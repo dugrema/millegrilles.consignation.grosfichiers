@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const {traitementFichier} = require('../util/traitementFichier');
+const {traitementFichier, pathConsignation} = require('../util/traitementFichier');
 
 const router = express.Router();
 
@@ -14,39 +14,52 @@ localRouter.get('*', (req, res, next) => {
   let fuuide = req.url;
   let contentType = 'application/octet-stream';
   header = {
-    fuuide: req.url,
+    fuuid: req.url,
     contentType: contentType,
   }
   processFichiersLocaux(header, req, res);
 });
 localRouter.post('*', (req, res, next) => {
-  let fuuide = req.headers.fuuide;
-  var fileName = req.headers.nomfichier;
-  var contentType = req.headers.contenttype || 'application/octet-stream';
+  let fuuid = req.headers.fuuid;
+  // var contentType = req.headers.contenttype || 'application/octet-stream';
+  var contentType = 'application/octet-stream';
   header = {
-    fuuide: fuuide,
+    fuuid: fuuid,
     'Content-Type': contentType,
-    'Content-Disposition': 'filename="' + fileName + '"',
   }
   processFichiersLocaux(header, req, res);
 });
 
 function processFichiersLocaux(header, req, res) {
   console.log("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
-  console.log(req.headers);
+  // console.log(req.headers);
 
   // Le serveur supporte une requete GET ou POST pour aller chercher les fichiers
   // GET devrait surtout etre utilise pour le developpement
-  let fuuide = header.fuuide;
+  let fuuid = header.fuuid, encrypted = false;
 
-  var filePath = path.join('/home/mathieu/work/downloadStaging/local', fuuide);
-  var stat = fs.statSync(filePath);
-  header['Content-Length'] = stat.size,
+  var filePath = pathConsignation.trouverPathLocal(fuuid, encrypted);  //path.join('/home/mathieu/work/downloadStaging/local', fuuid);
+  fs.stat(filePath, (err, stats)=>{
+    if(err) {
+      console.error(err);
+      if(err.errno == -2) {
+        res.sendStatus(404);
+      } else {
+        res.sendStatus(500);
+      }
+      return;
+    }
 
-  res.writeHead(200, header);
-  var readStream = fs.createReadStream(filePath);
+    header['Content-Length'] = stats.size,
+    // Forcer download plutot que open dans le browser
+    header['Content-Disposition'] = 'attachment;';
+    // Pour mettre le nom complet: Content-Disposition: attachment; filename="titles.txt"
 
-  readStream.pipe(res);
+    res.writeHead(200, header);
+    var readStream = fs.createReadStream(filePath);
+
+    readStream.pipe(res);
+  });
 };
 
 router.put('/local/nouveauFichier/*', function(req, res, next) {

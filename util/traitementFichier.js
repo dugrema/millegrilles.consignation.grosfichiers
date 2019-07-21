@@ -15,13 +15,14 @@ class PathConsignation {
   }
 
   trouverPathLocal(fichierUuid) {
-    return this.formatterPath(fichierUuid, false);
+    let pathFichier = this.formatterPath(fichierUuid, false);
+    return path.join(this.consignationPathLocal, pathFichier);
   }
 
   formatterPath(fichierUuid, encrypte) {
     // Extrait la date du fileUuid, formatte le path en fonction de cette date.
-    let timestamp = uuidToDate.extract(fichierUuid);
-    // console.debug("Timestamp " + timestamp);
+    let timestamp = uuidToDate.extract(fichierUuid.replace('/', ''));
+    // console.debug("uuid: " + fichierUuid + ". Timestamp " + timestamp);
 
     let extension = encrypte?'mgs1':'dat';
 
@@ -29,7 +30,7 @@ class PathConsignation {
     let month = timestamp.getUTCMonth() + 1; if(month < 10) month = '0'+month;
     let day = timestamp.getUTCDate(); if(day < 10) day = '0'+day;
     let hour = timestamp.getUTCHours(); if(hour < 10) hour = '0'+hour;
-    let minute = timestamp.getUTCMinutes(); if(minute < 10) day = '0'+minute;
+    let minute = timestamp.getUTCMinutes(); if(minute < 10) minute = '0'+minute;
     let fuuide =
       path.join(""+year, ""+month, ""+day, ""+hour, ""+minute,
         fichierUuid + '.' + extension);
@@ -45,6 +46,8 @@ const pathConsignation = new PathConsignation();
 class TraitementFichier {
 
   traiterPut(req) {
+    // Sauvegarde le fichier dans le repertoire de consignation local.
+    
     const promise = new Promise((resolve, reject) => {
 
       try {
