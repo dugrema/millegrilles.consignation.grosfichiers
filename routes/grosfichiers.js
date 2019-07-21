@@ -48,11 +48,11 @@ function processFichiersLocaux(header, req, res) {
 };
 
 router.put('/nouveauFichier', function(req, res, next) {
-
+  console.debug("nouveauFichier PUT " + req.url);
 });
 
 router.put('/nouvelleVersion', function(req, res, next) {
-
+  console.debug("nouvelleVersion PUT " + req.url);
 });
 
 // Router pour fichiers tiers (autres MilleGrilles)
