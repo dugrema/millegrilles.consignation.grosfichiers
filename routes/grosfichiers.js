@@ -7,29 +7,39 @@ var router = express.Router();
 // Router pour fichiers locaux (meme MilleGrille)
 var localRouter = express.Router();
 router.use('/local', localRouter);
-localRouter.get('*', processFichiersLocaux);
-localRouter.post('*', processFichiersLocaux);
+localRouter.get('*', (req, res, next) => {
+  // Tenter de charger les parametres via MQ
+  let fuuide = req.url;
+  let contentType = 'application/octet-stream';
+  header = {
+    fuuide: req.url,
+    contentType: contentType,
+  }
+  processFichiersLocaux(header, req, res);
+});
+localRouter.post('*', (req, res, next) => {
+  let fuuide = req.headers.fuuide;
+  var fileName = req.headers.nomfichier;
+  var contentType = req.headers.contenttype || 'application/octet-stream';
+  header = {
+    fuuide: fuuide,
+    'Content-Type': contentType,
+    'Content-Disposition': 'filename="' + fileName + '"',
+  }
+  processFichiersLocaux(header, req, res);
+});
 
-function processFichiersLocaux(req, res) {
+function processFichiersLocaux(header, req, res) {
   console.log("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
   console.log(req.headers);
 
   // Le serveur supporte une requete GET ou POST pour aller chercher les fichiers
   // GET devrait surtout etre utilise pour le developpement
-  let fuuide = req.headers.fuuide || req.body.fuuide || req.url;
-  var fileName = req.headers.nomfichier || req.body.nomfichier;
-  var contentType = req.headers.contentype || req.body.contenttype || 'application/octet-stream';
+  let fuuide = header.fuuide;
 
   var filePath = path.join('/home/mathieu/work/downloadStaging/local', fuuide);
   var stat = fs.statSync(filePath);
-
-  let header = {
-    'Content-Type': contentType,
-    'Content-Length': stat.size,
-  }
-  if(fileName) {
-    header['Content-Disposition'] = 'filename="' + fileName + '"';
-  }
+  header['Content-Length'] = stat.size,
 
   res.writeHead(200, header);
   var readStream = fs.createReadStream(filePath);
