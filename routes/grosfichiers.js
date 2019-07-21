@@ -58,33 +58,15 @@ router.put('/local/nouveauFichier/*', function(req, res, next) {
 
   // Streamer fichier vers FS
   try {
-    let writeStream = fs.createWriteStream('/tmp/monfichier.txt');
-    req.pipe(writeStream);
-    res.sendStatus(200);
+    traitementFichier.traiterPut(req)
+      .then(msg=>{
+        console.log("Retour top, grosfichier traite");
+        res.sendStatus(200);
+      });
   } catch (err) {
     console.error(err);
     res.sendStatus(500);
   }
-
-  // console.log(req.files);
-  //
-  // if(req.files.length === 1) {
-  //   let fichier = req.files[0];
-  //   traitementFichier.traiterPut(req.headers, fichier)
-  //   .then(resultat=>{
-  //     res.sendStatus(200);
-  //   })
-  //   .catch(err=>{
-  //     console.error("Erreur traitement fichier " + req.headers.fuuide);
-  //     console.error(err);
-  //     res.sendStatus(500);
-  //   });
-  //
-  // } else {
-  //   console.error("0 ou plus d'un fichier recu dans le PUT");
-  //   console.error(req.headers.nomfichier);
-  //   res.sendStatus(400);
-  // }
 
 });
 

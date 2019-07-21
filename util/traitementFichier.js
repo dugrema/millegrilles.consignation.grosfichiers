@@ -1,36 +1,50 @@
 const fs = require('fs');
 const path = require('path');
+const {uuidToDate} = require('./UUIDUtils');
 
 const pathconsignation = '/tmp/consignation_local';
 
 class TraitementFichier {
 
-  traiterPut(headers, fichier) {
+  traiterPut(req) {
     const promise = new Promise((resolve, reject) => {
 
       try {
         // Le nom du fichier au complet, incluant path, est fourni dans fuuide.
+        let headers = req.headers;
         let fileUuid = headers.fileuuid;
         let encrypte = headers.encrypte === "true";
         let fuuide = this.formatterPath(fileUuid, encrypte);
         let nouveauPathFichier = path.join(pathconsignation, fuuide);
 
-        if(!fs.existsSync(nouveauPathFichier)) {
-          // Creer le repertoire au besoin, puis deplacer le fichier (rename)
-          fs.mkdirSync(path.dirname(nouveauPathFichier), { recursive: true });
-          fs.rename(fichier.path, nouveauPathFichier, (err)=>{
-            if(!err) {
-              resolve(nouveauPathFichier);
-            } else {
+        // Creer le repertoire au besoin, puis deplacer le fichier (rename)
+        let pathRepertoire = path.dirname(nouveauPathFichier);
+        fs.mkdir(pathRepertoire, { recursive: true }, (err)=>{
+          console.debug("Path cree: " + pathRepertoire);
+          console.debug(err);
+
+          if(!err) {
+            console.debug("Ecriture fichier " + nouveauPathFichier);
+            let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx'});
+            writeStream.on('finish', ()=>{
+              console.log("Fichier ecrit: " + nouveauPathFichier);
+              resolve();
+            })
+            .on('error', err=>{
+              console.error("Erreur sauvegarde fichier: " + nouveauPathFichier);
               reject(err);
-            }
-          });
-        } else {
-          console.error('Fichier existe deja: ' + nouveauPathFichier);
-          reject('Fichier existe deja: ' + nouveauPathFichier);
-        }
+            })
+
+            req.pipe(writeStream); // Traitement via event callbacks
+
+          } else {
+            reject(err);
+          }
+
+        });
+
       } catch (err) {
-        console.error("Erreur traitement fichier " + headers.fuuide);
+        console.error("Erreur traitement fichier " + req.headers.fuuide);
         reject(err);
       }
 
