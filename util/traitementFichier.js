@@ -20,14 +20,14 @@ class TraitementFichier {
         // Creer le repertoire au besoin, puis deplacer le fichier (rename)
         let pathRepertoire = path.dirname(nouveauPathFichier);
         fs.mkdir(pathRepertoire, { recursive: true }, (err)=>{
-          console.debug("Path cree: " + pathRepertoire);
-          console.debug(err);
+          // console.debug("Path cree: " + pathRepertoire);
+          // console.debug(err);
 
           if(!err) {
-            console.debug("Ecriture fichier " + nouveauPathFichier);
+            // console.debug("Ecriture fichier " + nouveauPathFichier);
             let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx'});
             writeStream.on('finish', ()=>{
-              console.log("Fichier ecrit: " + nouveauPathFichier);
+              // console.log("Fichier ecrit: " + nouveauPathFichier);
               resolve();
             })
             .on('error', err=>{

@@ -54,13 +54,13 @@ function processFichiersLocaux(header, req, res) {
 
 router.put('/local/nouveauFichier/*', function(req, res, next) {
   console.debug("nouveauFichier PUT " + req.url);
-  console.debug(req.headers);
+  // console.debug(req.headers);
 
   // Streamer fichier vers FS
   try {
     traitementFichier.traiterPut(req)
       .then(msg=>{
-        console.log("Retour top, grosfichier traite");
+        // console.log("Retour top, grosfichier traite");
         res.sendStatus(200);
       });
   } catch (err) {
