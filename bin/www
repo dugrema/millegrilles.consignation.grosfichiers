@@ -6,7 +6,6 @@
 
 var app = require('../app');
 var debug = require('debug')('millegrilles.consignation.grosfichiers:server');
-var http = require('http');
 const Spdy = require('spdy');
 const FS = require('fs');
 

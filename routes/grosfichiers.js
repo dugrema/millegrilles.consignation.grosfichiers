@@ -12,12 +12,13 @@ localRouter.post('*', processFichiersLocaux);
 
 function processFichiersLocaux(req, res) {
   console.log("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
+  console.log(req.headers);
 
   // Le serveur supporte une requete GET ou POST pour aller chercher les fichiers
   // GET devrait surtout etre utilise pour le developpement
-  let fuuide = req.body.fuuide || req.url;
-  var fileName = req.body.nomfichier;
-  var contentType = req.body.contenttype || 'application/octet-stream';
+  let fuuide = req.headers.fuuide || req.body.fuuide || req.url;
+  var fileName = req.headers.nomfichier || req.body.nomfichier;
+  var contentType = req.headers.contentype || req.body.contenttype || 'application/octet-stream';
 
   var filePath = path.join('/home/mathieu/work/downloadStaging/local', fuuide);
   var stat = fs.statSync(filePath);
