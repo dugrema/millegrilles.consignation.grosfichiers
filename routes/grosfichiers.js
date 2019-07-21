@@ -1,12 +1,9 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const traitementFichier = require('../util/traitementFichier');
+const {traitementFichier} = require('../util/traitementFichier');
 
 const router = express.Router();
-
-const stagingFolder = process.env.MG_STAGING_FOLDER || "/tmp/uploadStagingCentral";
-const consignationFolder = process.env.MG_STAGING_FOLDER || "/tmp/consignation_local";
 
 // Router pour fichiers locaux (meme MilleGrille)
 const localRouter = express.Router();
@@ -62,6 +59,11 @@ router.put('/local/nouveauFichier/*', function(req, res, next) {
       .then(msg=>{
         // console.log("Retour top, grosfichier traite");
         res.sendStatus(200);
+      })
+      .catch(err=>{
+        console.error("Erreur traitement fichier " + req.url);
+        console.error(err);
+        res.sendStatus(500);
       });
   } catch (err) {
     console.error(err);

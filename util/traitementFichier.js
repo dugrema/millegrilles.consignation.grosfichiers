@@ -2,7 +2,45 @@ const fs = require('fs');
 const path = require('path');
 const {uuidToDate} = require('./UUIDUtils');
 
-const pathconsignation = '/tmp/consignation_local';
+class PathConsignation {
+
+  constructor() {
+    this.nomMillegrille = process.env.MG_NOM_MILLEGRILLE || 'sansnom';
+    this.consignationPath = process.env.MG_CONSIGNATION_PATH ||
+      path.join('/opt/millegrilles', this.nomMillegrille, 'consignation');
+
+    // Path utilisable localement
+    this.consignationPathLocal = path.join(this.consignationPath, '/local');
+    this.consignationPathTiers = path.join(this.consignationPath, '/tiers');
+  }
+
+  trouverPathLocal(fichierUuid) {
+    return this.formatterPath(fichierUuid, false);
+  }
+
+  formatterPath(fichierUuid, encrypte) {
+    // Extrait la date du fileUuid, formatte le path en fonction de cette date.
+    let timestamp = uuidToDate.extract(fichierUuid);
+    // console.debug("Timestamp " + timestamp);
+
+    let extension = encrypte?'mgs1':'dat';
+
+    let year = timestamp.getUTCFullYear();
+    let month = timestamp.getUTCMonth() + 1; if(month < 10) month = '0'+month;
+    let day = timestamp.getUTCDate(); if(day < 10) day = '0'+day;
+    let hour = timestamp.getUTCHours(); if(hour < 10) hour = '0'+hour;
+    let minute = timestamp.getUTCMinutes(); if(minute < 10) day = '0'+minute;
+    let fuuide =
+      path.join(""+year, ""+month, ""+day, ""+hour, ""+minute,
+        fichierUuid + '.' + extension);
+
+    return fuuide;
+  }
+
+
+}
+
+const pathConsignation = new PathConsignation();
 
 class TraitementFichier {
 
@@ -14,11 +52,12 @@ class TraitementFichier {
         let headers = req.headers;
         let fileUuid = headers.fileuuid;
         let encrypte = headers.encrypte === "true";
-        let fuuide = this.formatterPath(fileUuid, encrypte);
-        let nouveauPathFichier = path.join(pathconsignation, fuuide);
+        let fuuide = pathConsignation.formatterPath(fileUuid, encrypte);
+        let nouveauPathFichier = path.join(pathConsignation.consignationPathLocal, fuuide);
 
         // Creer le repertoire au besoin, puis deplacer le fichier (rename)
         let pathRepertoire = path.dirname(nouveauPathFichier);
+        console.debug("Path a utiliser: " + pathRepertoire);
         fs.mkdir(pathRepertoire, { recursive: true }, (err)=>{
           // console.debug("Path cree: " + pathRepertoire);
           // console.debug(err);
@@ -53,27 +92,8 @@ class TraitementFichier {
     return promise;
   }
 
-  formatterPath(fileUuid, encrypte) {
-    // Extrait la date du fileUuid, formatte le path en fonction de cette date.
-    let timestamp = uuidToDate.extract(fileUuid);
-    // console.debug("Timestamp " + timestamp);
-
-    let extension = encrypte?'mgs1':'dat';
-
-    let year = timestamp.getUTCFullYear();
-    let month = timestamp.getUTCMonth() + 1; if(month < 10) month = '0'+month;
-    let day = timestamp.getUTCDate(); if(day < 10) day = '0'+day;
-    let hour = timestamp.getUTCHours(); if(hour < 10) hour = '0'+hour;
-    let minute = timestamp.getUTCMinutes(); if(minute < 10) day = '0'+minute;
-    let fuuide =
-      '/' + year + '/' + month + '/' + day + '/' +
-      hour + '/' + minute + '/' +
-      fileUuid + '.' + extension;
-
-    return fuuide;
-  }
-
 }
 
 const traitementFichier = new TraitementFichier();
-module.exports = traitementFichier;
+
+module.exports = {traitementFichier, pathConsignation};
