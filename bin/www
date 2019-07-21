@@ -7,27 +7,49 @@
 var app = require('../app');
 var debug = require('debug')('millegrilles.consignation.grosfichiers:server');
 var http = require('http');
+const Spdy = require('spdy');
+const FS = require('fs');
 
 /**
  * Get port from environment and store in Express.
  */
 
-var port = normalizePort(process.env.PORT || '3000');
+var port = normalizePort(process.env.PORT || '4000');
 app.set('port', port);
+
+const hostIp = process.env.HOST || 'dev2.maple.mdugre.info';
+const key_path = process.env.PRIVKEY;
+const cert_path = process.env.CERT;
+
+/**
+ * Create SPDY/http2 server.
+ */
+
+const config = {
+    hostIp: hostIp,
+    cert: FS.readFileSync(cert_path),
+    key: FS.readFileSync(key_path)
+};
 
 /**
  * Create HTTP server.
  */
+const server = Spdy.createServer(config, app).listen(port, () => {
+  server.on('error', onError);
+  server.on('listening', onListening);
+  console.log('Server is listening at https://localhost:' + port + '. Ctrl^C to stop it.');
+});
 
-var server = http.createServer(app);
+// var server = http.createServer(app);
 
 /**
  * Listen on provided port, on all network interfaces.
  */
-
+/*
 server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);
+*/
 
 /**
  * Normalize a port into a number, string, or false.
