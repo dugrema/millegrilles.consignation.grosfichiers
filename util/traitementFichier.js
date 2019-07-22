@@ -69,7 +69,7 @@ class TraitementFichier {
           if(!err) {
             // console.debug("Ecriture fichier " + nouveauPathFichier);
             var sha256 = crypto.createHash('sha256');
-            let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx'});
+            let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx', mode: 0o440});
             writeStream.on('finish', ()=>{
               // Comparer hash a celui du header
               let sha256Hash = sha256.digest('hex');
