@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const {uuidToDate} = require('./UUIDUtils');
 const crypto = require('crypto');
+const rabbitMQ = require('./rabbitMQ');
 
 class PathConsignation {
 
@@ -75,6 +76,23 @@ class TraitementFichier {
               let sha256Hash = sha256.digest('hex');
               console.debug("Hash fichier " + sha256Hash);
 
+              let messageConfirmation = {
+                fuuid: fileUuid,
+                sha256: sha256Hash
+              };
+
+              rabbitMQ.transmettreTransactionFormattee(
+                messageConfirmation,
+                'millegrilles.domaines.GrosFichiers.nouvelleVersion.transfertComplete')
+              .then( msg => {
+                console.log("Recu confirmation de nouvelleVersion transfertComplete");
+                console.log(msg);
+              })
+              .catch( err => {
+                console.error("Erreur message");
+                console.error(err);
+              });
+
               // console.log("Fichier ecrit: " + nouveauPathFichier);
               resolve();
             })
@@ -111,6 +129,11 @@ class TraitementFichier {
   }
 
 }
+
+// Initialisation, connexions
+// Creer les connexions
+let mqConnectionUrl = process.env.MG_MQ_URL || 'amqps://mq:5673/';
+rabbitMQ.connect(mqConnectionUrl);
 
 const traitementFichier = new TraitementFichier();
 
