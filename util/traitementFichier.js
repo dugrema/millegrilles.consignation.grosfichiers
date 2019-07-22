@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const {uuidToDate} = require('./UUIDUtils');
+const crypto = require('crypto');
 
 class PathConsignation {
 
@@ -47,7 +48,7 @@ class TraitementFichier {
 
   traiterPut(req) {
     // Sauvegarde le fichier dans le repertoire de consignation local.
-    
+
     const promise = new Promise((resolve, reject) => {
 
       try {
@@ -67,8 +68,13 @@ class TraitementFichier {
 
           if(!err) {
             // console.debug("Ecriture fichier " + nouveauPathFichier);
+            var sha256 = crypto.createHash('sha256');
             let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx'});
             writeStream.on('finish', ()=>{
+              // Comparer hash a celui du header
+              let sha256Hash = sha256.digest('hex');
+              console.debug("Hash fichier " + sha256Hash);
+
               // console.log("Fichier ecrit: " + nouveauPathFichier);
               resolve();
             })
@@ -77,7 +83,16 @@ class TraitementFichier {
               reject(err);
             })
 
-            req.pipe(writeStream); // Traitement via event callbacks
+            req.on('data', chunk=>{
+              // Mettre le sha256 directement dans le pipe donne le mauvais
+              // resultat. L'update (avec digest plus bas) fonctionne correctement.
+              sha256.update(chunk);
+
+              // console.log('-------------');
+              // process.stdout.write(chunk);
+              // console.log('-------------');
+            })
+            .pipe(writeStream); // Traitement via event callbacks
 
           } else {
             reject(err);
