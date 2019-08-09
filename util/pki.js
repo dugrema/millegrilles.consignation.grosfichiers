@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const x509 = require('x509');
 const stringify = require('json-stable-stringify');
+const fs = require('fs');
 
 class PKIUtils {
   // Classe qui supporte des operations avec certificats et cles privees.
@@ -16,15 +17,16 @@ class PKIUtils {
 
     this.cle = null;
     this.cert = null;
+    this.ca = null;
 
     this.chargerPEMs();
     this._verifierCertificat();
   }
 
   chargerPEMs() {
-    const fs = require('fs');
     console.log("PKI: Chargement cle " + this.keyFile + " et cert " + this.certFile);
     this.cle = fs.readFileSync(this.keyFile);
+    this.ca = fs.readFileSync(this.cacertFile);
 
     // Charger le certificat pour conserver commonName, fingerprint
     this.chargerCertificat();
@@ -37,6 +39,8 @@ class PKIUtils {
   chargerCertificat() {
     let parsedCert = x509.parseCert(this.certFile);
     let fingerprint = parsedCert['fingerPrint'];
+
+    this.cert = parsedCert;
 
     // Pour correspondre au format Python, enlever les colons (:) et
     // mettre en lowercase.
@@ -101,6 +105,20 @@ class PKIUtils {
     hachage_transaction = hash.digest('base64')
 
     return hachage_transaction;
+  }
+
+  preparerMessageCertificat() {
+    // Retourne un message qui peut etre transmis a MQ avec le certificat
+    // utilise par ce noeud. Sert a verifier la signature des transactions.
+    let certificatBuffer = fs.readFileSync(this.certFile, 'utf8');
+
+    let transactionCertificat = {
+        evenement: 'pki.certificat',
+        fingerprint: this.fingerprint,
+        certificat_pem: certificatBuffer,
+    }
+
+    return transactionCertificat;
   }
 
 };

@@ -53,30 +53,33 @@ class RabbitMQWrapper {
       options['credentials'] = amqplib.credentials.external();
 
       amqplib.connect(this.url, options)
-        .then( conn => {
-          console.debug("Connexion a RabbitMQ reussie");
-          this.connection = conn;
+      .then( conn => {
+        console.debug("Connexion a RabbitMQ reussie");
+        this.connection = conn;
 
-          conn.createChannel()
-            .then( (ch) => {
-              this.channel = ch;
-              console.log("Channel ouvert");
-              this.ecouter();
-            })
-            .catch(err => {
-              console.error("Erreur ouverture channel");
-              console.error(err);
-            })
+        return conn.createChannel();
+      }).then( (ch) => {
+        this.channel = ch;
+        console.log("Channel ouvert");
+        return this.ecouter();
+      }).then(()=>{
+        console.log("Connexion et channel prets");
 
-        })
-        .catch(err => {
-          this.connection = null;
-          console.error("Erreur connexion RabbitMQ");
-          console.error(err);
-        })
-        .then( () => {
-          console.log("Connexion et channel prets!");
-        });
+        // Transmettre le certificat
+        let messageCertificat = pki.preparerMessageCertificat();
+        let fingerprint = messageCertificat.fingerprint;
+        console.log("Transmission certificat " + fingerprint);
+
+        let messageJSONStr = JSON.stringify(messageCertificat);
+        this._publish(
+          'pki.certificat.' + fingerprint, messageJSONStr
+        );
+        console.log("Certificat transmis");
+      }).catch(err => {
+        this.connection = null;
+        console.error("Erreur connexion RabbitMQ");
+        console.error(err);
+      });
 
     }
 
@@ -84,46 +87,50 @@ class RabbitMQWrapper {
 
   ecouter() {
 
-    // Creer Q pour ecouter
-    this.channel.assertQueue('', {
-      durable: false,
-      exclusive: true,
-    })
-    .then( (q) => {
-      console.log("Queue cree"),
-      console.log(q);
-      this.reply_q = q;
+    let promise = new Promise((resolve, reject) => {
 
-      // this.channel.bindQueue(q.queue, 'millegrilles.noeuds', 'test.routing');
+      // Creer Q pour ecouter
+      this.channel.assertQueue('', {
+        durable: false,
+        exclusive: true,
+      })
+      .then( (q) => {
+        console.log("Queue cree"),
+        console.log(q);
+        this.reply_q = q;
 
-      this.channel.consume(
-        q.queue,
-        (msg) => {
-          let correlationId = msg.properties.correlationId;
-          let messageContent = decodeURIComponent(escape(msg.content));
-          let routingKey = msg.fields.routingKey;
+        this.channel.consume(
+          q.queue,
+          (msg) => {
+            let correlationId = msg.properties.correlationId;
+            let messageContent = decodeURIComponent(escape(msg.content));
+            let routingKey = msg.fields.routingKey;
 
-          if(correlationId) {
-            let callback = this.pendingResponses[correlationId];
-            if(callback) {
-              callback(msg);
+            if(correlationId) {
+              let callback = this.pendingResponses[correlationId];
+              if(callback) {
+                callback(msg);
+              }
+            } else if(routingKey) {
+              console.debug("Message avec routing key: " + routingKey);
+              this.routingKeyManager.emitMessage(routingKey, messageContent);
+            } else {
+              console.debug("Recu message sans correlation Id ou routing key");
+              console.warn(msg);
             }
-          } else if(routingKey) {
-            console.debug("Message avec routing key: " + routingKey);
-            this.routingKeyManager.emitMessage(routingKey, messageContent);
-          } else {
-            console.debug("Recu message sans correlation Id ou routing key");
-            console.warn(msg);
-          }
-        },
-        {noAck: true}
-      );
+          },
+          {noAck: true}
+        );
 
-    })
-    .catch( err => {
-      console.error("Erreur creation Q pour ecouter");
-      console.error(err);
-    })
+        resolve();
+      })
+      .catch( err => {
+        console.error("Erreur creation Q pour ecouter");
+        reject(err);
+      })
+    });
+
+    return promise;
 
   }
 
@@ -274,6 +281,22 @@ class RabbitMQWrapper {
 
     return promise;
   };
+
+  _publish(routingKey, jsonMessage) {
+    // Faire la publication
+    this.channel.publish(
+      'millegrilles.noeuds',
+      routingKey,
+      Buffer.from(jsonMessage),
+      (err, ok) => {
+        console.error("Erreur MQ Callback");
+        console.error(err);
+        if(correlationId) {
+          delete pendingResponses[correlationId];
+        }
+      }
+    );
+  }
 
   // Retourne un document en fonction d'un domaine
   get_document(domaine, filtre) {
