@@ -8,6 +8,7 @@ var app = require('../app');
 var debug = require('debug')('millegrilles.consignation.grosfichiers:server');
 const Spdy = require('spdy');
 const FS = require('fs');
+const rabbitMQ = require('../util/rabbitMQ');
 
 /**
  * Get port from environment and store in Express.
@@ -38,6 +39,11 @@ const server = Spdy.createServer(config, app).listen(port, () => {
   server.on('listening', onListening);
   console.log('Server is listening at https://localhost:' + port + '. Ctrl^C to stop it.');
 });
+
+// Connecter a RabbitMQ
+let nomMilleGrille = process.env.MG_NOM_MILLEGRILLE || 'sansnom';
+let mqConnectionUrl = process.env.MG_MQ_URL || 'amqps://mq:5673/' + nomMilleGrille;
+rabbitMQ.connect(mqConnectionUrl);
 
 // var server = http.createServer(app);
 
