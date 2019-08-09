@@ -7,7 +7,11 @@ WORKDIR /usr/src/app
 VOLUME /opt/millegrilles/consignation
 
 ENV MG_NOM_MILLEGRILLE=sansnom \
-    MG_CONSIGNATION_PATH=/opt/millegrilles/consignation
+    MG_CONSIGNATION_PATH=/opt/millegrilles/consignation \
+    PORT=443 \
+    HOST=consignationfichiers \
+    PRIVKEY=/run/secrets/pki.millegrilles.ssl.key \
+    CERT=/run/secrets/pki.millegrilles.ssl.cert
 
 EXPOSE 443
 
