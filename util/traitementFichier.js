@@ -132,7 +132,8 @@ class TraitementFichier {
 
 // Initialisation, connexions
 // Creer les connexions
-let mqConnectionUrl = process.env.MG_MQ_URL || 'amqps://mq:5673/';
+let nomMilleGrille = process.env.MG_NOM_MILLEGRILLE || 'sansnom';
+let mqConnectionUrl = process.env.MG_MQ_URL || 'amqps://mq:5673/' + nomMilleGrille;
 rabbitMQ.connect(mqConnectionUrl);
 
 const traitementFichier = new TraitementFichier();
