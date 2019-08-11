@@ -2,6 +2,6 @@ REPO=registry.maple.mdugre.info:5000
 NAME=consignationfichiers
 ARCH_SUPPORTEES=( x86_64 armv7l aarch64 )
 BRANCH=`git name-rev --name-only HEAD`
-BUILD=4
+BUILD=0
 
 VERSION=$BRANCH.$BUILD
