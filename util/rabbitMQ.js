@@ -57,6 +57,12 @@ class RabbitMQWrapper {
         console.debug("Connexion a RabbitMQ reussie");
         this.connection = conn;
 
+        conn.on('close', (reason)=>{
+          console.warn("Fermeture connexion RabbitMQ");
+          console.info(reason);
+          this.scheduleReconnect();
+        });
+
         return conn.createChannel();
       }).then( (ch) => {
         this.channel = ch;
@@ -79,10 +85,49 @@ class RabbitMQWrapper {
         this.connection = null;
         console.error("Erreur connexion RabbitMQ");
         console.error(err);
+        this.scheduleReconnect();
       });
 
     }
 
+  }
+
+  scheduleReconnect() {
+    // Met un timer pour se reconnecter
+    const dureeAttente = 30;
+
+    if(!this.reconnectTimeout) {
+      var mq = this;
+      this.reconnectTimeout = setTimeout(()=>{
+        console.debug("Reconnexion en cours");
+        mq.reconnectTimeout = null;
+        mq._connect();
+      }, dureeAttente*1000);
+
+      console.info("Reconnexion a MQ dans " + dureeAttente + " secondes");
+
+      var conn = this.connection, channel = this.channel;
+      this.connection = null;
+      this.channel = null;
+
+      if(channel) {
+        try {
+          channel.close();
+        } catch (err) {
+          console.debug("Erreur fermeture channel");
+          console.debug(err);
+        }
+      }
+
+      if(this.connection) {
+        try {
+          conn.close();
+        } catch (err) {
+          console.info("Erreur fermeture connection");
+          console.info(err);
+        }
+      }
+    }
   }
 
   ecouter() {
