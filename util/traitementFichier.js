@@ -16,8 +16,8 @@ class PathConsignation {
     this.consignationPathTiers = path.join(this.consignationPath, '/tiers');
   }
 
-  trouverPathLocal(fichierUuid) {
-    let pathFichier = this.formatterPath(fichierUuid, false);
+  trouverPathLocal(fichierUuid, encrypte) {
+    let pathFichier = this.formatterPath(fichierUuid, encrypte);
     return path.join(this.consignationPathLocal, pathFichier);
   }
 

@@ -36,9 +36,10 @@ function processFichiersLocaux(header, req, res) {
 
   // Le serveur supporte une requete GET ou POST pour aller chercher les fichiers
   // GET devrait surtout etre utilise pour le developpement
-  let fuuid = header.fuuid, encrypted = false;
+  let fuuid = header.fuuid;
+  let encrypted = (req.headers.securite === '3.protege' || req.headers.securite === '4.secure');
 
-  var filePath = pathConsignation.trouverPathLocal(fuuid, encrypted);  //path.join('/home/mathieu/work/downloadStaging/local', fuuid);
+  var filePath = pathConsignation.trouverPathLocal(fuuid, encrypted);
   fs.stat(filePath, (err, stats)=>{
     if(err) {
       console.error(err);
