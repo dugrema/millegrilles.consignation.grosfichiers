@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const {traitementFichier, pathConsignation} = require('../util/traitementFichier');
+const throttle = require('@sitespeed.io/throttle');
 
 const router = express.Router();
 
@@ -69,16 +70,19 @@ router.put('/local/nouveauFichier/*', function(req, res, next) {
 
   // Streamer fichier vers FS
   try {
+    // Returns a promise
+    // throttle.start({up: 1000, down: 1000, rtt: 200})
+    // .then(() => traitementFichier.traiterPut(req))
     traitementFichier.traiterPut(req)
-      .then(msg=>{
+    .then(msg=>{
         // console.log("Retour top, grosfichier traite");
         res.sendStatus(200);
-      })
-      .catch(err=>{
-        console.error("Erreur traitement fichier " + req.url);
-        console.error(err);
-        res.sendStatus(500);
-      });
+    })
+    .catch(err=>{
+      console.error("Erreur traitement fichier " + req.url);
+      console.error(err);
+      res.sendStatus(500);
+    });
   } catch (err) {
     console.error(err);
     res.sendStatus(500);
