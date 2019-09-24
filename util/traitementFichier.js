@@ -9,7 +9,7 @@ class PathConsignation {
   constructor() {
     this.nomMillegrille = process.env.MG_NOM_MILLEGRILLE || 'sansnom';
     this.consignationPath = process.env.MG_CONSIGNATION_PATH ||
-      path.join('/opt/millegrilles', this.nomMillegrille, 'consignation');
+      path.join('/opt/millegrilles', this.nomMillegrille, 'mounts/consignation');
 
     // Path utilisable localement
     this.consignationPathLocal = path.join(this.consignationPath, '/local');
