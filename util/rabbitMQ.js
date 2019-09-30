@@ -23,6 +23,7 @@ class RabbitMQWrapper {
     // this.setHostname();
 
     this.routingKeyManager = new RoutingKeyManager(this);
+    this.routingKeyCertificat = null;
   }
 
   connect(url) {
