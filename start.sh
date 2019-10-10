@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-CERT_FOLDER=/opt/millegrilles/test1/pki/deployeur
-export MG_NOM_MILLEGRILLE=test1
+CERT_FOLDER=/opt/millegrilles/dev3/pki/deployeur
+export MG_NOM_MILLEGRILLE=dev3
 
 # export COUPDOEIL_SESSION_TIMEOUT=15000
 export MG_MQ_CAFILE=$CERT_FOLDER/pki.ca.fullchain.pem
