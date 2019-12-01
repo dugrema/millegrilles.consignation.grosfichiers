@@ -10,7 +10,7 @@ class TorrentMessages {
   }
 
   enregistrerChannel() {
-    this.mq.routingKeyManager.addRoutingKeyCallback(this.commandeTorrent, ['commande.torrent.#']);
+    this.mq.routingKeyManager.addRoutingKeyCallback(this.creerNouveauTorrent, ['commande.torrent.creerNouveau']);
     this.mq.routingKeyManager.addRoutingKeyCallback(this.requeteTorrent, ['requete.torrent.#']);
   }
 
@@ -25,8 +25,8 @@ class TorrentMessages {
   //   return fingerprint;
   // }
 
-  commandeTorrent(routingKey, message) {
-    console.debug("Commande torrent " + routingKey);
+  creerNouveauTorrent(routingKey, message) {
+    console.debug("Creer nouveau torrent");
     console.debug(message);
   }
 

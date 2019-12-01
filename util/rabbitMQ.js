@@ -152,6 +152,7 @@ class RabbitMQWrapper {
           listener.on_connecter();
         }
 
+        const routingKeyManager = this.routingKeyManager;
         this.channel.consume(
           q.queue,
           (msg) => {
@@ -166,7 +167,7 @@ class RabbitMQWrapper {
                 delete this.pendingResponses[correlationId];
               }
             } else if(routingKey) {
-              this.routinkgKeyManager.handleMessage(routingKey, messageContent);
+              routingKeyManager.handleMessage(routingKey, messageContent);
             } else {
               console.debug("Recu message sans correlation Id ou routing key");
               console.warn(msg);
@@ -396,11 +397,24 @@ class RoutingKeyManager {
     //   cle: string (routing key sur RabbitMQ)
     //   valeur: liste de callbacks
     this.registeredRoutingKeyCallbacks = {};
+
+    this.handleMessage.bind(this);
+  }
+
+  handleMessage(routingKey, messageContent) {
+    let callback = this.registeredRoutingKeyCallbacks[routingKey];
+    if(callback) {
+      callback(routingKey, messageContent);
+    } else {
+      console.warn("Routing key pas de callback: " + routingKey);
+    }
   }
 
   addRoutingKeyCallback(callback, routingKeys) {
     for(var routingKey_idx in routingKeys) {
       let routingKeyName = routingKeys[routingKey_idx];
+      this.registeredRoutingKeyCallbacks[routingKeyName] = callback;
+
       // Ajouter la routing key
       console.debug("Ajouter calbback pour routingKey " + routingKeyName);
       this.mq.channel.bindQueue(this.mq.reply_q.queue, 'millegrilles.noeuds', routingKeyName);
@@ -410,6 +424,8 @@ class RoutingKeyManager {
   removeRoutingKeys(routingKeys) {
     for(var routingKey_idx in routingKeys) {
       let routingKeyName = routingKeys[routingKey_idx];
+      delete this.registeredRoutingKeyCallbacks[routingKeyName];
+
       // Retirer la routing key
       console.debug("Enlever routingKeys " + routingKeyName);
       this.mq.channel.unbindQueue(this.mq.reply_q.queue, 'millegrilles.noeuds', routingKeyName);
