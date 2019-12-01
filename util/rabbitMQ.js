@@ -24,11 +24,13 @@ class RabbitMQWrapper {
 
     this.routingKeyManager = new RoutingKeyManager(this);
     this.routingKeyCertificat = null;
+
+    this.connexionListeners = [];  // Listeners a appeler lors de la connexion
   }
 
   connect(url) {
     this.url = url;
-    this._connect();
+    return this._connect();
   }
 
   _connect() {
@@ -53,7 +55,7 @@ class RabbitMQWrapper {
       }
       options['credentials'] = amqplib.credentials.external();
 
-      amqplib.connect(this.url, options)
+      return amqplib.connect(this.url, options)
       .then( conn => {
         console.debug("Connexion a RabbitMQ reussie");
         this.connection = conn;
@@ -69,18 +71,17 @@ class RabbitMQWrapper {
         this.channel = ch;
         console.log("Channel ouvert");
         return this.ecouter();
-      }).then(()=>{
-        console.log("Connexion et channel prets");
+      // }).then(()=>{
+        // console.log("Connexion et channel prets");
 
-        // Transmettre le certificat
-        let fingerprint = this.transmettreCertificat();
+        // // Transmettre le certificat
+        // let fingerprint = this.transmettreCertificat();
 
         // Enregistrer routing key du certificat
         // Permet de repondre si un autre composant demande notre certificat
-        this.routingKeyCertificat = 'pki.requete.' + fingerprint;
-        console.debug("Enregistrer routing key: " + fingerprint)
-        this.channel.bindQueue(this.reply_q.queue, 'millegrilles.noeuds', this.routingKeyCertificat);
-        console.log("Certificat transmis");
+        // this.routingKeyCertificat = 'pki.requete.' + fingerprint;
+        // console.debug("Enregistrer routing key: " + fingerprint);
+        // this.channel.bindQueue(this.reply_q.queue, 'millegrilles.noeuds', this.routingKeyCertificat);
 
       }).catch(err => {
         this.connection = null;
@@ -145,6 +146,12 @@ class RabbitMQWrapper {
         console.log(q);
         this.reply_q = q;
 
+        // Appeler listeners de connexion
+        for(let idx in this.connexionListeners) {
+          let listener = this.connexionListeners[idx];
+          listener.on_connecter();
+        }
+
         this.channel.consume(
           q.queue,
           (msg) => {
@@ -156,14 +163,10 @@ class RabbitMQWrapper {
               let callback = this.pendingResponses[correlationId];
               if(callback) {
                 callback(msg);
+                delete this.pendingResponses[correlationId];
               }
             } else if(routingKey) {
-              if(routingKey === this.routingKeyCertificat) {
-                this.transmettreCertificat();
-              } else {
-                console.debug("Message avec routing key: " + routingKey);
-                this.routingKeyManager.emitMessage(routingKey, messageContent);
-              }
+              this.routinkgKeyManager.handleMessage(routingKey, messageContent);
             } else {
               console.debug("Recu message sans correlation Id ou routing key");
               console.warn(msg);
@@ -184,15 +187,12 @@ class RabbitMQWrapper {
 
   }
 
-  transmettreCertificat() {
-    let messageCertificat = pki.preparerMessageCertificat();
-    let fingerprint = messageCertificat.fingerprint;
-    let messageJSONStr = JSON.stringify(messageCertificat);
-    this._publish(
-      'pki.certificat.' + fingerprint, messageJSONStr
-    );
-
-    return fingerprint;
+  enregistrerListenerConnexion(listener) {
+    this.connexionListeners.push(listener);
+    if(this.channel) {
+      // La connexion existe deja, on force l'execution de l'evenement.
+      listener.on_connecter();
+    }
   }
 
   // Utiliser cette methode pour simplifier le formattage d'une transaction.
@@ -376,11 +376,7 @@ class RabbitMQWrapper {
     .then((msg) => {
       let messageContent = decodeURIComponent(escape(msg.content));
       let json_message = JSON.parse(messageContent);
-      // console.log("JSON Message!\n\n\n");
-      // console.log(json_message);
       let document_recu = json_message['resultats'][0][0];
-      // console.log("Resultats!\n\n\n");
-      // console.log(document_recu);
       return(document_recu);
     })
 
@@ -395,81 +391,29 @@ class RoutingKeyManager {
 
     // Lien vers RabbitMQ, donne acces au channel, Q et routing keys
     this.mq = mq;
-    this.websocketsManager = null;
 
     // Dictionnaire de routing keys
     //   cle: string (routing key sur RabbitMQ)
-    //   valeur: dict de socket ids / socket
-    this.registeredRoutingKeysForSockets = {};
+    //   valeur: liste de callbacks
+    this.registeredRoutingKeyCallbacks = {};
   }
 
-  setWebSocketsManager(manager) {
-    this.websocketsManager = manager;
-    // console.log("WebSocketsManager");
-    // console.log(this.websocketsManager);
-  }
-
-  addRoutingKeysForSocket(socket, routingKeys) {
-    const socketId = socket.id;
-    // console.debug("Ajouter routingKeys au socket " + socketId);
-    // console.debug(routingKeys);
-
+  addRoutingKeyCallback(callback, routingKeys) {
     for(var routingKey_idx in routingKeys) {
       let routingKeyName = routingKeys[routingKey_idx];
       // Ajouter la routing key
+      console.debug("Ajouter calbback pour routingKey " + routingKeyName);
       this.mq.channel.bindQueue(this.mq.reply_q.queue, 'millegrilles.noeuds', routingKeyName);
-
-      var socket_dict = this.registeredRoutingKeysForSockets[routingKeyName];
-      if(!socket_dict) {
-        socket_dict = {};
-        this.registeredRoutingKeysForSockets[routingKeyName] = socket_dict;
-      }
-      socket_dict[socketId] = {'registered': (new Date()).getTime()};
     }
   }
 
-  removeRoutingKeysForSocket(socket, routingKeys) {
-    // console.debug("Enlever routingKeys du socket " + socket.id);
-    // console.debug(routingKeys);
-
+  removeRoutingKeys(routingKeys) {
     for(var routingKey_idx in routingKeys) {
       let routingKeyName = routingKeys[routingKey_idx];
       // Retirer la routing key
+      console.debug("Enlever routingKeys " + routingKeyName);
       this.mq.channel.unbindQueue(this.mq.reply_q.queue, 'millegrilles.noeuds', routingKeyName);
     }
-  }
-
-  emitMessage(routingKey, message) {
-    // Transmet un message aux subscribers appropries
-    var dictSockets = this.registeredRoutingKeysForSockets[routingKey];
-    if(dictSockets) {
-      // let messageContent = decodeURIComponent(escape(message.content));
-      let json_message = JSON.parse(message);
-
-      let cleanupSockets = [];
-      for(var socketId in dictSockets) {
-        let socket = this.websocketsManager.authenticated_sockets[socketId];
-        if(socket) {
-          // console.debug("Transmission message " + routingKey + " vers " + socket.id);
-          socket.emit('mq_message', {routingKey: routingKey, message: json_message});
-        } else {
-          console.warn("Message not sent to socket " + socketId + ", socket gone.");
-          cleanupSockets.push(socketId);
-        }
-      }
-
-      for(var socketId in cleanupSockets) {
-        delete dictSockets[cleanupSockets[socketId]];
-      }
-    }
-  }
-
-  clean() {
-    // Verifier chaque routing key pour voir s'il reste au moins un
-    // socket actif.
-
-    // Enlever la routing key qui n'est plus utile.
-
   }
 
 }
