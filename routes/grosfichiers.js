@@ -90,15 +90,4 @@ router.put('/local/nouveauFichier/*', function(req, res, next) {
 
 });
 
-router.put('/local/nouvelleVersion/*', function(req, res, next) {
-  console.debug("nouvelleVersion PUT " + req.url);
-  console.debug(req.headers);
-  console.log(req.files);
-  res.sendStatus(200);
-});
-
-// Router pour fichiers tiers (autres MilleGrilles)
-// var tiersRouter = express.Router();
-// router.use('/tiers', tiersRouter);
-
 module.exports = router;
