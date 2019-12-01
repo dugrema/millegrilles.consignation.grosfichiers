@@ -13,15 +13,19 @@ class PathConsignation {
 
     // Path utilisable localement
     this.consignationPathLocal = path.join(this.consignationPath, '/local');
-    this.consignationPathTiers = path.join(this.consignationPath, '/tiers');
+    this.consignationPathTorrent = path.join(this.consignationPath, '/torrents');
   }
 
   trouverPathLocal(fichierUuid, encrypte) {
-    let pathFichier = this.formatterPath(fichierUuid, encrypte);
+    let pathFichier = this._formatterPath(fichierUuid, encrypte);
     return path.join(this.consignationPathLocal, pathFichier);
   }
 
-  formatterPath(fichierUuid, encrypte) {
+  formatPathTorrentCollection(nomCollection) {
+    return path.join(this.consignationPathTorrent, nomCollection);
+  }
+
+  _formatterPath(fichierUuid, encrypte) {
     // Extrait la date du fileUuid, formatte le path en fonction de cette date.
     let timestamp = uuidToDate.extract(fichierUuid.replace('/', ''));
     // console.debug("uuid: " + fichierUuid + ". Timestamp " + timestamp);
@@ -39,6 +43,8 @@ class PathConsignation {
 
     return fuuide;
   }
+
+
 
 
 }

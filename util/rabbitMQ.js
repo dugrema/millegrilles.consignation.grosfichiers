@@ -404,7 +404,8 @@ class RoutingKeyManager {
   handleMessage(routingKey, messageContent) {
     let callback = this.registeredRoutingKeyCallbacks[routingKey];
     if(callback) {
-      callback(routingKey, messageContent);
+      let json_message = JSON.parse(messageContent);
+      callback(routingKey, json_message);
     } else {
       console.warn("Routing key pas de callback: " + routingKey);
     }
