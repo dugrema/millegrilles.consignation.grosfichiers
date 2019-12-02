@@ -125,6 +125,9 @@ class TorrentMessages {
     const transaction = {
       'catalogue': message.documents,
       'securite': securite,
+      'uuid': message.uuid,
+      'etiquettes': message.etiquettes,
+
     }
 
     const transactionFormattee = this.mq.formatterTransaction('millegrilles.domaines.GrosFichiers.nouveauTorrent', transaction);
@@ -134,7 +137,7 @@ class TorrentMessages {
     }
 
     const opts = {
-      name: nomCollection,
+      name: message.nom,
       comment: message.commentaires,
       createdBy: 'create-torrent/millegrilles 1.16',
       private: privateTorrent,
