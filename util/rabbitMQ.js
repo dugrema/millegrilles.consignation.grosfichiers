@@ -216,6 +216,17 @@ class RabbitMQWrapper {
     return promise;
   }
 
+  formatterTransaction(domaine, message) {
+    let messageFormatte = message;  // Meme objet si ca cause pas de problemes
+    let infoTransaction = this._formatterInfoTransaction(domaine);
+    const correlation = infoTransaction['uuid-transaction'];
+    messageFormatte['en-tete'] = infoTransaction;
+
+    // Signer le message avec le certificat
+    this._signerMessage(messageFormatte);
+    return messageFormatte;
+  }
+
   _formatterInfoTransaction(domaine) {
     // Ces valeurs n'ont de sens que sur le serveur.
     // Calculer secondes UTC (getTime retourne millisecondes locales)
