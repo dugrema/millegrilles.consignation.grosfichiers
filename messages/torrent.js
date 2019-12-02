@@ -3,6 +3,8 @@ const fs = require('fs');
 const createTorrent = require('create-torrent')
 const {pathConsignation} = require('../util/traitementFichier');
 
+const domaineNouveauTorrent = 'millegrilles.domaines.GrosFichiers.nouveauTorrent';
+
 class TorrentMessages {
 
   constructor(mq) {
@@ -45,12 +47,13 @@ class TorrentMessages {
       console.debug("Hard links crees");
       return this._creerFichierTorrent(message, nomCollection, pathCollection);
     })
-    .then(pathFichierTorrent=>{
-      console.debug("Fichier torrent cree: " + pathFichierTorrent);
-
-      // this._transmettreTransactionTorrent(message);
+    .then(({fichierTorrent, transaction})=>{
+      console.debug("Fichier torrent cree: " + fichierTorrent);
+      return this._transmettreTransactionTorrent(transaction);
+    })
+    .then(result=>{
+      console.debug("Transaction du nouveau torrent soumise");
       // this._seederTorrent(message);
-
     })
     .catch(err=>{
       console.error("Erreur creation torrent");
@@ -116,6 +119,7 @@ class TorrentMessages {
 
   }
 
+  // Genere le fichier torrent avec le contenu de la transaction
   _creerFichierTorrent(message, nomCollection, pathCollection) {
     const fichierTorrent = pathCollection + '.torrent';
     const securite = message.securite;
@@ -127,10 +131,9 @@ class TorrentMessages {
       'securite': securite,
       'uuid': message.uuid,
       'etiquettes': message.etiquettes,
-
     }
 
-    const transactionFormattee = this.mq.formatterTransaction('millegrilles.domaines.GrosFichiers.nouveauTorrent', transaction);
+    const transactionFormattee = this.mq.formatterTransaction(domaineNouveauTorrent, transaction);
 
     const info = {
       'millegrilles': transactionFormattee,
@@ -162,14 +165,14 @@ class TorrentMessages {
           }
 
           console.debug("Fichier torrent cree");
-          resolve(fichierTorrent);
+          resolve({fichierTorrent, transaction});
         });
       });
     });
   }
 
-  _transmettreTransactionTorrent(message) {
-
+  _transmettreTransactionTorrent(transaction) {
+    return this.mq.transmettreEnveloppeTransaction(transaction, domaineNouveauTorrent);
   }
 
   _seederTorrent(message) {

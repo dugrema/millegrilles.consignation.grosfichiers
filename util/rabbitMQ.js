@@ -201,16 +201,27 @@ class RabbitMQWrapper {
   transmettreTransactionFormattee(message, domaine) {
     let messageFormatte = message;  // Meme objet si ca cause pas de problemes
     let infoTransaction = this._formatterInfoTransaction(domaine);
-    const correlation = infoTransaction['uuid-transaction'];
     messageFormatte['en-tete'] = infoTransaction;
 
     // Signer le message avec le certificat
     this._signerMessage(messageFormatte);
-    const jsonMessage = JSON.stringify(message);
 
-    // Transmettre la nouvelle transaction. La promise permet de traiter
-    // le message de reponse.
-    let routingKey = 'transaction.nouvelle';
+    return this.transmettreEnveloppeTransaction(messageFormatte, domaine);
+
+    // const jsonMessage = JSON.stringify(message);
+    //
+    // // Transmettre la nouvelle transaction. La promise permet de traiter
+    // // le message de reponse.
+    // let routingKey = 'transaction.nouvelle';
+    // let promise = this._transmettre(routingKey, jsonMessage, correlation);
+    //
+    // return promise;
+  }
+
+  transmettreEnveloppeTransaction(transactionFormattee, domaine) {
+    const jsonMessage = JSON.stringify(transactionFormattee);
+    const correlation = transactionFormattee['en-tete']['uuid-transaction'];
+    const routingKey = 'transaction.nouvelle';
     let promise = this._transmettre(routingKey, jsonMessage, correlation);
 
     return promise;
