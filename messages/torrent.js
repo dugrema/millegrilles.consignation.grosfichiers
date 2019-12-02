@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const createTorrent = require('create-torrent')
 const {pathConsignation} = require('../util/traitementFichier');
 
 class TorrentMessages {
@@ -35,11 +36,18 @@ class TorrentMessages {
     console.debug("Creer nouveau torrent");
     console.debug(message);
 
-    this._creerRepertoireHardlinks(message)
+    // Creer repertoire pour collection figee
+    const nomCollection = message.nom + '.' + message.uuid;
+    const pathCollection = pathConsignation.formatPathTorrentCollection(nomCollection);
+
+    this._creerRepertoireHardlinks(message, nomCollection, pathCollection)
     .then(result=>{
       console.debug("Hard links crees");
+      return this._creerFichierTorrent(message, nomCollection, pathCollection);
+    })
+    .then(pathFichierTorrent=>{
+      console.debug("Fichier torrent cree: " + pathFichierTorrent);
 
-      // this._creerFichierTorrent(message);
       // this._transmettreTransactionTorrent(message);
       // this._seederTorrent(message);
 
@@ -59,14 +67,10 @@ class TorrentMessages {
 
   // Fabriquer un repertoire pour la collection figee. Creer hard links pour
   // tous les fichiers de la collection.
-  _creerRepertoireHardlinks(message) {
+  _creerRepertoireHardlinks(message, nomCollection, pathCollection) {
     console.debug("Creer repertoire hard links");
 
     return new Promise((resolve, reject) => {
-
-      // Creer repertoire pour collection figee
-      const nomCollection = message.nom + '.' + message.uuid;
-      const pathCollection = pathConsignation.formatPathTorrentCollection(nomCollection);
 
       fs.mkdir(pathCollection, e=>{
         if(e) {
@@ -112,8 +116,50 @@ class TorrentMessages {
 
   }
 
-  _creerFichierTorrent(message) {
+  _creerFichierTorrent(message, nomCollection, pathCollection) {
+    const fichierTorrent = pathCollection + '.torrent';
+    const securite = message.securite;
+    const privateTorrent = securite!='1.public';
+    const trackers = [[]]
 
+    const transaction = {
+      'catalogue': message.documents,
+      'securite': securite,
+    }
+    const info = {
+      'millegrilles': transaction,
+    }
+
+    const opts = {
+      name: nomCollection+'ma ma ma',
+      comment: message.commentaires,
+      createdBy: 'create-torrent/millegrilles 1.16',
+      private: privateTorrent,
+      // announceList: [[String]], // custom trackers (array of arrays of strings) (see [bep12](http://www.bittorrent.org/beps/bep_0012.html))
+      // urlList: [String],        // web seed urls (see [bep19](http://www.bittorrent.org/beps/bep_0019.html))
+      info: info
+    }
+
+    return new Promise((resolve, reject)=>{
+
+      createTorrent(pathCollection, opts, (err, torrent) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        // `torrent` is a Buffer with the contents of the new .torrent file
+        fs.writeFile(fichierTorrent, torrent, err=>{
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          console.debug("Fichier torrent cree");
+          resolve(fichierTorrent);
+        });
+      });
+    });
   }
 
   _transmettreTransactionTorrent(message) {
