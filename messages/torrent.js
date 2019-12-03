@@ -9,9 +9,6 @@ const uuid = require('uuid');
 
 const domaineNouveauTorrent = 'millegrilles.domaines.GrosFichiers.nouveauTorrent';
 const domaineSeedingTorrent = 'millegrilles.domaines.GrosFichiers.seedingTorrent';
-const trackers = [
-  ['https://mg-dev3.maple.maceroc.com:3004/announce/'],
-]
 
 // Creer instance de transmission RPC (torrents)
 const transmission = new TransmissionRPC({
