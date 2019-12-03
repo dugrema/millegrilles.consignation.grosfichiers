@@ -13,9 +13,8 @@ class PathConsignation {
 
     // Path utilisable localement
     this.consignationPathLocal = path.join(this.consignationPath, '/local');
-    this.consignationPathTorrent = path.join(this.consignationPath, '/torrents_seeds');
-    this.consignationPathManagedTorrents = path.join(this.consignationPath, '/torrents_managed');
-    this.consignationPathTorrentStaging = path.join(this.consignationPath, '/torrent_staging');
+    this.consignationPathSeeding = path.join(this.consignationPath, '/torrents/seeding');
+    this.consignationPathManagedTorrents = path.join(this.consignationPath, '/torrents/torrentfiles');
   }
 
   trouverPathLocal(fichierUuid, encrypte) {
@@ -24,7 +23,7 @@ class PathConsignation {
   }
 
   formatPathFichierTorrent(nomCollection) {
-    return path.join(this.consignationPathTorrent, nomCollection + '.torrent');
+    return path.join(this.consignationPathManagedTorrents, nomCollection + '.torrent');
   }
 
   formatPathTorrentStagingCollection(nomCollection) {

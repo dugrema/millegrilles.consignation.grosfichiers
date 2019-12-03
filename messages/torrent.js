@@ -109,7 +109,8 @@ class TorrentMessages {
 
     // Creer repertoire pour collection figee
     const nomCollection = message.nom;
-    const pathCollection = path.join(pathConsignation.consignationPathManagedTorrents, message.uuid, nomCollection);
+    const uuidCollection = message.uuid;
+    const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
     var pathFichierTorrent = null;
 
     this._creerRepertoireHardlinks(message, nomCollection, pathCollection)
@@ -120,11 +121,12 @@ class TorrentMessages {
     .then(({fichierTorrent, transaction})=>{
 
       console.debug("Fichier torrent cree: " + fichierTorrent);
+      pathFichierTorrent = fichierTorrent;
+      this._seederTorrent(pathFichierTorrent, uuidCollection);
       return this._transmettreTransactionTorrent(transaction);
     })
     .then(result=>{
       console.debug("Transaction du nouveau torrent soumise");
-      // this._seederTorrent(message);
     })
     .catch(err=>{
       console.error("Erreur creation torrent");
@@ -249,8 +251,20 @@ class TorrentMessages {
     return this.mq.transmettreEnveloppeTransaction(transaction, domaineNouveauTorrent);
   }
 
-  _seederTorrent(message) {
+  _seederTorrent(pathFichierTorrent, uuidCollection) {
+    const pathCollection = path.join('/torrents/seeding', uuidCollection);
 
+    const opts = {
+      'download-dir': pathCollection,
+    }
+
+    transmission.addFile(pathFichierTorrent, opts, (err, arg)=>{
+      if(err) {
+        console.error("Erreur seeding torrent " + pathFichierTorrent);
+        console.error(err);
+      }
+      console.log("Seeding torrent : " + pathFichierTorrent);
+    })
   }
 
   supprimerTorrent(routingKey, message, opts) {
@@ -276,10 +290,6 @@ class TorrentMessages {
     const correlationId = opts.properties.correlationId;
     const replyTo = opts.properties.replyTo;
     console.debug("Etat transmission, repondre a Q " + replyTo + ", correlationId " + correlationId);
-
-    // console.debug("Tranmission status: ");
-    // console.debug(transmission);
-    // console.debug(transmission.status);
 
     var reponseCumulee = {};
 
