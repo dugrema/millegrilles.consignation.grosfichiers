@@ -8,12 +8,9 @@ const {pathConsignation} = require('../util/traitementFichier');
 const uuid = require('uuid');
 
 const domaineNouveauTorrent = 'millegrilles.domaines.GrosFichiers.nouveauTorrent';
+const domaineSeedingTorrent = 'millegrilles.domaines.GrosFichiers.seedingTorrent';
 const trackers = [
   ['https://mg-dev3.maple.maceroc.com:3004/announce/'],
-  ['https://mg-dev3.local:3004/announce/'],
-  ['udp://mg-dev3.maple.maceroc.com:6969'],
-  ['http://mg-dev3.local:6969/announce'],
-  ['http://mg-dev3.maple.maceroc.com:6969/announce'],
 ]
 
 // Creer instance de transmission RPC (torrents)
@@ -118,12 +115,12 @@ class TorrentMessages {
       console.debug("Hard links crees");
       return this._creerFichierTorrent(message, nomCollection, pathCollection);
     })
-    .then(({fichierTorrent, transaction})=>{
+    .then(({fichierTorrent, transactionTorrent})=>{
 
       console.debug("Fichier torrent cree: " + fichierTorrent);
       pathFichierTorrent = fichierTorrent;
       this._seederTorrent(pathFichierTorrent, uuidCollection);
-      return this._transmettreTransactionTorrent(transaction);
+      return this._transmettreTransactionTorrent(transactionTorrent);
     })
     .then(result=>{
       console.debug("Transaction du nouveau torrent soumise");
@@ -200,7 +197,7 @@ class TorrentMessages {
     const uuidTorrent = uuidv1();
     const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent);
 
-    const transaction = {
+    const transactionTorrent = {
       'catalogue': message.documents,
       'securite': securite,
       'uuid-collection': message.uuid,
@@ -208,7 +205,7 @@ class TorrentMessages {
       'etiquettes': message.etiquettes,
     }
 
-    const transactionFormattee = this.mq.formatterTransaction(domaineNouveauTorrent, transaction);
+    const transactionFormattee = this.mq.formatterTransaction(domaineNouveauTorrent, transactionTorrent);
 
     const info = {
       'millegrilles': transactionFormattee,
@@ -241,7 +238,8 @@ class TorrentMessages {
           }
 
           console.debug("Fichier torrent cree");
-          resolve({fichierTorrent, transaction});
+
+          resolve({fichierTorrent, transactionTorrent});
         });
       });
     });
@@ -264,6 +262,17 @@ class TorrentMessages {
         console.error(err);
       }
       console.log("Seeding torrent : " + pathFichierTorrent);
+      console.log(arg);
+
+      // Transmettre transaction pour confirmer ajout du torrent.
+      // Inclue aussi la hashString
+      const transactionSeeding = {
+        'uuid-collection': uuidCollection,
+        'hashstring-torrent': arg.hashString,
+        'operation-torrent': 'seeding',
+      };
+
+      this.mq.transmettreTransactionFormattee(transactionSeeding, domaineSeedingTorrent);
     })
   }
 
