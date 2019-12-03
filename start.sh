@@ -15,4 +15,6 @@ export PORT=3003
 
 export MG_HTTPPROXY_SECURE=false
 
+export TRANSMISSION_PASSWORD='bwahahah1202'
+
 npm start

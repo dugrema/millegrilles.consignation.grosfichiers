@@ -15,10 +15,10 @@ const trackers = [
 
 // Creer instance de transmission RPC (torrents)
 const transmission = new TransmissionRPC({
-  host: 'localhost',
-  port: 9091,
-  username: 'millegrilles',
-  password: 'bwahahah1202',
+  host: process.env.TRANSMISSION_HOST || 'localhost',
+  port: process.env.TRANSMISSION_PORT || 9091,
+  username: process.env.TRANSMISSION_USERNAME || 'millegrilles',
+  password: process.env.TRANSMISSION_PASSWORD,
   ssl: false,
 });
 
@@ -88,17 +88,6 @@ class TorrentMessages {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
       this.etatTransmission(routingKey, message, opts)}, ['requete.torrent.etat']);
   }
-
-  // transmettreCertificat() {
-  //   let messageCertificat = pki.preparerMessageCertificat();
-  //   let fingerprint = messageCertificat.fingerprint;
-  //   let messageJSONStr = JSON.stringify(messageCertificat);
-  //   this.mq._publish(
-  //     'pki.certificat.' + fingerprint, messageJSONStr
-  //   );
-  //
-  //   return fingerprint;
-  // }
 
   creerNouveauTorrent(routingKey, message) {
     console.debug("Creer nouveau torrent");
@@ -283,6 +272,7 @@ class TorrentMessages {
       if(err) {
         console.error("Erreur seeding torrent " + pathFichierTorrent);
         console.error(err);
+        return;
       }
       console.log("Seeding torrent : " + pathFichierTorrent);
       console.log(arg);
