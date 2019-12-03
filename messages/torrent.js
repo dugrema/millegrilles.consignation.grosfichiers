@@ -1,9 +1,11 @@
 const path = require('path');
 const fs = require('fs');
 const createTorrent = require('create-torrent')
-const uuidv1 = require('uuid/v4');
+const uuidv1 = require('uuid/v1');
+const uuidv4 = require('uuid/v4');
 const TransmissionRPC = require('transmission');
 const {pathConsignation} = require('../util/traitementFichier');
+const uuid = require('uuid');
 
 const domaineNouveauTorrent = 'millegrilles.domaines.GrosFichiers.nouveauTorrent';
 const trackers = [
@@ -15,13 +17,51 @@ const trackers = [
 ]
 
 // Creer instance de transmission RPC (torrents)
-const transmission = TransmissionRPC({
+const transmission = new TransmissionRPC({
   host: 'localhost',
   port: 9091,
   username: 'millegrilles',
   password: 'bwahahah1202',
   ssl: false,
 });
+
+TransmissionRPC.prototype.seeds = function (callback) {
+
+    var filtrerSeeds = function(err, result) {
+      if(err) {
+        // Erreur, on passe tout de suite au callback
+        callback(err, null);
+        return;
+      }
+
+      let seeds = [];
+      for(let idx in result.torrents) {
+        let torrent = result.torrents[idx];
+        if(torrent.status == 5 || torrent.status == 6) {
+          seeds.push(torrent);
+        }
+      }
+
+      callback(null, {torrents: seeds});
+    };
+
+    var options = {
+        arguments: {
+            fields: [
+              'activityDate', 'addedDate', 'creator', 'dateCreated',
+              'error', 'errorString', 'hashString', 'id', 'isPrivate',
+              'peersConnected', 'rateUpload', 'seedIdleLimit', 'seedIdleMode',
+              'seedRatioLimit', 'seedRatioMode', 'status', 'totalSize'],
+        },
+        method: transmission.methods.torrents.get,
+        tag: uuidv4(),
+    };
+    transmission.callServer(options, filtrerSeeds);
+    return transmission;
+};
+
+console.log(transmission);
+
 
 class TorrentMessages {
 
@@ -152,7 +192,7 @@ class TorrentMessages {
   // Genere le fichier torrent avec le contenu de la transaction
   _creerFichierTorrent(message, nomCollection, pathCollection) {
     const securite = message.securite;
-    const privateTorrent = false; // securite!='1.public';
+    const privateTorrent = securite!='1.public';
 
     const uuidTorrent = uuidv1();
     const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent);
@@ -217,11 +257,61 @@ class TorrentMessages {
     const replyTo = opts.properties.replyTo;
     console.debug("Etat transmission, repondre a Q " + replyTo + ", correlationId " + correlationId);
 
-    // Transmettre reponse
-    this.mq.transmettreReponse({texte: 'Voici ma reponse'}, replyTo, correlationId)
-    .catch(err=>{
-      console.error("Erreur transmission reponse etat torrent");
-      console.error(err);
+    // console.debug("Tranmission status: ");
+    // console.debug(transmission);
+    // console.debug(transmission.status);
+
+    var reponseCumulee = {};
+
+    let transmettreReponse = (reponse) => {
+      // Transmettre reponse
+      this.mq.transmettreReponse(reponse, replyTo, correlationId)
+      .catch(err=>{
+        console.error("Erreur transmission reponse etat torrent");
+        console.error(err);
+      })
+    }
+
+    // Interroger Transmission
+    transmission.sessionStats((err, reponse)=>{
+      if(err) {
+        console.error(err);
+        transmettreReponse({erreur: "Erreur d'access a transmission"});
+        return;
+      }
+
+      console.log("Reponse transmission.sessionStats");
+      console.log(reponse);
+      reponseCumulee['sessionStats'] = reponse;
+      // transmettreReponse(reponseCumulee);
+
+      transmission.seeds((err, reponse)=>{
+        if(err) {
+          console.error(err);
+          transmettreReponse({erreur: "Erreur d'access a transmission"});
+          return;
+        }
+
+        console.log("Reponse transmission.all");
+        console.log(reponse);
+        reponseCumulee['seeds'] = reponse.torrents;
+
+        transmission.session((err, reponse)=>{
+          if(err) {
+            console.error(err);
+            transmettreReponse({erreur: "Erreur d'access a transmission"});
+            return;
+          }
+
+          console.log("Reponse transmission.seeding");
+          console.log(reponse);
+          reponseCumulee['session'] = reponse;
+
+          transmettreReponse(reponseCumulee);
+        });
+
+      });
+
     })
 
   }
