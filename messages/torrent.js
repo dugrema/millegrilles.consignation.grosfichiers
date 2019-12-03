@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const createTorrent = require('create-torrent')
 const uuidv1 = require('uuid/v4');
+const TransmissionRPC = require('transmission');
 const {pathConsignation} = require('../util/traitementFichier');
 
 const domaineNouveauTorrent = 'millegrilles.domaines.GrosFichiers.nouveauTorrent';
@@ -13,12 +14,22 @@ const trackers = [
   ['http://mg-dev3.maple.maceroc.com:6969/announce'],
 ]
 
+// Creer instance de transmission RPC (torrents)
+const transmission = TransmissionRPC({
+  host: 'localhost',
+  port: 9091,
+  username: 'millegrilles',
+  password: 'bwahahah1202',
+  ssl: false,
+});
+
 class TorrentMessages {
 
   constructor(mq) {
     this.mq = mq;
 
     this.creerNouveauTorrent.bind(this);
+    this.etatTransmission.bind(this);
   }
 
   // Appele lors d'une reconnexion MQ
@@ -36,8 +47,8 @@ class TorrentMessages {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
       this.arreterSeeding(routingKey, message)}, ['commande.torrent.arreterSeeding']);
 
-    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      this.etatSeeding(routingKey, message)}, ['requete.torrent.etatSeeding']);
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
+      this.etatTransmission(routingKey, message, opts)}, ['requete.torrent.etat']);
   }
 
   // transmettreCertificat() {
@@ -198,6 +209,20 @@ class TorrentMessages {
   }
 
   _seederTorrent(message) {
+
+  }
+
+  etatTransmission(routingKey, message, opts) {
+    const correlationId = opts.properties.correlationId;
+    const replyTo = opts.properties.replyTo;
+    console.debug("Etat transmission, repondre a Q " + replyTo + ", correlationId " + correlationId);
+
+    // Transmettre reponse
+    this.mq.transmettreReponse({texte: 'Voici ma reponse'}, replyTo, correlationId)
+    .catch(err=>{
+      console.error("Erreur transmission reponse etat torrent");
+      console.error(err);
+    })
 
   }
 

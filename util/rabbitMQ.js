@@ -160,14 +160,16 @@ class RabbitMQWrapper {
             let messageContent = decodeURIComponent(escape(msg.content));
             let routingKey = msg.fields.routingKey;
 
-            if(correlationId) {
+            if(correlationId && this.pendingResponses[correlationId]) {
+              // On a recu un message de reponse
               let callback = this.pendingResponses[correlationId];
               if(callback) {
                 callback(msg);
                 delete this.pendingResponses[correlationId];
               }
             } else if(routingKey) {
-              routingKeyManager.handleMessage(routingKey, messageContent);
+              // Traiter le message via handlers
+              routingKeyManager.handleMessage(routingKey, messageContent, msg.properties);
             } else {
               console.debug("Recu message sans correlation Id ou routing key");
               console.warn(msg);
@@ -236,6 +238,37 @@ class RabbitMQWrapper {
     // Signer le message avec le certificat
     this._signerMessage(messageFormatte);
     return messageFormatte;
+  }
+
+  // Transmet reponse (e.g. d'une requete)
+  // Repond directement a une Q (exclusive)
+  transmettreReponse(message, replyTo, correlationId) {
+    const messageFormatte = this.formatterTransaction(replyTo, message);
+    const jsonMessage = JSON.stringify(messageFormatte);
+
+    // Faire la publication
+    return new Promise((resolve, reject)=>{
+      this.channel.publish(
+        '',
+        replyTo,
+        Buffer.from(jsonMessage),
+        {
+          correlationId: correlationId
+        },
+        function(err, ok) {
+          if(err) {
+            console.error("Erreur MQ Callback");
+            console.error(err);
+            reject(err);
+            return;
+          }
+          console.debug("Reponse transmise");
+          console.debug(ok);
+          resolve(ok);
+        }
+      );
+    });
+
   }
 
   _formatterInfoTransaction(domaine) {
@@ -423,11 +456,14 @@ class RoutingKeyManager {
     this.handleMessage.bind(this);
   }
 
-  handleMessage(routingKey, messageContent) {
+  handleMessage(routingKey, messageContent, properties) {
     let callback = this.registeredRoutingKeyCallbacks[routingKey];
     if(callback) {
       let json_message = JSON.parse(messageContent);
-      callback(routingKey, json_message);
+      let opts = {
+        properties
+      }
+      callback(routingKey, json_message, opts);
     } else {
       console.warn("Routing key pas de callback: " + routingKey);
     }
