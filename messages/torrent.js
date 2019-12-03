@@ -93,9 +93,8 @@ class TorrentMessages {
     console.debug("Creer nouveau torrent");
     console.debug(message);
 
-    // Creer repertoire pour collection figee
     const nomCollection = message.nom;
-    const uuidCollection = message.uuid;
+    const uuidCollection = message['uuid-fige'];
     const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
     var pathFichierTorrent = null;
 
@@ -184,7 +183,7 @@ class TorrentMessages {
     const privateTorrent = securite!='1.public';
     const crypte = securite=='3.protege' || securite=='4.secure';
 
-    const uuidTorrent = uuidv1();
+    const uuidTorrent = message['uuid-fige'];
     const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent);
     const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidTorrent, crypte);
 
@@ -192,6 +191,7 @@ class TorrentMessages {
       'catalogue': message.documents,
       'securite': securite,
       'uuid-collection': message.uuid,
+      'uuid-fige': message['uuid-fige'],
       'uuid-torrent': uuidTorrent,
       'etiquettes': message.etiquettes,
     }
@@ -202,6 +202,12 @@ class TorrentMessages {
       'millegrilles': transactionFormattee,
     }
 
+    // Creer repertoire pour collection figee
+    const trackers = []
+    for(let idx in message.trackers) {
+      let tracker = message.trackers[idx];
+      trackers.push([tracker]);  // Mettre dans un array, c'est le format pour transmission rpc.
+    }
 
     const opts = {
       name: message.nom,
