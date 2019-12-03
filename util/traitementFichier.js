@@ -13,8 +13,9 @@ class PathConsignation {
 
     // Path utilisable localement
     this.consignationPathLocal = path.join(this.consignationPath, '/local');
-    this.consignationPathTorrent = path.join(this.consignationPath, '/torrents');
-    this.consignationPathTorrentStaging = path.join(this.consignationPath, '/torrent_staging/complete');
+    this.consignationPathTorrent = path.join(this.consignationPath, '/torrents_seeds');
+    this.consignationPathManagedTorrents = path.join(this.consignationPath, '/torrents_managed');
+    this.consignationPathTorrentStaging = path.join(this.consignationPath, '/torrent_staging');
   }
 
   trouverPathLocal(fichierUuid, encrypte) {

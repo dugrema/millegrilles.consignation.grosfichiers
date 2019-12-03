@@ -109,7 +109,7 @@ class TorrentMessages {
 
     // Creer repertoire pour collection figee
     const nomCollection = message.nom;
-    const pathCollection = pathConsignation.formatPathTorrentStagingCollection(nomCollection);
+    const pathCollection = path.join(pathConsignation.consignationPathManagedTorrents, message.uuid, nomCollection);
     var pathFichierTorrent = null;
 
     this._creerRepertoireHardlinks(message, nomCollection, pathCollection)
@@ -146,7 +146,7 @@ class TorrentMessages {
 
     return new Promise((resolve, reject) => {
 
-      fs.mkdir(pathCollection, e=>{
+      fs.mkdir(pathCollection, {recursive: true}, e=>{
         if(e) {
           reject(e);
           return;
