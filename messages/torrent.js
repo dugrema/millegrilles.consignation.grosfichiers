@@ -193,9 +193,11 @@ class TorrentMessages {
   _creerFichierTorrent(message, nomCollection, pathCollection) {
     const securite = message.securite;
     const privateTorrent = securite!='1.public';
+    const crypte = securite=='3.protege' || securite=='4.secure';
 
     const uuidTorrent = uuidv1();
     const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent);
+    const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidTorrent, crypte);
 
     const transactionTorrent = {
       'catalogue': message.documents,
@@ -239,6 +241,27 @@ class TorrentMessages {
 
           console.debug("Fichier torrent cree");
 
+          // Faire un hard link dans la base de consignation
+          const torrentDirName = path.dirname(pathTorrentConsigne);
+          fs.mkdir(torrentDirName, {recursive: true}, e=>{
+            if(e) {
+              console.error("Erreur creation repertoires consignation pour fichier torrent: " + pathTorrentConsigne);
+              console.error(e)
+              return;
+            }
+
+            fs.link(fichierTorrent, pathTorrentConsigne, e=>{
+              if(e) {
+                console.error("Erreur creation hard link consignation pour fichier torrent: " + pathTorrentConsigne);
+                console.error(e)
+                return;
+              }
+
+              console.debug("Creation hard link torrent: " + pathTorrentConsigne);
+            });
+
+          })
+
           resolve({fichierTorrent, transactionTorrent});
         });
       });
@@ -272,7 +295,11 @@ class TorrentMessages {
         'operation-torrent': 'seeding',
       };
 
-      this.mq.transmettreTransactionFormattee(transactionSeeding, domaineSeedingTorrent);
+      this.mq.transmettreTransactionFormattee(transactionSeeding, domaineSeedingTorrent)
+      .catch(err=>{
+        console.error("Erreur transaction seeding torrent");
+        console.error(err);
+      });
     })
   }
 
