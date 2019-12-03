@@ -70,6 +70,7 @@ class TorrentMessages {
 
     this.creerNouveauTorrent.bind(this);
     this.etatTransmission.bind(this);
+    this.supprimerTorrent.bind(this);
   }
 
   // Appele lors d'une reconnexion MQ
@@ -85,7 +86,7 @@ class TorrentMessages {
       this.commencerSeeding(routingKey, message)}, ['commande.torrent.commencerSeeding']);
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      this.arreterSeeding(routingKey, message)}, ['commande.torrent.arreterSeeding']);
+      this.supprimerTorrent(routingKey, message)}, ['commande.torrent.supprimer']);
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
       this.etatTransmission(routingKey, message, opts)}, ['requete.torrent.etat']);
@@ -250,6 +251,25 @@ class TorrentMessages {
 
   _seederTorrent(message) {
 
+  }
+
+  supprimerTorrent(routingKey, message, opts) {
+    const torrentHashList = message.hashlist;
+    console.debug("Supprimer torrent " + torrentHashList);
+
+    const deleteFolder = true;
+
+    transmission.remove(torrentHashList, deleteFolder, (err, arg)=>{
+      if(err) {
+        console.error("Erreur suppression torrents");
+        console.error(err);
+        return;
+      }
+
+      console.debug("Torrents supprimes");
+      console.debug(torrentHashList);
+      console.debug(arg);
+    });
   }
 
   etatTransmission(routingKey, message, opts) {
