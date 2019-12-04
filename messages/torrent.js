@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const createTorrent = require('create-torrent')
+const parseTorrent = require('parse-torrent')
 const uuidv1 = require('uuid/v1');
 const uuidv4 = require('uuid/v4');
 const TransmissionRPC = require('transmission');
@@ -9,6 +10,7 @@ const uuid = require('uuid');
 
 const domaineNouveauTorrent = 'millegrilles.domaines.GrosFichiers.nouveauTorrent';
 const domaineSeedingTorrent = 'millegrilles.domaines.GrosFichiers.seedingTorrent';
+const evenementTorrent = 'millegrilles.domaines.GrosFichiers.torrent';
 
 // Creer instance de transmission RPC (torrents)
 const transmission = new TransmissionRPC({
@@ -64,6 +66,7 @@ class TorrentMessages {
 
     this.creerNouveauTorrent.bind(this);
     this.etatTransmission.bind(this);
+    this.seederTorrent.bind(this);
     this.supprimerTorrent.bind(this);
   }
 
@@ -77,7 +80,7 @@ class TorrentMessages {
       this.creerNouveauTorrent(routingKey, message)}, ['commande.torrent.creerNouveau']);
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      this.commencerSeeding(routingKey, message)}, ['commande.torrent.commencerSeeding']);
+      this.seederTorrent(routingKey, message)}, ['commande.torrent.seederTorrent']);
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
       this.supprimerTorrent(routingKey, message)}, ['commande.torrent.supprimer']);
@@ -114,6 +117,104 @@ class TorrentMessages {
       console.error("Erreur creation torrent");
       console.error(err);
     });
+
+  }
+
+  seederTorrent(routingKey, message) {
+    console.debug("Seeder torrent");
+    console.debug(message);
+
+    const crypte = false;   // Cryptage torrent pas encore supporte
+    const uuidCollection = message['uuid'];
+    const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidCollection);
+    const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidCollection, crypte);
+
+    fs.readFile(pathTorrentConsigne, (e, bufferTorrent)=>{
+      if(e) {
+        console.error("Erreur leture fichier torrent " + bufferTorrent);
+        console.error(e);
+        return;
+      }
+
+      const contenuTorrent = parseTorrent(bufferTorrent);
+      // console.log(contenuTorrent);
+
+      const hashstring = contenuTorrent.infoHash;
+      const trackers = contenuTorrent.announce;
+      const infoCollection = contenuTorrent.info.millegrilles;
+      const nomCollection = contenuTorrent.name;
+      console.debug("Information collection extraite du torrent");
+      console.debug("Nom collection : " + nomCollection);
+      console.debug("HashString : " + hashstring);
+      console.debug("Trackers : " + trackers);
+      // console.log(infoCollection);
+
+      let catalogue = infoCollection.catalogue;
+      let fichiers = [];
+      for(let idx in catalogue) {
+        let fichierCatalogue = catalogue[idx];
+        let fichier = {
+          nom: fichierCatalogue.nom.toString(),
+          securite: fichierCatalogue.securite.toString(),
+          fuuid: fichierCatalogue.fuuid.toString(),
+        };
+        fichiers.push(fichier);
+      }
+
+      console.debug("Fichiers dans torrent");
+      console.debug(fichiers);
+
+      const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
+      this._creerRepertoireHardlinks({documents: fichiers}, nomCollection, pathCollection)
+      .catch(err=>{
+        console.error("Erreur creation hard links pour seeder");
+        console.error(err);
+      })
+      .then(()=>{
+        console.log("Hard links collection crees");
+
+        // Creer hard link pour fichier torrent
+        const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidCollection);
+        fs.link(pathTorrentConsigne, fichierTorrent, e=>{
+          if(e) {
+            if(e.code == 'EEXIST') {
+              console.debug("Hard link torrent existe deja");
+            } else {
+              console.error("Erreur creation hard link torrent");
+              console.error(e);
+              return;
+            }
+          }
+
+          this._seederTorrent(fichierTorrent, uuidCollection);
+        })
+      })
+
+    });
+
+    // const nomCollection = message.nom;
+    // const uuidCollection = message['uuid'];
+    // const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
+    // var pathFichierTorrent = null;
+    //
+    // this._creerRepertoireHardlinks(message, nomCollection, pathCollection)
+    // .catch(err=>{
+    //   console.error("Erreur creation hard links pour seeder");
+    //   console.error(err);
+    // })
+    // .then(()=>{
+    //   const uuidTorrent = message['uuid'];
+    //   const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent);
+    //   const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidTorrent, crypte);
+    //
+    //   console.debug("Fichier torrent cree: " + fichierTorrent);
+    //   pathFichierTorrent = fichierTorrent;
+    //   this._seederTorrent(pathFichierTorrent, uuidCollection);
+    // })
+    // .catch(err=>{
+    //   console.error("Erreur creation torrent");
+    //   console.error(err);
+    // });
 
   }
 
