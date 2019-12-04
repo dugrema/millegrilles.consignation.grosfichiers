@@ -292,6 +292,7 @@ class TorrentMessages {
       'uuid': uuidTorrent,
       'uuid-torrent': uuidTorrent,
       'etiquettes': message.etiquettes,
+      'nom': message.nom,
     }
 
     const transactionFormattee = this.mq.formatterTransaction(domaineNouveauTorrent, transactionTorrent);
