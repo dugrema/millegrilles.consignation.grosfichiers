@@ -91,7 +91,7 @@ class TorrentMessages {
     console.debug(message);
 
     const nomCollection = message.nom;
-    const uuidCollection = message['uuid-fige'];
+    const uuidCollection = message['uuid'];
     const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
     var pathFichierTorrent = null;
 
@@ -180,15 +180,15 @@ class TorrentMessages {
     const privateTorrent = securite!='1.public';
     const crypte = securite=='3.protege' || securite=='4.secure';
 
-    const uuidTorrent = message['uuid-fige'];
+    const uuidTorrent = message['uuid'];
     const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent);
     const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidTorrent, crypte);
 
     const transactionTorrent = {
       'catalogue': message.documents,
       'securite': securite,
-      'uuid-collection': message.uuid,
-      'uuid-fige': message['uuid-fige'],
+      'uuid-collection': message['uuid_source_figee'],
+      'uuid': uuidTorrent,
       'uuid-torrent': uuidTorrent,
       'etiquettes': message.etiquettes,
     }

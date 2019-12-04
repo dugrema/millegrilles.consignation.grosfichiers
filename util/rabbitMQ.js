@@ -157,7 +157,8 @@ class RabbitMQWrapper {
           q.queue,
           (msg) => {
             let correlationId = msg.properties.correlationId;
-            let messageContent = decodeURIComponent(escape(msg.content));
+            // let messageContent = decodeURIComponent(escape(msg.content));
+            let messageContent = msg.content.toString();
             let routingKey = msg.fields.routingKey;
 
             if(correlationId && this.pendingResponses[correlationId]) {
