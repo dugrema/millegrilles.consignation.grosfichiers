@@ -87,6 +87,10 @@ class TorrentMessages {
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
       this.etatTransmission(routingKey, message, opts)}, ['requete.torrent.etat']);
+
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
+      this.sommaireTransmission(routingKey, message, opts)}, ['requete.torrent.sommaire']);
+
   }
 
   creerNouveauTorrent(routingKey, message) {
@@ -436,6 +440,37 @@ class TorrentMessages {
 
       this._transmettreEvenementTorrent(torrentHashList, 'Supprimer');
     });
+  }
+
+  sommaireTransmission(routingKey, message, opts) {
+    const correlationId = opts.properties.correlationId;
+    const replyTo = opts.properties.replyTo;
+    console.debug("Sommaire transmission, repondre a Q " + replyTo + ", correlationId " + correlationId);
+
+    var reponseCumulee = {};
+    let transmettreReponse = (reponse) => {
+      // Transmettre reponse
+      this.mq.transmettreReponse(reponse, replyTo, correlationId)
+      .catch(err=>{
+        console.error("Erreur transmission reponse etat torrent");
+        console.error(err);
+      })
+    }
+
+    // Interroger Transmission
+    transmission.sessionStats((err, reponse)=>{
+      if(err) {
+        console.error(err);
+        transmettreReponse({erreur: "Erreur d'access a transmission"});
+        return;
+      }
+
+      console.log("Reponse transmission.sessionStats");
+      console.log(reponse);
+      reponseCumulee['sessionStats'] = reponse;
+      transmettreReponse(reponseCumulee);
+    });
+
   }
 
   etatTransmission(routingKey, message, opts) {
