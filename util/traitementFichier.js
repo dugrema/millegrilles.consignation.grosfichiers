@@ -68,8 +68,8 @@ class TraitementFichier {
         let headers = req.headers;
         let fileUuid = headers.fileuuid;
         let encrypte = headers.encrypte === "true";
-        let fuuide = pathConsignation.trouverPathLocal(fileUuid, encrypte);
-        let nouveauPathFichier = path.join(pathConsignation.consignationPathLocal, fuuide);
+        let nouveauPathFichier = pathConsignation.trouverPathLocal(fileUuid, encrypte);
+        // let nouveauPathFichier = path.join(pathConsignation.consignationPathLocal, fuuide);
 
         // Creer le repertoire au besoin, puis deplacer le fichier (rename)
         let pathRepertoire = path.dirname(nouveauPathFichier);
