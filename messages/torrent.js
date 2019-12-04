@@ -10,7 +10,7 @@ const uuid = require('uuid');
 
 const domaineNouveauTorrent = 'millegrilles.domaines.GrosFichiers.nouveauTorrent';
 const domaineSeedingTorrent = 'millegrilles.domaines.GrosFichiers.seedingTorrent';
-const evenementTorrent = 'millegrilles.domaines.GrosFichiers.torrent';
+const evenementTorrent = 'noeuds.source.millegrilles_domaines_GrosFichiers.torrents.evenement';
 
 // Creer instance de transmission RPC (torrents)
 const transmission = new TransmissionRPC({
@@ -365,6 +365,22 @@ class TorrentMessages {
     return this.mq.transmettreEnveloppeTransaction(transaction, domaineNouveauTorrent);
   }
 
+  _transmettreEvenementTorrent(hashString, evenement, opts) {
+    const transactionSeeding = {
+      'hashstring-torrent': hashString,
+      evenement,
+    };
+    if(opts) {
+      transactionSeeding.opts = opts;
+    }
+
+    this.mq.emettreEvenement(transactionSeeding, evenementTorrent)
+    .catch(err=>{
+      console.error("Erreur transmission evenement");
+      console.error(err);
+    });
+  }
+
   _seederTorrent(pathFichierTorrent, uuidCollection) {
     const pathCollection = path.join('/torrents/seeding', uuidCollection);
 
@@ -394,6 +410,9 @@ class TorrentMessages {
         console.error("Erreur transaction seeding torrent");
         console.error(err);
       });
+
+      this._transmettreEvenementTorrent(arg.hashString, 'seeding', {'uuid-collection': uuidCollection});
+
     })
   }
 
@@ -413,6 +432,8 @@ class TorrentMessages {
       console.debug("Torrents supprimes");
       console.debug(torrentHashList);
       console.debug(arg);
+
+      this._transmettreEvenementTorrent(torrentHashList, 'Supprimer');
     });
   }
 

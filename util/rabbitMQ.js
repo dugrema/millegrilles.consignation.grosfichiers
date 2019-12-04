@@ -347,6 +347,20 @@ class RabbitMQWrapper {
     return promise;
   }
 
+  emettreEvenement(message, routingKey) {
+
+    const infoTransaction = this._formatterInfoTransaction(routingKey);
+
+    message['en-tete'] = infoTransaction;
+    this._signerMessage(message);
+
+    const jsonMessage = JSON.stringify(message);
+
+    // Transmettre requete - la promise permet de traiter la reponse
+    const promise = this._transmettre(routingKey, jsonMessage);
+    return promise;
+  }
+
   _transmettre(routingKey, jsonMessage, correlationId) {
     // Setup variables pour timeout, callback
     let timeout, fonction_callback;
