@@ -11,6 +11,7 @@ const FS = require('fs');
 const rabbitMQ = require('../util/rabbitMQ');
 const {PkiMessages} = require('../messages/pki');
 const {TorrentMessages} = require('../messages/torrent');
+const {DecrypterFichier} = require('../messages/crypto');
 
 /**
  * Get port from environment and store in Express.
@@ -45,15 +46,17 @@ const server = Spdy.createServer(config, app).listen(port, () => {
 // Connecter a RabbitMQ
 let nomMilleGrille = process.env.MG_NOM_MILLEGRILLE || 'sansnom';
 let mqConnectionUrl = process.env.MG_MQ_URL || 'amqps://mq:5673/' + nomMilleGrille;
-var torrentMessageHandler;
 rabbitMQ.connect(mqConnectionUrl)
 .then(()=>{
   // Creer objets de connexion a MQ
   const pkiMessageHandler = new PkiMessages(rabbitMQ);
   rabbitMQ.enregistrerListenerConnexion(pkiMessageHandler);
 
-  torrentMessageHandler = new TorrentMessages(rabbitMQ);
+  const torrentMessageHandler = new TorrentMessages(rabbitMQ);
   rabbitMQ.enregistrerListenerConnexion(torrentMessageHandler);
+
+  const decrypterFichier = new DecrypterFichier(rabbitMQ);
+  rabbitMQ.enregistrerListenerConnexion(decrypterFichier);
 });
 
 
