@@ -196,30 +196,6 @@ class TorrentMessages {
 
     });
 
-    // const nomCollection = message.nom;
-    // const uuidCollection = message['uuid'];
-    // const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
-    // var pathFichierTorrent = null;
-    //
-    // this._creerRepertoireHardlinks(message, nomCollection, pathCollection)
-    // .catch(err=>{
-    //   console.error("Erreur creation hard links pour seeder");
-    //   console.error(err);
-    // })
-    // .then(()=>{
-    //   const uuidTorrent = message['uuid'];
-    //   const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent);
-    //   const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidTorrent, crypte);
-    //
-    //   console.debug("Fichier torrent cree: " + fichierTorrent);
-    //   pathFichierTorrent = fichierTorrent;
-    //   this._seederTorrent(pathFichierTorrent, uuidCollection);
-    // })
-    // .catch(err=>{
-    //   console.error("Erreur creation torrent");
-    //   console.error(err);
-    // });
-
   }
 
   requeteTorrent(routingKey, message) {
@@ -264,9 +240,9 @@ class TorrentMessages {
               return;
             }
 
-            if(documents.length < idx) {
+            if(idx < documents.length) {
               // Continuer boucle
-              linkDocsLoop();
+              linkDocsLoop(documents);
             } else{
               resolve();
             }
