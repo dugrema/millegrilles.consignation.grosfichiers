@@ -225,28 +225,39 @@ class TorrentMessages {
           let fuuid = fileDoc.fuuid;
           let securite = fileDoc.securite;
           let encrypte = securite == '3.protege' || securite == '4.secure';
-          const pathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte);
-          console.debug("Creer hard link pour " + pathFichier);
 
-          // Nom du fichier:
-          // Si 1.public ou 2.prive: nomFichier (extension deja inclue)
-          // Si 3.protege: nomFichier.mgs1 (2e extension)
-          // Si 4.secure: fuuid.mgs1
-          const nomFichier = ((securite!='4.secure')?fileDoc.nom+'.':'') + fileDoc.fuuid + (encrypte?'.mgs1':'');
-          const newPathFichier = path.join(pathCollection, nomFichier);
-          fs.link(pathFichier, newPathFichier, e=>{
-            if(e) {
-              reject(e);
-              return;
-            }
+          if(fuuid) {
+            const pathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte);
+            console.debug("Creer hard link pour " + pathFichier);
 
+            // Nom du fichier:
+            // Si 1.public ou 2.prive: nomFichier (extension deja inclue)
+            // Si 3.protege: nomFichier.mgs1 (2e extension)
+            // Si 4.secure: fuuid.mgs1
+            const nomFichier = ((securite!='4.secure')?fileDoc.nom+'.':'') + fileDoc.fuuid + (encrypte?'.mgs1':'');
+            const newPathFichier = path.join(pathCollection, nomFichier);
+            fs.link(pathFichier, newPathFichier, e=>{
+              if(e) {
+                reject(e);
+                return;
+              }
+
+              if(idx < documents.length) {
+                // Continuer boucle
+                linkDocsLoop(documents);
+              } else{
+                resolve();
+              }
+            })
+          } else {
+            // Pas un fichier, on skip pour le moment
             if(idx < documents.length) {
               // Continuer boucle
               linkDocsLoop(documents);
             } else{
               resolve();
             }
-          })
+          }
         };
         linkDocsLoop(message.documents); // Demarrer boucle
 
