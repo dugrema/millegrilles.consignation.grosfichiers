@@ -55,7 +55,7 @@ class DecrypterFichier {
 
         // Ouvrir et traiter fichier
         let readStream = fs.createReadStream(pathFichierCrypte);
-        readStream.pipe(writeStream);
+        readStream.pipe(cryptoStream);
 
         resolve();
       });
@@ -73,11 +73,15 @@ class DecrypterFichier {
 
     // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
     let decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
-    console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
-    console.debug(decryptedSecretKey);
+    decryptedSecretKey = decryptedSecretKey.toString('utf8');
+
+    var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
+      return parseInt(h, 16)
+    }));
+    console.debug("Cle secrete decryptee (" + typedArray.length + ") bytes");
 
     // Creer un decipher stream
-    var decipher = crypto.createDecipheriv('aes256', decryptedSecretKey, ivBuffer);
+    var decipher = crypto.createDecipheriv('aes256', typedArray, ivBuffer);
 
     return decipher;
 
