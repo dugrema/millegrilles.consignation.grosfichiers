@@ -65,7 +65,7 @@ class TorrentMessages {
     this.mq = mq;
 
     this.creerNouveauTorrent.bind(this);
-    this.etatTransmission.bind(this);
+    this.etatTorrent.bind(this);
     this.seederTorrent.bind(this);
     this.supprimerTorrent.bind(this);
   }
@@ -86,7 +86,7 @@ class TorrentMessages {
       this.supprimerTorrent(routingKey, message)}, ['commande.torrent.supprimer']);
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
-      this.etatTransmission(routingKey, message, opts)}, ['requete.torrent.etat']);
+      this.etatTorrent(routingKey, message, opts)}, ['requete.torrent.etat']);
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
       this.sommaireTransmission(routingKey, message, opts)}, ['requete.torrent.sommaire']);
@@ -473,63 +473,41 @@ class TorrentMessages {
 
   }
 
-  etatTransmission(routingKey, message, opts) {
+  etatTorrent(routingKey, message, opts) {
     const correlationId = opts.properties.correlationId;
     const replyTo = opts.properties.replyTo;
     console.debug("Etat transmission, repondre a Q " + replyTo + ", correlationId " + correlationId);
 
+    const listeHashstrings = message['hashstrings'];
+    console.debug("Liste hashstrings a verifier:");
+    console.debug(listeHashstrings);
+
     var reponseCumulee = {};
 
-    let transmettreReponse = (reponse) => {
+    const transmettreReponse = (reponse) => {
       // Transmettre reponse
       this.mq.transmettreReponse(reponse, replyTo, correlationId)
       .catch(err=>{
-        console.error("Erreur transmission reponse etat torrent");
+        console.error("Erreur transmission reponse etat torrents");
+        console.error(listeHashstrings);
         console.error(err);
       })
     }
 
     // Interroger Transmission
-    transmission.sessionStats((err, reponse)=>{
+    transmission.get(listeHashstrings, (err, reponse)=>{
       if(err) {
         console.error(err);
         transmettreReponse({erreur: "Erreur d'access a transmission"});
         return;
       }
 
-      console.log("Reponse transmission.sessionStats");
+      console.log("Reponse transmission.all");
       console.log(reponse);
-      reponseCumulee['sessionStats'] = reponse;
-      // transmettreReponse(reponseCumulee);
+      reponseCumulee['torrents'] = reponse.torrents;
 
-      transmission.seeds((err, reponse)=>{
-        if(err) {
-          console.error(err);
-          transmettreReponse({erreur: "Erreur d'access a transmission"});
-          return;
-        }
-
-        console.log("Reponse transmission.all");
-        console.log(reponse);
-        reponseCumulee['seeds'] = reponse.torrents;
-
-        transmission.session((err, reponse)=>{
-          if(err) {
-            console.error(err);
-            transmettreReponse({erreur: "Erreur d'access a transmission"});
-            return;
-          }
-
-          console.log("Reponse transmission.seeding");
-          console.log(reponse);
-          reponseCumulee['session'] = reponse;
-
-          transmettreReponse(reponseCumulee);
-        });
-
-      });
-
-    })
+      transmettreReponse(reponseCumulee);
+    });
 
   }
 
