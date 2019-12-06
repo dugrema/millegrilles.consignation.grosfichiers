@@ -48,12 +48,26 @@ class DecrypterFichier {
 
       let cryptoStream = this.getDecipherPipe4fuuid(cleSecreteDecryptee, iv);
 
+      // Calculer taille et sha256 du fichier decrypte. Necessaire pour transaction.
+      const sha256 = crypto.createHash('sha256');
+      var sha256Hash = null;
+      var tailleFichier = 0;
+      cryptoStream.on('data', chunk=>{
+        sha256.update(chunk);
+        tailleFichier = tailleFichier + chunk.length;
+      });
+      cryptoStream.on('end', ()=>{
+        // Comparer hash a celui du header
+        sha256Hash = sha256.digest('hex');
+        console.debug("Hash fichier " + sha256Hash);
+      });
+
       console.log("Decryptage fichier " + fuuid + " vers " + pathFichierDecrypte);
       let writeStream = fs.createWriteStream(pathFichierDecrypte);
 
       writeStream.on('close', ()=>{
         console.debug("Fermeture fichier decrypte");
-        this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte);
+        this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte, tailleFichier, sha256Hash);
       });
       writeStream.on('error', ()=>{
         console.error("Erreur decryptage fichier");
@@ -69,13 +83,18 @@ class DecrypterFichier {
 
   }
 
-  _transmettreTransactionFichierDecrypte(fuuidCrypte, fuuidDecrypte) {
+  _transmettreTransactionFichierDecrypte(fuuidCrypte, fuuidDecrypte, tailleFichier, sha256Hash) {
     const domaineTransaction = 'millegrilles.domaines.GrosFichiers.nouveauFichierDecrypte';
 
     const transaction = {
       'fuuid_crypte': fuuidCrypte,
       'fuuid_decrypte': fuuidDecrypte,
+      'taille': tailleFichier,
+      'sha256Hash': sha256Hash,
     }
+
+    console.debug("Transaction nouveauFichierDecrypte");
+    console.debug(transaction);
 
     this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
   }
