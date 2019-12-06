@@ -35,33 +35,49 @@ class DecrypterFichier {
     const pathFichierCrypte = pathConsignation.trouverPathLocal(fuuid, true);
 
     // Preparer fichier destination decrypte
-    const uuidFichierDecrypte = uuidv1();
-    const pathFichierDecrypte = pathConsignation.trouverPathLocal(uuidFichierDecrypte, false);
+    const fuuidFichierDecrypte = uuidv1();
+    const pathFichierDecrypte = pathConsignation.trouverPathLocal(fuuidFichierDecrypte, false);
     const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
-    return new Promise((resolve, reject)=>{
 
-      fs.mkdir(repFichierDecrypte, {recursive: true}, e=>{
-        if(e) {
-          reject(e);
-          return;
-        }
+    fs.mkdir(repFichierDecrypte, {recursive: true}, e=>{
+      if(e) {
+        console.error("Erreur creation repertoire pour decrypter fichier : " + repFichierDecrypte);
+        return;
+      }
 
-        let cryptoStream = this.getDecipherPipe4fuuid(cleSecreteDecryptee, iv);
+      let cryptoStream = this.getDecipherPipe4fuuid(cleSecreteDecryptee, iv);
 
-        console.log("Decryptage fichier " + fuuid + " vers " + pathFichierDecrypte);
-        let writeStream = fs.createWriteStream(pathFichierDecrypte);
-        cryptoStream.pipe(writeStream);
+      console.log("Decryptage fichier " + fuuid + " vers " + pathFichierDecrypte);
+      let writeStream = fs.createWriteStream(pathFichierDecrypte);
 
-        // Ouvrir et traiter fichier
-        let readStream = fs.createReadStream(pathFichierCrypte);
-        readStream.pipe(cryptoStream);
-
-        resolve();
+      writeStream.on('close', ()=>{
+        console.debug("Fermeture fichier decrypte");
+        this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte);
       });
+      writeStream.on('error', ()=>{
+        console.error("Erreur decryptage fichier");
+      });
+
+      cryptoStream.pipe(writeStream);
+
+      // Ouvrir et traiter fichier
+      let readStream = fs.createReadStream(pathFichierCrypte);
+      readStream.pipe(cryptoStream);
 
     });
 
+  }
+
+  _transmettreTransactionFichierDecrypte(fuuidCrypte, fuuidDecrypte) {
+    const domaineTransaction = 'millegrilles.domaines.GrosFichiers.nouveauFichierDecrypte';
+
+    const transaction = {
+      'fuuid_crypte': fuuidCrypte,
+      'fuuid_decrypte': fuuidDecrypte,
+    }
+
+    this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
   }
 
   getDecipherPipe4fuuid(cleSecrete, iv) {
