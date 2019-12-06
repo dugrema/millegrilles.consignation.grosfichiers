@@ -234,7 +234,28 @@ class TorrentMessages {
             // Si 1.public ou 2.prive: nomFichier (extension deja inclue)
             // Si 3.protege: nomFichier.mgs1 (2e extension)
             // Si 4.secure: fuuid.mgs1
-            const nomFichier = ((securite!='4.secure')?fileDoc.nom+'.':'') + fileDoc.fuuid + (encrypte?'.mgs1':'');
+            let nomFichier;
+            if(securite === '1.public') {
+              // Nom tel quel, pas de changement (risque de collision)
+              nomFichier = fileDoc.nom;
+            } else {
+              const fichierSplit = fileDoc.nom.split('.');
+              const extension = fichierSplit[fichierSplit.length-1];
+              const nomFichierPrefixe = fileDoc.nom.substring(0, fileDoc.nom.length - extension.length - 1);
+              console.debug("Nom fichier " + fileDoc.nom + ", extension " + extension + ", pref " + nomFichier);
+
+              if(securite === '2.prive') {
+                nomFichier = nomFichierPrefixe + '.' + fileDoc.fuuid + "." + extension;
+              } else if(securite === '3.protege') {
+                nomFichier = nomFichierPrefixe + '.' + fileDoc.fuuid + "." + extension + '.mgs1';
+              } else if(securite === '4.secure') {
+                nomFichier = fileDoc.fuuid + '.mgs1';
+              }
+            }
+
+            console.debug("Nom fichier: " + nomFichier + "(securite " + securite + ")");
+
+            // const nomFichier = ((securite!='4.secure')?fileDoc.nom+'.':'') + fileDoc.fuuid + (encrypte?'.mgs1':'');
             const newPathFichier = path.join(pathCollection, nomFichier);
             fs.link(pathFichier, newPathFichier, e=>{
               if(e) {
