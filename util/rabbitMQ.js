@@ -7,6 +7,8 @@ var pki = require('./pki.js');
 class RabbitMQWrapper {
 
   constructor() {
+    this.idmg = process.env.MG_IDMG;
+
     this.url = null;
     this.connection = null;
     this.channel = null;
@@ -280,12 +282,13 @@ class RabbitMQWrapper {
     let sourceSystem = 'coupdoeil/' + 'dev2.maple.mdugre.info' + "@" + pki.getCommonName();
     let infoTransaction = {
       'domaine': domaine,
-      'source-systeme': sourceSystem,
+       //'source-systeme': sourceSystem,
+      'idmg': this.idmg,
       'uuid-transaction': uuidv4(),
       'estampille': tempsLecture,
       'certificat': pki.getFingerprint(),
       'hachage-contenu': '',  // Doit etre calcule a partir du contenu
-      'version': 4
+      'version': 6
     };
 
     return infoTransaction;

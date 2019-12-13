@@ -7,9 +7,9 @@ const rabbitMQ = require('./rabbitMQ');
 class PathConsignation {
 
   constructor() {
-    this.nomMillegrille = process.env.MG_NOM_MILLEGRILLE || 'sansnom';
+    this.idmg = process.env.MG_IDMG || 'sansnom';
     this.consignationPath = process.env.MG_CONSIGNATION_PATH ||
-      path.join('/opt/millegrilles', this.nomMillegrille, 'mounts/consignation');
+      path.join('/var/opt/millegrilles/mounts/consignation');
 
     // Path utilisable localement
     this.consignationPathLocal = path.join(this.consignationPath, '/local');
