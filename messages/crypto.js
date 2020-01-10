@@ -36,7 +36,9 @@ class DecrypterFichier {
 
     // Preparer fichier destination decrypte
     const fuuidFichierDecrypte = uuidv1();
-    const pathFichierDecrypte = pathConsignation.trouverPathLocal(fuuidFichierDecrypte, false);
+    let extension = message.extension || path.parse(message.nomfichier).ext.toLowerCase().substr(1);
+    const paramsType = {extension, mimetype: message.mimetype};
+    const pathFichierDecrypte = pathConsignation.trouverPathLocal(fuuidFichierDecrypte, false, paramsType);
     const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
     fs.mkdir(repFichierDecrypte, {recursive: true}, e=>{
