@@ -39,7 +39,6 @@ class DecrypterFichier {
     const pathFichierDecrypte = pathConsignation.trouverPathLocal(fuuidFichierDecrypte, false);
     const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
-
     fs.mkdir(repFichierDecrypte, {recursive: true}, e=>{
       if(e) {
         console.error("Erreur creation repertoire pour decrypter fichier : " + repFichierDecrypte);
