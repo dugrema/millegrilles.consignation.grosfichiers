@@ -39,8 +39,9 @@ function processFichiersLocaux(header, req, res) {
   // GET devrait surtout etre utilise pour le developpement
   let fuuid = header.fuuid;
   let encrypted = (req.headers.securite === '3.protege' || req.headers.securite === '4.secure');
+  let extension = req.headers.extension;
 
-  var filePath = pathConsignation.trouverPathLocal(fuuid, encrypted);
+  var filePath = pathConsignation.trouverPathLocal(fuuid, encrypted, {extension});
   fs.stat(filePath, (err, stats)=>{
     if(err) {
       console.error(err);
