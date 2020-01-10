@@ -4,6 +4,9 @@ const {uuidToDate} = require('./UUIDUtils');
 const crypto = require('crypto');
 const rabbitMQ = require('./rabbitMQ');
 
+const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json');
+const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json');
+
 class PathConsignation {
 
   constructor() {
@@ -17,8 +20,10 @@ class PathConsignation {
     this.consignationPathManagedTorrents = path.join(this.consignationPath, '/torrents/torrentfiles');
   }
 
-  trouverPathLocal(fichierUuid, encrypte) {
-    let pathFichier = this._formatterPath(fichierUuid, encrypte);
+  // Retourne le path du fichier
+  // Type est un dict {mimetype, extension} ou une des deux valeurs doit etre fournie
+  trouverPathLocal(fichierUuid, encrypte, type) {
+    let pathFichier = this._formatterPath(fichierUuid, encrypte, type);
     return path.join(this.consignationPathLocal, pathFichier);
   }
 
@@ -30,12 +35,12 @@ class PathConsignation {
     return path.join(this.consignationPathTorrentStaging, nomCollection);
   }
 
-  _formatterPath(fichierUuid, encrypte) {
+  _formatterPath(fichierUuid, encrypte, type) {
     // Extrait la date du fileUuid, formatte le path en fonction de cette date.
     let timestamp = uuidToDate.extract(fichierUuid.replace('/', ''));
     // console.debug("uuid: " + fichierUuid + ". Timestamp " + timestamp);
 
-    let extension = encrypte?'mgs1':'dat';
+    let extension = encrypte?'mgs1':type.extension;
 
     let year = timestamp.getUTCFullYear();
     let month = timestamp.getUTCMonth() + 1; if(month < 10) month = '0'+month;
@@ -48,9 +53,6 @@ class PathConsignation {
 
     return fuuide;
   }
-
-
-
 
 }
 
@@ -66,9 +68,12 @@ class TraitementFichier {
       try {
         // Le nom du fichier au complet, incluant path, est fourni dans fuuide.
         let headers = req.headers;
+        console.debug(headers);
         let fileUuid = headers.fileuuid;
         let encrypte = headers.encrypte === "true";
-        let nouveauPathFichier = pathConsignation.trouverPathLocal(fileUuid, encrypte);
+        let extension = path.parse(headers.nomfichier).ext;
+        let mimetype = headers.mimetype;
+        let nouveauPathFichier = pathConsignation.trouverPathLocal(fileUuid, encrypte, {extension, mimetype});
         // let nouveauPathFichier = path.join(pathConsignation.consignationPathLocal, fuuide);
 
         // Creer le repertoire au besoin, puis deplacer le fichier (rename)
