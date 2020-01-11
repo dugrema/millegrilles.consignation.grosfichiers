@@ -12,6 +12,7 @@ const rabbitMQ = require('../util/rabbitMQ');
 const {PkiMessages} = require('../messages/pki');
 const {TorrentMessages} = require('../messages/torrent');
 const {DecrypterFichier} = require('../messages/crypto');
+const {GenerateurImages} = require('../messages/images');
 
 /**
  * Get port from environment and store in Express.
@@ -57,6 +58,9 @@ rabbitMQ.connect(mqConnectionUrl)
 
   const decrypterFichier = new DecrypterFichier(rabbitMQ);
   rabbitMQ.enregistrerListenerConnexion(decrypterFichier);
+
+  const generateurImages = new GenerateurImages(rabbitMQ);
+  rabbitMQ.enregistrerListenerConnexion(generateurImages);
 });
 
 

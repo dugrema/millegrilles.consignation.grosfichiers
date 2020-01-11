@@ -2,7 +2,10 @@ const path = require('path');
 const fs = require('fs');
 const uuidv1 = require('uuid/v1');
 const crypto = require('crypto');
+const { Decrypteur } = require('../util/cryptoUtils.js');
 const {pathConsignation} = require('../util/traitementFichier');
+
+const decrypteur = new Decrypteur();
 
 class DecrypterFichier {
 
@@ -47,38 +50,14 @@ class DecrypterFichier {
         return;
       }
 
-      let cryptoStream = this.getDecipherPipe4fuuid(cleSecreteDecryptee, iv);
-
-      // Calculer taille et sha256 du fichier decrypte. Necessaire pour transaction.
-      const sha256 = crypto.createHash('sha256');
-      var sha256Hash = null;
-      var tailleFichier = 0;
-      cryptoStream.on('data', chunk=>{
-        sha256.update(chunk);
-        tailleFichier = tailleFichier + chunk.length;
-      });
-      cryptoStream.on('end', ()=>{
-        // Comparer hash a celui du header
-        sha256Hash = sha256.digest('hex');
-        console.debug("Hash fichier " + sha256Hash);
-      });
-
-      console.log("Decryptage fichier " + fuuid + " vers " + pathFichierDecrypte);
-      let writeStream = fs.createWriteStream(pathFichierDecrypte);
-
-      writeStream.on('close', ()=>{
-        console.debug("Fermeture fichier decrypte");
+      decrypteur.decrypter(pathFichierCrypte, pathFichierDecrypte, cleSecreteDecryptee, iv).
+      then(({tailleFichier, sha256Hash})=>{
         this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte, tailleFichier, sha256Hash);
-      });
-      writeStream.on('error', ()=>{
-        console.error("Erreur decryptage fichier");
-      });
-
-      cryptoStream.pipe(writeStream);
-
-      // Ouvrir et traiter fichier
-      let readStream = fs.createReadStream(pathFichierCrypte);
-      readStream.pipe(cryptoStream);
+      })
+      .catch(err=>{
+        console.error("Erreur decryptage fichier " + pathFichierCrypte);
+        console.error(err);
+      })
 
     });
 
@@ -98,29 +77,6 @@ class DecrypterFichier {
     console.debug(transaction);
 
     this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
-  }
-
-  getDecipherPipe4fuuid(cleSecrete, iv) {
-    // On prepare un decipher pipe pour decrypter le contenu.
-
-    let ivBuffer = Buffer.from(iv, 'base64');
-    console.debug("IV (" + ivBuffer.length + "): ");
-    console.debug(iv);
-
-    // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
-    let decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
-    decryptedSecretKey = decryptedSecretKey.toString('utf8');
-
-    var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
-      return parseInt(h, 16)
-    }));
-    console.debug("Cle secrete decryptee (" + typedArray.length + ") bytes");
-
-    // Creer un decipher stream
-    var decipher = crypto.createDecipheriv('aes256', typedArray, ivBuffer);
-
-    return decipher;
-
   }
 
 }
