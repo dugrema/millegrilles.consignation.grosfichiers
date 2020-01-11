@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { withFile } = require('tmp-promise');
+const tmp = require('tmp-promise');
 const crypto = require('crypto');
 const im = require('imagemagick');
 const { DecrypterFichier } = require('./crypto.js')
@@ -42,40 +42,59 @@ class GenerateurImages {
 
     // Preparer fichier destination decrypte
     // Aussi preparer un fichier tmp pour le thumbnail
-    var convertedFile;
-    withFile(async (tmpThumbnail) => {
-      const thumbnailPath = tmpThumbnail.path;
-      await withFile(async (tmpDecrypted) => {
-        const decryptedPath = tmpDecrypted.path;
-        // Decrypter
+    var thumbnailBase64Content;
+    await tmp.file({ mode: 0o600 }).then(async tmpDecrypted => {
+      const decryptedPath = tmpDecrypted.path;
+      // Decrypter
+      try {
         var resultatsDecryptage = await decrypteur.decrypter(
           pathFichierCrypte, decryptedPath, cleSecreteDecryptee, iv);
         // console.debug("Fichier decrypte pour thumbnail sous " + pathTemp +
         //               ", taille " + resultatsDecryptage.tailleFichier +
         //               ", sha256 " + resultatsDecryptage.sha256Hash);
 
-        await this._imConvertPromise([decryptedPath, '-resize', '128', '-format', 'jpg', thumbnailPath]);
-      })
-
-      // Lire le fichier converti en memoire pour transformer en base64
-      convertedFile = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
-
-      // console.debug("Fichier converti");
-      // console.debug(convertedFile);
-      this._transmettreTransactionThumbnailProtege(fuuid, convertedFile)
+        thumbnailBase64Content = await this._genererThumbnail(decryptedPath);
+        // _imConvertPromise([decryptedPath, '-resize', '128', '-format', 'jpg', thumbnailPath]);
+      } finally {
+        // Effacer le fichier temporaire
+        tmpDecrypted.cleanup();
+      }
     })
+
+    // Lire le fichier converti en memoire pour transformer en base64
+    // convertedFile = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
+
+    // console.debug("Fichier converti");
+    // console.debug(convertedFile);
+    this._transmettreTransactionThumbnailProtege(fuuid, thumbnailBase64Content)
 
   }
 
-  _imConvertPromise(params) {
-    return new Promise((resolve, reject) => {
-      im.convert(params,
-        function(err, stdout){
-          if (err) reject(err);
-          console.log('stdout:', stdout);
-          resolve();
-        });
-    });
+  async _genererThumbnail(sourcePath, opts) {
+    // Preparer fichier destination decrypte
+    // Aussi preparer un fichier tmp pour le thumbnail
+    var base64Content;
+    await tmp.file({ mode: 0o600, postfix: '.jpg' }).then(async o => {
+
+      try {
+        const thumbnailPath = o.path;
+        // Convertir l'image - si c'est un gif anime, le fait de mettre [0]
+        // prend la premiere image de l'animation pour faire le thumbnail.
+        await this._imConvertPromise([sourcePath+'[0]', '-thumbnail', '200x150>', '-quality', '50', thumbnailPath]);
+
+        // Lire le fichier converti en memoire pour transformer en base64
+        base64Content = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
+      } finally {
+        // Effacer le fichier temporaire
+        o.cleanup();
+      }
+    })
+
+    return base64Content;
+  }
+
+  async _genererPreview(sourcePath, destinationPath, opts) {
+    await this._imConvertPromise([sourcePath+'[0]', '-resize', '720x540>', destinationPath]);
   }
 
   _transmettreTransactionThumbnailProtege(fuuid, thumbnail) {
@@ -87,6 +106,17 @@ class GenerateurImages {
     // console.debug(transaction);
 
     this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
+  }
+
+  _imConvertPromise(params) {
+    return new Promise((resolve, reject) => {
+      im.convert(params,
+        function(err, stdout){
+          if (err) reject(err);
+          console.log('stdout:', stdout);
+          resolve();
+        });
+    });
   }
 
   getDecipherPipe4fuuid(cleSecrete, iv) {
