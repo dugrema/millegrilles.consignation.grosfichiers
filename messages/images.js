@@ -54,7 +54,7 @@ class GenerateurImages {
         //               ", taille " + resultatsDecryptage.tailleFichier +
         //               ", sha256 " + resultatsDecryptage.sha256Hash);
 
-        await this._imConvertPromise([decryptedPath, '-resize', '128', thumbnailPath]);
+        await this._imConvertPromise([decryptedPath, '-resize', '128', '-format', 'jpg', thumbnailPath]);
       })
 
       // Lire le fichier converti en memoire pour transformer en base64
