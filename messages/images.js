@@ -30,8 +30,8 @@ class GenerateurImages {
 
   async genererThumbnail(routingKey, message) {
 
-    console.log("Message de declassement de grosfichiers");
-    console.log(message);
+    // console.log("Message de declassement de grosfichiers");
+    // console.log(message);
 
     const fuuid = message.fuuid;
     const cleSecreteDecryptee = message.cleSecreteDecryptee;
@@ -41,27 +41,28 @@ class GenerateurImages {
     const pathFichierCrypte = pathConsignation.trouverPathLocal(fuuid, true);
 
     // Preparer fichier destination decrypte
-    // const paramsType = {mimetype: message.mimetype};
+    // Aussi preparer un fichier tmp pour le thumbnail
     var convertedFile;
-    withFile(async (tmp2) => {
-      const thumbnailPath = tmp2.path;
-      await withFile(async (tmp1) => {
-        const pathTemp = tmp1.path;
+    withFile(async (tmpThumbnail) => {
+      const thumbnailPath = tmpThumbnail.path;
+      await withFile(async (tmpDecrypted) => {
+        const decryptedPath = tmpDecrypted.path;
         // Decrypter
         var resultatsDecryptage = await decrypteur.decrypter(
-          pathFichierCrypte, pathTemp, cleSecreteDecryptee, iv);
-        console.debug("Fichier decrypte pour thumbnail sous " + pathTemp +
-                      ", taille " + resultatsDecryptage.tailleFichier +
-                      ", sha256 " + resultatsDecryptage.sha256Hash);
+          pathFichierCrypte, decryptedPath, cleSecreteDecryptee, iv);
+        // console.debug("Fichier decrypte pour thumbnail sous " + pathTemp +
+        //               ", taille " + resultatsDecryptage.tailleFichier +
+        //               ", sha256 " + resultatsDecryptage.sha256Hash);
 
-        await this._imConvertPromise([pathTemp, '-resize', '120', thumbnailPath]);
+        await this._imConvertPromise([decryptedPath, '-resize', '128', thumbnailPath]);
       })
 
       // Lire le fichier converti en memoire pour transformer en base64
       convertedFile = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
 
-      console.debug("Fichier converti");
-      console.debug(convertedFile);
+      // console.debug("Fichier converti");
+      // console.debug(convertedFile);
+      this._transmettreTransactionThumbnailProtege(fuuid, convertedFile)
     })
 
   }
@@ -77,18 +78,13 @@ class GenerateurImages {
     });
   }
 
-  _transmettreTransactionFichierDecrypte(fuuidCrypte, fuuidDecrypte, tailleFichier, sha256Hash) {
-    const domaineTransaction = 'millegrilles.domaines.GrosFichiers.nouveauFichierDecrypte';
+  _transmettreTransactionThumbnailProtege(fuuid, thumbnail) {
+    const domaineTransaction = 'millegrilles.domaines.GrosFichiers.associerThumbnail';
 
-    const transaction = {
-      'fuuid_crypte': fuuidCrypte,
-      'fuuid_decrypte': fuuidDecrypte,
-      'taille': tailleFichier,
-      'sha256Hash': sha256Hash,
-    }
+    const transaction = {fuuid, thumbnail}
 
-    console.debug("Transaction nouveauFichierDecrypte");
-    console.debug(transaction);
+    // console.debug("Transaction thumbnail protege");
+    // console.debug(transaction);
 
     this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
   }
@@ -97,8 +93,8 @@ class GenerateurImages {
     // On prepare un decipher pipe pour decrypter le contenu.
 
     let ivBuffer = Buffer.from(iv, 'base64');
-    console.debug("IV (" + ivBuffer.length + "): ");
-    console.debug(iv);
+    // console.debug("IV (" + ivBuffer.length + "): ");
+    // console.debug(iv);
 
     // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
     let decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
@@ -107,7 +103,7 @@ class GenerateurImages {
     var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
       return parseInt(h, 16)
     }));
-    console.debug("Cle secrete decryptee (" + typedArray.length + ") bytes");
+    // console.debug("Cle secrete decryptee (" + typedArray.length + ") bytes");
 
     // Creer un decipher stream
     var decipher = crypto.createDecipheriv('aes256', typedArray, ivBuffer);
