@@ -87,10 +87,13 @@ class TraitementFichier {
             // console.debug("Ecriture fichier " + nouveauPathFichier);
             var sha256 = crypto.createHash('sha256');
             let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx', mode: 0o440});
-            writeStream.on('finish', ()=>{
+            writeStream.on('finish', data=>{
+              console.debug("Fin transmission");
+              console.debug(data);
+
               // Comparer hash a celui du header
               let sha256Hash = sha256.digest('hex');
-              console.debug("Hash fichier " + sha256Hash);
+              console.debug("Hash fichier remote : " + sha256Hash);
 
               let messageConfirmation = {
                 fuuid: fileUuid,
@@ -110,7 +113,7 @@ class TraitementFichier {
               });
 
               // console.log("Fichier ecrit: " + nouveauPathFichier);
-              resolve();
+              resolve({sha256Hash});
             })
             .on('error', err=>{
               console.error("Erreur sauvegarde fichier: " + nouveauPathFichier);

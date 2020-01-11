@@ -77,7 +77,12 @@ router.put('/local/nouveauFichier/*', function(req, res, next) {
     traitementFichier.traiterPut(req)
     .then(msg=>{
         // console.log("Retour top, grosfichier traite");
-        res.sendStatus(200);
+        // res.sendStatus(200);
+        response = {
+          sha256Hash: msg.sha256Hash
+        };
+        res.end(JSON.stringify(response));
+
     })
     .catch(err=>{
       console.error("Erreur traitement fichier " + req.url);
