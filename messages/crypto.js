@@ -4,6 +4,7 @@ const uuidv1 = require('uuid/v1');
 const crypto = require('crypto');
 const { Decrypteur } = require('../util/cryptoUtils.js');
 const {pathConsignation} = require('../util/traitementFichier');
+const transformationImages = require('../util/transformationImages');
 
 const decrypteur = new Decrypteur();
 
@@ -23,10 +24,9 @@ class DecrypterFichier {
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
       this.decrypterFichier(routingKey, message)}, ['commande.grosfichiers.decrypterFichier']);
-
   }
 
-  decrypterFichier(routingKey, message) {
+  async decrypterFichier(routingKey, message) {
     console.log("Message de declassement de grosfichiers");
     console.log(message);
 
@@ -38,21 +38,40 @@ class DecrypterFichier {
     const pathFichierCrypte = pathConsignation.trouverPathLocal(fuuid, true);
 
     // Preparer fichier destination decrypte
-    const fuuidFichierDecrypte = uuidv1();
+    const fuuidFichierDecrypte = uuidv1(), fuuidPreviewImage = uuidv1();
     let extension = message.extension || path.parse(message.nomfichier).ext.toLowerCase().substr(1);
     const paramsType = {extension, mimetype: message.mimetype};
     const pathFichierDecrypte = pathConsignation.trouverPathLocal(fuuidFichierDecrypte, false, paramsType);
     const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
-    fs.mkdir(repFichierDecrypte, {recursive: true}, e=>{
+    await fs.mkdir(repFichierDecrypte, {recursive: true}, e=>{
       if(e) {
         console.error("Erreur creation repertoire pour decrypter fichier : " + repFichierDecrypte);
         return;
       }
 
       decrypteur.decrypter(pathFichierCrypte, pathFichierDecrypte, cleSecreteDecryptee, iv).
-      then(({tailleFichier, sha256Hash})=>{
-        this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte, tailleFichier, sha256Hash);
+      then(async resultat =>{
+
+        if ( message.mimetype && message.mimetype.split('/')[0] === 'image' ) {
+          const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+          const repFichierDecrypte = path.dirname(pathFichierDecrypte);
+          console.debug("Decryptage image, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
+
+          await transformationImages.genererPreview(pathFichierDecrypte, pathPreviewImage);
+          var base64Thumbnail = await transformationImages.genererThumbnail(pathFichierDecrypte);
+
+          resultat.fuuidPreview = fuuidPreviewImage;
+          resultat.thumbnail = base64Thumbnail;
+        }
+
+        return resultat;
+      })
+      .then(resultat => {
+        var tailleFichier = resultat.tailleFichier;
+        var sha256Hash = resultat.sha256Hash;
+
+        this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte, resultat);
       })
       .catch(err=>{
         console.error("Erreur decryptage fichier " + pathFichierCrypte);
@@ -63,18 +82,26 @@ class DecrypterFichier {
 
   }
 
-  _transmettreTransactionFichierDecrypte(fuuidCrypte, fuuidDecrypte, tailleFichier, sha256Hash) {
+  _transmettreTransactionFichierDecrypte(fuuidCrypte, fuuidDecrypte, valeurs) {
     const domaineTransaction = 'millegrilles.domaines.GrosFichiers.nouveauFichierDecrypte';
 
     const transaction = {
       'fuuid_crypte': fuuidCrypte,
       'fuuid_decrypte': fuuidDecrypte,
-      'taille': tailleFichier,
-      'sha256Hash': sha256Hash,
+      'taille': valeurs.tailleFichier,
+      'sha256Hash': valeurs.sha256Hash,
     }
 
-    console.debug("Transaction nouveauFichierDecrypte");
-    console.debug(transaction);
+    if( valeurs.fuuidPreview ) {
+      transaction['fuuid_preview'] = valeurs.fuuidPreview;
+      transaction['mimetype_preview'] = 'image/jpeg';
+    }
+    if( valeurs.thumbnail ) {
+      transaction['thumbnail'] = valeurs.thumbnail;
+    }
+
+    // console.debug("Transaction nouveauFichierDecrypte");
+    // console.debug(transaction);
 
     this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
   }

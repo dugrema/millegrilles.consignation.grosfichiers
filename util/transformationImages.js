@@ -34,7 +34,6 @@ function _imConvertPromise(params) {
     im.convert(params,
       function(err, stdout){
         if (err) reject(err);
-        console.log('stdout:', stdout);
         resolve();
       });
   });
