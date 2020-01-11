@@ -42,16 +42,27 @@ class GenerateurImages {
 
     // Preparer fichier destination decrypte
     // const paramsType = {mimetype: message.mimetype};
-    withFile(async ({path, fd}) => {
-      // Decrypter
-      var resultatsDecryptage = await decrypteur.decrypter(
-        pathFichierCrypte, path, cleSecreteDecryptee, iv);
-      console.debug("Fichier decrypte pour thumbnail sous " + path +
-                    ", taille " + resultatsDecryptage.tailleFichier +
-                    ", sha256 " + resultatsDecryptage.sha256Hash);
+    var convertedFile;
+    withFile(async (tmp2) => {
+      const thumbnailPath = tmp2.path;
+      await withFile(async (tmp1) => {
+        const pathTemp = tmp1.path;
+        // Decrypter
+        var resultatsDecryptage = await decrypteur.decrypter(
+          pathFichierCrypte, pathTemp, cleSecreteDecryptee, iv);
+        console.debug("Fichier decrypte pour thumbnail sous " + pathTemp +
+                      ", taille " + resultatsDecryptage.tailleFichier +
+                      ", sha256 " + resultatsDecryptage.sha256Hash);
 
-      await this._imConvertPromise([path, '-resize', '120', '/tmp/converted.jpg']);
-    });
+        await this._imConvertPromise([pathTemp, '-resize', '120', thumbnailPath]);
+      })
+
+      // Lire le fichier converti en memoire pour transformer en base64
+      convertedFile = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
+
+      console.debug("Fichier converti");
+      console.debug(convertedFile);
+    })
 
   }
 
