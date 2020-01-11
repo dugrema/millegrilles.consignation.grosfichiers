@@ -6,6 +6,7 @@ const im = require('imagemagick');
 const { DecrypterFichier } = require('./crypto.js')
 const { Decrypteur } = require('../util/cryptoUtils.js');
 const {pathConsignation} = require('../util/traitementFichier');
+const transformationImages = require('../util/transformationImages');
 
 const decrypteur = new Decrypteur();
 
@@ -53,7 +54,7 @@ class GenerateurImages {
         //               ", taille " + resultatsDecryptage.tailleFichier +
         //               ", sha256 " + resultatsDecryptage.sha256Hash);
 
-        thumbnailBase64Content = await this._genererThumbnail(decryptedPath);
+        thumbnailBase64Content = await transformationImages.genererThumbnail(decryptedPath);
         // _imConvertPromise([decryptedPath, '-resize', '128', '-format', 'jpg', thumbnailPath]);
       } finally {
         // Effacer le fichier temporaire
@@ -70,33 +71,6 @@ class GenerateurImages {
 
   }
 
-  async _genererThumbnail(sourcePath, opts) {
-    // Preparer fichier destination decrypte
-    // Aussi preparer un fichier tmp pour le thumbnail
-    var base64Content;
-    await tmp.file({ mode: 0o600, postfix: '.jpg' }).then(async o => {
-
-      try {
-        const thumbnailPath = o.path;
-        // Convertir l'image - si c'est un gif anime, le fait de mettre [0]
-        // prend la premiere image de l'animation pour faire le thumbnail.
-        await this._imConvertPromise([sourcePath+'[0]', '-thumbnail', '200x150>', '-quality', '50', thumbnailPath]);
-
-        // Lire le fichier converti en memoire pour transformer en base64
-        base64Content = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
-      } finally {
-        // Effacer le fichier temporaire
-        o.cleanup();
-      }
-    })
-
-    return base64Content;
-  }
-
-  async _genererPreview(sourcePath, destinationPath, opts) {
-    await this._imConvertPromise([sourcePath+'[0]', '-resize', '720x540>', destinationPath]);
-  }
-
   _transmettreTransactionThumbnailProtege(fuuid, thumbnail) {
     const domaineTransaction = 'millegrilles.domaines.GrosFichiers.associerThumbnail';
 
@@ -106,17 +80,6 @@ class GenerateurImages {
     // console.debug(transaction);
 
     this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
-  }
-
-  _imConvertPromise(params) {
-    return new Promise((resolve, reject) => {
-      im.convert(params,
-        function(err, stdout){
-          if (err) reject(err);
-          console.log('stdout:', stdout);
-          resolve();
-        });
-    });
   }
 
   getDecipherPipe4fuuid(cleSecrete, iv) {
