@@ -33,6 +33,7 @@ class DecrypterFichier {
     const fuuid = message.fuuid;
     const cleSecreteDecryptee = message.cleSecreteDecryptee;
     const iv = message.iv;
+    const securite = message.securite;
 
     // Trouver fichier original crypte
     const pathFichierCrypte = pathConsignation.trouverPathLocal(fuuid, true);
@@ -63,6 +64,7 @@ class DecrypterFichier {
 
           resultat.fuuidPreview = fuuidPreviewImage;
           resultat.thumbnail = base64Thumbnail;
+          resultat.securite = securite;
         }
 
         return resultat;
@@ -90,6 +92,7 @@ class DecrypterFichier {
       'fuuid_decrypte': fuuidDecrypte,
       'taille': valeurs.tailleFichier,
       'sha256Hash': valeurs.sha256Hash,
+      'securite': valeurs.securite,
     }
 
     if( valeurs.fuuidPreview ) {
