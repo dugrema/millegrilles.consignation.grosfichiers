@@ -71,14 +71,14 @@ class TraitementFichier {
         console.debug(headers);
         let fileUuid = headers.fileuuid;
         let encrypte = headers.encrypte === "true";
-        let extension = path.parse(headers.nomfichier).ext;
+        let extension = path.parse(headers.nomfichier).ext.replace('.', '');
         let mimetype = headers.mimetype;
         let nouveauPathFichier = pathConsignation.trouverPathLocal(fileUuid, encrypte, {extension, mimetype});
         // let nouveauPathFichier = path.join(pathConsignation.consignationPathLocal, fuuide);
 
         // Creer le repertoire au besoin, puis deplacer le fichier (rename)
         let pathRepertoire = path.dirname(nouveauPathFichier);
-        console.debug("Path a utiliser: " + pathRepertoire);
+        console.debug("Path a utiliser: " + pathRepertoire + ", complet: " + nouveauPathFichier + ", extension: " + extension);
         fs.mkdir(pathRepertoire, { recursive: true }, (err)=>{
           // console.debug("Path cree: " + pathRepertoire);
           // console.debug(err);
