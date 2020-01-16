@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const uuidv1 = require('uuid/v1');
 const {uuidToDate} = require('./UUIDUtils');
 const crypto = require('crypto');
 const rabbitMQ = require('./rabbitMQ');
+const transformationImages = require('./transformationImages');
 
 const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json');
 const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json');
@@ -87,7 +89,7 @@ class TraitementFichier {
             // console.debug("Ecriture fichier " + nouveauPathFichier);
             var sha256 = crypto.createHash('sha256');
             let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx', mode: 0o440});
-            writeStream.on('finish', data=>{
+            writeStream.on('finish', async data=>{
               console.debug("Fin transmission");
               console.debug(data);
 
@@ -99,6 +101,14 @@ class TraitementFichier {
                 fuuid: fileUuid,
                 sha256: sha256Hash
               };
+
+              // Verifier si on doit generer des thumbnails/preview
+              if(!encrypte && mimetype.split('/')[0] === 'image') {
+                var imagePreviewInfo = await traiterImage(nouveauPathFichier);
+                messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
+                messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
+                messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
+              }
 
               rabbitMQ.transmettreTransactionFormattee(
                 messageConfirmation,
@@ -147,6 +157,15 @@ class TraitementFichier {
     return promise;
   }
 
+}
+
+// Extraction de thumbnail et preview pour images
+async function traiterImage(pathImage) {
+  var fuuidPreviewImage = uuidv1();
+  var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+  var thumbnail = await transformationImages.genererThumbnail(pathImage);
+  await transformationImages.genererPreview(pathImage, pathPreviewImage);
+  return {thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'};
 }
 
 const traitementFichier = new TraitementFichier();
