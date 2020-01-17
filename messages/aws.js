@@ -88,7 +88,8 @@ function uploaderFichier(s3, fichiers, msg) {
     var uploadParams = {
       Bucket: msg.message.bucket,
       Key: pathSurServeur,
-      Body: fileStream
+      Body: fileStream,
+      ACL: 'public-read',
     };
 
     // call S3 to retrieve upload file to specified bucket
