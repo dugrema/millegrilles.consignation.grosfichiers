@@ -77,8 +77,10 @@ function uploaderFichier(s3, fichiers, msg) {
       console.log('File Error', err);
     });
 
+    let dirFichier = msg.message.dirfichier || '';
+
     var pathSurServeur = path.format({
-      dir: 'consignationfichiers',
+      dir: dirFichier,
       name: fuuidFichier,
       ext: '.'+extension
     })
