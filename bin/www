@@ -13,6 +13,7 @@ const {PkiMessages} = require('../messages/pki');
 const {TorrentMessages} = require('../messages/torrent');
 const {DecrypterFichier} = require('../messages/crypto');
 const {GenerateurImages} = require('../messages/images');
+const {PublicateurAWS} = require('../messages/aws');
 
 /**
  * Get port from environment and store in Express.
@@ -61,6 +62,8 @@ rabbitMQ.connect(mqConnectionUrl)
 
   const generateurImages = new GenerateurImages(rabbitMQ);
   rabbitMQ.enregistrerListenerConnexion(generateurImages);
+
+  rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
 });
 
 

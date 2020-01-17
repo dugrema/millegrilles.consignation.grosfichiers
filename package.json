@@ -8,6 +8,7 @@
   "dependencies": {
     "@sitespeed.io/throttle": "^0.5.1",
     "amqplib": "^0.5.3",
+    "aws-sdk": "^2.605.0",
     "cookie-parser": "~1.4.4",
     "create-torrent": "^4.4.1",
     "debug": "~2.6.9",
