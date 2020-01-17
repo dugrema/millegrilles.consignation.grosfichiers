@@ -51,21 +51,29 @@ function getDecipherPipe4fuuid(cleSecrete, iv) {
   console.debug("IV (" + ivBuffer.length + "): ");
   console.debug(iv);
 
-  // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
-  let decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
-  decryptedSecretKey = decryptedSecretKey.toString('utf8');
+  let decryptedSecretKey;
+  if(typeof cleSecrete === 'string') {
+    // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
+    decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
+    decryptedSecretKey = decryptedSecretKey.toString('utf8');
 
-  var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
-    return parseInt(h, 16)
-  }));
-  console.debug("Cle secrete decryptee (" + typedArray.length + ") bytes");
+    var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
+     return parseInt(h, 16)
+    }));
+
+    decryptedSecretKey = typedArray;
+  } else {
+    decryptedSecretKey = cleSecrete;
+  }
+
+  console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
 
   // Creer un decipher stream
-  var decipher = crypto.createDecipheriv('aes256', typedArray, ivBuffer);
+  var decipher = crypto.createDecipheriv('aes256', decryptedSecretKey, ivBuffer);
 
   return decipher;
 
 }
 
 
-module.exports = { Decrypteur }
+module.exports = { Decrypteur, getDecipherPipe4fuuid }

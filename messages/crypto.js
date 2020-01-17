@@ -2,11 +2,22 @@ const path = require('path');
 const fs = require('fs');
 const uuidv1 = require('uuid/v1');
 const crypto = require('crypto');
+const forge = require('node-forge');
 const { Decrypteur } = require('../util/cryptoUtils.js');
 const {pathConsignation} = require('../util/traitementFichier');
 const transformationImages = require('../util/transformationImages');
 
 const decrypteur = new Decrypteur();
+
+var PRIVATE_KEY_FORGE;
+
+function chargerCleForge() {
+  fs.readFile(process.env.MG_MQ_KEYFILE, (err, data)=>{
+    PRIVATE_KEY_FORGE = forge.pki.privateKeyFromPem(data);
+    console.debug("Cle privee chargee")
+  });
+}
+chargerCleForge();
 
 class DecrypterFichier {
 
@@ -111,4 +122,22 @@ class DecrypterFichier {
 
 }
 
-module.exports = {DecrypterFichier}
+function decrypterCleSecrete(cleChiffree) {
+  console.debug("Cle chiffree: " + cleChiffree);
+  let cleSecrete = forge.util.decode64(cleChiffree);
+
+  // Decrypter la cle secrete avec notre cle privee
+  var decryptedSecretKey = PRIVATE_KEY_FORGE.decrypt(cleSecrete, 'RSA-OAEP', {
+    md: forge.md.sha256.create(),
+    mgf1: {
+      md: forge.md.sha256.create()
+    }
+  });
+
+  decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
+  console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
+
+  return decryptedSecretKey;
+}
+
+module.exports = {DecrypterFichier, decrypterCleSecrete}

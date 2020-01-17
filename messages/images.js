@@ -3,7 +3,7 @@ const fs = require('fs');
 const tmp = require('tmp-promise');
 const crypto = require('crypto');
 const im = require('imagemagick');
-const { DecrypterFichier } = require('./crypto.js')
+const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
 const { Decrypteur } = require('../util/cryptoUtils.js');
 const {pathConsignation} = require('../util/traitementFichier');
 const transformationImages = require('../util/transformationImages');
@@ -35,8 +35,11 @@ class GenerateurImages {
     // console.log(message);
 
     const fuuid = message.fuuid;
-    const cleSecreteDecryptee = message.cleSecreteDecryptee;
+    const cleSecreteChiffree = message.cleSecreteChiffree;
     const iv = message.iv;
+
+    // Decrypter la cle secrete
+    const cleSecreteDechiffree = decrypterCleSecrete(cleSecreteChiffree);
 
     // Trouver fichier original crypte
     const pathFichierCrypte = pathConsignation.trouverPathLocal(fuuid, true);
@@ -49,7 +52,7 @@ class GenerateurImages {
       // Decrypter
       try {
         var resultatsDecryptage = await decrypteur.decrypter(
-          pathFichierCrypte, decryptedPath, cleSecreteDecryptee, iv);
+          pathFichierCrypte, decryptedPath, cleSecreteDechiffree, iv);
         // console.debug("Fichier decrypte pour thumbnail sous " + pathTemp +
         //               ", taille " + resultatsDecryptage.tailleFichier +
         //               ", sha256 " + resultatsDecryptage.sha256Hash);
@@ -82,28 +85,28 @@ class GenerateurImages {
     this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
   }
 
-  getDecipherPipe4fuuid(cleSecrete, iv) {
-    // On prepare un decipher pipe pour decrypter le contenu.
-
-    let ivBuffer = Buffer.from(iv, 'base64');
-    // console.debug("IV (" + ivBuffer.length + "): ");
-    // console.debug(iv);
-
-    // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
-    let decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
-    decryptedSecretKey = decryptedSecretKey.toString('utf8');
-
-    var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
-      return parseInt(h, 16)
-    }));
-    // console.debug("Cle secrete decryptee (" + typedArray.length + ") bytes");
-
-    // Creer un decipher stream
-    var decipher = crypto.createDecipheriv('aes256', typedArray, ivBuffer);
-
-    return decipher;
-
-  }
+  // getDecipherPipe4fuuid(cleSecrete, iv) {
+  //   // On prepare un decipher pipe pour decrypter le contenu.
+  //
+  //   let ivBuffer = Buffer.from(iv, 'base64');
+  //   // console.debug("IV (" + ivBuffer.length + "): ");
+  //   // console.debug(iv);
+  //
+  //   // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
+  //   //let decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
+  //   decryptedSecretKey = cleSecrete; //decryptedSecretKey.toString('utf8');
+  //
+  //   var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
+  //     return parseInt(h, 16)
+  //   }));
+  //   // console.debug("Cle secrete decryptee (" + typedArray.length + ") bytes");
+  //
+  //   // Creer un decipher stream
+  //   var decipher = crypto.createDecipheriv('aes256', typedArray, ivBuffer);
+  //
+  //   return decipher;
+  //
+  // }
 
 }
 
