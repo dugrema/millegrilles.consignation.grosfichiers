@@ -77,7 +77,11 @@ function uploaderFichier(s3, fichiers, msg) {
       console.log('File Error', err);
     });
 
-    var pathSurServeur = path.format({name: fuuidFichier, ext: '.'+extension})
+    var pathSurServeur = path.format({
+      dir: 'consignationfichiers',
+      name: fuuidFichier,
+      ext: '.'+extension
+    })
 
     var uploadParams = {
       Bucket: msg.message.bucket,
