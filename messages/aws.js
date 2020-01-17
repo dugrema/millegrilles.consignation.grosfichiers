@@ -19,11 +19,13 @@ class PublicateurAWS {
   }
 
   enregistrerChannel() {
-    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, properties)=>{
-      this.publierCollection(routingKey, message, properties)}, ['commande.grosfichiers.publierCollection']);
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
+      this.publierCollection(routingKey, message, opts)}, ['commande.grosfichiers.publierCollection']);
   }
 
-  publierCollection(routingKey, message, properties) {
+  publierCollection(routingKey, message, opts) {
+    console.debug("AWS publicCollection Properties");
+    console.debug(opts.properties);
 
     var messageConfiguration = Object.assign({}, message);  // Copie message
     if(message.contenuChiffre) {
@@ -51,7 +53,7 @@ class PublicateurAWS {
       {
           mq: this.mq,
           message: messageConfiguration,
-          properties,
+          properties: opts.properties,
       }
     );
 
@@ -64,7 +66,19 @@ function uploaderFichier(s3, fichiers, msg) {
     console.debug("Batch upload AWS termine");
 
     // Transmettre reponse a la commande d'upload
+    if(msg.properties && msg.properties.replyTo && msg.properties.correlationId) {
+      console.debug("Transmettre message de reponse pour transfert AWS");
+      let reponseUpload = {
+        uuid_source_figee: msg.message.uuid_source_figee,
+        uuid_collection_figee: msg.message.uuid_collection_figee,
+      }
+      msg.mq.transmettreReponse(
+        reponseUpload,
+        msg.properties.replyTo,
+        msg.properties.correlationId
+      );
 
+    }
 
   } else {
     let fichier = fichiers.pop();
