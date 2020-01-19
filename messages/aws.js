@@ -107,6 +107,7 @@ function uploaderFichier(s3, fichiers, msg) {
     let fichier = fichiers.pop();
     let fuuidFichier = fichier.fuuid;
     let extension = fichier.extension;
+    let mimetype = fichier.mimetype;
     let file = pathConsignation.trouverPathLocal(fuuidFichier, false, {extension});
 
     var fileStream = fs.createReadStream(file);
@@ -127,6 +128,7 @@ function uploaderFichier(s3, fichiers, msg) {
       Key: pathSurServeur,
       Body: fileStream,
       ACL: 'public-read',
+      ContentType: mimetype,
     };
 
     // call S3 to retrieve upload file to specified bucket
