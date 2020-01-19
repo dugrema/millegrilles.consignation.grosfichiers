@@ -67,21 +67,82 @@ class PublicateurAWS {
 
       // Connecter a Amazon S3
       const s3 = new S3(configurationAws);
-      const fichiers = messageConfiguration.fuuidFichiers.slice();  // Copier liste fichiers
+      const fichiers = {};
 
-      // Commencer le telechargement
-      uploaderFichier(
-        s3, fichiers,
-        {
-            mq: this.mq,
-            message: messageConfiguration,
-            properties: opts.properties,
-        }
-      );
+      // Creer un dictionnaire de fichiers par fuuid pour retirer
+      // les fichiers dejas presents sur le drive S3
+      for(let idx in messageConfiguration.fuuidFichiers) {
+        let fichier = messageConfiguration.fuuidFichiers[idx];
+        fichiers[fichier.fuuid] = fichier;
+      }
+
+      // Demander la liste des fichiers du bucket; on ne veut pas re-uploader
+      // les memes fichiers (consignation est immuable)
+      var paramsListing = {
+        Bucket: messageConfiguration.bucket,
+        MaxKeys: 1000,
+      }
+      if(messageConfiguration.dirfichier) {
+        paramsListing.Prefix = messageConfiguration.dirfichier;
+      }
+
+      return new Promise((resolve, reject)=>{
+        listerFichiers(s3, paramsListing, fichiers, {resolve, reject});
+      })
+      .then(()=>{
+        console.debug("Commencer upload AWS");
+        // Commencer le telechargement
+        const listeFichiers = Object.values(fichiers);
+
+        uploaderFichier(
+          s3, listeFichiers,
+          {
+              mq: this.mq,
+              message: messageConfiguration,
+              properties: opts.properties,
+          }
+        );
+      });
     });
 
   }
 
+}
+
+function listerFichiers(s3, paramsListing, fichiers, promiseRR) {
+  s3.listObjectsV2(paramsListing, (err, data)=>{
+    if(err) {
+      console.error("Erreur demande liste fichiers");
+      promiseRR.reject(err);
+    } else {
+      // console.log("Listing fichiers bucket " + paramsListing.Bucket);
+      for(let idx in data.Contents) {
+        let contents = data.Contents[idx];
+
+        let keyInfo = contents.Key.split('/');
+        let nomFichier = keyInfo[keyInfo.length-1];
+        let fuuid = nomFichier.split('.')[0];
+
+        if(fuuid && fuuid !== '') {
+          // console.log(contents);
+          // console.log('fuuid: ' + fuuid);
+
+          if(fichiers[fuuid]) {
+            // console.log("Fichier " + fuuid + " existe deja");
+            delete fichiers[fuuid];
+          }
+        }
+      }
+
+      if(data.IsTruncated) {
+        // console.debug("Continuer listing");
+        paramsListing.ContinuationToken = data.NextContinuationToken;
+        listerFichiers(s3, paramsListing, fichiers, promiseRR);
+      } else {
+        promiseRR.resolve();  // Listing termine
+      }
+    }
+  });
 }
 
 function uploaderFichier(s3, fichiers, msg) {
