@@ -70,14 +70,14 @@ class PublicateurAWS {
       const fichiers = messageConfiguration.fuuidFichiers.slice();  // Copier liste fichiers
 
       // Commencer le telechargement
-      // uploaderFichier(
-      //   s3, fichiers,
-      //   {
-      //       mq: this.mq,
-      //       message: messageConfiguration,
-      //       properties: opts.properties,
-      //   }
-      // );
+      uploaderFichier(
+        s3, fichiers,
+        {
+            mq: this.mq,
+            message: messageConfiguration,
+            properties: opts.properties,
+        }
+      );
     });
 
   }
