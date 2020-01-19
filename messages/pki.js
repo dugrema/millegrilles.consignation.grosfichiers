@@ -30,8 +30,8 @@ class PkiMessages {
 }
 
 function transmettreCertificat(mq, routingKeys, message, opts) {
-  console.debug("transmettreCertificat");
-  console.debug(routingKeys);
+  // console.debug("transmettreCertificat");
+  // console.debug(routingKeys);
   // console.debug(message);
   // console.debug(opts);
 
@@ -45,7 +45,7 @@ function transmettreCertificat(mq, routingKeys, message, opts) {
   let fingerprint = messageCertificat.fingerprint;
 
   if(replyTo && correlationId) {
-    console.debug("Reponse a " + replyTo + ", correlation " + correlationId);
+    // console.debug("Reponse a " + replyTo + ", correlation " + correlationId);
     mq.transmettreReponse(messageCertificat, replyTo, correlationId);
   } else {
     let messageJSONStr = JSON.stringify(messageCertificat);

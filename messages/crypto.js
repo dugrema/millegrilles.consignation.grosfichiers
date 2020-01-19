@@ -123,7 +123,7 @@ class DecrypterFichier {
 }
 
 function decrypterCleSecrete(cleChiffree) {
-  console.debug("Cle chiffree: " + cleChiffree);
+  // console.debug("Cle chiffree: " + cleChiffree);
   let cleSecrete = forge.util.decode64(cleChiffree);
 
   // Decrypter la cle secrete avec notre cle privee
@@ -135,7 +135,7 @@ function decrypterCleSecrete(cleChiffree) {
   });
 
   decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
-  console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
+  // console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
 
   return decryptedSecretKey;
 }

@@ -1,6 +1,10 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const forge = require('node-forge');
+
+const AES_ALGORITHM = 'aes-256-cbc';  // Meme algorithme utilise sur MG en Python
+const RSA_ALGORITHM = 'RSA-OAEP';
 
 class Decrypteur {
 
@@ -48,8 +52,8 @@ function getDecipherPipe4fuuid(cleSecrete, iv) {
   // On prepare un decipher pipe pour decrypter le contenu.
 
   let ivBuffer = Buffer.from(iv, 'base64');
-  console.debug("IV (" + ivBuffer.length + "): ");
-  console.debug(iv);
+  // console.debug("IV (" + ivBuffer.length + "): ");
+  // console.debug(iv);
 
   let decryptedSecretKey;
   if(typeof cleSecrete === 'string') {
@@ -66,7 +70,7 @@ function getDecipherPipe4fuuid(cleSecrete, iv) {
     decryptedSecretKey = cleSecrete;
   }
 
-  console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
+  // console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
 
   // Creer un decipher stream
   var decipher = crypto.createDecipheriv('aes256', decryptedSecretKey, ivBuffer);
@@ -75,5 +79,61 @@ function getDecipherPipe4fuuid(cleSecrete, iv) {
 
 }
 
+function decrypterSymmetrique(contenuCrypte, cleSecrete, iv) {
+  return new Promise((resolve, reject)=>{
 
-module.exports = { Decrypteur, getDecipherPipe4fuuid }
+    // console.debug("Params decrypteSymmetrique")
+    // console.debug(contenuCrypte);
+    // console.debug(cleSecrete);
+    // console.debug(iv);
+
+    // Dechiffrage avec Crypto
+    // let cleSecreteBuffer = Buffer.from(cleSecrete, 'base64');
+    // let ivBuffer = Buffer.from(iv, 'base64');
+
+    // // console.log("Creer decipher secretKey: " + cleSecreteBuffer.toString('base64') + ", iv: " + ivBuffer.toString('base64'));
+    // var decipher = crypto.createDecipheriv(AES_ALGORITHM, cleSecreteBuffer, ivBuffer);
+    //
+    // // console.debug("Decrypter " + contenuCrypte.toString('base64'));
+    // let contenuDecrypteString = decipher.update(contenuCrypte, 'base64',  'utf8');
+    // contenuDecrypteString += decipher.final('utf8');
+
+    // Dechiffrage avec node-forge
+    let cleSecreteBuffer = forge.util.decode64(cleSecrete.toString('base64'));
+    let ivBuffer = forge.util.decode64(iv);
+
+    var decipher = forge.cipher.createDecipher('AES-CBC', cleSecreteBuffer);
+    decipher.start({iv: ivBuffer});
+    let bufferContenu = forge.util.createBuffer(forge.util.decode64(contenuCrypte));
+    decipher.update(bufferContenu);
+    var result = decipher.finish(); // check 'result' for true/false
+
+    if(!result) {
+      reject("Erreur dechiffrage");
+    }
+    let output = decipher.output;
+    // console.debug("Output decrypte: " + result);
+    // console.debug(output);
+    contenuDecrypteString = output.data.toString('utf8');
+
+    // Verifier le IV (16 premiers bytes)
+    // for(let i=0; i<16; i++) {
+    //   let xor_result = output.data[i] ^ 0x02; // ivBuffer[i];
+    //   console.debug("Output " + i + ": " + output.data[i] + ", ivBuffer: " + ivBuffer[i] + ", xor: " + xor_result);
+    // }
+
+    // Enlever 16 bytes pour IV
+    contenuDecrypteString = contenuDecrypteString.slice(16);
+
+    // console.debug("Contenu decrypte :");
+    // console.debug(contenuDecrypteString);
+
+    // let dictDecrypte = JSON.parse(contenuDecrypteString);
+    // console.log("Dict decrypte: ");
+    // console.log(dictDecrypte);
+
+    resolve(contenuDecrypteString);
+  });
+}
+
+module.exports = { Decrypteur, getDecipherPipe4fuuid, decrypterSymmetrique }

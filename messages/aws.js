@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
 const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
+const { decrypterSymmetrique } = require('../util/cryptoUtils')
 const { pathConsignation } = require('../util/traitementFichier');
 
 const AWS_API_VERSION = '2006-03-01';
@@ -24,38 +25,60 @@ class PublicateurAWS {
   }
 
   publierCollection(routingKey, message, opts) {
-    console.debug("AWS publicCollection Properties");
-    console.debug(opts.properties);
+    // console.debug("AWS publicCollection Properties");
+    // console.debug(opts.properties);
 
     var messageConfiguration = Object.assign({}, message);  // Copie message
-    if(message.contenuChiffre) {
+
+    let promise = Promise.resolve();
+
+    // console.debug("AWS message");
+    // console.debug(message);
+    if(messageConfiguration.credentials.secretAccessKeyChiffre) {
       // On doit commencer par dechiffrer le contenu protege (mots de passe, etc.)
-      let cleSecrete = decrypterCleSecrete(message.cleSecreteChiffree);
+      let secretAccessKeyChiffre = messageConfiguration.credentials.secretAccessKeyChiffre;
+      let iv = messageConfiguration.credentials.iv;
+      let cleSecrete = decrypterCleSecrete(messageConfiguration.credentials.cle);
+      // console.debug("Secret access key: ");
+      // console.debug(cleSecrete);
+
+      promise = decrypterSymmetrique(secretAccessKeyChiffre, cleSecrete, iv);
     }
 
-    let configurationAws = {
-      apiVersion: AWS_API_VERSION,
-      region: messageConfiguration.region,
-      credentials: {
-        accessKeyId: messageConfiguration.credentials.accessKeyId,
-        secretAccessKey: messageConfiguration.credentials.secretAccessKey,
-        region: messageConfiguration.credentials.region,
+    promise.then(secretAccessKeyDecrypte=>{
+      var secretAccessKey = messageConfiguration.credentials.secretAccessKey;
+      if(secretAccessKeyDecrypte) {
+        // Extraire la cle du contenu decrypte
+        let jsonDict = JSON.parse(secretAccessKeyDecrypte);
+        secretAccessKey = jsonDict.awsSecretAccessKey;
       }
-    }
 
-    // Connecter a Amazon S3
-    const s3 = new S3(configurationAws);
-    const fichiers = messageConfiguration.fuuidFichiers.slice();  // Copier liste fichiers
+      // console.debug("Secret access key AWS: " + secretAccessKey);
 
-    // Commencer le telechargement
-    uploaderFichier(
-      s3, fichiers,
-      {
-          mq: this.mq,
-          message: messageConfiguration,
-          properties: opts.properties,
+      let configurationAws = {
+        apiVersion: AWS_API_VERSION,
+        region: messageConfiguration.region,
+        credentials: {
+          accessKeyId: messageConfiguration.credentials.accessKeyId,
+          secretAccessKey,
+          region: messageConfiguration.credentials.region,
+        }
       }
-    );
+
+      // Connecter a Amazon S3
+      const s3 = new S3(configurationAws);
+      const fichiers = messageConfiguration.fuuidFichiers.slice();  // Copier liste fichiers
+
+      // Commencer le telechargement
+      // uploaderFichier(
+      //   s3, fichiers,
+      //   {
+      //       mq: this.mq,
+      //       message: messageConfiguration,
+      //       properties: opts.properties,
+      //   }
+      // );
+    });
 
   }
 
