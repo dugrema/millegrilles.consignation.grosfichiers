@@ -131,7 +131,7 @@ class TorrentMessages {
     const crypte = false;   // Cryptage torrent pas encore supporte
     const uuidCollection = message['uuid'];
     const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidCollection);
-    const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidCollection, crypte);
+    const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidCollection, crypte, {extension: 'torrent'});
 
     fs.readFile(pathTorrentConsigne, (e, bufferTorrent)=>{
       if(e) {
@@ -224,10 +224,11 @@ class TorrentMessages {
 
           let fuuid = fileDoc.fuuid;
           let securite = fileDoc.securite;
+          let extension = fileDoc.extension;
           let encrypte = securite == '3.protege' || securite == '4.secure';
 
           if(fuuid) {
-            const pathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte);
+            const pathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension});
             console.debug("Creer hard link pour " + pathFichier);
 
             // Nom du fichier:
@@ -294,8 +295,8 @@ class TorrentMessages {
     const crypte = securite=='3.protege' || securite=='4.secure';
 
     const uuidTorrent = message['uuid'];
-    const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent);
-    const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidTorrent, crypte);
+    const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent, false, {extension: 'torrent'});
+    const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidTorrent, crypte, {extension: 'torrent'});
 
     const transactionTorrent = {
       'catalogue': message.documents,
