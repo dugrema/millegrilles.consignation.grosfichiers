@@ -454,7 +454,7 @@ class TorrentMessages {
   sommaireTransmission(routingKey, message, opts) {
     const correlationId = opts.properties.correlationId;
     const replyTo = opts.properties.replyTo;
-    console.debug("Sommaire transmission, repondre a Q " + replyTo + ", correlationId " + correlationId);
+    // console.debug("Sommaire transmission, repondre a Q " + replyTo + ", correlationId " + correlationId);
 
     var reponseCumulee = {};
     let transmettreReponse = (reponse) => {

@@ -23,14 +23,14 @@ class Decrypteur {
       cryptoStream.on('end', ()=>{
         // Comparer hash a celui du header
         sha256Hash = sha256.digest('hex');
-        console.debug("Hash fichier " + sha256Hash);
+        // console.debug("Hash fichier " + sha256Hash);
       });
 
-      console.log("Decryptage fichier " + sourceCryptee + " vers " + destination);
+      // console.log("Decryptage fichier " + sourceCryptee + " vers " + destination);
       let writeStream = fs.createWriteStream(destination);
 
       writeStream.on('close', ()=>{
-        console.debug("Fermeture fichier decrypte");
+        // console.debug("Fermeture fichier decrypte");
         resolve({tailleFichier, sha256Hash});
       });
       writeStream.on('error', ()=>{
