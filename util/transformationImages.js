@@ -88,8 +88,8 @@ async function genererPreviewVideoPromise(sourcePath, previewPath) {
         dataVideo = data;
       })
       .on('end', function(filenames) {
-        console.log('Successfully generated thumbnail ' + previewPath);
-        console.log(dataVideo);
+        // console.debug('Successfully generated thumbnail ' + previewPath);
+        // console.debug(dataVideo);
         resolve({data_video: dataVideo});
       })
       .takeScreenshots(
@@ -123,7 +123,7 @@ async function genererVideoMp4_480p(sourcePath, destinationPath) {
           })
           s.on('end', function () {
             const sha256 = shasum.digest('hex')
-            console.log('Successfully generated 480p mp4 ' + destinationPath + ", taille " + tailleFichier + ", sha256 " + sha256);
+            // console.debug('Successfully generated 480p mp4 ' + destinationPath + ", taille " + tailleFichier + ", sha256 " + sha256);
             return resolve({tailleFichier, sha256});
           })
         } catch (error) {

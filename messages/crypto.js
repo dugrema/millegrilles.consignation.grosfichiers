@@ -38,14 +38,14 @@ class DecrypterFichier {
   }
 
   async decrypterFichier(routingKey, message) {
-    console.log("Message de declassement de grosfichiers, debut ");
+    // console.log("Message de declassement de grosfichiers, debut ");
 
     const fuuid = message.fuuid;
     const cleSecreteDecryptee = message.cleSecreteDecryptee;
     const iv = message.iv;
     const securite = message.securite;
 
-    console.log("Message de declassement de grosfichiers " + fuuid);
+    // console.log("Message de declassement de grosfichiers " + fuuid);
 
     // Trouver fichier original crypte
     const pathFichierCrypte = pathConsignation.trouverPathLocal(fuuid, true);
@@ -57,7 +57,7 @@ class DecrypterFichier {
     const pathFichierDecrypte = pathConsignation.trouverPathLocal(fuuidFichierDecrypte, false, paramsType);
     const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
-    console.debug("Creation repertoire");
+    // console.debug("Creation repertoire");
     return new Promise((resolve, reject) => {
       fs.mkdir(repFichierDecrypte, {recursive: true}, async e=>{
         if(e) {
@@ -70,7 +70,7 @@ class DecrypterFichier {
       });
     })
     .then(()=>{
-      console.debug("Decrypter");
+      // console.debug("Decrypter");
       return decrypteur.decrypter(pathFichierCrypte, pathFichierDecrypte, cleSecreteDecryptee, iv);
     })
     .then(async resultat =>{
@@ -78,7 +78,7 @@ class DecrypterFichier {
       if ( message.mimetype && message.mimetype.split('/')[0] === 'image' ) {
         const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
         const repFichierDecrypte = path.dirname(pathFichierDecrypte);
-        console.debug("Decryptage image, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
+        // console.debug("Decryptage image, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
 
         await transformationImages.genererPreview(pathFichierDecrypte, pathPreviewImage);
         var base64Thumbnail = await transformationImages.genererThumbnail(pathFichierDecrypte);
@@ -93,10 +93,10 @@ class DecrypterFichier {
         const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
         const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
-        console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
+        // console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
         await transformationImages.genererPreviewVideoPromise(pathFichierDecrypte, pathPreviewImage);
 
-        console.debug("Decryptage video, re-encoder en MP4, source " + fuuid + " sous " + fuuidVideo480p);
+        // console.debug("Decryptage video, re-encoder en MP4, source " + fuuid + " sous " + fuuidVideo480p);
         var resultatMp4 = await transformationImages.genererVideoMp4_480p(pathFichierDecrypte, pathVideo480p);
 
         var base64Thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
@@ -113,7 +113,7 @@ class DecrypterFichier {
       return resultat;
     })
     .then(async resultat => {
-      console.debug("Resultat image/video " + fuuid);
+      // console.debug("Resultat image/video " + fuuid);
       // console.debug(resultat);
       this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte, resultat);
     })
@@ -121,8 +121,6 @@ class DecrypterFichier {
       console.error("Erreur decryptage fichier " + pathFichierCrypte);
       console.error(err);
     })
-
-    console.log("Fin message de declassement de grosfichiers " + fuuid);
 
   }
 

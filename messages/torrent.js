@@ -474,8 +474,8 @@ class TorrentMessages {
         return;
       }
 
-      console.log("Reponse transmission.sessionStats");
-      console.log(reponse);
+      // console.log("Reponse transmission.sessionStats");
+      // console.log(reponse);
       reponseCumulee['sessionStats'] = reponse;
       transmettreReponse(reponseCumulee);
     });
@@ -485,11 +485,11 @@ class TorrentMessages {
   etatTorrent(routingKey, message, opts) {
     const correlationId = opts.properties.correlationId;
     const replyTo = opts.properties.replyTo;
-    console.debug("Etat transmission, repondre a Q " + replyTo + ", correlationId " + correlationId);
+    // console.debug("Etat transmission, repondre a Q " + replyTo + ", correlationId " + correlationId);
 
     const listeHashstrings = message['hashstrings'];
-    console.debug("Liste hashstrings a verifier:");
-    console.debug(listeHashstrings);
+    // console.debug("Liste hashstrings a verifier:");
+    // console.debug(listeHashstrings);
 
     var reponseCumulee = {};
 
@@ -511,8 +511,8 @@ class TorrentMessages {
         return;
       }
 
-      console.log("Reponse transmission.all");
-      console.log(reponse);
+      // console.log("Reponse transmission.all");
+      // console.log(reponse);
       reponseCumulee['torrents'] = reponse.torrents;
 
       transmettreReponse(reponseCumulee);

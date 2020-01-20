@@ -63,7 +63,7 @@ class RabbitMQWrapper {
 
       return amqplib.connect(this.url, options)
       .then( conn => {
-        console.debug("Connexion a RabbitMQ reussie");
+        console.info("Connexion a RabbitMQ reussie");
         this.connection = conn;
 
         conn.on('close', (reason)=>{
@@ -75,7 +75,7 @@ class RabbitMQWrapper {
         return conn.createChannel();
       }).then( (ch) => {
         this.channel = ch;
-        console.log("Channel ouvert");
+        console.info("Channel ouvert");
         return this.ecouter();
       // }).then(()=>{
         // console.log("Connexion et channel prets");
@@ -107,7 +107,7 @@ class RabbitMQWrapper {
     if(!this.reconnectTimeout) {
       var mq = this;
       this.reconnectTimeout = setTimeout(()=>{
-        console.debug("Reconnexion en cours");
+        console.info("Reconnexion en cours");
         mq.reconnectTimeout = null;
         mq._connect();
       }, dureeAttente*1000);
@@ -123,7 +123,7 @@ class RabbitMQWrapper {
           channel.close();
         } catch (err) {
           console.debug("Erreur fermeture channel");
-          console.debug(err);
+          // console.debug(err);
         }
       }
 
@@ -131,7 +131,7 @@ class RabbitMQWrapper {
         try {
           conn.close();
         } catch (err) {
-          console.info("Erreur fermeture connection");
+          console.warn("Erreur fermeture connection");
           console.info(err);
         }
       }
@@ -179,10 +179,10 @@ class RabbitMQWrapper {
     return this.channel.consume(
       this.reply_q.queue,
       async (msg) => {
-        const noMessage = this.compteurMessages;
-        this.compteurMessages = noMessage + 1;
+        // const noMessage = this.compteurMessages;
+        // this.compteurMessages = noMessage + 1;
 
-        console.debug("Message recu " + noMessage);
+        // console.debug("Message recu " + noMessage);
         let correlationId = msg.properties.correlationId;
         // let messageContent = decodeURIComponent(escape(msg.content));
         let messageContent = msg.content.toString();
@@ -199,12 +199,12 @@ class RabbitMQWrapper {
           // Traiter le message via handlers
           let blockingPromise = this.routingKeyManager.handleMessage(routingKey, messageContent, msg.properties);
           if(blockingPromise) {
-            console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
+            // console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
             // On arrete de consommer le temps de traiter le message
             this.channel.cancel(this.consumerTag)
             .then(()=>{
               blockingPromise.finally(()=>{
-                console.debug("Resumer consume apres noMessage=" + noMessage);
+                // console.debug("Resumer consume apres noMessage=" + noMessage);
                 this._consume();
               })
             })
@@ -214,15 +214,15 @@ class RabbitMQWrapper {
           }
 
         } else {
-          console.debug("Recu message sans correlation Id ou routing key");
+          console.warn("Recu message sans correlation Id ou routing key");
           console.warn(msg);
         }
-        console.debug("Message traite " + noMessage);
+        // console.debug("Message traite " + noMessage);
       },
       {noAck: true}
     ).then(tag=>{
-      console.debug("Consumer Tag ");
-      console.debug(tag);
+      // console.debug("Consumer Tag ");
+      // console.debug(tag);
       this.consumerTag = tag.consumerTag;
     })
   }
@@ -299,8 +299,8 @@ class RabbitMQWrapper {
             reject(err);
             return;
           }
-          console.debug("Reponse transmise");
-          console.debug(ok);
+          // console.debug("Reponse transmise");
+          // console.debug(ok);
           resolve(ok);
         }
       );
@@ -517,11 +517,11 @@ class RoutingKeyManager {
         properties
       }
       promise = callback(routingKey, json_message, opts);
-      if(promise) {
-        console.debug("Promise recue");
-      } else {
-        console.debug("Promise non recue");
-      }
+      // if(promise) {
+      //   console.debug("Promise recue");
+      // } else {
+      //   console.debug("Promise non recue");
+      // }
     } else {
       console.warn("Routing key pas de callback: " + routingKey);
     }
@@ -535,7 +535,7 @@ class RoutingKeyManager {
       this.registeredRoutingKeyCallbacks[routingKeyName] = callback;
 
       // Ajouter la routing key
-      console.debug("Ajouter callback pour routingKey " + routingKeyName);
+      console.info("Ajouter callback pour routingKey " + routingKeyName);
       this.mq.channel.bindQueue(this.mq.reply_q.queue, 'millegrilles.noeuds', routingKeyName);
     }
   }
@@ -546,7 +546,7 @@ class RoutingKeyManager {
       delete this.registeredRoutingKeyCallbacks[routingKeyName];
 
       // Retirer la routing key
-      console.debug("Enlever routingKeys " + routingKeyName);
+      console.info("Enlever routingKeys " + routingKeyName);
       this.mq.channel.unbindQueue(this.mq.reply_q.queue, 'millegrilles.noeuds', routingKeyName);
     }
   }

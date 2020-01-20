@@ -70,7 +70,7 @@ class TraitementFichier {
       try {
         // Le nom du fichier au complet, incluant path, est fourni dans fuuide.
         let headers = req.headers;
-        console.debug(headers);
+        // console.debug(headers);
         let fileUuid = headers.fileuuid;
         let encrypte = headers.encrypte === "true";
         let extension = path.parse(headers.nomfichier).ext.replace('.', '');
@@ -80,7 +80,7 @@ class TraitementFichier {
 
         // Creer le repertoire au besoin, puis deplacer le fichier (rename)
         let pathRepertoire = path.dirname(nouveauPathFichier);
-        console.debug("Path a utiliser: " + pathRepertoire + ", complet: " + nouveauPathFichier + ", extension: " + extension);
+        // console.debug("Path a utiliser: " + pathRepertoire + ", complet: " + nouveauPathFichier + ", extension: " + extension);
         fs.mkdir(pathRepertoire, { recursive: true }, (err)=>{
           // console.debug("Path cree: " + pathRepertoire);
           // console.debug(err);
@@ -90,12 +90,12 @@ class TraitementFichier {
             var sha256 = crypto.createHash('sha256');
             let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx', mode: 0o440});
             writeStream.on('finish', async data=>{
-              console.debug("Fin transmission");
-              console.debug(data);
+              // console.debug("Fin transmission");
+              // console.debug(data);
 
               // Comparer hash a celui du header
               let sha256Hash = sha256.digest('hex');
-              console.debug("Hash fichier remote : " + sha256Hash);
+              // console.debug("Hash fichier remote : " + sha256Hash);
 
               let messageConfirmation = {
                 fuuid: fileUuid,
@@ -114,8 +114,8 @@ class TraitementFichier {
                 messageConfirmation,
                 'millegrilles.domaines.GrosFichiers.nouvelleVersion.transfertComplete')
               .then( msg => {
-                console.log("Recu confirmation de nouvelleVersion transfertComplete");
-                console.log(msg);
+                // console.log("Recu confirmation de nouvelleVersion transfertComplete");
+                // console.log(msg);
               })
               .catch( err => {
                 console.error("Erreur message");

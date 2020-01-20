@@ -35,7 +35,7 @@ class GenerateurImages {
     const cleSecreteChiffree = message.cleSecreteChiffree;
     const iv = message.iv;
 
-    // console.log("Message pour generer thumbnail protege " + message.fuuid);
+    // console.debug("Message pour generer thumbnail protege " + message.fuuid);
 
     // Decrypter la cle secrete
     const cleSecreteDechiffree = decrypterCleSecrete(cleSecreteChiffree);
