@@ -168,6 +168,20 @@ async function traiterImage(pathImage) {
   return {thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'};
 }
 
+// Extraction de thumbnail, preview et recodage des videos pour le web
+async function traiterVideo(pathVideo) {
+  var fuuidPreviewImage = uuidv1();
+
+  // Extraire un preview pleine resolution du video, faire un thumbnail
+  var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+  await transformationImages.genererPreviewVideoPromise(pathVideo, pathPreviewImage);
+  var thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
+
+  // Generer une nouvelle version downsamplee du video en mp4 a 480p, 3Mbit/s
+
+  return {thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'};
+}
+
 const traitementFichier = new TraitementFichier();
 
 module.exports = {traitementFichier, pathConsignation};

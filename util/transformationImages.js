@@ -35,7 +35,7 @@ async function genererThumbnailVideo(sourcePath, opts) {
     try {
       const previewPath = o.path;
       // Extraire une image du video
-      await _ffmpegPreviewPromise(sourcePath, previewPath);
+      await genererPreviewVideoPromise(sourcePath, previewPath);
 
       // Prendre le preview genere et creer le thumbnail
       await tmp.file({ mode: 0o600, postfix: '.jpg' }).then(async tbtmp => {
@@ -75,26 +75,25 @@ function _imConvertPromise(params) {
   });
 }
 
-function _ffmpegPreviewPromise(sourcePath, thumbnailPath) {
-  return new Promise((resolve, reject) => {
+async function genererPreviewVideoPromise(sourcePath, previewPath) {
+  await new Promise((resolve, reject) => {
     new FFmpeg({ source: sourcePath })
       .on('error', function(err) {
           console.error('An error occurred: ' + err.message);
           reject(err);
       })
       .on('end', function(filenames) {
-        console.log('Successfully generated thumbnail ' + thumbnailPath);
+        console.log('Successfully generated thumbnail ' + previewPath);
         resolve();
       })
       .takeScreenshots(
         {
           count: 1,
-          timemarks: [ '0.5' ],
-          filename: thumbnailPath
+          filename: previewPath
         },
         '/'
       );
   });
 }
 
-module.exports = {genererThumbnail, genererThumbnailVideo, genererPreview}
+module.exports = {genererThumbnail, genererThumbnailVideo, genererPreview, genererPreviewVideoPromise}

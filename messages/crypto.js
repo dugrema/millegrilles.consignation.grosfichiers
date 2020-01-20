@@ -76,6 +76,17 @@ class DecrypterFichier {
           resultat.fuuidPreview = fuuidPreviewImage;
           resultat.thumbnail = base64Thumbnail;
           resultat.securite = securite;
+        } else if ( message.mimetype && message.mimetype.split('/')[0] === 'video' ) {
+          const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+          const repFichierDecrypte = path.dirname(pathFichierDecrypte);
+          console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
+
+          await transformationImages.genererPreviewVideoPromise(pathFichierDecrypte, pathPreviewImage);
+          var base64Thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
+
+          resultat.fuuidPreview = fuuidPreviewImage;
+          resultat.thumbnail = base64Thumbnail;
+          resultat.securite = securite;
         }
 
         return resultat;
