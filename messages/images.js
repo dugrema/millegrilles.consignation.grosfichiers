@@ -46,7 +46,7 @@ class GenerateurImages {
 
     // Preparer fichier destination decrypte
     // Aussi preparer un fichier tmp pour le thumbnail
-    var thumbnailBase64Content;
+    var thumbnailBase64Content, metadata;
     await tmp.file({ mode: 0o600, postfix: '.'+message.extension }).then(async tmpDecrypted => {
       const decryptedPath = tmpDecrypted.path;
       // Decrypter
@@ -61,7 +61,9 @@ class GenerateurImages {
         if(mimetype === 'image') {
           thumbnailBase64Content = await transformationImages.genererThumbnail(decryptedPath);
         } else if(mimetype === 'video') {
-          thumbnailBase64Content = await transformationImages.genererThumbnailVideo(decryptedPath);
+          var dataVideo = await transformationImages.genererThumbnailVideo(decryptedPath);
+          thumbnailBase64Content = dataVideo.base64Content;
+          metadata = dataVideo.metadata;
         }
 
         // _imConvertPromise([decryptedPath, '-resize', '128', '-format', 'jpg', thumbnailPath]);
@@ -76,14 +78,14 @@ class GenerateurImages {
 
     // console.debug("Fichier converti");
     // console.debug(convertedFile);
-    this._transmettreTransactionThumbnailProtege(fuuid, thumbnailBase64Content)
+    this._transmettreTransactionThumbnailProtege(fuuid, thumbnailBase64Content, metadata)
 
   }
 
-  _transmettreTransactionThumbnailProtege(fuuid, thumbnail) {
+  _transmettreTransactionThumbnailProtege(fuuid, thumbnail, metadata) {
     const domaineTransaction = 'millegrilles.domaines.GrosFichiers.associerThumbnail';
 
-    const transaction = {fuuid, thumbnail}
+    const transaction = {fuuid, thumbnail, metadata}
 
     // console.debug("Transaction thumbnail protege");
     // console.debug(transaction);

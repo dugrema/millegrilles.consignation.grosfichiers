@@ -2,6 +2,7 @@ const fs = require('fs');
 const tmp = require('tmp-promise');
 const im = require('imagemagick');
 const FFmpeg = require('fluent-ffmpeg');
+const crypto = require('crypto');
 
 async function genererThumbnail(sourcePath, opts) {
   // Preparer fichier destination decrypte
@@ -29,13 +30,13 @@ async function genererThumbnail(sourcePath, opts) {
 async function genererThumbnailVideo(sourcePath, opts) {
   // Preparer fichier destination decrypte
   // Aussi preparer un fichier tmp pour le thumbnail
-  var base64Content;
+  var base64Content, metadata;
   await tmp.file({ mode: 0o600, postfix: '.jpg' }).then(async o => {
 
     try {
       const previewPath = o.path;
       // Extraire une image du video
-      await genererPreviewVideoPromise(sourcePath, previewPath);
+      metadata = await genererPreviewVideoPromise(sourcePath, previewPath);
 
       // Prendre le preview genere et creer le thumbnail
       await tmp.file({ mode: 0o600, postfix: '.jpg' }).then(async tbtmp => {
@@ -58,7 +59,7 @@ async function genererThumbnailVideo(sourcePath, opts) {
     }
   })
 
-  return base64Content;
+  return {base64Content, metadata};
 }
 
 async function genererPreview(sourcePath, destinationPath, opts) {
@@ -76,15 +77,20 @@ function _imConvertPromise(params) {
 }
 
 async function genererPreviewVideoPromise(sourcePath, previewPath) {
-  await new Promise((resolve, reject) => {
+  var dataVideo;
+  return await new Promise((resolve, reject) => {
     new FFmpeg({ source: sourcePath })
       .on('error', function(err) {
           console.error('An error occurred: ' + err.message);
           reject(err);
       })
+      .on('codecData', data => {
+        dataVideo = data;
+      })
       .on('end', function(filenames) {
         console.log('Successfully generated thumbnail ' + previewPath);
-        resolve();
+        console.log(dataVideo);
+        resolve({data_video: dataVideo});
       })
       .takeScreenshots(
         {
@@ -96,4 +102,37 @@ async function genererPreviewVideoPromise(sourcePath, previewPath) {
   });
 }
 
-module.exports = {genererThumbnail, genererThumbnailVideo, genererPreview, genererPreviewVideoPromise}
+async function genererVideoMp4_480p(sourcePath, destinationPath) {
+  return await new Promise((resolve, reject) => {
+    new FFmpeg({source: sourcePath})
+      .withVideoBitrate('2500k')
+      .withSize('?x480')
+      .on('error', function(err) {
+          console.error('An error occurred: ' + err.message);
+          reject(err);
+      })
+      .on('end', function(filenames) {
+
+        let shasum = crypto.createHash('sha256');
+        try {
+          let s = fs.ReadStream(destinationPath)
+          let tailleFichier = 0;
+          s.on('data', data => {
+            shasum.update(data)
+            tailleFichier += data.length;
+          })
+          s.on('end', function () {
+            const sha256 = shasum.digest('hex')
+            console.log('Successfully generated 480p mp4 ' + destinationPath + ", taille " + tailleFichier + ", sha256 " + sha256);
+            return resolve({tailleFichier, sha256});
+          })
+        } catch (error) {
+          return reject(error);
+        }
+
+      })
+      .saveToFile(destinationPath);
+  });
+}
+
+module.exports = {genererThumbnail, genererThumbnailVideo, genererPreview, genererPreviewVideoPromise, genererVideoMp4_480p}

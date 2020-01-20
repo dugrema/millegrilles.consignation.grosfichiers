@@ -77,23 +77,34 @@ class DecrypterFichier {
           resultat.thumbnail = base64Thumbnail;
           resultat.securite = securite;
         } else if ( message.mimetype && message.mimetype.split('/')[0] === 'video' ) {
+          const fuuidVideo480p = uuidv1();
+          const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
+
           const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
           const repFichierDecrypte = path.dirname(pathFichierDecrypte);
-          console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
 
+          console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
           await transformationImages.genererPreviewVideoPromise(pathFichierDecrypte, pathPreviewImage);
+
+          console.debug("Decryptage video, re-encoder en MP4, source " + fuuid + " sous " + fuuidVideo480p);
+          var resultatMp4 = await transformationImages.genererVideoMp4_480p(pathFichierDecrypte, pathVideo480p);
+
           var base64Thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
 
           resultat.fuuidPreview = fuuidPreviewImage;
           resultat.thumbnail = base64Thumbnail;
+          resultat.fuuidVideo480p = fuuidVideo480p;
+          resultat.mimetypeVideo480p = 'video/mp4';
+          resultat.tailleVideo480p = resultatMp4.tailleFichier;
+          resultat.sha256Video480p = resultatMp4.sha256;
           resultat.securite = securite;
         }
 
         return resultat;
       })
       .then(resultat => {
-        var tailleFichier = resultat.tailleFichier;
-        var sha256Hash = resultat.sha256Hash;
+        console.debug("Resultat image/video");
+        console.debug(resultat);
 
         this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte, resultat);
       })
@@ -123,6 +134,12 @@ class DecrypterFichier {
     }
     if( valeurs.thumbnail ) {
       transaction['thumbnail'] = valeurs.thumbnail;
+    }
+    if(valeurs.fuuidVideo480p) {
+      transaction.fuuidVideo480p = valeurs.fuuidVideo480p;
+      transaction.mimetypeVideo480p = valeurs.mimetypeVideo480p;
+      transaction.tailleVideo480p = valeurs.tailleVideo480p;
+      transaction.sha256Video480p = valeurs.sha256Video480p;
     }
 
     // console.debug("Transaction nouveauFichierDecrypte");
