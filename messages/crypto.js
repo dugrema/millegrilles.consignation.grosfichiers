@@ -94,7 +94,7 @@ class DecrypterFichier {
         const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
         // console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
-        await transformationImages.genererPreviewVideoPromise(pathFichierDecrypte, pathPreviewImage);
+        var resultatPreview = await transformationImages.genererPreviewVideoPromise(pathFichierDecrypte, pathPreviewImage);
 
         // console.debug("Decryptage video, re-encoder en MP4, source " + fuuid + " sous " + fuuidVideo480p);
         var resultatMp4 = await transformationImages.genererVideoMp4_480p(pathFichierDecrypte, pathVideo480p);
@@ -107,6 +107,7 @@ class DecrypterFichier {
         resultat.mimetypeVideo480p = 'video/mp4';
         resultat.tailleVideo480p = resultatMp4.tailleFichier;
         resultat.sha256Video480p = resultatMp4.sha256;
+        resultat.data_video = resultatPreview.data_video;
         resultat.securite = securite;
       }
 
@@ -147,6 +148,7 @@ class DecrypterFichier {
       transaction.mimetypeVideo480p = valeurs.mimetypeVideo480p;
       transaction.tailleVideo480p = valeurs.tailleVideo480p;
       transaction.sha256Video480p = valeurs.sha256Video480p;
+      transaction.metadata = {data_video: valeurs.data_video};
     }
 
     // console.debug("Transaction nouveauFichierDecrypte");
