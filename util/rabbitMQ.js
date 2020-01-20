@@ -13,8 +13,12 @@ class RabbitMQWrapper {
     this.connection = null;
     this.channel = null;
     this.reply_q = null;
+    this.consumerTag = null;
+
+    this.compteurMessages = 0;
 
     this.reconnectTimeout = null; // Timer de reconnexion - null si inactif
+
 
     // Correlation avec les reponses en attente.
     // Cle: uuid de CorrelationId
@@ -135,6 +139,7 @@ class RabbitMQWrapper {
   }
 
   ecouter() {
+    var compteurMessages = 0;
 
     let promise = new Promise((resolve, reject) => {
 
@@ -155,31 +160,8 @@ class RabbitMQWrapper {
         }
 
         const routingKeyManager = this.routingKeyManager;
-        this.channel.consume(
-          q.queue,
-          (msg) => {
-            let correlationId = msg.properties.correlationId;
-            // let messageContent = decodeURIComponent(escape(msg.content));
-            let messageContent = msg.content.toString();
-            let routingKey = msg.fields.routingKey;
 
-            if(correlationId && this.pendingResponses[correlationId]) {
-              // On a recu un message de reponse
-              let callback = this.pendingResponses[correlationId];
-              if(callback) {
-                callback(msg);
-                delete this.pendingResponses[correlationId];
-              }
-            } else if(routingKey) {
-              // Traiter le message via handlers
-              routingKeyManager.handleMessage(routingKey, messageContent, msg.properties);
-            } else {
-              console.debug("Recu message sans correlation Id ou routing key");
-              console.warn(msg);
-            }
-          },
-          {noAck: true}
-        );
+        this._consume();
 
         resolve();
       })
@@ -191,6 +173,58 @@ class RabbitMQWrapper {
 
     return promise;
 
+  }
+
+  _consume() {
+    return this.channel.consume(
+      this.reply_q.queue,
+      async (msg) => {
+        const noMessage = this.compteurMessages;
+        this.compteurMessages = noMessage + 1;
+
+        console.debug("Message recu " + noMessage);
+        let correlationId = msg.properties.correlationId;
+        // let messageContent = decodeURIComponent(escape(msg.content));
+        let messageContent = msg.content.toString();
+        let routingKey = msg.fields.routingKey;
+
+        if(correlationId && this.pendingResponses[correlationId]) {
+          // On a recu un message de reponse
+          let callback = this.pendingResponses[correlationId];
+          if(callback) {
+            callback(msg);
+            delete this.pendingResponses[correlationId];
+          }
+        } else if(routingKey) {
+          // Traiter le message via handlers
+          let blockingPromise = this.routingKeyManager.handleMessage(routingKey, messageContent, msg.properties);
+          if(blockingPromise) {
+            console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
+            // On arrete de consommer le temps de traiter le message
+            this.channel.cancel(this.consumerTag)
+            .then(()=>{
+              blockingPromise.finally(()=>{
+                console.debug("Resumer consume apres noMessage=" + noMessage);
+                this._consume();
+              })
+            })
+            .catch(err=>{
+              console.error("Erreur cancel reader consume");
+            });
+          }
+
+        } else {
+          console.debug("Recu message sans correlation Id ou routing key");
+          console.warn(msg);
+        }
+        console.debug("Message traite " + noMessage);
+      },
+      {noAck: true}
+    ).then(tag=>{
+      console.debug("Consumer Tag ");
+      console.debug(tag);
+      this.consumerTag = tag.consumerTag;
+    })
   }
 
   enregistrerListenerConnexion(listener) {
@@ -474,17 +508,25 @@ class RoutingKeyManager {
     this.handleMessage.bind(this);
   }
 
-  handleMessage(routingKey, messageContent, properties) {
+  async handleMessage(routingKey, messageContent, properties) {
     let callback = this.registeredRoutingKeyCallbacks[routingKey];
+    var promise;
     if(callback) {
       let json_message = JSON.parse(messageContent);
       let opts = {
         properties
       }
-      callback(routingKey, json_message, opts);
+      promise = callback(routingKey, json_message, opts);
+      if(promise) {
+        console.debug("Promise recue");
+      } else {
+        console.debug("Promise non recue");
+      }
     } else {
       console.warn("Routing key pas de callback: " + routingKey);
     }
+
+    return promise;
   }
 
   addRoutingKeyCallback(callback, routingKeys) {
@@ -493,7 +535,7 @@ class RoutingKeyManager {
       this.registeredRoutingKeyCallbacks[routingKeyName] = callback;
 
       // Ajouter la routing key
-      console.debug("Ajouter calbback pour routingKey " + routingKeyName);
+      console.debug("Ajouter callback pour routingKey " + routingKeyName);
       this.mq.channel.bindQueue(this.mq.reply_q.queue, 'millegrilles.noeuds', routingKeyName);
     }
   }

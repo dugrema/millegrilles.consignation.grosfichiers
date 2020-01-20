@@ -34,17 +34,18 @@ class DecrypterFichier {
 
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      this.decrypterFichier(routingKey, message)}, ['commande.grosfichiers.decrypterFichier']);
+      return this.decrypterFichier(routingKey, message)}, ['commande.grosfichiers.decrypterFichier']);
   }
 
   async decrypterFichier(routingKey, message) {
-    console.log("Message de declassement de grosfichiers");
-    console.log(message);
+    console.log("Message de declassement de grosfichiers, debut ");
 
     const fuuid = message.fuuid;
     const cleSecreteDecryptee = message.cleSecreteDecryptee;
     const iv = message.iv;
     const securite = message.securite;
+
+    console.log("Message de declassement de grosfichiers " + fuuid);
 
     // Trouver fichier original crypte
     const pathFichierCrypte = pathConsignation.trouverPathLocal(fuuid, true);
@@ -56,64 +57,72 @@ class DecrypterFichier {
     const pathFichierDecrypte = pathConsignation.trouverPathLocal(fuuidFichierDecrypte, false, paramsType);
     const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
-    await fs.mkdir(repFichierDecrypte, {recursive: true}, e=>{
-      if(e) {
-        console.error("Erreur creation repertoire pour decrypter fichier : " + repFichierDecrypte);
-        return;
+    console.debug("Creation repertoire");
+    return new Promise((resolve, reject) => {
+      fs.mkdir(repFichierDecrypte, {recursive: true}, async e=>{
+        if(e) {
+          console.error("Erreur creation repertoire pour decrypter fichier : " + repFichierDecrypte);
+          reject(e);
+          // return;
+        } else {
+          resolve();
+        }
+      });
+    })
+    .then(()=>{
+      console.debug("Decrypter");
+      return decrypteur.decrypter(pathFichierCrypte, pathFichierDecrypte, cleSecreteDecryptee, iv);
+    })
+    .then(async resultat =>{
+
+      if ( message.mimetype && message.mimetype.split('/')[0] === 'image' ) {
+        const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+        const repFichierDecrypte = path.dirname(pathFichierDecrypte);
+        console.debug("Decryptage image, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
+
+        await transformationImages.genererPreview(pathFichierDecrypte, pathPreviewImage);
+        var base64Thumbnail = await transformationImages.genererThumbnail(pathFichierDecrypte);
+
+        resultat.fuuidPreview = fuuidPreviewImage;
+        resultat.thumbnail = base64Thumbnail;
+        resultat.securite = securite;
+      } else if ( message.mimetype && message.mimetype.split('/')[0] === 'video' ) {
+        const fuuidVideo480p = uuidv1();
+        const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
+
+        const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+        const repFichierDecrypte = path.dirname(pathFichierDecrypte);
+
+        console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
+        await transformationImages.genererPreviewVideoPromise(pathFichierDecrypte, pathPreviewImage);
+
+        console.debug("Decryptage video, re-encoder en MP4, source " + fuuid + " sous " + fuuidVideo480p);
+        var resultatMp4 = await transformationImages.genererVideoMp4_480p(pathFichierDecrypte, pathVideo480p);
+
+        var base64Thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
+
+        resultat.fuuidPreview = fuuidPreviewImage;
+        resultat.thumbnail = base64Thumbnail;
+        resultat.fuuidVideo480p = fuuidVideo480p;
+        resultat.mimetypeVideo480p = 'video/mp4';
+        resultat.tailleVideo480p = resultatMp4.tailleFichier;
+        resultat.sha256Video480p = resultatMp4.sha256;
+        resultat.securite = securite;
       }
 
-      decrypteur.decrypter(pathFichierCrypte, pathFichierDecrypte, cleSecreteDecryptee, iv).
-      then(async resultat =>{
+      return resultat;
+    })
+    .then(async resultat => {
+      console.debug("Resultat image/video " + fuuid);
+      // console.debug(resultat);
+      this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte, resultat);
+    })
+    .catch(err=>{
+      console.error("Erreur decryptage fichier " + pathFichierCrypte);
+      console.error(err);
+    })
 
-        if ( message.mimetype && message.mimetype.split('/')[0] === 'image' ) {
-          const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
-          const repFichierDecrypte = path.dirname(pathFichierDecrypte);
-          console.debug("Decryptage image, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
-
-          await transformationImages.genererPreview(pathFichierDecrypte, pathPreviewImage);
-          var base64Thumbnail = await transformationImages.genererThumbnail(pathFichierDecrypte);
-
-          resultat.fuuidPreview = fuuidPreviewImage;
-          resultat.thumbnail = base64Thumbnail;
-          resultat.securite = securite;
-        } else if ( message.mimetype && message.mimetype.split('/')[0] === 'video' ) {
-          const fuuidVideo480p = uuidv1();
-          const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
-
-          const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
-          const repFichierDecrypte = path.dirname(pathFichierDecrypte);
-
-          console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
-          await transformationImages.genererPreviewVideoPromise(pathFichierDecrypte, pathPreviewImage);
-
-          console.debug("Decryptage video, re-encoder en MP4, source " + fuuid + " sous " + fuuidVideo480p);
-          var resultatMp4 = await transformationImages.genererVideoMp4_480p(pathFichierDecrypte, pathVideo480p);
-
-          var base64Thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
-
-          resultat.fuuidPreview = fuuidPreviewImage;
-          resultat.thumbnail = base64Thumbnail;
-          resultat.fuuidVideo480p = fuuidVideo480p;
-          resultat.mimetypeVideo480p = 'video/mp4';
-          resultat.tailleVideo480p = resultatMp4.tailleFichier;
-          resultat.sha256Video480p = resultatMp4.sha256;
-          resultat.securite = securite;
-        }
-
-        return resultat;
-      })
-      .then(resultat => {
-        console.debug("Resultat image/video");
-        console.debug(resultat);
-
-        this._transmettreTransactionFichierDecrypte(fuuid, fuuidFichierDecrypte, resultat);
-      })
-      .catch(err=>{
-        console.error("Erreur decryptage fichier " + pathFichierCrypte);
-        console.error(err);
-      })
-
-    });
+    console.log("Fin message de declassement de grosfichiers " + fuuid);
 
   }
 
@@ -145,7 +154,7 @@ class DecrypterFichier {
     // console.debug("Transaction nouveauFichierDecrypte");
     // console.debug(transaction);
 
-    this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
+    return this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
   }
 
 }

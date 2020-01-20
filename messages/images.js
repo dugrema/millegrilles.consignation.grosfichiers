@@ -31,12 +31,11 @@ class GenerateurImages {
 
   async genererThumbnail(routingKey, message) {
 
-    console.log("Message pour generer thumbnail protege");
-    console.log(message);
-
     const fuuid = message.fuuid;
     const cleSecreteChiffree = message.cleSecreteChiffree;
     const iv = message.iv;
+
+    // console.log("Message pour generer thumbnail protege " + message.fuuid);
 
     // Decrypter la cle secrete
     const cleSecreteDechiffree = decrypterCleSecrete(cleSecreteChiffree);
