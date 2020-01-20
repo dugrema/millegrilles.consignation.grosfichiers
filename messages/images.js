@@ -31,8 +31,8 @@ class GenerateurImages {
 
   async genererThumbnail(routingKey, message) {
 
-    // console.log("Message de declassement de grosfichiers");
-    // console.log(message);
+    console.log("Message pour generer thumbnail protege");
+    console.log(message);
 
     const fuuid = message.fuuid;
     const cleSecreteChiffree = message.cleSecreteChiffree;
@@ -47,7 +47,7 @@ class GenerateurImages {
     // Preparer fichier destination decrypte
     // Aussi preparer un fichier tmp pour le thumbnail
     var thumbnailBase64Content;
-    await tmp.file({ mode: 0o600 }).then(async tmpDecrypted => {
+    await tmp.file({ mode: 0o600, postfix: '.'+message.extension }).then(async tmpDecrypted => {
       const decryptedPath = tmpDecrypted.path;
       // Decrypter
       try {
@@ -57,7 +57,13 @@ class GenerateurImages {
         //               ", taille " + resultatsDecryptage.tailleFichier +
         //               ", sha256 " + resultatsDecryptage.sha256Hash);
 
-        thumbnailBase64Content = await transformationImages.genererThumbnail(decryptedPath);
+        let mimetype = message.mimetype.split('/')[0];
+        if(mimetype === 'image') {
+          thumbnailBase64Content = await transformationImages.genererThumbnail(decryptedPath);
+        } else if(mimetype === 'video') {
+          thumbnailBase64Content = await transformationImages.genererThumbnailVideo(decryptedPath);
+        }
+
         // _imConvertPromise([decryptedPath, '-resize', '128', '-format', 'jpg', thumbnailPath]);
       } finally {
         // Effacer le fichier temporaire
@@ -84,29 +90,6 @@ class GenerateurImages {
 
     this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
   }
-
-  // getDecipherPipe4fuuid(cleSecrete, iv) {
-  //   // On prepare un decipher pipe pour decrypter le contenu.
-  //
-  //   let ivBuffer = Buffer.from(iv, 'base64');
-  //   // console.debug("IV (" + ivBuffer.length + "): ");
-  //   // console.debug(iv);
-  //
-  //   // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
-  //   //let decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
-  //   decryptedSecretKey = cleSecrete; //decryptedSecretKey.toString('utf8');
-  //
-  //   var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
-  //     return parseInt(h, 16)
-  //   }));
-  //   // console.debug("Cle secrete decryptee (" + typedArray.length + ") bytes");
-  //
-  //   // Creer un decipher stream
-  //   var decipher = crypto.createDecipheriv('aes256', typedArray, ivBuffer);
-  //
-  //   return decipher;
-  //
-  // }
 
 }
 
