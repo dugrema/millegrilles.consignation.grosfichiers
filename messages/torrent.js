@@ -56,7 +56,7 @@ TransmissionRPC.prototype.seeds = function (callback) {
     return transmission;
 };
 
-console.log(transmission);
+// console.log(transmission);
 
 
 class TorrentMessages {
@@ -94,8 +94,8 @@ class TorrentMessages {
   }
 
   creerNouveauTorrent(routingKey, message) {
-    console.debug("Creer nouveau torrent");
-    console.debug(message);
+    // console.debug("Creer nouveau torrent");
+    // console.debug(message);
 
     const nomCollection = message.nom;
     const uuidCollection = message['uuid'];
@@ -104,18 +104,18 @@ class TorrentMessages {
 
     this._creerRepertoireHardlinks(message, nomCollection, pathCollection)
     .then(result=>{
-      console.debug("Hard links crees");
+      // console.debug("Hard links crees");
       return this._creerFichierTorrent(message, nomCollection, pathCollection);
     })
     .then(({fichierTorrent, transactionTorrent})=>{
 
-      console.debug("Fichier torrent cree: " + fichierTorrent);
+      // console.debug("Fichier torrent cree: " + fichierTorrent);
       pathFichierTorrent = fichierTorrent;
       this._seederTorrent(pathFichierTorrent, uuidCollection);
       return this._transmettreTransactionTorrent(transactionTorrent);
     })
     .then(result=>{
-      console.debug("Transaction du nouveau torrent soumise");
+      // console.debug("Transaction du nouveau torrent soumise");
     })
     .catch(err=>{
       console.error("Erreur creation torrent");
@@ -125,8 +125,8 @@ class TorrentMessages {
   }
 
   seederTorrent(routingKey, message) {
-    console.debug("Seeder torrent");
-    console.debug(message);
+    // console.debug("Seeder torrent");
+    // console.debug(message);
 
     const crypte = false;   // Cryptage torrent pas encore supporte
     const uuidCollection = message['uuid'];
@@ -147,10 +147,10 @@ class TorrentMessages {
       const trackers = contenuTorrent.announce;
       const infoCollection = contenuTorrent.info.millegrilles;
       const nomCollection = contenuTorrent.name;
-      console.debug("Information collection extraite du torrent");
-      console.debug("Nom collection : " + nomCollection);
-      console.debug("HashString : " + hashstring);
-      console.debug("Trackers : " + trackers);
+      // console.debug("Information collection extraite du torrent");
+      // console.debug("Nom collection : " + nomCollection);
+      // console.debug("HashString : " + hashstring);
+      // console.debug("Trackers : " + trackers);
       // console.log(infoCollection);
 
       let catalogue = infoCollection.catalogue;
@@ -165,8 +165,8 @@ class TorrentMessages {
         fichiers.push(fichier);
       }
 
-      console.debug("Fichiers dans torrent");
-      console.debug(fichiers);
+      // console.debug("Fichiers dans torrent");
+      // console.debug(fichiers);
 
       const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
       this._creerRepertoireHardlinks({documents: fichiers}, nomCollection, pathCollection)
@@ -175,14 +175,14 @@ class TorrentMessages {
         console.error(err);
       })
       .then(()=>{
-        console.log("Hard links collection crees");
+        // console.log("Hard links collection crees");
 
         // Creer hard link pour fichier torrent
         const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidCollection);
         fs.link(pathTorrentConsigne, fichierTorrent, e=>{
           if(e) {
             if(e.code == 'EEXIST') {
-              console.debug("Hard link torrent existe deja");
+              // console.debug("Hard link torrent existe deja");
             } else {
               console.error("Erreur creation hard link torrent");
               console.error(e);
@@ -199,15 +199,15 @@ class TorrentMessages {
   }
 
   requeteTorrent(routingKey, message) {
-    console.debug("Requete torrent " + routingKey);
-    console.debug(message);
+    // console.debug("Requete torrent " + routingKey);
+    // console.debug(message);
 
   }
 
   // Fabriquer un repertoire pour la collection figee. Creer hard links pour
   // tous les fichiers de la collection.
   _creerRepertoireHardlinks(message, nomCollection, pathCollection) {
-    console.debug("Creer repertoire hard links");
+    // console.debug("Creer repertoire hard links");
 
     return new Promise((resolve, reject) => {
 
@@ -229,7 +229,7 @@ class TorrentMessages {
 
           if(fuuid) {
             const pathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension});
-            console.debug("Creer hard link pour " + pathFichier);
+            // console.debug("Creer hard link pour " + pathFichier);
 
             // Nom du fichier:
             // Si 1.public ou 2.prive: nomFichier (extension deja inclue)
@@ -243,7 +243,7 @@ class TorrentMessages {
               const fichierSplit = fileDoc.nom.split('.');
               const extension = fichierSplit[fichierSplit.length-1];
               const nomFichierPrefixe = fileDoc.nom.substring(0, fileDoc.nom.length - extension.length - 1);
-              console.debug("Nom fichier " + fileDoc.nom + ", extension " + extension + ", pref " + nomFichier);
+              // console.debug("Nom fichier " + fileDoc.nom + ", extension " + extension + ", pref " + nomFichier);
 
               if(securite === '2.prive') {
                 nomFichier = nomFichierPrefixe + '.' + fileDoc.fuuid + "." + extension;
@@ -254,7 +254,7 @@ class TorrentMessages {
               }
             }
 
-            console.debug("Nom fichier: " + nomFichier + "(securite " + securite + ")");
+            // console.debug("Nom fichier: " + nomFichier + "(securite " + securite + ")");
 
             // const nomFichier = ((securite!='4.secure')?fileDoc.nom+'.':'') + fileDoc.fuuid + (encrypte?'.mgs1':'');
             const newPathFichier = path.join(pathCollection, nomFichier);
@@ -346,7 +346,7 @@ class TorrentMessages {
             return;
           }
 
-          console.debug("Fichier torrent cree");
+          // console.debug("Fichier torrent cree");
 
           // Faire un hard link dans la base de consignation
           const torrentDirName = path.dirname(pathTorrentConsigne);
@@ -364,7 +364,7 @@ class TorrentMessages {
                 return;
               }
 
-              console.debug("Creation hard link torrent: " + pathTorrentConsigne);
+              // console.debug("Creation hard link torrent: " + pathTorrentConsigne);
             });
 
           })
@@ -408,8 +408,8 @@ class TorrentMessages {
         console.error(err);
         return;
       }
-      console.log("Seeding torrent : " + pathFichierTorrent);
-      console.log(arg);
+      // console.log("Seeding torrent : " + pathFichierTorrent);
+      // console.log(arg);
 
       // Transmettre transaction pour confirmer ajout du torrent.
       // Inclue aussi la hashString
@@ -432,7 +432,7 @@ class TorrentMessages {
 
   supprimerTorrent(routingKey, message, opts) {
     const torrentHashList = message.hashlist;
-    console.debug("Supprimer torrent " + torrentHashList);
+    // console.debug("Supprimer torrent " + torrentHashList);
 
     const deleteFolder = true;
 
@@ -443,9 +443,9 @@ class TorrentMessages {
         return;
       }
 
-      console.debug("Torrents supprimes");
-      console.debug(torrentHashList);
-      console.debug(arg);
+      // console.debug("Torrents supprimes");
+      // console.debug(torrentHashList);
+      // console.debug(arg);
 
       this._transmettreEvenementTorrent(torrentHashList, 'Supprimer');
     });
