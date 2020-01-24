@@ -18,6 +18,13 @@ EXPOSE 443
 CMD [ "npm", "start" ]
 
 COPY ./package*.json ./
+
+# Installer ffmpeg pour conversion video
+RUN apt update && \
+    apt install ffmpeg -y && \
+    apt clean && \
+    rm -rf /var/cache/apt
+
 RUN npm install
 
 # Bundle app source
