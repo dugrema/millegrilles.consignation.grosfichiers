@@ -1,4 +1,4 @@
-FROM node:12
+FROM docker.maceroc.com/nodejsmedia:12_0
 
 # Create app directory
 WORKDIR /usr/src/app
@@ -13,17 +13,7 @@ ENV MG_NOM_MILLEGRILLE=sansnom \
     PRIVKEY=/run/secrets/pki.millegrilles.ssl.key \
     CERT=/run/secrets/pki.millegrilles.ssl.cert
 
-EXPOSE 443
-
-CMD [ "npm", "start" ]
-
 COPY ./package*.json ./
-
-# Installer ffmpeg pour conversion video
-RUN apt update && \
-    apt install ffmpeg -y && \
-    apt clean && \
-    rm -rf /var/cache/apt
 
 RUN npm install
 
