@@ -43,6 +43,7 @@ class PathConsignation {
     // console.debug("uuid: " + fichierUuid + ". Timestamp " + timestamp);
 
     let extension = encrypte?'mgs1':type.extension;
+    extension = extension.toLowerCase() // Troujours lowercase
 
     let year = timestamp.getUTCFullYear();
     let month = timestamp.getUTCMonth() + 1; if(month < 10) month = '0'+month;

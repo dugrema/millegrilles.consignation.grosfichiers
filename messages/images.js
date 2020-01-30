@@ -3,6 +3,7 @@ const fs = require('fs');
 const tmp = require('tmp-promise');
 const crypto = require('crypto');
 const im = require('imagemagick');
+const uuidv1 = require('uuid/v1');
 const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
 const { Decrypteur } = require('../util/cryptoUtils.js');
 const {pathConsignation} = require('../util/traitementFichier');
@@ -17,6 +18,7 @@ class GenerateurImages {
     this.mq = mq;
 
     this.genererThumbnail.bind(this);
+    this.transcoderVideoDecrypte.bind(this);
   }
 
   // Appele lors d'une reconnexion MQ
@@ -27,6 +29,9 @@ class GenerateurImages {
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
       this.genererThumbnail(routingKey, message)}, ['commande.grosfichiers.genererThumbnailProtege']);
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
+      // Retourner la promise pour rendre cette operation bloquante (longue duree)
+      return this.transcoderVideoDecrypte(routingKey, message)}, ['commande.grosfichiers.transcoderVideo']);
   }
 
   async genererThumbnail(routingKey, message) {
@@ -46,7 +51,7 @@ class GenerateurImages {
     // Preparer fichier destination decrypte
     // Aussi preparer un fichier tmp pour le thumbnail
     var thumbnailBase64Content, metadata;
-    await tmp.file({ mode: 0o600, postfix: '.'+message.extension }).then(async tmpDecrypted => {
+    return await tmp.file({ mode: 0o600, postfix: '.'+message.extension }).then(async tmpDecrypted => {
       const decryptedPath = tmpDecrypted.path;
       // Decrypter
       try {
@@ -81,6 +86,62 @@ class GenerateurImages {
 
   }
 
+  async transcoderVideoDecrypte(routingKey, message) {
+
+    const fuuid = message.fuuid;
+    const extension = message.extension;
+    const securite = message.securite;
+    // console.debug("Message transcoder video")
+    // console.debug(message);
+
+    // console.debug("Message pour generer thumbnail protege " + message.fuuid);
+
+    const pathFichier = pathConsignation.trouverPathLocal(fuuid, false, {extension: extension});
+
+    var thumbnailBase64Content, metadata;
+
+    let mimetype = message.mimetype.split('/')[0];
+    if(mimetype !== 'video') {
+      throw new Error("Erreur, type n'est pas video: " + mimetype)
+    }
+
+    const fuuidVideo480p = uuidv1(), fuuidPreviewImage = uuidv1();
+    const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
+    const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+    return await new Promise((resolve, reject)=>{
+      fs.mkdir(path.dirname(pathVideo480p), {recursive: true}, e=>{
+        if(e) reject(e);
+        fs.mkdir(path.dirname(pathPreviewImage), {recursive: true}, e=>{
+          if(e) reject(e);
+          resolve();
+        })
+      })
+    }).then( async () => {
+      // console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
+      var resultatPreview = await transformationImages.genererPreviewVideoPromise(pathFichier, pathPreviewImage);
+
+      // console.debug("Decryptage video, re-encoder en MP4, source " + fuuid + " sous " + fuuidVideo480p);
+      var resultatMp4 = await transformationImages.genererVideoMp4_480p(pathFichier, pathVideo480p);
+
+      var base64Thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
+
+      var resultat = {};
+      resultat.fuuidPreview = fuuidPreviewImage;
+      resultat.thumbnail = base64Thumbnail;
+      resultat.fuuidVideo480p = fuuidVideo480p;
+      resultat.mimetypeVideo480p = 'video/mp4';
+      resultat.tailleVideo480p = resultatMp4.tailleFichier;
+      resultat.sha256Video480p = resultatMp4.sha256;
+      resultat.data_video = resultatPreview.data_video;
+      resultat.securite = securite;
+
+      // console.debug("Fichier converti");
+      // console.debug(convertedFile);
+      this._transmettreTransactionVideoTranscode(fuuid, resultat)
+    })
+
+  }
+
   _transmettreTransactionThumbnailProtege(fuuid, thumbnail, metadata) {
     const domaineTransaction = 'millegrilles.domaines.GrosFichiers.associerThumbnail';
 
@@ -88,6 +149,14 @@ class GenerateurImages {
 
     // console.debug("Transaction thumbnail protege");
     // console.debug(transaction);
+
+    this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
+  }
+
+  _transmettreTransactionVideoTranscode(fuuid, resultat) {
+    const domaineTransaction = 'millegrilles.domaines.GrosFichiers.associerVideo';
+
+    const transaction = {fuuid, ...resultat}
 
     this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
   }
