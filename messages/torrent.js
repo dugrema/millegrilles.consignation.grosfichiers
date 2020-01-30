@@ -506,7 +506,8 @@ class TorrentMessages {
     // Interroger Transmission
     transmission.get(listeHashstrings, (err, reponse)=>{
       if(err) {
-        console.error(err);
+        // console.error("Erreur d'access a transmission");
+        // console.error(err);
         transmettreReponse({erreur: "Erreur d'access a transmission"});
         return;
       }
