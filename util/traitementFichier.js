@@ -103,17 +103,28 @@ class TraitementFichier {
               };
 
               // Verifier si on doit generer des thumbnails/preview
-              if(!encrypte && mimetype.split('/')[0] === 'image') {
-                try {
-                  // console.debug("Creation preview image")
-                  var imagePreviewInfo = await traiterImage(nouveauPathFichier);
+              if(!encrypte) {
+                if(mimetype.split('/')[0] === 'image') {
+                  try {
+                    // console.debug("Creation preview image")
+                    var imagePreviewInfo = await traiterImage(nouveauPathFichier);
+                    messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
+                    messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
+                    messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
+                    // console.debug("Info image, preview = " + messageConfirmation.fuuid_preview)
+                  } catch (err) {
+                    console.error("Erreur creation thumbnail/previews");
+                    console.error(err);
+                  }
+                } else if(mimetype.split('/')[0] === 'video') {
+                  // On genere uniquement le thumbnail - le processus va
+                  // faire un appel async pour le re-encoder
+                  console.debug("Traitement video");
+                  var imagePreviewInfo = await traiterVideo(nouveauPathFichier);
                   messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
                   messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
                   messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
-                  // console.debug("Info image, preview = " + messageConfirmation.fuuid_preview)
-                } catch (err) {
-                  console.error("Erreur creation thumbnail/previews");
-                  console.error(err);
+                  console.debug("Fuuid preview video: " + messageConfirmation.fuuid_preview)
                 }
               }
 
@@ -196,17 +207,30 @@ async function traiterImage(pathImage) {
 }
 
 // Extraction de thumbnail, preview et recodage des videos pour le web
-async function traiterVideo(pathVideo) {
+async function traiterVideo(pathVideo, sansTranscodage) {
   var fuuidPreviewImage = uuidv1();
 
   // Extraire un preview pleine resolution du video, faire un thumbnail
   var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
-  await transformationImages.genererPreviewVideoPromise(pathVideo, pathPreviewImage);
-  var thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
+  console.debug("Path video " + pathVideo)
+  console.debug("Path preview " + pathPreviewImage)
 
-  // Generer une nouvelle version downsamplee du video en mp4 a 480p, 3Mbit/s
+  return await new Promise((resolve, reject)=>{
+    fs.mkdir(path.dirname(pathPreviewImage), { recursive: true }, async err =>{
+      if(err) reject(err);
 
-  return {thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'};
+      await transformationImages.genererPreviewVideoPromise(pathVideo, pathPreviewImage);
+      var thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
+
+      // Generer une nouvelle version downsamplee du video en mp4 a 480p, 3Mbit/s
+      if(!sansTranscodage) {
+
+      }
+
+      resolve({thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'});
+    })
+  })
+
 }
 
 const traitementFichier = new TraitementFichier();
