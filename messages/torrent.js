@@ -469,7 +469,8 @@ class TorrentMessages {
     // Interroger Transmission
     transmission.sessionStats((err, reponse)=>{
       if(err) {
-        console.error(err);
+        // console.warn("sommaireTransmission: Erreur connexion")
+        // console.error(err);
         transmettreReponse({erreur: "Erreur d'access a transmission"});
         return;
       }
