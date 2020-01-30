@@ -71,18 +71,12 @@ class GenerateurImages {
         }
 
         // _imConvertPromise([decryptedPath, '-resize', '128', '-format', 'jpg', thumbnailPath]);
+        this._transmettreTransactionThumbnailProtege(fuuid, thumbnailBase64Content, metadata)
       } finally {
         // Effacer le fichier temporaire
         tmpDecrypted.cleanup();
       }
     })
-
-    // Lire le fichier converti en memoire pour transformer en base64
-    // convertedFile = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
-
-    // console.debug("Fichier converti");
-    // console.debug(convertedFile);
-    this._transmettreTransactionThumbnailProtege(fuuid, thumbnailBase64Content, metadata)
 
   }
 
