@@ -18,6 +18,10 @@ async function genererThumbnail(sourcePath, opts) {
 
       // Lire le fichier converti en memoire pour transformer en base64
       base64Content = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
+      console.debug("Thumbnail b64 genere")
+    } catch(err) {
+      console.error("Erreur creation thumbnail");
+      console.error(err);
     } finally {
       // Effacer le fichier temporaire
       o.cleanup();
@@ -47,12 +51,18 @@ async function genererThumbnailVideo(sourcePath, opts) {
 
           // Lire le fichier converti en memoire pour transformer en base64
           base64Content = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
+        } catch(err) {
+          console.error("Erreur creation thumbnail video")
+          console.error(err);
         } finally {
           tbtmp.cleanup();
         }
 
       })
 
+    } catch(err) {
+      console.error("Erreur creation thumbnail video")
+      console.error(err);
     } finally {
       // Effacer le fichier temporaire
       o.cleanup();

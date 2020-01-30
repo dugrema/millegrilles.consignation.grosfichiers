@@ -104,17 +104,24 @@ class TraitementFichier {
 
               // Verifier si on doit generer des thumbnails/preview
               if(!encrypte && mimetype.split('/')[0] === 'image') {
-                var imagePreviewInfo = await traiterImage(nouveauPathFichier);
-                messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
-                messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
-                messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
+                try {
+                  console.debug("Creation preview image")
+                  var imagePreviewInfo = await traiterImage(nouveauPathFichier);
+                  messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
+                  messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
+                  messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
+                  console.debug("Info image, preview = " + messageConfirmation.fuuid_preview)
+                } catch (err) {
+                  console.error("Erreur creation thumbnail/previews");
+                  console.error(err);
+                }
               }
 
               rabbitMQ.transmettreTransactionFormattee(
                 messageConfirmation,
                 'millegrilles.domaines.GrosFichiers.nouvelleVersion.transfertComplete')
               .then( msg => {
-                // console.log("Recu confirmation de nouvelleVersion transfertComplete");
+                console.log("Recu confirmation de nouvelleVersion transfertComplete");
                 // console.log(msg);
               })
               .catch( err => {
@@ -163,8 +170,15 @@ class TraitementFichier {
 async function traiterImage(pathImage) {
   var fuuidPreviewImage = uuidv1();
   var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
-  var thumbnail = await transformationImages.genererThumbnail(pathImage);
-  await transformationImages.genererPreview(pathImage, pathPreviewImage);
+  var thumbnail = null;
+  try {
+    thumbnail = await transformationImages.genererThumbnail(pathImage);
+    await transformationImages.genererPreview(pathImage, pathPreviewImage);
+    console.debug("2. thumbnail/preview prets")
+  } catch(err) {
+    console.error("Erreur traitement image thumbnail/preview");
+    console.error(err);
+  }
   return {thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'};
 }
 
