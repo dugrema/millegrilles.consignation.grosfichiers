@@ -18,7 +18,7 @@ async function genererThumbnail(sourcePath, opts) {
 
       // Lire le fichier converti en memoire pour transformer en base64
       base64Content = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
-      console.debug("Thumbnail b64 genere")
+      // console.debug("Thumbnail b64 genere")
     } catch(err) {
       console.error("Erreur creation thumbnail");
       console.error(err);
@@ -78,6 +78,8 @@ async function genererPreview(sourcePath, destinationPath, opts) {
 
 function _imConvertPromise(params) {
   return new Promise((resolve, reject) => {
+    // console.debug("Conversion")
+    // console.debug(params)
     im.convert(params,
       function(err, stdout){
         if (err) reject(err);
