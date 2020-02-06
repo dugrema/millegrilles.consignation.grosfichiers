@@ -25,6 +25,7 @@ app.set('port', port);
 const hostIp = process.env.HOST || 'dev2.maple.mdugre.info';
 const key_path = process.env.PRIVKEY;
 const cert_path = process.env.CERT;
+const ca_path = process.env.MG_MQ_CAFILE;
 
 /**
  * Create SPDY/http2 server.
@@ -33,7 +34,10 @@ const cert_path = process.env.CERT;
 const config = {
     hostIp: hostIp,
     cert: FS.readFileSync(cert_path),
-    key: FS.readFileSync(key_path)
+    key: FS.readFileSync(key_path),
+    ca: FS.readFileSync(ca_path),
+    requestCert: true,
+    rejectUnauthorized: true,
 };
 
 /**
