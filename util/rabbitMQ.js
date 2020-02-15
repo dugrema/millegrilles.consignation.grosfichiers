@@ -184,39 +184,114 @@ class RabbitMQWrapper {
 
         // console.debug("Message recu " + noMessage);
         let correlationId = msg.properties.correlationId;
+        let callback = this.pendingResponses[correlationId];
+        if(callback) {
+          delete this.pendingResponses[correlationId];
+        }
+
         // let messageContent = decodeURIComponent(escape(msg.content));
         let messageContent = msg.content.toString();
         let routingKey = msg.fields.routingKey;
+        let json_message = JSON.parse(messageContent);
+        // console.debug(json_message);
 
-        if(correlationId && this.pendingResponses[correlationId]) {
-          // On a recu un message de reponse
-          let callback = this.pendingResponses[correlationId];
-          if(callback) {
-            callback(msg);
+        if(routingKey && routingKey.startsWith('pki.certificat.')) {
+          // Sauvegarder le certificat localement pour usage futur
+          pki.sauvegarderMessageCertificat(messageContent, json_message.fingerprint);
+          return; // Ce message ne correspond pas au format standard
+        }
+
+        // Valider le contenu du message - hachage et signature
+        let hashTransactionCalcule = pki.hacherTransaction(json_message);
+        let hashTransactionRecu = json_message['en-tete']['hachage-contenu'];
+        if(hashTransactionCalcule !== hashTransactionRecu) {
+          console.warn("Erreur hachage incorrect : " + hashTransactionCalcule + ", message dropped");
+          console.debug(messageContent);
+
+          return;
+        }
+
+        pki.verifierSignatureMessage(json_message)
+        .then(signatureValide=>{
+          if(signatureValide) {
+            this.traiterMessageValide(json_message, msg, callback);
+          } else {
+            // Cleanup au besoin
             delete this.pendingResponses[correlationId];
           }
-        } else if(routingKey) {
-          // Traiter le message via handlers
-          let blockingPromise = this.routingKeyManager.handleMessage(routingKey, messageContent, msg.properties);
-          if(blockingPromise) {
-            // console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
-            // On arrete de consommer le temps de traiter le message
-            this.channel.cancel(this.consumerTag)
-            .then(()=>{
-              blockingPromise.finally(()=>{
-                // console.debug("Resumer consume apres noMessage=" + noMessage);
-                this._consume();
-              })
-            })
-            .catch(err=>{
-              console.error("Erreur cancel reader consume");
-            });
-          }
+        })
+        .catch(err=>{
+          if(err.inconnu) {
+            // Message inconnu, on va verifier si c'est une reponse de
+            // certificat.
+            if(json_message.resultats && json_message.resultats.certificat_pem) {
+              // On laisse le message passer, c'est un certificat
+              // console.debug("Certificat recu");
+              callback(msg);
+            } else {
+              // On tente de charger le certificat
+              let fingerprint = json_message['en-tete'].certificat;
+              console.warn("Certificat inconnu, on fait une demande : " + fingerprint);
+              this.demanderCertificat(fingerprint)
+              .then(reponse=>{
 
-        } else {
-          console.warn("Recu message sans correlation Id ou routing key");
-          console.warn(msg);
-        }
+                // console.debug("Reponse demande certificat");
+                // console.debug(reponse);
+
+                // Sauvegarder le certificat et tenter de valider le message en attente
+                pki.sauvegarderMessageCertificat(JSON.stringify(reponse.resultats))
+                .then(()=>pki.verifierSignatureMessage(json_message))
+                .then(signatureValide=>{
+                  if(signatureValide) {
+                    this.traiterMessageValide(json_message, msg, callback);
+                  } else {
+                    console.warn("Signature invalide, message dropped");
+                  }
+                })
+                .catch(err=>{
+                  console.warn("Message non valide apres reception du certificat, message dropped");
+                  console.debug(err);
+                });
+
+              })
+              .catch(err=>{
+                console.warn("Certificat non charge, message dropped");
+                console.debug(err);
+              })
+            }
+          }
+        });
+
+
+        // if(correlationId && this.pendingResponses[correlationId]) {
+        //   // On a recu un message de reponse
+        //   let callback = this.pendingResponses[correlationId];
+        //   if(callback) {
+        //     callback(msg);
+        //     delete this.pendingResponses[correlationId];
+        //   }
+        // } else if(routingKey) {
+        //   // Traiter le message via handlers
+        //   let blockingPromise = this.routingKeyManager.handleMessage(routingKey, messageContent, msg.properties);
+        //   if(blockingPromise) {
+        //     // console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
+        //     // On arrete de consommer le temps de traiter le message
+        //     this.channel.cancel(this.consumerTag)
+        //     .then(()=>{
+        //       blockingPromise.finally(()=>{
+        //         // console.debug("Resumer consume apres noMessage=" + noMessage);
+        //         this._consume();
+        //       })
+        //     })
+        //     .catch(err=>{
+        //       console.error("Erreur cancel reader consume");
+        //     });
+        //   }
+        //
+        // } else {
+        //   console.warn("Recu message sans correlation Id ou routing key");
+        //   console.warn(msg);
+        // }
         // console.debug("Message traite " + noMessage);
       },
       {noAck: true}
@@ -225,6 +300,35 @@ class RabbitMQWrapper {
       // console.debug(tag);
       this.consumerTag = tag.consumerTag;
     })
+  }
+
+  traiterMessageValide(json_message, msg, callback) {
+    let routingKey = msg.fields.routingKey;
+    if(callback) {
+      callback(json_message);
+    } else if(routingKey) {
+      // Traiter le message via handlers
+      let blockingPromise = this.routingKeyManager.handleMessage(routingKey, msg.content, msg.properties);
+      if(blockingPromise) {
+        // console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
+        // On arrete de consommer le temps de traiter le message
+        this.channel.cancel(this.consumerTag)
+        .then(()=>{
+          blockingPromise.finally(()=>{
+            // console.debug("Resumer consume apres noMessage=" + noMessage);
+            this._consume();
+          })
+        })
+        .catch(err=>{
+          console.error("Erreur cancel reader consume");
+        });
+      }
+
+    } else {
+      console.warn("Recu message sans correlation Id ou routing key");
+      console.warn(msg);
+    }
+
   }
 
   enregistrerListenerConnexion(listener) {
@@ -489,6 +593,17 @@ class RabbitMQWrapper {
     })
 
     return promise;
+  }
+
+  demanderCertificat(fingerprint) {
+    var requete = {fingerprint}
+    var routingKey = 'requete.millegrilles.domaines.Pki.certificat';
+    return this.transmettreRequete(routingKey, requete)
+    .then(reponse=>{
+      let messageContent = decodeURIComponent(escape(reponse.content));
+      let json_message = JSON.parse(messageContent);
+      return json_message;
+    })
   }
 
 }
