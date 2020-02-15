@@ -3,6 +3,6 @@ DOCKERHUB_REPO=dugremat
 NAME=consignationfichiers
 ARCH_SUPPORTEES=( x86_64 armv7l aarch64 )
 BRANCH=`git name-rev --name-only HEAD`
-BUILD=4
+BUILD=5
 
 VERSION=$BRANCH.$BUILD
