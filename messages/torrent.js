@@ -165,6 +165,12 @@ class TorrentMessages {
         fichiers.push(fichier);
       }
 
+      // Extraire l'extension
+      for(let idx in fichiers) {
+        let fichier = fichiers[idx];
+        fichier.extension = path.extname(fichier.nom).toLowerCase().replace('.', '');
+      }
+
       // console.debug("Fichiers dans torrent");
       // console.debug(fichiers);
 
@@ -227,6 +233,11 @@ class TorrentMessages {
           let extension = fileDoc.extension;
           let encrypte = securite == '3.protege' || securite == '4.secure';
 
+          // console.debug("Fichier creer link hard");
+          // console.debug(fuuid);
+          // console.debug(encrypte);
+          // console.debug(extension);
+
           if(fuuid) {
             const pathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension});
             // console.debug("Creer hard link pour " + pathFichier);
@@ -281,6 +292,8 @@ class TorrentMessages {
             }
           }
         };
+        // console.debug("Creer seed hard links");
+        // console.debug(message.documents);
         linkDocsLoop(message.documents); // Demarrer boucle
 
       })
