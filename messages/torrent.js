@@ -77,8 +77,8 @@ class TorrentMessages {
   }
 
   enregistrerChannel() {
-    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      this.creerNouveauTorrent(routingKey, message)}, ['commande.torrent.creerNouveau']);
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
+      this.creerNouveauTorrent(routingKey, message, opts)}, ['commande.torrent.creerNouveau']);
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
       this.seederTorrent(routingKey, message, opts)}, ['commande.torrent.seederTorrent']);
@@ -94,14 +94,18 @@ class TorrentMessages {
 
   }
 
-  creerNouveauTorrent(routingKey, message) {
+  creerNouveauTorrent(routingKey, message, opts) {
     // console.debug("Creer nouveau torrent");
     // console.debug(message);
+    // console.debug(opts);
+
+    const {replyTo, correlationId} = opts.properties;
 
     const nomCollection = message.nom;
     const uuidCollection = message['uuid'];
     const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
     var pathFichierTorrent = null;
+    var transactionTorrent_local = null;
 
     this._creerRepertoireHardlinks(message, nomCollection, pathCollection)
     .then(result=>{
@@ -109,15 +113,40 @@ class TorrentMessages {
       return this._creerFichierTorrent(message, nomCollection, pathCollection);
     })
     .then(({fichierTorrent, transactionTorrent})=>{
-
+      transactionTorrent_local = transactionTorrent;
       // console.debug("Fichier torrent cree: " + fichierTorrent);
       // console.debug(transactionTorrent);
       pathFichierTorrent = fichierTorrent;
-      return this._seederTorrent(pathFichierTorrent, uuidCollection)
-      .then(()=>this._transmettreTransactionTorrent(transactionTorrent))
+      return this._seederTorrent(pathFichierTorrent, uuidCollection, opts);
     })
-    .then(result=>{
-      // console.debug("Transaction du nouveau torrent soumise");
+    .then(arg=>{
+      console.debug("Seeding demarre, args:");
+      console.debug(arg);
+
+      this._transmettreTransactionTorrent(transactionTorrent_local);
+
+      // Transmettre reponse a la demande de seeding
+      // transmission.get([arg.hashString], (err, reponseTorrentsActifs)=>{
+      //   if(err) {
+      //     throw err;
+      //   }
+      //
+      //   // console.log("Reponse transmission.all");
+      //   // console.log(reponseTorrentsActifs);
+      //
+      //   const reponse = {
+      //     hashstring: arg.hashString,
+      //     uuidCollection,
+      //     seeding: true,
+      //     torrents: reponseTorrentsActifs.torrents,
+      //   }
+      //   this.mq.transmettreReponse(reponse, replyTo, correlationId)
+      //   .catch(err=>{
+      //     console.error("Erreur transmission reponse etat torrent");
+      //     console.error(err);
+      //   })
+      // });
+
     })
     .catch(err=>{
       console.error("Erreur creation torrent");
@@ -212,8 +241,7 @@ class TorrentMessages {
               }
 
               // console.log("Reponse transmission.all");
-              // console.log(reponse);
-              // reponseCumulee['torrents'] = reponse.torrents;
+              // console.log(reponseTorrentsActifs);
 
               const reponse = {
                 hashstring, uuidCollection, 'seeding': true, torrents: reponseTorrentsActifs.torrents
@@ -482,7 +510,7 @@ class TorrentMessages {
         this.mq.transmettreTransactionFormattee(transactionSeeding, domaineSeedingTorrent)
         .then(()=>{
             this._transmettreEvenementTorrent(arg.hashString, 'seeding', {'uuid-collection': uuidCollection});
-            resolve();
+            resolve(arg);
         })
         .catch(err=>{
           reject(err);
