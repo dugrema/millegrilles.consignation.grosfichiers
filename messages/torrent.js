@@ -113,8 +113,8 @@ class TorrentMessages {
       // console.debug("Fichier torrent cree: " + fichierTorrent);
       // console.debug(transactionTorrent);
       pathFichierTorrent = fichierTorrent;
-      this._seederTorrent(pathFichierTorrent, uuidCollection);
-      return this._transmettreTransactionTorrent(transactionTorrent);
+      return this._seederTorrent(pathFichierTorrent, uuidCollection)
+      .then(()=>this._transmettreTransactionTorrent(transactionTorrent))
     })
     .then(result=>{
       // console.debug("Transaction du nouveau torrent soumise");
@@ -202,17 +202,37 @@ class TorrentMessages {
             }
           }
 
-          this._seederTorrent(fichierTorrent, uuidCollection);
+          this._seederTorrent(fichierTorrent, uuidCollection)
+          .then(()=>{
 
-          // Transmettre reponse a la demande de seeding
-          const reponse = {
-            hashstring, uuidCollection, 'seeding': true,
-          }
-          this.mq.transmettreReponse(reponse, replyTo, correlationId)
-          .catch(err=>{
-            console.error("Erreur transmission reponse etat torrent");
-            console.error(err);
+            // Transmettre reponse a la demande de seeding
+            transmission.get([hashstring], (err, reponseTorrentsActifs)=>{
+              if(err) {
+                throw err;
+              }
+
+              // console.log("Reponse transmission.all");
+              // console.log(reponse);
+              // reponseCumulee['torrents'] = reponse.torrents;
+
+              const reponse = {
+                hashstring, uuidCollection, 'seeding': true, torrents: reponseTorrentsActifs.torrents
+              }
+              this.mq.transmettreReponse(reponse, replyTo, correlationId)
+              .catch(err=>{
+                console.error("Erreur transmission reponse etat torrent");
+                console.error(err);
+              })
+
+            });
+
           })
+          .catch(err=>{
+            console.error("Erreur seed torrent");
+            console.error(err);
+            this.mq.transmettreReponse({erreur: "Erreur d'access a transmission"}, replyTo, correlationId);
+          });
+
         })
       })
 
@@ -441,32 +461,38 @@ class TorrentMessages {
       'download-dir': pathCollection,
     }
 
-    transmission.addFile(pathFichierTorrent, opts, (err, arg)=>{
-      if(err) {
-        console.error("Erreur seeding torrent " + pathFichierTorrent);
-        console.error(err);
-        return;
-      }
-      // console.log("Seeding torrent : " + pathFichierTorrent);
-      // console.log(arg);
+    const promise = new Promise((resolve, reject) => {
 
-      // Transmettre transaction pour confirmer ajout du torrent.
-      // Inclue aussi la hashString
-      const transactionSeeding = {
-        'uuid-collection': uuidCollection,
-        'hashstring-torrent': arg.hashString,
-        'operation-torrent': 'seeding',
-      };
+      transmission.addFile(pathFichierTorrent, opts, (err, arg)=>{
+        if(err) {
+          console.error("Erreur seeding torrent " + pathFichierTorrent);
+          reject(err);
+        }
+        // console.log("Seeding torrent : " + pathFichierTorrent);
+        // console.log(arg);
 
-      this.mq.transmettreTransactionFormattee(transactionSeeding, domaineSeedingTorrent)
-      .catch(err=>{
-        console.error("Erreur transaction seeding torrent");
-        console.error(err);
+        // Transmettre transaction pour confirmer ajout du torrent.
+        // Inclue aussi la hashString
+        const transactionSeeding = {
+          'uuid-collection': uuidCollection,
+          'hashstring-torrent': arg.hashString,
+          'operation-torrent': 'seeding',
+        };
+
+        this.mq.transmettreTransactionFormattee(transactionSeeding, domaineSeedingTorrent)
+        .then(()=>{
+            this._transmettreEvenementTorrent(arg.hashString, 'seeding', {'uuid-collection': uuidCollection});
+            resolve();
+        })
+        .catch(err=>{
+          reject(err);
+        })
+
       });
 
-      this._transmettreEvenementTorrent(arg.hashString, 'seeding', {'uuid-collection': uuidCollection});
+    });
 
-    })
+    return promise;
   }
 
   supprimerTorrent(routingKey, message, opts) {
