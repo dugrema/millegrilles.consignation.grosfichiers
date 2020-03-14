@@ -123,8 +123,8 @@ class TorrentMessages {
       return this._seederTorrent(pathFichierTorrent, uuidCollection, opts);
     })
     .then(arg=>{
-      console.debug("Seeding demarre, args:");
-      console.debug(arg);
+      // console.debug("Seeding demarre, args:");
+      // console.debug(arg);
 
       this._transmettreTransactionTorrent(transactionTorrent_local);
 
@@ -558,7 +558,7 @@ class TorrentMessages {
   }
 
   supprimerTousTorrents(routingKey, message, opts) {
-    console.debug("Supprimer tous les torrents");
+    // console.debug("Supprimer tous les torrents");
     const mq = this.mq;
     const {replyTo, correlationId} = opts.properties;
 
@@ -566,21 +566,23 @@ class TorrentMessages {
       if (err){
         console.error(err);
       } else {
-        console.debug("Nombre torrents actifs supprimer: " + result.torrents.length);
+        // console.debug("Nombre torrents actifs supprimer: " + result.torrents.length);
 
         function prochain(compteur) {
           if(result.torrents.length > compteur) {
             var torrentId = result.torrents[compteur].id;
             transmission.remove(torrentId, (err, result)=>{
-              console.debug("Torrent arrete, id: " + torrentId);
+              // console.debug("Torrent arrete, id: " + torrentId);
               prochain(compteur+1);
             });
           } else {
-            console.debug("Torrents arretes");
-            const reponse = {
-              'seeding': false,
+            // console.debug("Torrents arretes");
+            const reponseArretTorrent = {
+              resultats: {
+                seeding: false,
+              }
             }
-            mq.transmettreReponse(reponse, replyTo, correlationId)
+            mq.transmettreReponse(reponseArretTorrent, replyTo, correlationId)
             .catch(err=>{
               console.error("Erreur transmission reponse etat torrent");
               console.error(err);
