@@ -92,6 +92,9 @@ class TorrentMessages {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
       this.sommaireTransmission(routingKey, message, opts)}, ['requete.torrent.sommaire']);
 
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
+      this.supprimerTousTorrents(routingKey, message, opts)}, ['commande.torrent.supprimerTout']);
+
   }
 
   creerNouveauTorrent(routingKey, message, opts) {
@@ -551,6 +554,43 @@ class TorrentMessages {
         console.error(err);
       })
       this._transmettreEvenementTorrent(torrentHashList, 'Supprimer');
+    });
+  }
+
+  supprimerTousTorrents(routingKey, message, opts) {
+    console.debug("Supprimer tous les torrents");
+    const mq = this.mq;
+    const {replyTo, correlationId} = opts.properties;
+
+    transmission.active((err, result) => {
+      if (err){
+        console.error(err);
+      } else {
+        console.debug("Nombre torrents actifs supprimer: " + result.torrents.length);
+
+        function prochain(compteur) {
+          if(result.torrents.length > compteur) {
+            var torrentId = result.torrents[compteur].id;
+            transmission.remove(torrentId, (err, result)=>{
+              console.debug("Torrent arrete, id: " + torrentId);
+              prochain(compteur+1);
+            });
+          } else {
+            console.debug("Torrents arretes");
+            const reponse = {
+              'seeding': false,
+            }
+            mq.transmettreReponse(reponse, replyTo, correlationId)
+            .catch(err=>{
+              console.error("Erreur transmission reponse etat torrent");
+              console.error(err);
+            })
+          }
+        };
+
+        // Lancer la boucle
+        prochain(0);
+      }
     });
   }
 
