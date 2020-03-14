@@ -80,11 +80,11 @@ class TorrentMessages {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
       this.creerNouveauTorrent(routingKey, message)}, ['commande.torrent.creerNouveau']);
 
-    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      this.seederTorrent(routingKey, message)}, ['commande.torrent.seederTorrent']);
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
+      this.seederTorrent(routingKey, message, opts)}, ['commande.torrent.seederTorrent']);
 
-    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      this.supprimerTorrent(routingKey, message)}, ['commande.torrent.supprimer']);
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
+      this.supprimerTorrent(routingKey, message, opts)}, ['commande.torrent.supprimer']);
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
       this.etatTorrent(routingKey, message, opts)}, ['requete.torrent.etat']);
@@ -126,9 +126,13 @@ class TorrentMessages {
 
   }
 
-  seederTorrent(routingKey, message) {
+  seederTorrent(routingKey, message, opts) {
     // console.debug("Seeder torrent");
     // console.debug(message);
+    // console.debug(opts);
+
+    const {replyTo, correlationId} = opts.properties;
+    // console.debug("Reply to: " + replyTo + ", correlation id " + correlationId);
 
     const crypte = false;   // Cryptage torrent pas encore supporte
     const uuidCollection = message['uuid'];
@@ -199,6 +203,16 @@ class TorrentMessages {
           }
 
           this._seederTorrent(fichierTorrent, uuidCollection);
+
+          // Transmettre reponse a la demande de seeding
+          const reponse = {
+            hashstring, uuidCollection, 'seeding': true,
+          }
+          this.mq.transmettreReponse(reponse, replyTo, correlationId)
+          .catch(err=>{
+            console.error("Erreur transmission reponse etat torrent");
+            console.error(err);
+          })
         })
       })
 
@@ -413,11 +427,11 @@ class TorrentMessages {
       transactionSeeding.opts = opts;
     }
 
-    this.mq.emettreEvenement(transactionSeeding, evenementTorrent)
-    .catch(err=>{
-      console.error("Erreur transmission evenement");
-      console.error(err);
-    });
+    // this.mq.emettreEvenement(transactionSeeding, evenementTorrent)
+    // .catch(err=>{
+    //   console.error("Erreur transmission evenement");
+    //   console.error(err);
+    // });
   }
 
   _seederTorrent(pathFichierTorrent, uuidCollection) {
@@ -458,6 +472,7 @@ class TorrentMessages {
   supprimerTorrent(routingKey, message, opts) {
     const torrentHashList = message.hashlist;
     // console.debug("Supprimer torrent " + torrentHashList);
+    const {replyTo, correlationId} = opts.properties;
 
     const deleteFolder = true;
 
@@ -472,6 +487,15 @@ class TorrentMessages {
       // console.debug(torrentHashList);
       // console.debug(arg);
 
+      // Transmettre reponse a la demande de seeding
+      const reponse = {
+        torrentHashList, 'seeding': false,
+      }
+      this.mq.transmettreReponse(reponse, replyTo, correlationId)
+      .catch(err=>{
+        console.error("Erreur transmission reponse etat torrent");
+        console.error(err);
+      })
       this._transmettreEvenementTorrent(torrentHashList, 'Supprimer');
     });
   }
