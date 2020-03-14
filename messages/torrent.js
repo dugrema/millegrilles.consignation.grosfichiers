@@ -5,8 +5,9 @@ const parseTorrent = require('parse-torrent')
 const uuidv1 = require('uuid/v1');
 const uuidv4 = require('uuid/v4');
 const TransmissionRPC = require('transmission');
-const {pathConsignation} = require('../util/traitementFichier');
+const crypto = require('crypto');
 const uuid = require('uuid');
+const {pathConsignation} = require('../util/traitementFichier');
 
 const domaineNouveauTorrent = 'millegrilles.domaines.GrosFichiers.nouveauTorrent';
 const domaineSeedingTorrent = 'millegrilles.domaines.GrosFichiers.seedingTorrent';
@@ -110,6 +111,7 @@ class TorrentMessages {
     .then(({fichierTorrent, transactionTorrent})=>{
 
       // console.debug("Fichier torrent cree: " + fichierTorrent);
+      // console.debug(transactionTorrent);
       pathFichierTorrent = fichierTorrent;
       this._seederTorrent(pathFichierTorrent, uuidCollection);
       return this._transmettreTransactionTorrent(transactionTorrent);
@@ -321,6 +323,8 @@ class TorrentMessages {
       'nom': message.nom,
     }
 
+    var transactionCopie = Object.assign({}, transactionTorrent);
+
     const transactionFormattee = this.mq.formatterTransaction(domaineNouveauTorrent, transactionTorrent);
 
     const info = {
@@ -337,7 +341,7 @@ class TorrentMessages {
     const opts = {
       name: message.nom,
       comment: message.commentaires,
-      createdBy: 'create-torrent/millegrilles 1.16',
+      createdBy: 'create-torrent/millegrilles 1.22',
       private: privateTorrent,
       announceList: trackers,
       // urlList: [String],        // web seed urls (see [bep19](http://www.bittorrent.org/beps/bep_0019.html))
@@ -353,6 +357,14 @@ class TorrentMessages {
         }
 
         // `torrent` is a Buffer with the contents of the new .torrent file
+        // Calculer la taille et sha256 pour l'enregistrement du fichier
+        transactionCopie.taille = torrent.length;
+        var sha256 = crypto.createHash('sha256');
+        sha256.update(torrent);
+        transactionCopie.sha256 = sha256.digest('hex');
+
+        // console.debug("Creation torrent, taille fichier " + transactionCopie.taille + ", sha256 " + transactionCopie.sha256);
+
         fs.writeFile(fichierTorrent, torrent, err=>{
           if (err) {
             reject(err);
@@ -382,14 +394,14 @@ class TorrentMessages {
 
           })
 
-          resolve({fichierTorrent, transactionTorrent});
+          resolve({fichierTorrent, transactionTorrent: transactionCopie});
         });
       });
     });
   }
 
   _transmettreTransactionTorrent(transaction) {
-    return this.mq.transmettreEnveloppeTransaction(transaction, domaineNouveauTorrent);
+    return this.mq.transmettreTransactionFormattee(transaction, domaineNouveauTorrent);
   }
 
   _transmettreEvenementTorrent(hashString, evenement, opts) {
