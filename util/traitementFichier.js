@@ -29,6 +29,23 @@ class PathConsignation {
     return path.join(this.consignationPathLocal, pathFichier);
   }
 
+  async preparerRepertoireBackup(heureBackup, sousRepertoire) {
+    let repertoire = pathConsignation.trouverPathLocal(fuuid, false, opt);
+
+    return await new Promise((resolve, reject)=>{
+      fs.mkdir(path.dirname(pathPreviewImage), { recursive: true }, async err =>{
+        if(err) reject(err);
+        resolve(repertoire);
+      })
+    });
+
+  }
+
+  trouverPathBackup(dateBackup, {sousRepertoire, fichier, encrypte}) {
+    let pathFichier = this._formatterPath(fichierUuid, encrypte, type);
+    return path.join(this.consignationPathLocal, pathFichier);
+  }
+
   formatPathFichierTorrent(nomCollection) {
     return path.join(this.consignationPathManagedTorrents, nomCollection + '.torrent');
   }
@@ -174,6 +191,11 @@ class TraitementFichier {
     });
 
     return promise;
+  }
+
+  // PUT pour un fichier de backup
+  async traiterPutBackup(req) {
+
   }
 
 }
