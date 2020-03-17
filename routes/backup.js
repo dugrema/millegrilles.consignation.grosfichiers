@@ -9,7 +9,7 @@ const {traitementFichier, pathConsignation} = require('../util/traitementFichier
 
 const router = express.Router();
 const jsonParser = bodyParser.json();
-const backupUpload = multer({ dest: 'backup_uploads/' });
+const backupUpload = multer({ dest: '/tmp/backup_uploads/' });
 
 // Router pour fichiers locaux (meme MilleGrille)
 const backupRouter = express.Router();
@@ -32,30 +32,34 @@ router.put('/domaine/*', backupUpload.array('fichiers_backup'), function(req, re
   // }
 
   // Streamer fichier vers FS
-  try {
-    // Returns a promise
-    traitementFichier.traiterPutBackup(req)
-    .then(msg=>{
-        // console.log("Retour top, grosfichier traite");
-        // response = {
-        //   sha512Hash: msg.sha512Hash
-        // };
-        // res.send(JSON.stringify(response));
+  traitementFichier.traiterPutBackup(req)
+  .then(msg=>{
+      // console.log("Retour top, grosfichier traite");
+      // response = {
+      //   sha512Hash: msg.sha512Hash
+      // };
+      // res.send(JSON.stringify(response));
 
-        res.sendStatus(200);
+      res.sendStatus(200);
 
-    })
-    .catch(err=>{
-      console.error("Erreur traitement fichier " + req.url);
-      console.error(err);
-      res.sendStatus(500);
-    });
-  } catch (err) {
+  })
+  .catch(err=>{
+    console.error("Erreur traitement fichier " + req.url);
     console.error(err);
     res.sendStatus(500);
-  }
 
-  // res.sendStatus(200);
+    // Tenter de supprimer les fichiers
+    req.files.forEach(file=>{
+      console.debug("Supprimer fichier " + file.path);
+      fs.unlink(file.path, err=>{
+        if(err) {
+          console.warning("Erreur suppression fichier backup " + file.path);
+          console.warning(err);
+        }
+      });
+    });
+
+  })
 
 });
 

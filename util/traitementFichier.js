@@ -202,7 +202,7 @@ class TraitementFichier {
 
       console.debug("Path a utiliser: " + pathRepertoire);
       await new Promise((resolve, reject)=>{
-        fs.mkdir(pathRepertoire, { recursive: true }, (err)=>{
+        fs.mkdir(path.join(pathRepertoire, 'domaines'), { recursive: true, mode: 0o770 }, (err)=>{
           if(err) return reject(err);
           resolve();
         });
@@ -251,7 +251,7 @@ async function deplacerFichiers(fichiersRecus, pathRepertoire) {
       fs.rename(fichierDict.path, nouveauPath, err=>{
         if(err) return reject(err);
 
-        _fctDeplacerFichier(post+1); // Loop
+        _fctDeplacerFichier(pos+1); // Loop
       });
 
     };
@@ -261,7 +261,7 @@ async function deplacerFichiers(fichiersRecus, pathRepertoire) {
     return false;
   })
   .catch(err=>{
-    // Retourner l'erreur via barriere await pour faire un throw 
+    // Retourner l'erreur via barriere await pour faire un throw
     return err;
   });
 
