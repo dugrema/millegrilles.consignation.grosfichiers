@@ -210,8 +210,9 @@ class TraitementFichier {
 
       // Deplacer les fichiers de backup vers le bon repertoire /backup
       console.debug("Deplacers fichiers recus");
+      var fichiersDomaines;
       try {
-        await deplacerFichiers(fichiersRecus, pathRepertoire);
+        fichiersDomaines = await traiterFichiersBackup(fichiersRecus, pathRepertoire);
       } catch(err) {
         // console.error("ERREUR 2!");
         // console.error(err);
@@ -220,33 +221,59 @@ class TraitementFichier {
 
       // Creer les hard links pour les grosfichiers
 
-      // Calculer SHA512 sur fichier de backup
-
       console.debug("PUT backup Termine");
-      resolve();
+      resolve({fichiersDomaines});
 
     })
-    // .catch(err=>{
-    //   console.error("Erreur put backup");
-    //   console.error(err);
-    //   throw err;
-    // });
+
   }
 
 }
 
-async function deplacerFichiers(fichiersRecus, pathRepertoire) {
+async function traiterFichiersBackup(fichiersRecus, pathRepertoire) {
 
-  const err = await new Promise((resolve, reject)=>{
+  const {err, resultatHash} = await new Promise(async (resolve, reject)=>{
 
-    function _fctDeplacerFichier(pos) {
+    const resultatHash = {};
+
+    async function _fctDeplacerFichier(pos) {
       if(pos === fichiersRecus.length) {
-        return resolve();
+        return resolve({resultatHash});
       }
 
       const fichierDict = fichiersRecus[pos];
       const nomFichier = fichierDict.originalname;
       const nouveauPath = path.join(pathRepertoire, 'domaines', nomFichier);
+
+      // Calculer SHA512 sur fichier de backup
+      const sha512 = crypto.createHash('sha512');
+      const readStream = fs.createReadStream(fichierDict.path);
+
+      const resultatSha512 = await new Promise(async (resolve, reject)=>{
+        readStream.on('data', chunk=>{
+          sha512.update(chunk);
+        })
+        readStream.on('end', ()=>{
+          const resultat = sha512.digest('hex');
+          // console.debug("Resultat SHA512 fichier :");
+          // console.debug(resultat);
+          resolve({sha512: resultat});
+        });
+        readStream.on('error', err=> {
+          reject({err});
+        });
+
+        // Commencer lecture stream
+        // console.debug("Debut lecture fichier pour SHA512");
+        readStream.read();
+      });
+
+      if(resultatSha512.err) {
+        return reject(resultatSha512.err);
+      } else {
+        resultatHash[nomFichier] = resultatSha512.sha512;
+      }
+
       console.debug("Sauvegarde " + nouveauPath);
       fs.rename(fichierDict.path, nouveauPath, err=>{
         if(err) return reject(err);
@@ -258,16 +285,17 @@ async function deplacerFichiers(fichiersRecus, pathRepertoire) {
 
     _fctDeplacerFichier(0);  // Lancer boucle
 
-    return false;
   })
   .catch(err=>{
     // Retourner l'erreur via barriere await pour faire un throw
-    return err;
+    return {err};
   });
 
   if(err)  {
     throw err;
   }
+
+  return resultatHash;
 
 }
 

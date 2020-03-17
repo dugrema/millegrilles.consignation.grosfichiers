@@ -34,13 +34,14 @@ router.put('/domaine/*', backupUpload.array('fichiers_backup'), function(req, re
   // Streamer fichier vers FS
   traitementFichier.traiterPutBackup(req)
   .then(msg=>{
-      // console.log("Retour top, grosfichier traite");
-      // response = {
-      //   sha512Hash: msg.sha512Hash
-      // };
-      // res.send(JSON.stringify(response));
+      console.debug("Retour top, grosfichier traite");
+      console.debug(msg);
+      response = {
+       ...msg,
+      };
+      res.end(JSON.stringify(response));
 
-      res.sendStatus(200);
+      // res.sendStatus(200);
 
   })
   .catch(err=>{
@@ -53,8 +54,8 @@ router.put('/domaine/*', backupUpload.array('fichiers_backup'), function(req, re
       console.debug("Supprimer fichier " + file.path);
       fs.unlink(file.path, err=>{
         if(err) {
-          console.warning("Erreur suppression fichier backup " + file.path);
-          console.warning(err);
+          console.warn("Erreur suppression fichier backup " + file.path);
+          console.warn(err);
         }
       });
     });
