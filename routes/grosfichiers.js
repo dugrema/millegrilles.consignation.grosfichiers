@@ -81,7 +81,7 @@ router.put('/local/nouveauFichier/*', function(req, res, next) {
         response = {
           sha256Hash: msg.sha256Hash
         };
-        res.send(JSON.stringify(response));
+        res.end(JSON.stringify(response));
 
     })
     .catch(err=>{

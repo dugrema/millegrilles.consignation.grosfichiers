@@ -20,6 +20,7 @@ class PathConsignation {
     this.consignationPathLocal = path.join(this.consignationPath, '/local');
     this.consignationPathSeeding = path.join(this.consignationPath, '/torrents/seeding');
     this.consignationPathManagedTorrents = path.join(this.consignationPath, '/torrents/torrentfiles');
+    this.consignationPathBackup = path.join(this.consignationPath, '/backup');
   }
 
   // Retourne le path du fichier
@@ -29,21 +30,18 @@ class PathConsignation {
     return path.join(this.consignationPathLocal, pathFichier);
   }
 
-  async preparerRepertoireBackup(heureBackup, sousRepertoire) {
-    let repertoire = pathConsignation.trouverPathLocal(fuuid, false, opt);
+  trouverPathBackup(heureBackup) {
+    let year = heureBackup.getUTCFullYear();
+    let month = heureBackup.getUTCMonth() + 1; if(month < 10) month = '0'+month;
+    let day = heureBackup.getUTCDate(); if(day < 10) day = '0'+day;
+    let hour = heureBackup.getUTCHours(); if(hour < 10) hour = '0'+hour;
 
-    return await new Promise((resolve, reject)=>{
-      fs.mkdir(path.dirname(pathPreviewImage), { recursive: true }, async err =>{
-        if(err) reject(err);
-        resolve(repertoire);
-      })
-    });
+    let pathBackup =
+      path.join(
+        this.consignationPathBackup,
+        ""+year, ""+month, ""+day, ""+hour);
 
-  }
-
-  trouverPathBackup(dateBackup, {sousRepertoire, fichier, encrypte}) {
-    let pathFichier = this._formatterPath(fichierUuid, encrypte, type);
-    return path.join(this.consignationPathLocal, pathFichier);
+    return pathBackup;
   }
 
   formatPathFichierTorrent(nomCollection) {
@@ -195,10 +193,84 @@ class TraitementFichier {
 
   // PUT pour un fichier de backup
   async traiterPutBackup(req) {
+    return await new Promise(async (resolve, reject) => {
+      const timestampBackup = new Date(req.body.timestamp_backup * 1000);
+      if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
 
+      let pathRepertoire = pathConsignation.trouverPathBackup(timestampBackup);
+      let fichiersRecus = req.files.filter(fichier=>{return fichier.fieldname === 'fichiers_backup';})
+
+      console.debug("Path a utiliser: " + pathRepertoire);
+      await new Promise((resolve, reject)=>{
+        fs.mkdir(pathRepertoire, { recursive: true }, (err)=>{
+          if(err) return reject(err);
+          resolve();
+        });
+      });
+
+      // Deplacer les fichiers de backup vers le bon repertoire /backup
+      console.debug("Deplacers fichiers recus");
+      try {
+        await deplacerFichiers(fichiersRecus, pathRepertoire);
+      } catch(err) {
+        // console.error("ERREUR 2!");
+        // console.error(err);
+        return reject(err);
+      }
+
+      // Creer les hard links pour les grosfichiers
+
+      // Calculer SHA512 sur fichier de backup
+
+      console.debug("PUT backup Termine");
+      resolve();
+
+    })
+    // .catch(err=>{
+    //   console.error("Erreur put backup");
+    //   console.error(err);
+    //   throw err;
+    // });
   }
 
 }
+
+async function deplacerFichiers(fichiersRecus, pathRepertoire) {
+
+  const err = await new Promise((resolve, reject)=>{
+
+    function _fctDeplacerFichier(pos) {
+      if(pos === fichiersRecus.length) {
+        return resolve();
+      }
+
+      const fichierDict = fichiersRecus[pos];
+      const nomFichier = fichierDict.originalname;
+      const nouveauPath = path.join(pathRepertoire, 'domaines', nomFichier);
+      console.debug("Sauvegarde " + nouveauPath);
+      fs.rename(fichierDict.path, nouveauPath, err=>{
+        if(err) return reject(err);
+
+        _fctDeplacerFichier(post+1); // Loop
+      });
+
+    };
+
+    _fctDeplacerFichier(0);  // Lancer boucle
+
+    return false;
+  })
+  .catch(err=>{
+    // Retourner l'erreur via barriere await pour faire un throw 
+    return err;
+  });
+
+  if(err)  {
+    throw err;
+  }
+
+}
+
 
 // Extraction de thumbnail et preview pour images
 async function traiterImage(pathImage) {
