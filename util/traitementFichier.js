@@ -245,7 +245,8 @@ class TraitementFichier {
       if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
 
       let pathRepertoire = pathConsignation.trouverPathBackup(timestampBackup);
-      let fichiersRecus = req.files.filter(fichier=>{return fichier.fieldname === 'fichiers_backup';})
+      let fichiersTransactions = req.files.transactions;
+      let fichierCatalogue = req.files.catalogue[0];
 
       console.debug("Path a utiliser: " + pathRepertoire);
 
@@ -253,7 +254,7 @@ class TraitementFichier {
       console.debug("Deplacers fichiers recus");
       var fichiersDomaines;
       try {
-        fichiersDomaines = await traiterFichiersBackup(fichiersRecus, pathRepertoire);
+        fichiersDomaines = await traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire);
       } catch(err) {
         // console.error("ERREUR 2!");
         // console.error(err);
@@ -318,26 +319,49 @@ class TraitementFichier {
 
 }
 
-async function traiterFichiersBackup(fichiersRecus, pathRepertoire) {
+async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire) {
   const pathTransactions = path.join(pathRepertoire, 'transactions');
+  const pathCatalogues = path.join(pathRepertoire, 'catalogues');
+
   const {err, resultatHash} = await new Promise((resolve, reject)=>{
 
+    // Creer tous les repertoires requis pour le backup
     fs.mkdir(pathTransactions, { recursive: true, mode: 0o770 }, (err)=>{
       if(err) return reject(err);
       console.debug("Path cree " + pathTransactions);
+
+      fs.mkdir(pathCatalogues, { recursive: true, mode: 0o770 }, (err)=>{
+        if(err) return reject(err);
+        console.debug("Path cree " + pathCatalogues);
+        resolve();
+      })
+
+    });
+  })
+  .then(async () => await new Promise((resolve, reject) => {
+
+    // Deplacer le fichier de catalogue du backup
+
+    const nomFichier = fichierCatalogue.originalname;
+    const nouveauPath = path.join(pathCatalogues, nomFichier);
+
+    fs.rename(fichierCatalogue.path, nouveauPath, err=>{
+      if(err) return reject(err);
       resolve();
     });
-  }).then(async () => {
+
+  }))
+  .then(async () => {
     console.debug("Debut copie fichiers backup transaction");
 
     const resultatHash = {};
 
     async function _fctDeplacerFichier(pos) {
-      if(pos === fichiersRecus.length) {
+      if(pos === fichiersTransactions.length) {
         return {resultatHash};
       }
 
-      const fichierDict = fichiersRecus[pos];
+      const fichierDict = fichiersTransactions[pos];
       const nomFichier = fichierDict.originalname;
       const nouveauPath = path.join(pathTransactions, nomFichier);
 

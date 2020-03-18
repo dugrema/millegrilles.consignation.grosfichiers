@@ -19,13 +19,18 @@ const backupUpload = multer({ dest: pathBackup });
 const backupRouter = express.Router();
 // router.use('/', backupRouter);
 
-router.put('/domaine/*', backupUpload.array('fichiers_backup'), function(req, res, next) {
-  // console.debug("fichier backup PUT " + req.url);
-  // console.debug("Headers: ");
-  // console.debug(req.headers);
+const backupFileFields = [
+  {name: 'transactions', maxcount: 4},
+  {name: 'catalogue', maxcount: 1},
+]
+
+router.put('/domaine/*', backupUpload.fields(backupFileFields), function(req, res, next) {
+  console.debug("fichier backup PUT " + req.url);
+  console.debug("Headers: ");
+  console.debug(req.headers);
   console.debug("Body: ");
   console.debug(req.body);
-  // console.debug(req.files);
+  console.debug(req.files);
 
   // Streamer fichier vers FS
   traitementFichier.traiterPutBackup(req)
