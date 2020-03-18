@@ -30,6 +30,48 @@ class PathConsignation {
     return path.join(this.consignationPathLocal, pathFichier);
   }
 
+  // Trouve un fichier existant lorsque l'extension n'est pas connue
+  async trouverPathFuuidExistant(fichierUuid, encrypte) {
+    let pathFichier = this._formatterPath(fichierUuid, encrypte, {});
+    let pathRepertoire = path.join(this.consignationPathLocal, path.dirname(pathFichier));
+    console.debug("Aller chercher fichiers du repertoire " + pathRepertoire);
+
+    var {err, fichier} = await new Promise((resolve, reject)=>{
+      fs.readdir(pathRepertoire, (err, files)=>{
+        if(err) return reject(err);
+
+        // console.debug("Liste fichiers dans " + pathRepertoire);
+        // console.debug(files);
+
+        const fichiersTrouves = files.filter(file=>{
+          // console.debug("File trouve : ");
+          // console.debug(file);
+          return file.startsWith(fichierUuid);
+        });
+
+        if(fichiersTrouves.length == 1) {
+          // On a trouve un seul fichier qui correspond au uuid, OK
+          const fichierPath = path.join(pathRepertoire, fichiersTrouves[0]);
+          console.debug("Fichier trouve : " + fichier);
+          return resolve({fichier: fichierPath})
+        } else if(fichiersTrouves.length == 0) {
+          // Aucun fichier trouve
+          return reject("Fichier UUID " + fichierUuid + " non trouve.");
+        } else {
+          // On a trouver plusieurs fichiers qui correspondent au UUID
+          // C'est une erreur
+          return reject("Plusieurs fichiers trouves pour fuuid " + fichierUuid);
+        }
+
+      });
+    })
+    .catch(err=>{
+      return({err});
+    });
+
+    return {fichier};
+  }
+
   trouverPathBackup(heureBackup) {
     let year = heureBackup.getUTCFullYear();
     let month = heureBackup.getUTCMonth() + 1; if(month < 10) month = '0'+month;
@@ -58,7 +100,13 @@ class PathConsignation {
     // console.debug("uuid: " + fichierUuid + ". Timestamp " + timestamp);
 
     let extension = encrypte?'mgs1':type.extension;
-    extension = extension.toLowerCase() // Troujours lowercase
+    let nomFichier;
+    if(extension) {
+      extension = extension.toLowerCase() // Troujours lowercase
+      nomFichier = fichierUuid + '.' + extension;
+    } else {
+      nomFichier = fichierUuid;
+    }
 
     let year = timestamp.getUTCFullYear();
     let month = timestamp.getUTCMonth() + 1; if(month < 10) month = '0'+month;
@@ -66,8 +114,7 @@ class PathConsignation {
     let hour = timestamp.getUTCHours(); if(hour < 10) hour = '0'+hour;
     let minute = timestamp.getUTCMinutes(); if(minute < 10) minute = '0'+minute;
     let fuuide =
-      path.join(""+year, ""+month, ""+day, ""+hour, ""+minute,
-        fichierUuid + '.' + extension);
+      path.join(""+year, ""+month, ""+day, ""+hour, ""+minute, nomFichier);
 
     return fuuide;
   }
@@ -220,6 +267,53 @@ class TraitementFichier {
       }
 
       // Creer les hard links pour les grosfichiers
+      const fuuidDict = JSON.parse(req.body.fuuid_grosfichiers);
+      if(fuuidDict && Object.keys(fuuidDict).length > 0) {
+        console.debug("Traitement grosfichiers");
+        console.debug(fuuidDict);
+
+        const pathBackupGrosFichiers = path.join(pathRepertoire, 'grosfichiers');
+        await new Promise((resolve, reject)=>{
+          fs.mkdir(pathBackupGrosFichiers, { recursive: true, mode: 0o770 }, (err)=>{
+            if(err) return reject(err);
+            resolve();
+          });
+        });
+
+        for(const fuuid in fuuidDict) {
+          const paramFichier = fuuidDict[fuuid];
+          console.debug("Creer hard link pour fichier " + fuuid);
+
+          const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid);
+          if(err) {
+            console.error("Erreur extraction fichier " + fuuid + " pour backup");
+            console.error(err);
+          } else {
+            if(fichier) {
+              console.debug("Fichier " + fuuid + " trouve");
+              console.debug(fichier);
+
+              const nomFichier = path.basename(fichier);
+              const pathFichierBackup = path.join(pathBackupGrosFichiers, nomFichier);
+
+              await new Promise((resolve, reject)=>{
+                fs.link(fichier, pathFichierBackup, e=>{
+                  if(e) return reject(e);
+                  resolve();
+                });
+              })
+              .catch(err=>{
+                console.error("Erreur link grosfichier backup : " + fichier);
+                console.error(err);
+              });
+
+            } else {
+              console.warn("Fichier " + fuuid + "  non trouve");
+            }
+          }
+
+        }
+      }
 
       console.debug("PUT backup Termine");
       resolve({fichiersDomaines});
