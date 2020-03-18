@@ -248,12 +248,6 @@ class TraitementFichier {
       let fichiersRecus = req.files.filter(fichier=>{return fichier.fieldname === 'fichiers_backup';})
 
       console.debug("Path a utiliser: " + pathRepertoire);
-      await new Promise((resolve, reject)=>{
-        fs.mkdir(path.join(pathRepertoire, 'domaines'), { recursive: true, mode: 0o770 }, (err)=>{
-          if(err) return reject(err);
-          resolve();
-        });
-      });
 
       // Deplacer les fichiers de backup vers le bon repertoire /backup
       console.debug("Deplacers fichiers recus");
@@ -325,19 +319,27 @@ class TraitementFichier {
 }
 
 async function traiterFichiersBackup(fichiersRecus, pathRepertoire) {
+  const pathTransactions = path.join(pathRepertoire, 'transactions');
+  const {err, resultatHash} = await new Promise((resolve, reject)=>{
 
-  const {err, resultatHash} = await new Promise(async (resolve, reject)=>{
+    fs.mkdir(pathTransactions, { recursive: true, mode: 0o770 }, (err)=>{
+      if(err) return reject(err);
+      console.debug("Path cree " + pathTransactions);
+      resolve();
+    });
+  }).then(async () => {
+    console.debug("Debut copie fichiers backup transaction");
 
     const resultatHash = {};
 
     async function _fctDeplacerFichier(pos) {
       if(pos === fichiersRecus.length) {
-        return resolve({resultatHash});
+        return {resultatHash};
       }
 
       const fichierDict = fichiersRecus[pos];
       const nomFichier = fichierDict.originalname;
-      const nouveauPath = path.join(pathRepertoire, 'domaines', nomFichier);
+      const nouveauPath = path.join(pathTransactions, nomFichier);
 
       // Calculer SHA512 sur fichier de backup
       const sha512 = crypto.createHash('sha512');
@@ -363,21 +365,23 @@ async function traiterFichiersBackup(fichiersRecus, pathRepertoire) {
       });
 
       if(resultatSha512.err) {
-        return reject(resultatSha512.err);
+        throw resultatSha512.err;
       } else {
         resultatHash[nomFichier] = resultatSha512.sha512;
       }
 
       console.debug("Sauvegarde " + nouveauPath);
       fs.rename(fichierDict.path, nouveauPath, err=>{
-        if(err) return reject(err);
+        if(err) throw err;
 
         _fctDeplacerFichier(pos+1); // Loop
       });
 
     };
 
-    _fctDeplacerFichier(0);  // Lancer boucle
+    await _fctDeplacerFichier(0);  // Lancer boucle
+
+    return {resultatHash};
 
   })
   .catch(err=>{
