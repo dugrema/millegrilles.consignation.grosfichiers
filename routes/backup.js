@@ -9,27 +9,23 @@ const {traitementFichier, pathConsignation} = require('../util/traitementFichier
 
 const router = express.Router();
 const jsonParser = bodyParser.json();
-const backupUpload = multer({ dest: '/tmp/backup_uploads/' });
+
+// Creer path stockage temporaire pour upload fichiers backup
+const pathBackup = '/tmp/backup_uploads/';
+fs.mkdirSync(pathBackup, {recursive: true, mode: 0o700});
+const backupUpload = multer({ dest: pathBackup });
 
 // Router pour fichiers locaux (meme MilleGrille)
 const backupRouter = express.Router();
 // router.use('/', backupRouter);
 
 router.put('/domaine/*', backupUpload.array('fichiers_backup'), function(req, res, next) {
-  console.debug("fichier backup PUT " + req.url);
-  console.debug("Headers: ");
-  console.debug(req.headers);
+  // console.debug("fichier backup PUT " + req.url);
+  // console.debug("Headers: ");
+  // console.debug(req.headers);
   console.debug("Body: ");
   console.debug(req.body);
-  console.debug(req.files);
-
-  // const listeFuuidGrosfichiers = req.body.fuuid_grosfichiers;
-  // // console.debug("GrosFichiers : ");
-  // console.debug(listeFuuidGrosfichiers);
-  //
-  // for(let fichierBackup in req.files) {
-  //   console.debug(fichierBackup);
-  // }
+  // console.debug(req.files);
 
   // Streamer fichier vers FS
   traitementFichier.traiterPutBackup(req)
