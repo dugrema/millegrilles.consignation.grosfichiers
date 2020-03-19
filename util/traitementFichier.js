@@ -1,4 +1,5 @@
 const fs = require('fs');
+const readdirp = require('readdirp');
 const path = require('path');
 const uuidv1 = require('uuid/v1');
 const {uuidToDate} = require('./UUIDUtils');
@@ -317,6 +318,86 @@ class TraitementFichier {
 
   }
 
+  async genererListeBackupsHoraire(req) {
+
+    const domaine = req.body.domaine;
+    const pathRepertoire = pathConsignation.consignationPathBackup;
+    console.debug("Path repertoire backup");
+    console.debug(pathRepertoire);
+
+    const prefixeCatalogue = domaine + "_catalogue";
+    const prefixeTransactions = domaine + "_transactions";
+
+    var settings = {
+      type: 'files',
+      fileFilter: [
+        prefixeCatalogue + '_*.json.xz',
+        prefixeTransactions + '_*.json.xz',
+      ],
+    }
+
+    const {err, backupsHoraire} = await new Promise((resolve, reject)=>{
+      // const fichiersCatalogue = [];
+      // const fichiersTransactions = [];
+
+      const backupsHoraire = {};
+
+      readdirp(
+        pathRepertoire,
+        settings,
+      )
+      .on('data', entry=>{
+        // console.debug(entry);
+
+        const heureBackup = entry.path.split('/').slice(0, 4).join('');
+        var entreeBackup = backupsHoraire[heureBackup];
+        if(!entreeBackup) {
+          entreeBackup = {};
+          backupsHoraire[heureBackup] = entreeBackup;
+        }
+
+        if(entry.basename.startsWith(prefixeCatalogue)) {
+          entreeBackup.catalogue = entry.path;
+        } else if(entry.basename.startsWith(prefixeTransactions)) {
+          entreeBackup.transactions = entry.path;
+        }
+      })
+      .on('error', err=>{
+        reject({err});
+      })
+      .on('end', ()=>{
+        console.debug("Fini");
+        resolve({backupsHoraire});
+      });
+
+    });
+
+    if(err) throw err;
+
+    // Trier les catalgues et transactions par date (tri naturel)
+    // catalogues.sort();
+    // transactions.sort();
+
+    // return {catalogues, transactions};
+    return {backupsHoraire};
+
+  }
+
+  async getStatFichierBackup(pathFichier) {
+    const fullPathFichier = path.join(pathConsignation.consignationPathBackup, pathFichier);
+
+    const {err, size} = await new Promise((resolve, reject)=>{
+      fs.stat(fullPathFichier, (err, stat)=>{
+        if(err) reject({err});
+        resolve({size: stat.size})
+      })
+    });
+
+    if(err) throw(err);
+
+    return {size, fullPathFichier};
+  }
+
 }
 
 async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire) {
@@ -420,7 +501,6 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
   return resultatHash;
 
 }
-
 
 // Extraction de thumbnail et preview pour images
 async function traiterImage(pathImage) {

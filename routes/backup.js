@@ -65,4 +65,65 @@ router.put('/domaine/*', backupUpload.fields(backupFileFields), function(req, re
 
 });
 
+router.get('/liste/backups_horaire', async (req, res, next) => {
+
+  console.debug("Retourner la liste des backups horaires");
+
+  try {
+    const listeBackupsHoraires = await traitementFichier.genererListeBackupsHoraire(req);
+    res.end(JSON.stringify(listeBackupsHoraires));
+  } catch(err) {
+    console.error("Erreur preparation liste backups horaire");
+    console.error(err);
+    res.sendStatus(500);
+  }
+
+});
+
+// Path de download des fichiers de backup horaires
+router.get('/:type(transactions)/:pathFichier(*)', getFichierBackup);
+router.get('/:type(catalogues)/:pathFichier(*)', getFichierBackup);
+
+async function getFichierBackup(req, res, next) {
+  try {
+    // console.debug(req.params);
+    const pathFichier = req.params.pathFichier;
+    const typeFichier = req.params.type || req.params['1'];
+
+    // Valider que c'est bien un fichier de backup de transactions
+    if( pathFichier.split('/')[4] != typeFichier) {
+      console.error("Le fichier n'est pas sous le repertoire de " + typeFichier + ": " + pathFichier);
+      return res.sendStatus(403);
+    }
+
+    // console.debug("Path fichier transactions backup: " + pathFichier);
+
+    // S'assurer que le fichier existe, recuperer le full path
+    const statFichier = await traitementFichier.getStatFichierBackup(pathFichier);
+
+    let contentType = 'application/x-xz';
+    if(statFichier.size) {
+      const header = {
+        'Content-Type': contentType,
+        'Content-Length': statFichier.size,
+        'Content-Disposition': 'attachment;',
+      };
+
+      res.writeHead(200, header);
+      var readStream = fs.createReadStream(statFichier.fullPathFichier);
+      readStream.pipe(res);
+
+    } else {
+      // Fichier non trouve
+      res.sendStatus(404);
+    }
+
+  } catch(err) {
+    console.error("Erreur download transactions");
+    console.error(err);
+    res.sendStatus(500);
+  }
+
+}
+
 module.exports = router;
