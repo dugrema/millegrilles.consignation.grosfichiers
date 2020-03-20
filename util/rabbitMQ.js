@@ -19,7 +19,6 @@ class RabbitMQWrapper {
 
     this.reconnectTimeout = null; // Timer de reconnexion - null si inactif
 
-
     // Correlation avec les reponses en attente.
     // Cle: uuid de CorrelationId
     // Valeur: callback
@@ -238,7 +237,7 @@ class RabbitMQWrapper {
               console.warn("Certificat inconnu, on fait une demande : " + fingerprint);
               this.demanderCertificat(fingerprint)
               .then(reponse=>{
-                console.debug("Reponse demande certificat " + fingerprint);
+                // console.debug("Reponse demande certificat " + fingerprint);
                 // console.debug(reponse);
 
                 var etatCertificat = this.certificatsConnus[fingerprint];
@@ -251,7 +250,11 @@ class RabbitMQWrapper {
                     reponse: reponse.resultats,
                     certificatSauvegarde: false,
                     callbacks: [],
-                    timer: setTimeout(()=>{console.error("Timeout traitement certificat " + fingerprint);}, 5000),
+                    timer: setTimeout(()=>{
+                      console.error("Timeout traitement certificat " + fingerprint);
+                      // Supprimer attente, va essayer a nouveau plus tard
+                      delete this.certificatsConnus[fingerprint];
+                    }, 10000),
                   }
 
                   this.certificatsConnus[fingerprint] = etatCertificat;
@@ -269,7 +272,7 @@ class RabbitMQWrapper {
                       while(etatCertificat.callbacks.length > 0) {
                         const callbackMessage = this.certificatsConnus[fingerprint].callbacks.pop();
                         try {
-                          console.debug("Callback apres reception certificat " + fingerprint);
+                          // console.debug("Callback apres reception certificat " + fingerprint);
                           callbackMessage();
                         } catch (err) {
                           console.error("Erreur callback certificat " + fingerprint);
