@@ -73,7 +73,7 @@ class PathConsignation {
     return {fichier};
   }
 
-  trouverPathBackup(heureBackup) {
+  trouverPathBackupHoraire(heureBackup) {
     let year = heureBackup.getUTCFullYear();
     let month = heureBackup.getUTCMonth() + 1; if(month < 10) month = '0'+month;
     let day = heureBackup.getUTCDate(); if(day < 10) day = '0'+day;
@@ -82,6 +82,7 @@ class PathConsignation {
     let pathBackup =
       path.join(
         this.consignationPathBackup,
+        'horaire',
         ""+year, ""+month, ""+day, ""+hour);
 
     return pathBackup;
@@ -245,7 +246,7 @@ class TraitementFichier {
       const timestampBackup = new Date(req.body.timestamp_backup * 1000);
       if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
 
-      let pathRepertoire = pathConsignation.trouverPathBackup(timestampBackup);
+      let pathRepertoire = pathConsignation.trouverPathBackupHoraire(timestampBackup);
       let fichiersTransactions = req.files.transactions;
       let fichierCatalogue = req.files.catalogue[0];
 
@@ -321,7 +322,7 @@ class TraitementFichier {
   async genererListeBackupsHoraire(req) {
 
     const domaine = req.body.domaine;
-    const pathRepertoire = pathConsignation.consignationPathBackup;
+    const pathRepertoire = path.join(pathConsignation.consignationPathBackup, 'horaire');
     console.debug("Path repertoire backup");
     console.debug(pathRepertoire);
 
@@ -383,8 +384,8 @@ class TraitementFichier {
 
   }
 
-  async getStatFichierBackup(pathFichier) {
-    const fullPathFichier = path.join(pathConsignation.consignationPathBackup, pathFichier);
+  async getStatFichierBackup(pathFichier, aggregation) {
+    const fullPathFichier = path.join(pathConsignation.consignationPathBackup, aggregation, pathFichier);
 
     const {err, size} = await new Promise((resolve, reject)=>{
       fs.stat(fullPathFichier, (err, stat)=>{

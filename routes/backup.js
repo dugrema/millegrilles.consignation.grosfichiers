@@ -5,7 +5,6 @@ const multer = require('multer');
 const bodyParser = require('body-parser');
 
 const {traitementFichier, pathConsignation} = require('../util/traitementFichier');
-// const throttle = require('@sitespeed.io/throttle');
 
 const router = express.Router();
 const jsonParser = bodyParser.json();
@@ -17,26 +16,33 @@ const backupUpload = multer({ dest: pathBackup });
 
 // Router pour fichiers locaux (meme MilleGrille)
 const backupRouter = express.Router();
-// router.use('/', backupRouter);
 
 const backupFileFields = [
   {name: 'transactions', maxcount: 4},
   {name: 'catalogue', maxcount: 1},
 ]
 
-router.put('/domaine/*', backupUpload.fields(backupFileFields), function(req, res, next) {
-  console.debug("fichier backup PUT " + req.url);
-  console.debug("Headers: ");
-  console.debug(req.headers);
-  console.debug("Body: ");
-  console.debug(req.body);
-  console.debug(req.files);
+router.put('/domaine/*', backupUpload.fields(backupFileFields), traiterUploadHoraire);
+router.put('/quotidien/*', traiterUploadCatalogueQuotidien);
+
+// Path de download des fichiers de backup horaires
+router.get('/liste/backups_horaire', getListeBackupHoraire);
+router.get('/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup);
+router.get('/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup);
+
+async function traiterUploadHoraire(req, res, next) {
+  // console.debug("fichier backup PUT " + req.url);
+  // console.debug("Headers: ");
+  // console.debug(req.headers);
+  // console.debug("Body: ");
+  // console.debug(req.body);
+  // console.debug(req.files);
 
   // Streamer fichier vers FS
   traitementFichier.traiterPutBackup(req)
   .then(msg=>{
-      console.debug("Retour top, grosfichier traite");
-      console.debug(msg);
+      // console.debug("Retour top, grosfichier traite");
+      // console.debug(msg);
       response = {
        ...msg,
       };
@@ -52,7 +58,7 @@ router.put('/domaine/*', backupUpload.fields(backupFileFields), function(req, re
 
     // Tenter de supprimer les fichiers
     req.files.forEach(file=>{
-      console.debug("Supprimer fichier " + file.path);
+      // console.debug("Supprimer fichier " + file.path);
       fs.unlink(file.path, err=>{
         if(err) {
           console.warn("Erreur suppression fichier backup " + file.path);
@@ -63,11 +69,15 @@ router.put('/domaine/*', backupUpload.fields(backupFileFields), function(req, re
 
   })
 
-});
+};
 
-router.get('/liste/backups_horaire', async (req, res, next) => {
+async function traiterUploadCatalogueQuotidien(req, res, next) {
 
-  console.debug("Retourner la liste des backups horaires");
+}
+
+async function getListeBackupHoraire(req, res, next) {
+
+  // console.debug("Retourner la liste des backups horaires");
 
   try {
     const listeBackupsHoraires = await traitementFichier.genererListeBackupsHoraire(req);
@@ -78,17 +88,14 @@ router.get('/liste/backups_horaire', async (req, res, next) => {
     res.sendStatus(500);
   }
 
-});
-
-// Path de download des fichiers de backup horaires
-router.get('/:type(transactions)/:pathFichier(*)', getFichierBackup);
-router.get('/:type(catalogues)/:pathFichier(*)', getFichierBackup);
+}
 
 async function getFichierBackup(req, res, next) {
   try {
     // console.debug(req.params);
     const pathFichier = req.params.pathFichier;
-    const typeFichier = req.params.type || req.params['1'];
+    const typeFichier = req.params.type;
+    const aggregation = req.params.aggregation;
 
     // Valider que c'est bien un fichier de backup de transactions
     if( pathFichier.split('/')[4] != typeFichier) {
@@ -99,7 +106,7 @@ async function getFichierBackup(req, res, next) {
     // console.debug("Path fichier transactions backup: " + pathFichier);
 
     // S'assurer que le fichier existe, recuperer le full path
-    const statFichier = await traitementFichier.getStatFichierBackup(pathFichier);
+    const statFichier = await traitementFichier.getStatFichierBackup(pathFichier, aggregation);
 
     let contentType = 'application/x-xz';
     if(statFichier.size) {
@@ -124,6 +131,6 @@ async function getFichierBackup(req, res, next) {
     res.sendStatus(500);
   }
 
-}
+};
 
 module.exports = router;
