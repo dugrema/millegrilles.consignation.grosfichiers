@@ -34,7 +34,7 @@ class DecrypterFichier {
 
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      return this.decrypterFichier(routingKey, message)}, ['commande.grosfichiers.decrypterFichier']);
+      return this.decrypterFichier(routingKey, message)}, ['commande.grosfichiers.decrypterFichier'], {operationLongue: true});
   }
 
   async decrypterFichier(routingKey, message) {

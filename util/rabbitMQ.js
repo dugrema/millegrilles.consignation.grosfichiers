@@ -15,6 +15,12 @@ class RabbitMQWrapper {
     this.reply_q = null;
     this.consumerTag = null;
 
+    // Creer Q que reception separee pour les operations longues
+    // comme transcodage, archivage, creation torrents, etc
+    this.qOperationLongue = null;
+    this.consumerTagOperationLongue = null;
+    this.consumerTagOperationLongue = null;
+
     this.compteurMessages = 0;
 
     this.reconnectTimeout = null; // Timer de reconnexion - null si inactif
@@ -80,18 +86,6 @@ class RabbitMQWrapper {
         this.channel = ch;
         console.info("Channel ouvert");
         return this.ecouter();
-      // }).then(()=>{
-        // console.log("Connexion et channel prets");
-
-        // // Transmettre le certificat
-        // let fingerprint = this.transmettreCertificat();
-
-        // Enregistrer routing key du certificat
-        // Permet de repondre si un autre composant demande notre certificat
-        // this.routingKeyCertificat = 'pki.requete.' + fingerprint;
-        // console.debug("Enregistrer routing key: " + fingerprint);
-        // this.channel.bindQueue(this.reply_q.queue, 'millegrilles.noeuds', this.routingKeyCertificat);
-
       }).catch(err => {
         this.connection = null;
         console.error("Erreur connexion RabbitMQ");
@@ -155,6 +149,16 @@ class RabbitMQWrapper {
         console.log("Queue cree"),
         console.log(q);
         this.reply_q = q;
+
+        return this.channel.assertQueue('', {
+          durable: false,
+          exclusive: true,
+        })
+      })
+      .then( (q) => {
+        console.log("Queue operations longues cree"),
+        console.log(q);
+        this.qOperationLongue = q;
 
         // Appeler listeners de connexion
         for(let idx in this.connexionListeners) {
@@ -666,14 +670,21 @@ class RoutingKeyManager {
     return promise;
   }
 
-  addRoutingKeyCallback(callback, routingKeys) {
+  addRoutingKeyCallback(callback, routingKeys, opts) {
+    const operationLongue = opts?opts.operationLongue:false;
+
     for(var routingKey_idx in routingKeys) {
       let routingKeyName = routingKeys[routingKey_idx];
       this.registeredRoutingKeyCallbacks[routingKeyName] = callback;
 
       // Ajouter la routing key
-      console.info("Ajouter callback pour routingKey " + routingKeyName);
-      this.mq.channel.bindQueue(this.mq.reply_q.queue, 'millegrilles.noeuds', routingKeyName);
+      if(operationLongue) {
+        console.info("Ajouter callback pour routingKey " + routingKeyName + ' sur Q operation longue');
+        this.mq.channel.bindQueue(this.mq.qOperationLongue.queue, 'millegrilles.noeuds', routingKeyName);
+      } else {
+        console.info("Ajouter callback pour routingKey " + routingKeyName);
+        this.mq.channel.bindQueue(this.mq.reply_q.queue, 'millegrilles.noeuds', routingKeyName);
+      }
     }
   }
 

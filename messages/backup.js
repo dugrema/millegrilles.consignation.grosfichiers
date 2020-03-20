@@ -20,7 +20,9 @@ class GestionnaireMessagesBackup {
       (routingKey, message, opts) => {
         // Retourner la promise pour rendre cette operation bloquante (longue duree)
         return this.genererBackupQuotidien(routingKey, message, opts)
-      }, ['commande.backup.genererBackupQuotidien']
+      },
+      ['commande.backup.genererBackupQuotidien'],
+      {operationLongue: true}
     );
   }
 

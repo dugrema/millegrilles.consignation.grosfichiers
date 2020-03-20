@@ -78,10 +78,10 @@ class TorrentMessages {
 
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
-      this.creerNouveauTorrent(routingKey, message, opts)}, ['commande.torrent.creerNouveau']);
+      this.creerNouveauTorrent(routingKey, message, opts)}, ['commande.torrent.creerNouveau'], {operationLongue: true});
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
-      this.seederTorrent(routingKey, message, opts)}, ['commande.torrent.seederTorrent']);
+      this.seederTorrent(routingKey, message, opts)}, ['commande.torrent.seederTorrent'], {operationLongue: true});
 
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
       this.supprimerTorrent(routingKey, message, opts)}, ['commande.torrent.supprimer']);

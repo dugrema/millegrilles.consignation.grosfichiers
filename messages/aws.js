@@ -21,7 +21,7 @@ class PublicateurAWS {
 
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
-      this.publierCollection(routingKey, message, opts)}, ['commande.grosfichiers.publierCollection']);
+      this.publierCollection(routingKey, message, opts)}, ['commande.grosfichiers.publierCollection'], {operationLongue: true});
   }
 
   publierCollection(routingKey, message, opts) {

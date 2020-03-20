@@ -28,10 +28,10 @@ class GenerateurImages {
 
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      this.genererThumbnail(routingKey, message)}, ['commande.grosfichiers.genererThumbnailProtege']);
+      this.genererThumbnail(routingKey, message)}, ['commande.grosfichiers.genererThumbnailProtege'], {operationLongue: true});
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
       // Retourner la promise pour rendre cette operation bloquante (longue duree)
-      return this.transcoderVideoDecrypte(routingKey, message)}, ['commande.grosfichiers.transcoderVideo']);
+      return this.transcoderVideoDecrypte(routingKey, message)}, ['commande.grosfichiers.transcoderVideo'], {operationLongue: true});
   }
 
   async genererThumbnail(routingKey, message) {
