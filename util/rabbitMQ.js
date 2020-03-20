@@ -84,7 +84,7 @@ class RabbitMQWrapper {
       }).then( (ch) => {
         this.channel = ch;
         console.info("Channel ouvert");
-        ch.prefetch(1);
+        ch.prefetch(5);
         return this.ecouter();
       }).catch(err => {
         this.connection = null;
@@ -195,7 +195,7 @@ class RabbitMQWrapper {
       return this.channel.consume(
         this.qOperationLongue.queue,
         (msg) => {this._traiterMessageOperationLongue(msg)},
-        {noAck: true}
+        {noAck: false}
       );
     })
     .then(tag=>{
@@ -208,10 +208,12 @@ class RabbitMQWrapper {
     this.consumerTagOperationLongue = null;
 
     if(consumerTag) {
-      console.debug("Operation longue");
-      console.debug(consumerTag);
+      // console.debug("Operation longue");
+      // console.debug(consumerTag);
 
       try {
+        // Traiter tous les messages dans la Q, un a la fois
+        // Ne pas utiliser le consumer, il ne permet pas le controle fin.
         while(msg) {
           try {
             await this.channel.cancel(consumerTag);
@@ -219,13 +221,17 @@ class RabbitMQWrapper {
             await this._traiterMessage(msg);
             // console.debug("Fin traitement message operation longue")
           } catch (err) {
-            console.error("Erreur traitement message operation longue");
+            // Le traitement du message n'a pas fonctionne, mais on le fait passer quand meme
+            // avec ACK dans finally pour eviter de bloquer.
+            console.error("Erreur traitement message");
             console.error(err);
+          } finally {
+            this.channel.ack(msg);
           }
 
           // Tenter d'aller chercher un autre message
           // Traite un message a la fois
-          msg = await this.channel.get(this.qOperationLongue.queue, {noAck: true});
+          msg = await this.channel.get(this.qOperationLongue.queue, {noAck: false});
           // console.debug("Message operation longue suivant")
           // console.debug(msg);
         }
@@ -239,9 +245,11 @@ class RabbitMQWrapper {
         this.consumerTagOperationLongue = nouveauTag.consumerTag;
       }
 
-      console.debug("Fin operation longue");
+      // console.debug("Fin operation longue");
     } else {
-      console.error("Message operation longue recu durant traitement");
+      console.error("Message operation longue recu durant traitement, NACK vers la Q");
+      // Remettre le message sur la Q avec un nack
+      this.channel.nack(msg);
     }
   }
 
@@ -710,11 +718,11 @@ class RoutingKeyManager {
         properties
       }
       promise = callback(routingKey, json_message, opts);
-      if(promise) {
-        console.debug("Promise recue");
-      } else {
-        console.debug("Promise non recue");
-      }
+      // if(promise) {
+      //   console.debug("Promise recue");
+      // } else {
+      //   console.debug("Promise non recue");
+      // }
     } else {
       console.warn("Routing key pas de callback: " + routingKey);
     }
