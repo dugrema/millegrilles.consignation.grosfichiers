@@ -19,7 +19,6 @@ class RabbitMQWrapper {
     // comme transcodage, archivage, creation torrents, etc
     this.qOperationLongue = null;
     this.consumerTagOperationLongue = null;
-    this.consumerTagOperationLongue = null;
 
     this.compteurMessages = 0;
 
@@ -85,6 +84,7 @@ class RabbitMQWrapper {
       }).then( (ch) => {
         this.channel = ch;
         console.info("Channel ouvert");
+        ch.prefetch(1);
         return this.ecouter();
       }).catch(err => {
         this.connection = null;
@@ -191,7 +191,58 @@ class RabbitMQWrapper {
       // console.debug("Consumer Tag ");
       // console.debug(tag);
       this.consumerTag = tag.consumerTag;
+
+      return this.channel.consume(
+        this.qOperationLongue.queue,
+        (msg) => {this._traiterMessageOperationLongue(msg)},
+        {noAck: true}
+      );
     })
+    .then(tag=>{
+      this.consumerTagOperationLongue = tag.consumerTag;
+    });
+  }
+
+  async _traiterMessageOperationLongue(msg) {
+    var consumerTag = this.consumerTagOperationLongue;
+    this.consumerTagOperationLongue = null;
+
+    if(consumerTag) {
+      console.debug("Operation longue");
+      console.debug(consumerTag);
+
+      try {
+        while(msg) {
+          try {
+            await this.channel.cancel(consumerTag);
+            // console.debug("Debut traiter message operation longue");
+            await this._traiterMessage(msg);
+            // console.debug("Fin traitement message operation longue")
+          } catch (err) {
+            console.error("Erreur traitement message operation longue");
+            console.error(err);
+          }
+
+          // Tenter d'aller chercher un autre message
+          // Traite un message a la fois
+          msg = await this.channel.get(this.qOperationLongue.queue, {noAck: true});
+          // console.debug("Message operation longue suivant")
+          // console.debug(msg);
+        }
+      } finally {
+        // Recommencer a ecouter les evenements
+        var nouveauTag = await this.channel.consume(
+          this.qOperationLongue.queue,
+          async (msg) => {await this._traiterMessageOperationLongue(msg)},
+          {noAck: true}
+        );
+        this.consumerTagOperationLongue = nouveauTag.consumerTag;
+      }
+
+      console.debug("Fin operation longue");
+    } else {
+      console.error("Message operation longue recu durant traitement");
+    }
   }
 
   async _traiterMessage(msg) {
@@ -227,10 +278,10 @@ class RabbitMQWrapper {
       return;
     }
 
-    pki.verifierSignatureMessage(json_message)
+    return pki.verifierSignatureMessage(json_message)
     .then(signatureValide=>{
       if(signatureValide) {
-        this.traiterMessageValide(json_message, msg, callback);
+        return this.traiterMessageValide(json_message, msg, callback);
       } else {
         // Cleanup au besoin
         delete this.pendingResponses[correlationId];
@@ -248,7 +299,8 @@ class RabbitMQWrapper {
           // On tente de charger le certificat
           let fingerprint = json_message['en-tete'].certificat;
           console.warn("Certificat inconnu, on fait une demande : " + fingerprint);
-          this.demanderCertificat(fingerprint)
+
+          return this.demanderCertificat(fingerprint)
           .then(reponse=>{
             // console.debug("Reponse demande certificat " + fingerprint);
             // console.debug(reponse);
@@ -277,7 +329,7 @@ class RabbitMQWrapper {
               .then(()=>pki.verifierSignatureMessage(json_message))
               .then(signatureValide=>{
                 if(signatureValide) {
-                  this.traiterMessageValide(json_message, msg, callback);
+                  return this.traiterMessageValide(json_message, msg, callback);
                   clearTimeout(etatCertificat.timer);
 
                   etatCertificat.certificatSauvegarde = true;
@@ -307,11 +359,11 @@ class RabbitMQWrapper {
             } else {
 
               if(etatCertificat.certificatSauvegarde) {
-                this.traiterMessageValide(json_message, msg, callback);
+                return this.traiterMessageValide(json_message, msg, callback);
               } else {
                 // Inserer callback a executer lors de la reception du certificat
                 etatCertificat.callbacks.push(
-                  () => {this.traiterMessageValide(json_message, msg, callback);}
+                  () => {return this.traiterMessageValide(json_message, msg, callback);}
                 );
               }
             };
@@ -332,23 +384,23 @@ class RabbitMQWrapper {
       callback(json_message);
     } else if(routingKey) {
       // Traiter le message via handlers
-      let blockingPromise = this.routingKeyManager.handleMessage(routingKey, msg.content, msg.properties);
-      if(blockingPromise) {
-        console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
-        // On arrete de consommer le temps de traiter le message
-        this.channel.cancel(this.consumerTag)
-        .then(()=>{
-          blockingPromise.finally(()=>{
-            console.debug("Resumer consume apres noMessage=" + noMessage);
-            this._consume();
-          })
-        })
-        .catch(err=>{
-          console.error("Erreur cancel reader consume");
-        });
-      } else {
-        console.debug("Message pas blocking")
-      }
+      return this.routingKeyManager.handleMessage(routingKey, msg.content, msg.properties);
+      // if(blockingPromise) {
+      //   console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
+      //   // On arrete de consommer le temps de traiter le message
+      //   this.channel.cancel(this.consumerTag)
+      //   .then(()=>{
+      //     blockingPromise.finally(()=>{
+      //       console.debug("Resumer consume apres noMessage=" + noMessage);
+      //       this._consume();
+      //     })
+      //   })
+      //   .catch(err=>{
+      //     console.error("Erreur cancel reader consume");
+      //   });
+      // } else {
+      //   console.debug("Message pas blocking")
+      // }
 
     } else {
       console.warn("Recu message sans correlation Id ou routing key");
@@ -658,11 +710,11 @@ class RoutingKeyManager {
         properties
       }
       promise = callback(routingKey, json_message, opts);
-      // if(promise) {
-      //   console.debug("Promise recue");
-      // } else {
-      //   console.debug("Promise non recue");
-      // }
+      if(promise) {
+        console.debug("Promise recue");
+      } else {
+        console.debug("Promise non recue");
+      }
     } else {
       console.warn("Routing key pas de callback: " + routingKey);
     }
