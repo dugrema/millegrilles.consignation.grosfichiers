@@ -23,7 +23,6 @@ const backupFileFields = [
 ]
 
 router.put('/domaine/*', backupUpload.fields(backupFileFields), traiterUploadHoraire);
-router.put('/quotidien/*', traiterUploadCatalogueQuotidien);
 
 // Path de download des fichiers de backup horaires
 router.get('/liste/backups_horaire', getListeBackupHoraire);
@@ -70,10 +69,6 @@ async function traiterUploadHoraire(req, res, next) {
   })
 
 };
-
-async function traiterUploadCatalogueQuotidien(req, res, next) {
-
-}
 
 async function getListeBackupHoraire(req, res, next) {
 

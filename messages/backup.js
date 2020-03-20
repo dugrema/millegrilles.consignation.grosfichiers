@@ -27,7 +27,11 @@ class GestionnaireMessagesBackup {
   genererBackupQuotidien(routingKey, message, opts) {
     return new Promise( (resolve, reject) => {
       console.debug("Generer backup quotidien");
-      resolve();
+      setTimeout(()=>{
+        console.debug("Backup quotidien termine");
+        resolve();
+      }, 5000);
+      // resolve();
     });
 
   }

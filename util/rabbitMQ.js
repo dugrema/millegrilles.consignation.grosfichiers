@@ -181,175 +181,145 @@ class RabbitMQWrapper {
   _consume() {
     return this.channel.consume(
       this.reply_q.queue,
-      async (msg) => {
-        // const noMessage = this.compteurMessages;
-        // this.compteurMessages = noMessage + 1;
-
-        // console.debug("Message recu " + noMessage);
-        let correlationId = msg.properties.correlationId;
-        let callback = this.pendingResponses[correlationId];
-        if(callback) {
-          delete this.pendingResponses[correlationId];
-        }
-
-        // let messageContent = decodeURIComponent(escape(msg.content));
-        let messageContent = msg.content.toString();
-        let routingKey = msg.fields.routingKey;
-        let json_message = JSON.parse(messageContent);
-        // console.debug(json_message);
-
-        if(routingKey && routingKey.startsWith('pki.certificat.')) {
-          // Sauvegarder le certificat localement pour usage futur
-          pki.sauvegarderMessageCertificat(messageContent, json_message.fingerprint);
-          return; // Ce message ne correspond pas au format standard
-        }
-
-        // Valider le contenu du message - hachage et signature
-        let hashTransactionCalcule = pki.hacherTransaction(json_message);
-        let hashTransactionRecu = json_message['en-tete']['hachage-contenu'];
-        if(hashTransactionCalcule !== hashTransactionRecu) {
-          console.warn("Erreur hachage incorrect : " + hashTransactionCalcule + ", message dropped");
-          console.debug(messageContent);
-
-          return;
-        }
-
-        pki.verifierSignatureMessage(json_message)
-        .then(signatureValide=>{
-          if(signatureValide) {
-            this.traiterMessageValide(json_message, msg, callback);
-          } else {
-            // Cleanup au besoin
-            delete this.pendingResponses[correlationId];
-          }
-        })
-        .catch(err=>{
-          if(err.inconnu) {
-            // Message inconnu, on va verifier si c'est une reponse de
-            // certificat.
-            if(json_message.resultats && json_message.resultats.certificat_pem) {
-              // On laisse le message passer, c'est un certificat
-              // console.debug("Certificat recu");
-              callback(msg);
-            } else {
-              // On tente de charger le certificat
-              let fingerprint = json_message['en-tete'].certificat;
-              console.warn("Certificat inconnu, on fait une demande : " + fingerprint);
-              this.demanderCertificat(fingerprint)
-              .then(reponse=>{
-                // console.debug("Reponse demande certificat " + fingerprint);
-                // console.debug(reponse);
-
-                var etatCertificat = this.certificatsConnus[fingerprint];
-
-                if(!etatCertificat) {
-
-                  // Creer un placeholder pour messages en attente sur ce
-                  // certificat.
-                  etatCertificat = {
-                    reponse: reponse.resultats,
-                    certificatSauvegarde: false,
-                    callbacks: [],
-                    timer: setTimeout(()=>{
-                      console.error("Timeout traitement certificat " + fingerprint);
-                      // Supprimer attente, va essayer a nouveau plus tard
-                      delete this.certificatsConnus[fingerprint];
-                    }, 10000),
-                  }
-
-                  this.certificatsConnus[fingerprint] = etatCertificat;
-
-                  // Sauvegarder le certificat et tenter de valider le message en attente
-                  pki.sauvegarderMessageCertificat(JSON.stringify(reponse.resultats))
-                  .then(()=>pki.verifierSignatureMessage(json_message))
-                  .then(signatureValide=>{
-                    if(signatureValide) {
-                      this.traiterMessageValide(json_message, msg, callback);
-                      clearTimeout(etatCertificat.timer);
-
-                      etatCertificat.certificatSauvegarde = true;
-
-                      while(etatCertificat.callbacks.length > 0) {
-                        const callbackMessage = this.certificatsConnus[fingerprint].callbacks.pop();
-                        try {
-                          // console.debug("Callback apres reception certificat " + fingerprint);
-                          callbackMessage();
-                        } catch (err) {
-                          console.error("Erreur callback certificat " + fingerprint);
-                        }
-                      }
-
-                      // Cleanup memoire
-                      this.certificatsConnus[fingerprint] = {certificatSauvegarde: true};
-
-                    } else {
-                      console.warn("Signature invalide, message dropped");
-                    }
-                  })
-                  .catch(err=>{
-                    console.warn("Message non valide apres reception du certificat, message dropped");
-                    console.debug(err);
-                  });
-
-                } else {
-
-                  if(etatCertificat.certificatSauvegarde) {
-                    this.traiterMessageValide(json_message, msg, callback);
-                  } else {
-                    // Inserer callback a executer lors de la reception du certificat
-                    etatCertificat.callbacks.push(
-                      () => {this.traiterMessageValide(json_message, msg, callback);}
-                    );
-                  }
-                };
-
-              })
-              .catch(err=>{
-                console.warn("Certificat non charge, message dropped");
-                console.debug(err);
-              })
-            }
-          }
-        });
-
-
-        // if(correlationId && this.pendingResponses[correlationId]) {
-        //   // On a recu un message de reponse
-        //   let callback = this.pendingResponses[correlationId];
-        //   if(callback) {
-        //     callback(msg);
-        //     delete this.pendingResponses[correlationId];
-        //   }
-        // } else if(routingKey) {
-        //   // Traiter le message via handlers
-        //   let blockingPromise = this.routingKeyManager.handleMessage(routingKey, messageContent, msg.properties);
-        //   if(blockingPromise) {
-        //     // console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
-        //     // On arrete de consommer le temps de traiter le message
-        //     this.channel.cancel(this.consumerTag)
-        //     .then(()=>{
-        //       blockingPromise.finally(()=>{
-        //         // console.debug("Resumer consume apres noMessage=" + noMessage);
-        //         this._consume();
-        //       })
-        //     })
-        //     .catch(err=>{
-        //       console.error("Erreur cancel reader consume");
-        //     });
-        //   }
-        //
-        // } else {
-        //   console.warn("Recu message sans correlation Id ou routing key");
-        //   console.warn(msg);
-        // }
-        // console.debug("Message traite " + noMessage);
-      },
+      async (msg) => {this._traiterMessage(msg)},
       {noAck: true}
     ).then(tag=>{
       // console.debug("Consumer Tag ");
       // console.debug(tag);
       this.consumerTag = tag.consumerTag;
     })
+  }
+
+  async _traiterMessage(msg) {
+    // const noMessage = this.compteurMessages;
+    // this.compteurMessages = noMessage + 1;
+
+    // console.debug("Message recu " + noMessage);
+    let correlationId = msg.properties.correlationId;
+    let callback = this.pendingResponses[correlationId];
+    if(callback) {
+      delete this.pendingResponses[correlationId];
+    }
+
+    // let messageContent = decodeURIComponent(escape(msg.content));
+    let messageContent = msg.content.toString();
+    let routingKey = msg.fields.routingKey;
+    let json_message = JSON.parse(messageContent);
+    // console.debug(json_message);
+
+    if(routingKey && routingKey.startsWith('pki.certificat.')) {
+      // Sauvegarder le certificat localement pour usage futur
+      pki.sauvegarderMessageCertificat(messageContent, json_message.fingerprint);
+      return; // Ce message ne correspond pas au format standard
+    }
+
+    // Valider le contenu du message - hachage et signature
+    let hashTransactionCalcule = pki.hacherTransaction(json_message);
+    let hashTransactionRecu = json_message['en-tete']['hachage-contenu'];
+    if(hashTransactionCalcule !== hashTransactionRecu) {
+      console.warn("Erreur hachage incorrect : " + hashTransactionCalcule + ", message dropped");
+      console.debug(messageContent);
+
+      return;
+    }
+
+    pki.verifierSignatureMessage(json_message)
+    .then(signatureValide=>{
+      if(signatureValide) {
+        this.traiterMessageValide(json_message, msg, callback);
+      } else {
+        // Cleanup au besoin
+        delete this.pendingResponses[correlationId];
+      }
+    })
+    .catch(err=>{
+      if(err.inconnu) {
+        // Message inconnu, on va verifier si c'est une reponse de
+        // certificat.
+        if(json_message.resultats && json_message.resultats.certificat_pem) {
+          // On laisse le message passer, c'est un certificat
+          // console.debug("Certificat recu");
+          callback(msg);
+        } else {
+          // On tente de charger le certificat
+          let fingerprint = json_message['en-tete'].certificat;
+          console.warn("Certificat inconnu, on fait une demande : " + fingerprint);
+          this.demanderCertificat(fingerprint)
+          .then(reponse=>{
+            // console.debug("Reponse demande certificat " + fingerprint);
+            // console.debug(reponse);
+
+            var etatCertificat = this.certificatsConnus[fingerprint];
+
+            if(!etatCertificat) {
+
+              // Creer un placeholder pour messages en attente sur ce
+              // certificat.
+              etatCertificat = {
+                reponse: reponse.resultats,
+                certificatSauvegarde: false,
+                callbacks: [],
+                timer: setTimeout(()=>{
+                  console.error("Timeout traitement certificat " + fingerprint);
+                  // Supprimer attente, va essayer a nouveau plus tard
+                  delete this.certificatsConnus[fingerprint];
+                }, 10000),
+              }
+
+              this.certificatsConnus[fingerprint] = etatCertificat;
+
+              // Sauvegarder le certificat et tenter de valider le message en attente
+              pki.sauvegarderMessageCertificat(JSON.stringify(reponse.resultats))
+              .then(()=>pki.verifierSignatureMessage(json_message))
+              .then(signatureValide=>{
+                if(signatureValide) {
+                  this.traiterMessageValide(json_message, msg, callback);
+                  clearTimeout(etatCertificat.timer);
+
+                  etatCertificat.certificatSauvegarde = true;
+
+                  while(etatCertificat.callbacks.length > 0) {
+                    const callbackMessage = this.certificatsConnus[fingerprint].callbacks.pop();
+                    try {
+                      // console.debug("Callback apres reception certificat " + fingerprint);
+                      callbackMessage();
+                    } catch (err) {
+                      console.error("Erreur callback certificat " + fingerprint);
+                    }
+                  }
+
+                  // Cleanup memoire
+                  this.certificatsConnus[fingerprint] = {certificatSauvegarde: true};
+
+                } else {
+                  console.warn("Signature invalide, message dropped");
+                }
+              })
+              .catch(err=>{
+                console.warn("Message non valide apres reception du certificat, message dropped");
+                console.debug(err);
+              });
+
+            } else {
+
+              if(etatCertificat.certificatSauvegarde) {
+                this.traiterMessageValide(json_message, msg, callback);
+              } else {
+                // Inserer callback a executer lors de la reception du certificat
+                etatCertificat.callbacks.push(
+                  () => {this.traiterMessageValide(json_message, msg, callback);}
+                );
+              }
+            };
+
+          })
+          .catch(err=>{
+            console.warn("Certificat non charge, message dropped");
+            console.debug(err);
+          })
+        }
+      }
+    });
   }
 
   traiterMessageValide(json_message, msg, callback) {
@@ -360,18 +330,20 @@ class RabbitMQWrapper {
       // Traiter le message via handlers
       let blockingPromise = this.routingKeyManager.handleMessage(routingKey, msg.content, msg.properties);
       if(blockingPromise) {
-        // console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
+        console.debug("Promise recue dans consume, on bloque noMessage=" + noMessage);
         // On arrete de consommer le temps de traiter le message
         this.channel.cancel(this.consumerTag)
         .then(()=>{
           blockingPromise.finally(()=>{
-            // console.debug("Resumer consume apres noMessage=" + noMessage);
+            console.debug("Resumer consume apres noMessage=" + noMessage);
             this._consume();
           })
         })
         .catch(err=>{
           console.error("Erreur cancel reader consume");
         });
+      } else {
+        console.debug("Message pas blocking")
       }
 
     } else {
