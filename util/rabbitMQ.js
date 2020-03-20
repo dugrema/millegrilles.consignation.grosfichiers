@@ -240,7 +240,7 @@ class RabbitMQWrapper {
         var nouveauTag = await this.channel.consume(
           this.qOperationLongue.queue,
           async (msg) => {await this._traiterMessageOperationLongue(msg)},
-          {noAck: true}
+          {noAck: false}
         );
         this.consumerTagOperationLongue = nouveauTag.consumerTag;
       }

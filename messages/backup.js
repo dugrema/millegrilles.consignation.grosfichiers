@@ -27,20 +27,25 @@ class GestionnaireMessagesBackup {
   }
 
   genererBackupQuotidien(routingKey, message, opts) {
-    return new Promise( (resolve, reject) => {
+    return new Promise( async (resolve, reject) => {
       console.debug("Generer backup quotidien");
       // console.debug(message);
-
-      const {domaine, securite} = message;
-      const jourBackup = new Date(message.jour * 1000);
-      console.debug("Domaine " + domaine + ", securite " + securite);
-      console.debug(jourBackup);
+      await genererBackupQuotidien(message);
 
       console.debug("Backup quotidien termine");
       resolve();
     });
 
   }
+
+}
+
+async function genererBackupQuotidien(journal) {
+
+  const {domaine, securite} = journal;
+  const jourBackup = new Date(journal.jour * 1000);
+  console.debug("Domaine " + domaine + ", securite " + securite);
+  console.debug(jourBackup);
 
 }
 
