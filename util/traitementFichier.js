@@ -399,6 +399,25 @@ class TraitementFichier {
     return {size, fullPathFichier};
   }
 
+  async sauvegarderJournalQuotidien(journal) {
+    const {domaine, securite, jour} = journal;
+
+    const dateJournal = new Date(jour*1000);
+    var repertoireBackup = pathConsignation.trouverPathBackupHoraire(dateJournal);
+    // Remonter du niveau heure a jour
+    repertoireBackup = path.dirname(repertoireBackup);
+    let year = dateJournal.getUTCFullYear();
+    let month = dateJournal.getUTCMonth() + 1; if(month < 10) month = '0'+month;
+    let day = dateJournal.getUTCDate(); if(day < 10) day = '0'+day;
+    const dateFormattee = "" + year + month + day;
+
+    const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
+
+    const fullPathFichier = path.join(repertoireBackup, nomFichier);
+
+    console.debug("Path fichier journal quotidien " + fullPathFichier);
+  }
+
 }
 
 async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire) {

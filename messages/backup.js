@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
-const { pathConsignation } = require('../util/traitementFichier');
+const { traitementFichier } = require('../util/traitementFichier');
 
 class GestionnaireMessagesBackup {
 
@@ -29,7 +29,7 @@ class GestionnaireMessagesBackup {
   genererBackupQuotidien(routingKey, message, opts) {
     return new Promise( async (resolve, reject) => {
       console.debug("Generer backup quotidien");
-      // console.debug(message);
+      console.debug(message);
       await genererBackupQuotidien(message);
 
       console.debug("Backup quotidien termine");
@@ -46,6 +46,9 @@ async function genererBackupQuotidien(journal) {
   const jourBackup = new Date(journal.jour * 1000);
   console.debug("Domaine " + domaine + ", securite " + securite);
   console.debug(jourBackup);
+
+  // Sauvegarder journal quotidien, sauvegarder en format .json.xz
+  await traitementFichier.sauvegarderJournalQuotidien(journal);
 
 }
 
