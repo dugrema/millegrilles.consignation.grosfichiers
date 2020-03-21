@@ -33,7 +33,12 @@ class GestionnaireMessagesBackup {
       console.debug(message);
 
       try {
-        await genererBackupQuotidien(message);
+        await genererBackupQuotidien(message.catalogue);
+
+        // Finaliser le backup en retransmettant le journal comme transaction
+        // de backup quotidien
+        await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'nouvelle.transaction');
+
       } catch (err) {
         console.error("Erreur creation backup quotidien");
         console.error(err);
@@ -47,6 +52,7 @@ class GestionnaireMessagesBackup {
 
 }
 
+// Genere un fichier de backup quotidien qui correspond au journal
 async function genererBackupQuotidien(journal) {
 
   const {domaine, securite} = journal;
