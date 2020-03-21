@@ -2,8 +2,10 @@ const fs = require('fs');
 const readdirp = require('readdirp');
 const path = require('path');
 const uuidv1 = require('uuid/v1');
-const {uuidToDate} = require('./UUIDUtils');
 const crypto = require('crypto');
+const lzma = require('lzma-native');
+
+const {uuidToDate} = require('./UUIDUtils');
 const rabbitMQ = require('./rabbitMQ');
 const transformationImages = require('./transformationImages');
 
@@ -22,6 +24,7 @@ class PathConsignation {
     this.consignationPathSeeding = path.join(this.consignationPath, '/torrents/seeding');
     this.consignationPathManagedTorrents = path.join(this.consignationPath, '/torrents/torrentfiles');
     this.consignationPathBackup = path.join(this.consignationPath, '/backup');
+    this.consignationPathBackupArchives = path.join(this.consignationPathBackup, '/archives');
   }
 
   // Retourne le path du fichier
@@ -416,6 +419,25 @@ class TraitementFichier {
     const fullPathFichier = path.join(repertoireBackup, nomFichier);
 
     console.debug("Path fichier journal quotidien " + fullPathFichier);
+    var compressor = lzma.createCompressor();
+    var output = fs.createWriteStream(fullPathFichier);
+    compressor.pipe(output);
+
+    const promiseSauvegarde = new Promise((resolve, reject)=>{
+      output.on('close', ()=>{
+        resolve();
+      });
+      output.on('error', err=>{
+        reject(err);
+      })
+    });
+
+    compressor.write(JSON.stringify(journal));
+    compressor.end();
+    await promiseSauvegarde;
+
+    console.debug("Fichier cree : " + fullPathFichier);
+    return {path: fullPathFichier};
   }
 
 }

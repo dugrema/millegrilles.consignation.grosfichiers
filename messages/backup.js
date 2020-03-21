@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
-const { traitementFichier } = require('../util/traitementFichier');
+const { spawn } = require('child_process');
+const { traitementFichier, pathConsignation } = require('../util/traitementFichier');
 
 class GestionnaireMessagesBackup {
 
@@ -30,7 +31,13 @@ class GestionnaireMessagesBackup {
     return new Promise( async (resolve, reject) => {
       console.debug("Generer backup quotidien");
       console.debug(message);
-      await genererBackupQuotidien(message);
+
+      try {
+        await genererBackupQuotidien(message);
+      } catch (err) {
+        console.error("Erreur creation backup quotidien");
+        console.error(err);
+      }
 
       console.debug("Backup quotidien termine");
       resolve();
@@ -48,7 +55,41 @@ async function genererBackupQuotidien(journal) {
   console.debug(jourBackup);
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
-  await traitementFichier.sauvegarderJournalQuotidien(journal);
+  var resultat = await traitementFichier.sauvegarderJournalQuotidien(journal);
+  const pathJournal = resultat.path;
+  const nomJournal = path.basename(pathJournal);
+  const pathRepertoireBackup = path.dirname(pathJournal);
+
+  console.debug(`Path backup : ${pathRepertoireBackup}`);
+
+  const pathArchive = pathConsignation.consignationPathBackupArchives;
+  await new Promise((resolve, reject)=>{
+    fs.mkdir(pathArchive, { recursive: true, mode: 0o770 }, err=>{
+      if(err) reject(err);
+      else resolve();
+    })
+  })
+  var nomArchive = nomJournal.replace('_catalogue', '').replace('.json', '.tar');
+  const pathArchiveQuotidienne = path.join(pathArchive, `${nomArchive}`)
+
+  const fichiersInclure = `${nomJournal} */catalogues/${domaine}*.json.xz */transactions/${domaine}*.json.xz`
+  console.debug(`Fichiers inclure : ${fichiersInclure}`);
+
+  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathRepertoireBackup}; tar -jcf ${pathArchiveQuotidienne} ${fichiersInclure}`]);
+  commandeBackup.stderr.on('data', data=>{
+    console.error(`tar backup quotidien: ${data}`);
+  })
+
+  const promiseTar = new Promise((resolve, reject) => {
+    commandeBackup.on('close', code =>{
+      if(code != 0) {
+        reject(code);
+      }
+      resolve();
+    })
+  });
+
+  await promiseTar;
 
 }
 
