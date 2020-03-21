@@ -69,10 +69,19 @@ async function genererBackupQuotidien(journal) {
       else resolve();
     })
   })
+
+  // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
   var nomArchive = nomJournal.replace('_catalogue', '').replace('.json', '.tar');
   const pathArchiveQuotidienne = path.join(pathArchive, `${nomArchive}`)
 
-  const fichiersInclure = `${nomJournal} */catalogues/${domaine}*.json.xz */transactions/${domaine}*.json.xz`
+  // Faire liste des fichiers a inclure.
+  var fichiersInclure = `${nomJournal} */catalogues/${domaine}*.json.xz */transactions/${domaine}*.json.xz`
+
+  if(journal.fuuid_grosfichiers) {
+    // Aussi inclure le repertoire des grosfichiers
+    fichiersInclure = `${fichiersInclure} */grosfichiers/*`
+  }
+
   console.debug(`Fichiers inclure : ${fichiersInclure}`);
 
   const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathRepertoireBackup}; tar -jcf ${pathArchiveQuotidienne} ${fichiersInclure}`]);
