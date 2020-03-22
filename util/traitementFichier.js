@@ -440,6 +440,44 @@ class TraitementFichier {
     return {path: fullPathFichier};
   }
 
+  async sauvegarderJournalMensuel(journal) {
+    const {domaine, securite, mois} = journal;
+
+    const dateJournal = new Date(mois*1000);
+    var repertoireBackup = pathConsignation.consignationPathBackupArchives;
+
+    let year = dateJournal.getUTCFullYear();
+    let month = dateJournal.getUTCMonth() + 1; if(month < 10) month = '0'+month;
+    const dateFormattee = "" + year + month;
+
+    const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
+
+    const fullPathFichier = path.join(repertoireBackup, nomFichier);
+
+    console.debug("Path fichier journal mensuel " + fullPathFichier);
+    var compressor = lzma.createCompressor();
+    var output = fs.createWriteStream(fullPathFichier);
+    compressor.pipe(output);
+
+    const promiseSauvegarde = new Promise((resolve, reject)=>{
+      output.on('close', ()=>{
+        resolve();
+      });
+      output.on('error', err=>{
+        reject(err);
+      })
+    });
+
+    compressor.write(JSON.stringify(journal));
+    compressor.end();
+    await promiseSauvegarde;
+
+    const sha512Journal = await utilitaireFichiers.calculerSHAFichier(fullPathFichier);
+
+    console.debug("Fichier cree : " + fullPathFichier);
+    return {pathJournal: fullPathFichier, sha512: sha512Journal};
+  }
+
 }
 
 class UtilitaireFichiers {
