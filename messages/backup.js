@@ -98,9 +98,16 @@ async function genererBackupQuotidien(journal) {
   const promiseTar = new Promise((resolve, reject) => {
     commandeBackup.on('close', code =>{
       if(code != 0) {
-        reject(code);
+        return reject(code);
       }
-      resolve();
+
+      // Supprimer repertoire horaire
+      fs.rmdir(pathRepertoireBackup, { recursive: true }, err=>{
+        if(err) return reject(err);
+
+        return resolve();
+      });
+
     })
   });
 
