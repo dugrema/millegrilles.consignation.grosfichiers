@@ -253,10 +253,10 @@ class TraitementFichier {
       let fichiersTransactions = req.files.transactions;
       let fichierCatalogue = req.files.catalogue[0];
 
-      console.debug("Path a utiliser: " + pathRepertoire);
+      // console.debug("Path a utiliser: " + pathRepertoire);
 
       // Deplacer les fichiers de backup vers le bon repertoire /backup
-      console.debug("Deplacers fichiers recus");
+      // console.debug("Deplacers fichiers recus");
       var fichiersDomaines;
       try {
         fichiersDomaines = await traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire);
@@ -269,8 +269,8 @@ class TraitementFichier {
       // Creer les hard links pour les grosfichiers
       const fuuidDict = JSON.parse(req.body.fuuid_grosfichiers);
       if(fuuidDict && Object.keys(fuuidDict).length > 0) {
-        console.debug("Traitement grosfichiers");
-        console.debug(fuuidDict);
+        // console.debug("Traitement grosfichiers");
+        // console.debug(fuuidDict);
 
         const pathBackupGrosFichiers = path.join(pathRepertoire, 'grosfichiers');
         await new Promise((resolve, reject)=>{
@@ -282,7 +282,7 @@ class TraitementFichier {
 
         for(const fuuid in fuuidDict) {
           const paramFichier = fuuidDict[fuuid];
-          console.debug("Creer hard link pour fichier " + fuuid);
+          // console.debug("Creer hard link pour fichier " + fuuid);
 
           const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid);
           if(err) {
@@ -290,8 +290,8 @@ class TraitementFichier {
             console.error(err);
           } else {
             if(fichier) {
-              console.debug("Fichier " + fuuid + " trouve");
-              console.debug(fichier);
+              // console.debug("Fichier " + fuuid + " trouve");
+              // console.debug(fichier);
 
               const nomFichier = path.basename(fichier);
               const pathFichierBackup = path.join(pathBackupGrosFichiers, nomFichier);
@@ -315,7 +315,7 @@ class TraitementFichier {
         }
       }
 
-      console.debug("PUT backup Termine");
+      // console.debug("PUT backup Termine");
       resolve({fichiersDomaines});
 
     })
@@ -326,8 +326,8 @@ class TraitementFichier {
 
     const domaine = req.body.domaine;
     const pathRepertoire = path.join(pathConsignation.consignationPathBackup, 'horaire');
-    console.debug("Path repertoire backup");
-    console.debug(pathRepertoire);
+    // console.debug("Path repertoire backup");
+    // console.debug(pathRepertoire);
 
     const prefixeCatalogue = domaine + "_catalogue";
     const prefixeTransactions = domaine + "_transactions";
@@ -370,7 +370,7 @@ class TraitementFichier {
         reject({err});
       })
       .on('end', ()=>{
-        console.debug("Fini");
+        // console.debug("Fini");
         resolve({backupsHoraire});
       });
 
@@ -418,7 +418,7 @@ class TraitementFichier {
 
     const fullPathFichier = path.join(repertoireBackup, nomFichier);
 
-    console.debug("Path fichier journal quotidien " + fullPathFichier);
+    // console.debug("Path fichier journal quotidien " + fullPathFichier);
     var compressor = lzma.createCompressor();
     var output = fs.createWriteStream(fullPathFichier);
     compressor.pipe(output);
@@ -436,7 +436,7 @@ class TraitementFichier {
     compressor.end();
     await promiseSauvegarde;
 
-    console.debug("Fichier cree : " + fullPathFichier);
+    // console.debug("Fichier cree : " + fullPathFichier);
     return {path: fullPathFichier};
   }
 
@@ -454,7 +454,7 @@ class TraitementFichier {
 
     const fullPathFichier = path.join(repertoireBackup, nomFichier);
 
-    console.debug("Path fichier journal mensuel " + fullPathFichier);
+    // console.debug("Path fichier journal mensuel " + fullPathFichier);
     var compressor = lzma.createCompressor();
     var output = fs.createWriteStream(fullPathFichier);
     compressor.pipe(output);
@@ -474,8 +474,49 @@ class TraitementFichier {
 
     const sha512Journal = await utilitaireFichiers.calculerSHAFichier(fullPathFichier);
 
-    console.debug("Fichier cree : " + fullPathFichier);
+    // console.debug("Fichier cree : " + fullPathFichier);
     return {pathJournal: fullPathFichier, sha512: sha512Journal};
+  }
+
+  async supprimerFichiers(fichiers, repertoire) {
+    // console.debug(`Supprimer fichiers sous ${repertoire}`);
+    // console.debug(fichiers);
+
+    var resultat = await new Promise((resolve, reject)=>{
+
+      var compteur = 0;
+      function supprimer(idx) {
+        if(idx == fichiers.length) {
+          return resolve({});
+        }
+
+        let fichier = fichiers[idx];
+
+        if(repertoire) {
+          fichier = path.join(repertoire, fichier);
+        }
+
+        // console.debug(`Supprimer ${fichier}`);
+
+        fs.unlink(fichier, err=>{
+          if(err) {
+            return reject(err);
+          }
+          else {
+            supprimer(idx+1)
+          }
+        });
+
+      }; supprimer(0);
+
+    })
+    .catch(err=>{
+      return({err});
+    });
+
+    if(resultat.err) {
+      throw resultat.err;
+    }
   }
 
 }
@@ -524,11 +565,11 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
     // Creer tous les repertoires requis pour le backup
     fs.mkdir(pathTransactions, { recursive: true, mode: 0o770 }, (err)=>{
       if(err) return reject(err);
-      console.debug("Path cree " + pathTransactions);
+      // console.debug("Path cree " + pathTransactions);
 
       fs.mkdir(pathCatalogues, { recursive: true, mode: 0o770 }, (err)=>{
         if(err) return reject(err);
-        console.debug("Path cree " + pathCatalogues);
+        // console.debug("Path cree " + pathCatalogues);
         resolve();
       })
 
@@ -548,7 +589,7 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
 
   }))
   .then(async () => {
-    console.debug("Debut copie fichiers backup transaction");
+    // console.debug("Debut copie fichiers backup transaction");
 
     const resultatHash = {};
 
@@ -590,7 +631,7 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
         resultatHash[nomFichier] = resultatSha512.sha512;
       }
 
-      console.debug("Sauvegarde " + nouveauPath);
+      // console.debug("Sauvegarde " + nouveauPath);
       fs.rename(fichierDict.path, nouveauPath, err=>{
         if(err) throw err;
 

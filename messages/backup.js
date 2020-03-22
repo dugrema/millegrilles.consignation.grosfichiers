@@ -39,8 +39,8 @@ class GestionnaireMessagesBackup {
 
   genererBackupQuotidien(routingKey, message, opts) {
     return new Promise( async (resolve, reject) => {
-      console.debug("Generer backup quotidien");
-      console.debug(message);
+      // console.debug("Generer backup quotidien");
+      // console.debug(message);
 
       try {
         const informationArchive = await genererBackupQuotidien(message.catalogue);
@@ -50,8 +50,8 @@ class GestionnaireMessagesBackup {
         await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'nouvelle.transaction');
 
         // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
-        console.debug("Transmettre transaction informationArchive : ");
-        console.debug(informationArchive);
+        // console.debug("Transmettre transaction informationArchive : ");
+        // console.debug(informationArchive);
 
         await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveQuotidienneInfo');
 
@@ -60,7 +60,7 @@ class GestionnaireMessagesBackup {
         console.error(err);
       }
 
-      console.debug("Backup quotidien termine");
+      // console.debug("Backup quotidien termine");
       resolve();
     });
 
@@ -68,33 +68,39 @@ class GestionnaireMessagesBackup {
 
   genererBackupMensuel(routingKey, message, opts) {
     return new Promise( async (resolve, reject) => {
-      console.debug("Generer backup mensuel");
-      console.debug(message);
+      // console.debug("Generer backup mensuel");
+      // console.debug(message);
 
       try {
         const informationArchive = await genererBackupMensuel(message.catalogue);
 
-        console.debug("Information archive mensuelle:");
-        console.debug(informationArchive);
+        // console.debug("Information archive mensuelle:");
+        // console.debug(informationArchive);
 
         // Finaliser le backup en retransmettant le journal comme transaction
         // de backup quotidien
         await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'nouvelle.transaction');
 
         // Generer transaction pour journal annuel. Inclue SHA512 et nom de l'archive mensuelle
-        console.debug("Transmettre transaction informationArchive : ");
-        console.debug(informationArchive);
+        // console.debug("Transmettre transaction informationArchive : ");
+        // console.debug(informationArchive);
+        const {nomJournal, fichiersInclure} = informationArchive;
+
+        delete informationArchive.fichiersInclure;
+        delete informationArchive.nomJournal;
 
         await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveMensuelleInfo');
 
-        console.debug("Info archive mensuelle transmise");
+        // console.debug("Info archive mensuelle transmise, nettoyage des fichiers locaux");
+
+        await traitementFichier.supprimerFichiers(fichiersInclure, pathConsignation.consignationPathBackupArchives);
 
       } catch (err) {
         console.error("Erreur creation backup mensuel");
         console.error(err);
       }
 
-      console.debug("Backup mensuel termine");
+      // console.debug("Backup mensuel termine");
       resolve();
     });
 
@@ -107,8 +113,8 @@ async function genererBackupQuotidien(journal) {
 
   const {domaine, securite} = journal;
   const jourBackup = new Date(journal.jour * 1000);
-  console.debug("Domaine " + domaine + ", securite " + securite);
-  console.debug(jourBackup);
+  // console.debug("Domaine " + domaine + ", securite " + securite);
+  // console.debug(jourBackup);
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
   var resultat = await traitementFichier.sauvegarderJournalQuotidien(journal);
@@ -116,7 +122,7 @@ async function genererBackupQuotidien(journal) {
   const nomJournal = path.basename(pathJournal);
   const pathRepertoireBackup = path.dirname(pathJournal);
 
-  console.debug(`Path backup : ${pathRepertoireBackup}`);
+  // console.debug(`Path backup : ${pathRepertoireBackup}`);
 
   const pathArchive = pathConsignation.consignationPathBackupArchives;
   await new Promise((resolve, reject)=>{
@@ -138,7 +144,7 @@ async function genererBackupQuotidien(journal) {
     fichiersInclure = `${fichiersInclure} */grosfichiers/*`
   }
 
-  console.debug(`Fichiers inclure : ${fichiersInclure}`);
+  // console.debug(`Fichiers inclure : ${fichiersInclure}`);
 
   const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathRepertoireBackup}; tar -jcf ${pathArchiveQuotidienne} ${fichiersInclure}`]);
   commandeBackup.stderr.on('data', data=>{
@@ -188,15 +194,15 @@ async function genererBackupMensuel(journal) {
 
   const {domaine, securite} = journal;
   const moisBackup = new Date(journal.mois * 1000);
-  console.debug("Domaine " + domaine + ", securite " + securite);
-  console.debug(moisBackup);
+  // console.debug("Domaine " + domaine + ", securite " + securite);
+  // console.debug(moisBackup);
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
   var resultat = await traitementFichier.sauvegarderJournalMensuel(journal);
   const pathJournal = resultat.pathJournal;
   const nomJournal = path.basename(pathJournal);
 
-  console.debug(`Path journal mensuel : ${pathJournal}`);
+  // console.debug(`Path journal mensuel : ${pathJournal}`);
 
   const pathArchives = pathConsignation.consignationPathBackupArchives;
 
@@ -209,11 +215,31 @@ async function genererBackupMensuel(journal) {
   let month = moisBackup.getUTCMonth() + 1; if(month < 10) month = '0'+month;
   const moisStr = '' + year + month;
 
-  const fichiersInclure = `${nomJournal} ${domaine}_${moisStr}??_${securite}.tar.xz`
+  // const fichiersInclure = `${nomJournal} ${domaine}_${moisStr}??_${securite}.tar.xz`
+  var fichiersInclure = [nomJournal];
+  for(let jour in journal.fichiers_quotidien) {
+    let infoArchive = journal.fichiers_quotidien[jour];
+    let sha512_archive = infoArchive.archive_sha512;
+    let nomFichier = infoArchive.archive_nomfichier;
 
-  console.debug(`Archive mensuelle inclure : ${fichiersInclure}`);
+    let pathFichierArchive = path.join(pathArchives, nomFichier);
+    const sha512Archive = await utilitaireFichiers.calculerSHAFichier(pathFichierArchive);
+    if(sha512Archive != sha512_archive) {
+      throw `SHA512 archive ${nomFichier} est incorrect, backup annule`;
+    }
+    // console.debug(`Reducing fichier ${nomFichier}, SHA512: ${sha512Archive}`);
+    // console.debug(fichiersInclure);
+    fichiersInclure.push(nomFichier);
+  }
 
-  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathArchives}; tar -jcf ${pathArchiveMensuelle} ${fichiersInclure}`]);
+  // console.debug("Array fichiersInclure");
+  // console.debug(fichiersInclure);
+
+  let fichiersInclureStr = fichiersInclure.join(' ');
+
+  // console.debug(`Archive mensuelle inclure : ${fichiersInclure}`);
+
+  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathArchives}; tar -jcf ${pathArchiveMensuelle} ${fichiersInclureStr}`]);
   commandeBackup.stderr.on('data', data=>{
     console.error(`tar backup mensuel: ${data}`);
   })
@@ -234,11 +260,14 @@ async function genererBackupMensuel(journal) {
           mois: journal.mois,
           domaine: journal.domaine,
           securite: journal.securite,
+
+          nomJournal,
+          fichiersInclure,
         }
 
         // Supprimer les archives quotidiennes correspondants au mois, journal
 
-        console.debug("SHA512 archive mensuelle : " + sha512Archive);
+        // console.debug("SHA512 archive mensuelle : " + sha512Archive);
 
         return resolve(informationArchive);
       } catch(err) {
