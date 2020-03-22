@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
 const { spawn } = require('child_process');
-const { traitementFichier, pathConsignation } = require('../util/traitementFichier');
+const { traitementFichier, pathConsignation, utilitaireFichiers } = require('../util/traitementFichier');
 
 class GestionnaireMessagesBackup {
 
@@ -33,11 +33,17 @@ class GestionnaireMessagesBackup {
       console.debug(message);
 
       try {
-        await genererBackupQuotidien(message.catalogue);
+        const informationArchive = await genererBackupQuotidien(message.catalogue);
 
         // Finaliser le backup en retransmettant le journal comme transaction
         // de backup quotidien
         await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'nouvelle.transaction');
+
+        // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
+        console.debug("Transmettre transaction informationArchive : ");
+        console.debug(informationArchive);
+
+        await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveQuotidienneInfo');
 
       } catch (err) {
         console.error("Erreur creation backup quotidien");
@@ -95,23 +101,41 @@ async function genererBackupQuotidien(journal) {
     console.error(`tar backup quotidien: ${data}`);
   })
 
-  const promiseTar = new Promise((resolve, reject) => {
-    commandeBackup.on('close', code =>{
+  const resultatTar = await new Promise(async (resolve, reject) => {
+    commandeBackup.on('close', async code =>{
       if(code != 0) {
         return reject(code);
       }
+
+      // Calculer le SHA512 du fichier d'archive
+      const sha512Archive = await utilitaireFichiers.calculerSHAFichier(pathArchiveQuotidienne);
 
       // Supprimer repertoire horaire
       fs.rmdir(pathRepertoireBackup, { recursive: true }, err=>{
         if(err) return reject(err);
 
-        return resolve();
+        const informationArchive = {
+          archive_sha512: sha512Archive,
+          archive_nomfichier: nomArchive,
+          jour: journal.jour,
+          domaine: journal.domaine,
+          securite: journal.securite,
+        }
+
+        return resolve(informationArchive);
       });
 
     })
+  })
+  .catch(err=>{
+    return({err});
   });
 
-  await promiseTar;
+  if(resultatTar.err) {
+    throw err;
+  }
+
+  return resultatTar;
 
 }
 

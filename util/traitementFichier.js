@@ -442,6 +442,41 @@ class TraitementFichier {
 
 }
 
+class UtilitaireFichiers {
+
+  async calculerSHAFichier(pathFichier, opts) {
+    if(!opts) opts = {};
+
+    let fonctionHash = opts.fonctionHash || 'sha512';
+
+    // Calculer SHA512 sur fichier de backup
+    const sha = crypto.createHash(fonctionHash);
+    const readStream = fs.createReadStream(pathFichier);
+
+    const resultatSha = await new Promise(async (resolve, reject)=>{
+      readStream.on('data', chunk=>{
+        sha.update(chunk);
+      })
+      readStream.on('end', ()=>{
+        const resultat = sha.digest('hex');
+        resolve({sha: resultat});
+      });
+      readStream.on('error', err=> {
+        reject({err});
+      });
+
+      readStream.read();
+    });
+
+    if(resultatSha.err) {
+      throw resultatSha.err;
+    } else {
+      return resultatSha.sha;
+    }
+  }
+
+}
+
 async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire) {
   const pathTransactions = path.join(pathRepertoire, 'transactions');
   const pathCatalogues = path.join(pathRepertoire, 'catalogues');
@@ -601,5 +636,6 @@ async function traiterVideo(pathVideo, sansTranscodage) {
 }
 
 const traitementFichier = new TraitementFichier();
+const utilitaireFichiers = new UtilitaireFichiers();
 
-module.exports = {traitementFichier, pathConsignation};
+module.exports = {traitementFichier, pathConsignation, utilitaireFichiers};
