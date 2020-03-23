@@ -481,6 +481,92 @@ class TraitementFichier {
     return {pathJournal: fullPathFichier, sha512: sha512Journal};
   }
 
+  async creerHardLinksBackupStaging() {
+
+    // S'assurer que les repertoires sous /staging existent
+    const pathStaging = pathConsignation.consignationPathBackupStaging;
+    let listeSousRepertoires = ['horaire', 'quotidien', 'mensuel', 'annuel'];
+    var errMkdir = await new Promise((resolve, reject)=>{
+      function creerRepertoires(idx) {
+        if(idx === listeSousRepertoires.length) return resolve();
+        let sousRepertoire = path.join(pathStaging, listeSousRepertoires[idx]);
+        fs.mkdir(sousRepertoire, {recursive: true, mode: 0o770}, err=>{
+          if(err) reject(err);
+          else creerRepertoires(idx+1);
+        })
+      };
+      creerRepertoires(0);
+    });
+    if(errMkdir) throw errMkdir;
+
+    // Creer hard-link pour tous les fichiers courants sous backup/horaire
+    // vers backup/staging/horaire
+    const pathBackupHoraire = pathConsignation.consignationPathBackupHoraire;
+    const commandeHardLinkHoraire = spawn('cp', ['-rl', pathBackupHoraire, pathStaging]);
+    commandeHardLinkHoraire.stderr.on('data', data=>{
+      console.error(`Erreur nettoyage repertoires : ${data}`);
+    })
+
+    const resultatHardLinkHoraire = await new Promise(async (resolve, reject) => {
+      commandeHardLinkHoraire.on('close', async code =>{
+        if(code != 0) {
+          return reject(code);
+        }
+        return resolve();
+      })
+    })
+    .catch(err=>{
+      return({err});
+    });
+
+    // Faire liste des archives et creer hard links sous staging/ approprie.
+    const pathBackupArchives = pathConsignation.consignationPathBackupArchives;
+
+    var errArchives = await new Promise((resolve, reject)=>{
+      fs.readdir(pathBackupArchives, (err, files)=>{
+        if(err) return reject(err);
+
+        function createHardLink(idx) {
+          if(idx == files.length) return resolve();
+
+          const nomFichier = files[idx];
+          const fichier = path.join(pathBackupArchives, nomFichier);
+          console.debug(`Fichier archive, creer hard link : ${fichier}`);
+
+          // Verifier si c'est une archive annuelle, mensuelle ou quotidienne
+          const dateFichier = nomFichier.split('_')[1];
+
+          var pathStagingFichier = null;
+          if(dateFichier.length == 8) {
+            // Fichier quotidien
+            pathStagingFichier = path.join(pathStaging, 'quotidien', nomFichier);
+          } else if(dateFichier.length == 6) {
+            // Fichier mensuel
+            pathStagingFichier = path.join(pathStaging, 'mensuel', nomFichier);
+          } else if(dateFichier.length == 4) {
+            // Fichier annuel
+            pathStagingFichier = path.join(pathStaging, 'annuel', nomFichier);
+          } else {
+            console.warning(`Fichier non reconnu: ${fichier}`)
+          }
+
+          if(pathStagingFichier) {
+            fs.link(fichier, pathStagingFichier, err=>{
+              if(err) return reject(err);
+              else createHardLink(idx+1);
+            });
+          } else {
+            createHardLink(idx+1);
+          }
+
+        };
+        createHardLink(0);
+
+      });
+    });
+
+  }
+
 }
 
 class UtilitaireFichiers {

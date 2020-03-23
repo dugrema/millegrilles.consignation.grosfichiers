@@ -35,6 +35,14 @@ class GestionnaireMessagesBackup {
       {operationLongue: true}
     );
 
+    this.mq.routingKeyManager.addRoutingKeyCallback(
+      (routingKey, message, opts) => {
+        return this.prerarerStagingRestauration(routingKey, message, opts)
+      },
+      ['commande.backup.preparerStagingRestauration'],
+      {operationLongue: true}
+    );
+
   }
 
   genererBackupQuotidien(routingKey, message, opts) {
@@ -107,6 +115,30 @@ class GestionnaireMessagesBackup {
       }
 
       // console.debug("Backup mensuel termine");
+      resolve();
+    });
+
+  }
+
+  // Generer le repertoire staging, extrait et verifie tous les fichiers
+  // de catalogues, transactions et autres (e.g. grosfichiers)
+  // Retourne un rapport avec les erreurs
+  prerarerStagingRestauration(routingKey, message, opts) {
+    return new Promise( async (resolve, reject) => {
+      console.debug("Preparer staging restauration");
+      console.debug(message);
+
+      try {
+        const rapportRestauration = await preparerStagingRestauration(message);
+
+        // Transmettre reponse
+        // await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveMensuelleInfo');
+
+      } catch (err) {
+        console.error("Erreur preparation staging restauration");
+        console.error(err);
+      }
+
       resolve();
     });
 
@@ -346,6 +378,30 @@ async function genererBackupMensuel(journal) {
   }
 
   return resultatTar;
+
+}
+
+async function preparerStagingRestauration(commande) {
+
+  // Premiere partie : creer hard-links pour archives existantes sous staging/
+  await traitementFichier.creerHardLinksBackupStaging();
+
+  // Creer hard links pour backup/horaire sous staging/horaire
+
+  // Creer hard links quotidiens sous staging/quotidien
+
+  // Creer hard links mensuels sous staging/mensuels
+
+  // Creer hard links annuels sous staging/annuels
+
+  // Deuxieme partie : extraire tous les fichiers d'archives vers staging/horaire
+  // Verifie les SHA des archives pour chaque archive a partir des catalogues
+
+  // Extraire archives annuelles sous staging/mensuels
+
+  // Extraire archives mensuelles sous staging/quotidiens
+
+  // Extraire archives quotidiennes sous staging/horaire
 
 }
 
