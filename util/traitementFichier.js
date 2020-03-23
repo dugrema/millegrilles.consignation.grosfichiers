@@ -4,6 +4,7 @@ const path = require('path');
 const uuidv1 = require('uuid/v1');
 const crypto = require('crypto');
 const lzma = require('lzma-native');
+const { spawn } = require('child_process');
 
 const {uuidToDate} = require('./UUIDUtils');
 const rabbitMQ = require('./rabbitMQ');
@@ -24,7 +25,9 @@ class PathConsignation {
     this.consignationPathSeeding = path.join(this.consignationPath, '/torrents/seeding');
     this.consignationPathManagedTorrents = path.join(this.consignationPath, '/torrents/torrentfiles');
     this.consignationPathBackup = path.join(this.consignationPath, '/backup');
+    this.consignationPathBackupHoraire = path.join(this.consignationPathBackup, '/horaire');
     this.consignationPathBackupArchives = path.join(this.consignationPathBackup, '/archives');
+    this.consignationPathBackupStaging = path.join(this.consignationPathBackup, '/staging');
   }
 
   // Retourne le path du fichier
@@ -552,6 +555,29 @@ class UtilitaireFichiers {
     if(resultat.err) {
       throw resultat.err;
     }
+  }
+
+  async supprimerRepertoiresVides(repertoireBase) {
+    // find horaire/* -type d -empty
+
+    const masqueRecherche = path.join(repertoireBase, '*');
+
+    const commandeBackup = spawn('/bin/sh', ['-c', `find ${masqueRecherche} -type d -empty -delete`]);
+    commandeBackup.stderr.on('data', data=>{
+      console.error(`Erreur nettoyage repertoires : ${data}`);
+    })
+
+    const resultatNettoyage = await new Promise(async (resolve, reject) => {
+      commandeBackup.on('close', async code =>{
+        if(code != 0) {
+          return reject(code);
+        }
+        return resolve();
+      })
+    })
+    .catch(err=>{
+      return({err});
+    });
   }
 
 }

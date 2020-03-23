@@ -60,6 +60,7 @@ class GestionnaireMessagesBackup {
 
         // Effacer les fichiers transferes dans l'archive quotidienne
         await utilitaireFichiers.supprimerFichiers(fichiersInclure, pathRepertoireBackup);
+        await utilitaireFichiers.supprimerRepertoiresVides(pathConsignation.consignationPathBackupHoraire);
 
       } catch (err) {
         console.error("Erreur creation backup quotidien");
@@ -98,7 +99,6 @@ class GestionnaireMessagesBackup {
         await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveMensuelleInfo');
 
         // console.debug("Info archive mensuelle transmise, nettoyage des fichiers locaux");
-
         await utilitaireFichiers.supprimerFichiers(fichiersInclure, pathConsignation.consignationPathBackupArchives);
 
       } catch (err) {
