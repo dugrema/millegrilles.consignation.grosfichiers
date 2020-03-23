@@ -44,6 +44,9 @@ class GestionnaireMessagesBackup {
 
       try {
         const informationArchive = await genererBackupQuotidien(message.catalogue);
+        const { fichiersInclure, pathRepertoireBackup } = informationArchive;
+        delete informationArchive.fichiersInclure; // Pas necessaire pour la transaction
+        delete informationArchive.pathRepertoireBackup; // Pas necessaire pour la transaction
 
         // Finaliser le backup en retransmettant le journal comme transaction
         // de backup quotidien
@@ -54,6 +57,9 @@ class GestionnaireMessagesBackup {
         // console.debug(informationArchive);
 
         await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveQuotidienneInfo');
+
+        // Effacer les fichiers transferes dans l'archive quotidienne
+        await utilitaireFichiers.supprimerFichiers(fichiersInclure, pathRepertoireBackup);
 
       } catch (err) {
         console.error("Erreur creation backup quotidien");
@@ -93,7 +99,7 @@ class GestionnaireMessagesBackup {
 
         // console.debug("Info archive mensuelle transmise, nettoyage des fichiers locaux");
 
-        await traitementFichier.supprimerFichiers(fichiersInclure, pathConsignation.consignationPathBackupArchives);
+        await utilitaireFichiers.supprimerFichiers(fichiersInclure, pathConsignation.consignationPathBackupArchives);
 
       } catch (err) {
         console.error("Erreur creation backup mensuel");
@@ -136,17 +142,74 @@ async function genererBackupQuotidien(journal) {
   var nomArchive = nomJournal.replace('_catalogue', '').replace('.json', '.tar');
   const pathArchiveQuotidienne = path.join(pathArchive, `${nomArchive}`)
 
-  // Faire liste des fichiers a inclure.
-  var fichiersInclure = `${nomJournal} */catalogues/${domaine}*.json.xz */transactions/${domaine}*.json.xz`
+  // Faire liste des fichiers de catalogue et transactions a inclure.
+  var fichiersInclure = [nomJournal];
 
+  for(let heureStr in journal.fichiers_horaire) {
+    let infoFichier = journal.fichiers_horaire[heureStr];
+    if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
+
+    let fichierCatalogue = path.join(heureStr, 'catalogues', infoFichier.catalogue_nomfichier);
+    let fichierTransactions = path.join(heureStr, 'transactions', infoFichier.transactions_nomfichier);
+
+    // Verifier SHA512
+    const sha512Catalogue = await utilitaireFichiers.calculerSHAFichier(path.join(pathRepertoireBackup, fichierCatalogue));
+    if(sha512Catalogue != infoFichier.catalogue_sha512) {
+      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA512`;
+    }
+
+    const sha512Transactions = await utilitaireFichiers.calculerSHAFichier(path.join(pathRepertoireBackup, fichierTransactions));
+    if(sha512Transactions != infoFichier.transactions_sha512) {
+      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA512`;
+    }
+
+    fichiersInclure.push(fichierCatalogue);
+    fichiersInclure.push(fichierTransactions);
+  }
+
+  // Faire liste des grosfichiers au besoin
   if(journal.fuuid_grosfichiers) {
     // Aussi inclure le repertoire des grosfichiers
-    fichiersInclure = `${fichiersInclure} */grosfichiers/*`
+    // fichiersInclureStr = `${fichiersInclureStr} */grosfichiers/*`
+
+    for(let fuuid in journal.fuuid_grosfichiers) {
+      let infoFichier = journal.fuuid_grosfichiers[fuuid];
+      let heureStr = infoFichier.heure;
+      if(heureStr.length == 1) heureStr = '0' + heureStr;
+
+      let extension = infoFichier.extension;
+      if(infoFichier.securite == '3.protege' || infoFichier.securite == '4.secure') {
+        extension = 'mgs1';
+      }
+      let nomFichier = path.join(heureStr, 'grosfichiers', `${fuuid}.${extension}`);
+
+      // Verifier le SHA si disponible
+      if(infoFichier.sha256) {
+        const sha256Calcule = await utilitaireFichiers.calculerSHAFichier(
+          path.join(pathRepertoireBackup, nomFichier), {fonctionHash: 'sha256'});
+
+        if(sha256Calcule != infoFichier.sha256) {
+          throw `Erreur SHA256 sur fichier : ${nomFichier}`
+        }
+      } else if(infoFichier.sha512) {
+        const sha512Calcule = await utilitaireFichiers.calculerSHAFichier(
+          path.join(pathRepertoireBackup, nomFichier));
+
+        if(sha512Calcule != infoFichier.sha512) {
+          throw `Erreur SHA512 sur fichier : ${nomFichier}`;
+        }
+      }
+
+      fichiersInclure.push(nomFichier);
+    }
   }
+
+  var fichiersInclureStr = fichiersInclure.join(' ');
+
 
   // console.debug(`Fichiers inclure : ${fichiersInclure}`);
 
-  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathRepertoireBackup}; tar -jcf ${pathArchiveQuotidienne} ${fichiersInclure}`]);
+  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathRepertoireBackup}; tar -jcf ${pathArchiveQuotidienne} ${fichiersInclureStr}`]);
   commandeBackup.stderr.on('data', data=>{
     console.error(`tar backup quotidien: ${data}`);
   })
@@ -160,20 +223,18 @@ async function genererBackupQuotidien(journal) {
       // Calculer le SHA512 du fichier d'archive
       const sha512Archive = await utilitaireFichiers.calculerSHAFichier(pathArchiveQuotidienne);
 
-      // Supprimer repertoire horaire
-      fs.rmdir(pathRepertoireBackup, { recursive: true }, err=>{
-        if(err) return reject(err);
+      const informationArchive = {
+        archive_sha512: sha512Archive,
+        archive_nomfichier: nomArchive,
+        jour: journal.jour,
+        domaine: journal.domaine,
+        securite: journal.securite,
 
-        const informationArchive = {
-          archive_sha512: sha512Archive,
-          archive_nomfichier: nomArchive,
-          jour: journal.jour,
-          domaine: journal.domaine,
-          securite: journal.securite,
-        }
+        fichiersInclure,
+        pathRepertoireBackup,
+      }
 
-        return resolve(informationArchive);
-      });
+      return resolve(informationArchive);
 
     })
   })
