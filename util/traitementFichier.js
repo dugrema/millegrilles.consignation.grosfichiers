@@ -558,8 +558,6 @@ class UtilitaireFichiers {
   }
 
   async supprimerRepertoiresVides(repertoireBase) {
-    // find horaire/* -type d -empty
-
     const masqueRecherche = path.join(repertoireBase, '*');
 
     const commandeBackup = spawn('/bin/sh', ['-c', `find ${masqueRecherche} -type d -empty -delete`]);
