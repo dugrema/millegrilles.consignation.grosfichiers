@@ -125,8 +125,8 @@ class GestionnaireMessagesBackup {
   // Retourne un rapport avec les erreurs
   prerarerStagingRestauration(routingKey, message, opts) {
     return new Promise( async (resolve, reject) => {
-      console.debug("Preparer staging restauration");
-      console.debug(message);
+      console.info("Preparer staging restauration");
+      // console.debug(message);
 
       try {
         const rapportRestauration = await preparerStagingRestauration(message);
@@ -139,6 +139,8 @@ class GestionnaireMessagesBackup {
         console.error(err);
       }
 
+
+      console.info("Staging restauration complete");
       resolve();
     });
 
@@ -238,10 +240,9 @@ async function genererBackupQuotidien(journal) {
 
   var fichiersInclureStr = fichiersInclure.join(' ');
 
+  console.debug(`Fichiers quotidien inclure : ${fichiersInclure}`);
 
-  // console.debug(`Fichiers inclure : ${fichiersInclure}`);
-
-  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathRepertoireBackup}; tar -jcf ${pathArchiveQuotidienne} ${fichiersInclureStr}`]);
+  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathRepertoireBackup}; tar -Jcf ${pathArchiveQuotidienne} ${fichiersInclureStr}`]);
   commandeBackup.stderr.on('data', data=>{
     console.error(`tar backup quotidien: ${data}`);
   })
@@ -330,9 +331,9 @@ async function genererBackupMensuel(journal) {
 
   let fichiersInclureStr = fichiersInclure.join(' ');
 
-  // console.debug(`Archive mensuelle inclure : ${fichiersInclure}`);
+  console.debug(`Archive mensuelle inclure : ${fichiersInclure}`);
 
-  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathArchives}; tar -jcf ${pathArchiveMensuelle} ${fichiersInclureStr}`]);
+  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathArchives}; tar -Jcf ${pathArchiveMensuelle} ${fichiersInclureStr}`]);
   commandeBackup.stderr.on('data', data=>{
     console.error(`tar backup mensuel: ${data}`);
   })
@@ -383,25 +384,13 @@ async function genererBackupMensuel(journal) {
 
 async function preparerStagingRestauration(commande) {
 
-  // Premiere partie : creer hard-links pour archives existantes sous staging/
+  // Creer hard-links pour archives existantes sous staging/
   await traitementFichier.creerHardLinksBackupStaging();
 
-  // Creer hard links pour backup/horaire sous staging/horaire
+  // Extraire tous les fichiers d'archives vers staging/horaire
+  await traitementFichier.extraireTarStaging();
 
-  // Creer hard links quotidiens sous staging/quotidien
-
-  // Creer hard links mensuels sous staging/mensuels
-
-  // Creer hard links annuels sous staging/annuels
-
-  // Deuxieme partie : extraire tous les fichiers d'archives vers staging/horaire
   // Verifie les SHA des archives pour chaque archive a partir des catalogues
-
-  // Extraire archives annuelles sous staging/mensuels
-
-  // Extraire archives mensuelles sous staging/quotidiens
-
-  // Extraire archives quotidiennes sous staging/horaire
 
 }
 

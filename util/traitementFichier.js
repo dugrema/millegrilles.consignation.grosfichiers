@@ -527,11 +527,11 @@ class TraitementFichier {
         if(err) return reject(err);
 
         function createHardLink(idx) {
-          if(idx == files.length) return resolve();
+          if(idx === files.length) return resolve();
 
           const nomFichier = files[idx];
           const fichier = path.join(pathBackupArchives, nomFichier);
-          console.debug(`Fichier archive, creer hard link : ${fichier}`);
+          // console.debug(`Fichier archive, creer hard link : ${fichier}`);
 
           // Verifier si c'est une archive annuelle, mensuelle ou quotidienne
           const dateFichier = nomFichier.split('_')[1];
@@ -552,8 +552,14 @@ class TraitementFichier {
 
           if(pathStagingFichier) {
             fs.link(fichier, pathStagingFichier, err=>{
-              if(err) return reject(err);
-              else createHardLink(idx+1);
+              if(err) {
+                // Erreur existe deja est OK
+                if(err.code !== 'EEXIST') {
+                  return reject(err);
+                }
+              }
+
+              createHardLink(idx+1);
             });
           } else {
             createHardLink(idx+1);
@@ -565,6 +571,68 @@ class TraitementFichier {
       });
     });
 
+  }
+
+  async extraireTarStaging() {
+
+    const pathStaging = pathConsignation.consignationPathBackupStaging;
+    const listeRepertoires = [
+      path.join(pathStaging, 'annuel'),
+      path.join(pathStaging, 'mensuel'),
+      path.join(pathStaging, 'quotidien'),
+      path.join(pathStaging, 'horaire'),
+    ]
+
+    // console.debug(`Path staging ${pathStaging}`);
+
+    for(let idxRep in listeRepertoires) {
+      if(idxRep == 3) continue;
+
+      const repertoire = listeRepertoires[idxRep];
+      // console.debug(`Extraire archives tar.xz sous ${repertoire}`)
+      var errArchives = await new Promise((resolve, reject)=>{
+        fs.readdir(repertoire, (err, files)=>{
+          if(err) return reject(err);
+
+          async function extraireTar(idx) {
+            if(idx >= files.length-1) return resolve();
+
+            const fichier = path.join(repertoire, files[idx]);
+
+            if(fichier.endsWith('.tar.xz')) {
+              // console.debug("Nom Fichier : " + fichier);
+              var pathDestination = listeRepertoires[1+parseInt(idxRep)]; // Extraction granularite plus fine
+              if(idxRep < 2) {
+                // console.debug("File actuelle : " + files[idx]);
+              } else {
+                // Path horaire, il faut ajouter AAAA/MM/JJ au path
+
+                var dateFichier = fichier.split('_')[1];
+                var annee = dateFichier.slice(0, 4);
+                var mois = dateFichier.slice(4, 6);
+                var jour = dateFichier.slice(6, 8);
+                pathDestination = path.join(pathDestination, annee, mois, jour);
+                await new Promise((resolve, reject)=>{
+                  fs.mkdir(pathDestination, {recursive: true, mode: 0o770}, err=>{
+                    if(err) reject(err);
+                    else resolve();
+                  })
+                })
+              }
+
+              // console.debug(`Extraire fichier ${fichier} vers ${pathDestination}`)
+              await utilitaireFichiers.extraireTarFile(fichier, pathDestination);
+            }
+            extraireTar(idx+1);
+          }
+          extraireTar(0);
+        });
+      });
+
+      if(errArchives) {
+        throw errArchives;
+      }
+    }
   }
 
 }
@@ -662,6 +730,27 @@ class UtilitaireFichiers {
     .catch(err=>{
       return({err});
     });
+  }
+
+  async extraireTarFile(fichierTar, destination, opts) {
+    const commandeBackup = spawn('/bin/sh', ['-c', `cd ${destination}; tar -x --skip-old-files -Jf ${fichierTar}`]);
+    commandeBackup.stderr.on('data', data=>{
+      console.error(`Ouverture fichier tar : ${data}`);
+    })
+
+    const errResultatNettoyage = await new Promise(async (resolve, reject) => {
+      commandeBackup.on('close', async code =>{
+        if(code != 0) {
+          return reject(new Error(`Erreur backup code ${code}`));
+        }
+        return resolve();
+      })
+    })
+    .catch(err=>{
+      return(err);
+    });
+
+    if(errResultatNettoyage) throw errResultatNettoyage;
   }
 
 }
