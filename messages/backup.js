@@ -195,12 +195,12 @@ async function genererBackupQuotidien(journal) {
     // Verifier SHA512
     const sha512Catalogue = await utilitaireFichiers.calculerSHAFichier(path.join(pathRepertoireBackup, fichierCatalogue));
     if(sha512Catalogue != infoFichier.catalogue_sha512) {
-      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA512`;
+      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA3-512`;
     }
 
     const sha512Transactions = await utilitaireFichiers.calculerSHAFichier(path.join(pathRepertoireBackup, fichierTransactions));
     if(sha512Transactions != infoFichier.transactions_sha512) {
-      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA512`;
+      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA3-512`;
     }
 
     fichiersInclure.push(fichierCatalogue);
@@ -236,7 +236,7 @@ async function genererBackupQuotidien(journal) {
           path.join(pathRepertoireBackup, nomFichier));
 
         if(sha512Calcule != infoFichier.sha512) {
-          throw `Erreur SHA512 sur fichier : ${nomFichier}`;
+          throw `Erreur SHA3-512 sur fichier : ${nomFichier}`;
         }
       }
 
@@ -325,7 +325,7 @@ async function genererBackupMensuel(journal) {
     let pathFichierArchive = path.join(pathArchives, nomFichier);
     const sha512Archive = await utilitaireFichiers.calculerSHAFichier(pathFichierArchive);
     if(sha512Archive != sha512_archive) {
-      throw `SHA512 archive ${nomFichier} est incorrect, backup annule`;
+      throw `SHA3-512 archive ${nomFichier} est incorrect, backup annule`;
     }
     // console.debug(`Reducing fichier ${nomFichier}, SHA512: ${sha512Archive}`);
     // console.debug(fichiersInclure);

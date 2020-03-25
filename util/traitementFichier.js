@@ -688,7 +688,7 @@ class UtilitaireFichiers {
   async calculerSHAFichier(pathFichier, opts) {
     if(!opts) opts = {};
 
-    let fonctionHash = opts.fonctionHash || 'sha512';
+    let fonctionHash = opts.fonctionHash || 'sha3-512';
 
     // Calculer SHA512 sur fichier de backup
     const sha = crypto.createHash(fonctionHash);
@@ -848,7 +848,7 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
       const nouveauPath = path.join(pathTransactions, nomFichier);
 
       // Calculer SHA512 sur fichier de backup
-      const sha512 = crypto.createHash('sha512');
+      const sha512 = crypto.createHash('sha3-512');
       const readStream = fs.createReadStream(fichierDict.path);
 
       const resultatSha512 = await new Promise(async (resolve, reject)=>{
