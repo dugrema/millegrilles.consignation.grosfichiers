@@ -194,12 +194,12 @@ async function genererBackupQuotidien(journal) {
 
     // Verifier SHA512
     const sha512Catalogue = await utilitaireFichiers.calculerSHAFichier(path.join(pathRepertoireBackup, fichierCatalogue));
-    if(sha512Catalogue != infoFichier.catalogue_sha512) {
+    if(sha512Catalogue != infoFichier.catalogue_sha3_512) {
       throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA3-512`;
     }
 
     const sha512Transactions = await utilitaireFichiers.calculerSHAFichier(path.join(pathRepertoireBackup, fichierTransactions));
-    if(sha512Transactions != infoFichier.transactions_sha512) {
+    if(sha512Transactions != infoFichier.transactions_sha3_512) {
       throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA3-512`;
     }
 
@@ -263,7 +263,7 @@ async function genererBackupQuotidien(journal) {
       const sha512Archive = await utilitaireFichiers.calculerSHAFichier(pathArchiveQuotidienne);
 
       const informationArchive = {
-        archive_sha512: sha512Archive,
+        archive_sha3_512: sha512Archive,
         archive_nomfichier: nomArchive,
         jour: journal.jour,
         domaine: journal.domaine,
