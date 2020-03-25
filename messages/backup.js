@@ -319,7 +319,7 @@ async function genererBackupMensuel(journal) {
   var fichiersInclure = [nomJournal];
   for(let jour in journal.fichiers_quotidien) {
     let infoArchive = journal.fichiers_quotidien[jour];
-    let sha512_archive = infoArchive.archive_sha512;
+    let sha512_archive = infoArchive.archive_sha3_512;
     let nomFichier = infoArchive.archive_nomfichier;
 
     let pathFichierArchive = path.join(pathArchives, nomFichier);
@@ -354,9 +354,9 @@ async function genererBackupMensuel(journal) {
       try {
         const sha512Archive = await utilitaireFichiers.calculerSHAFichier(pathArchiveMensuelle);
         const informationArchive = {
-          archive_sha512: sha512Archive,
+          archive_sha3_512: sha512Archive,
           archive_nomfichier: nomArchive,
-          catalogue_sha512: resultat.sha512,
+          catalogue_sha3_512: resultat.sha512,
           mois: journal.mois,
           domaine: journal.domaine,
           securite: journal.securite,
