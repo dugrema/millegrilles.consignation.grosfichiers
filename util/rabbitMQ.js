@@ -214,9 +214,9 @@ class RabbitMQWrapper {
       try {
         // Traiter tous les messages dans la Q, un a la fois
         // Ne pas utiliser le consumer, il ne permet pas le controle fin.
+        await this.channel.cancel(consumerTag);
         while(msg) {
           try {
-            await this.channel.cancel(consumerTag);
             // console.debug("Debut traiter message operation longue");
             await this._traiterMessage(msg);
             // console.debug("Fin traitement message operation longue")

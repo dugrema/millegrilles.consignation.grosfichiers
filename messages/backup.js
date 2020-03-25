@@ -127,16 +127,20 @@ class GestionnaireMessagesBackup {
     return new Promise( async (resolve, reject) => {
       console.info("Preparer staging restauration");
       // console.debug(message);
+      // console.debug(opts);
+
+      const {correlationId, replyTo} = opts.properties;
 
       try {
         const rapportRestauration = await preparerStagingRestauration(message);
 
         // Transmettre reponse
-        // await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveMensuelleInfo');
+        this.mq.transmettreReponse(rapportRestauration, replyTo, correlationId);
 
       } catch (err) {
         console.error("Erreur preparation staging restauration");
         console.error(err);
+        reject(err);
       }
 
 
@@ -385,12 +389,13 @@ async function genererBackupMensuel(journal) {
 async function preparerStagingRestauration(commande) {
 
   // Creer hard-links pour archives existantes sous staging/
-  await traitementFichier.creerHardLinksBackupStaging();
+  const rapportHardLinks = await traitementFichier.creerHardLinksBackupStaging();
 
   // Extraire tous les fichiers d'archives vers staging/horaire
-  await traitementFichier.extraireTarStaging();
+  const rapportTarExtraction = await traitementFichier.extraireTarStaging();
 
   // Verifie les SHA des archives pour chaque archive a partir des catalogues
+  return {};
 
 }
 
