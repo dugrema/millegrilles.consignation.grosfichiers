@@ -487,15 +487,23 @@ class TraitementFichier {
     const pathStaging = pathConsignation.consignationPathBackupStaging;
     let listeSousRepertoires = ['horaire', 'quotidien', 'mensuel', 'annuel'];
     var errMkdir = await new Promise((resolve, reject)=>{
-      function creerRepertoires(idx) {
-        if(idx === listeSousRepertoires.length) return resolve();
-        let sousRepertoire = path.join(pathStaging, listeSousRepertoires[idx]);
-        fs.mkdir(sousRepertoire, {recursive: true, mode: 0o770}, err=>{
-          if(err) reject(err);
-          else creerRepertoires(idx+1);
-        })
-      };
-      creerRepertoires(0);
+
+      // Nettoyer (supprimer) repertoire staging/
+      fs.rmdir(pathStaging, { recursive: true }, err=>{
+        if(err) return reject(err);
+
+        function creerRepertoires(idx) {
+          if(idx === listeSousRepertoires.length) return resolve();
+          let sousRepertoire = path.join(pathStaging, listeSousRepertoires[idx]);
+          fs.mkdir(sousRepertoire, {recursive: true, mode: 0o770}, err=>{
+            if(err) reject(err);
+            else creerRepertoires(idx+1);
+          })
+        };
+        creerRepertoires(0);
+
+      });
+
     });
     if(errMkdir) throw errMkdir;
 
@@ -522,47 +530,66 @@ class TraitementFichier {
     // Faire liste des archives et creer hard links sous staging/ approprie.
     const pathBackupArchives = pathConsignation.consignationPathBackupArchives;
 
-    var errArchives = await new Promise((resolve, reject)=>{
+    const resultatHardLinksArchives = await new Promise((resolve, reject)=>{
       fs.readdir(pathBackupArchives, (err, files)=>{
         if(err) return reject(err);
 
-        function createHardLink(idx) {
-          if(idx === files.length) return resolve();
+        async function createHardLink(idx) {
+          if(idx === files.length) {
+            // Creation hard links terminee
+            const pathStagingHoraire = path.join(pathStaging, 'horaire');
+            // console.debug(`Creation hard links terminee, lectures archives sous ${pathStagingHoraire}`);
 
-          const nomFichier = files[idx];
-          const fichier = path.join(pathBackupArchives, nomFichier);
-          // console.debug(`Fichier archive, creer hard link : ${fichier}`);
+            // Faire la liste des fichiers extraits - sera utilisee pour creer
+            // l'ordre de traitement des fichiers pour importer les transactions
+            try {
+              const listeCatalogues = await genererListeCatalogues(pathStagingHoraire);
+              console.debug("Liste catalogues horaire");
+              console.debug(listeCatalogues);
 
-          // Verifier si c'est une archive annuelle, mensuelle ou quotidienne
-          const dateFichier = nomFichier.split('_')[1];
+              return resolve({listeCatalogues});
+            } catch (err) {
+              return reject({err});
+            }
 
-          var pathStagingFichier = null;
-          if(dateFichier.length == 8) {
-            // Fichier quotidien
-            pathStagingFichier = path.join(pathStaging, 'quotidien', nomFichier);
-          } else if(dateFichier.length == 6) {
-            // Fichier mensuel
-            pathStagingFichier = path.join(pathStaging, 'mensuel', nomFichier);
-          } else if(dateFichier.length == 4) {
-            // Fichier annuel
-            pathStagingFichier = path.join(pathStaging, 'annuel', nomFichier);
           } else {
-            console.warning(`Fichier non reconnu: ${fichier}`)
-          }
 
-          if(pathStagingFichier) {
-            fs.link(fichier, pathStagingFichier, err=>{
-              if(err) {
-                // Erreur existe deja est OK
-                if(err.code !== 'EEXIST') {
-                  return reject(err);
+            const nomFichier = files[idx];
+            const fichier = path.join(pathBackupArchives, nomFichier);
+            // console.debug(`Fichier archive, creer hard link : ${fichier}`);
+
+            // Verifier si c'est une archive annuelle, mensuelle ou quotidienne
+            const dateFichier = nomFichier.split('_')[1];
+
+            var pathStagingFichier = null;
+            if(dateFichier.length == 8) {
+              // Fichier quotidien
+              pathStagingFichier = path.join(pathStaging, 'quotidien', nomFichier);
+            } else if(dateFichier.length == 6) {
+              // Fichier mensuel
+              pathStagingFichier = path.join(pathStaging, 'mensuel', nomFichier);
+            } else if(dateFichier.length == 4) {
+              // Fichier annuel
+              pathStagingFichier = path.join(pathStaging, 'annuel', nomFichier);
+            } else {
+              console.warning(`Fichier non reconnu: ${fichier}`)
+            }
+
+            if(pathStagingFichier) {
+              // console.debug(`Creer link ${pathStagingFichier}`);
+              fs.link(fichier, pathStagingFichier, err=>{
+                if(err) {
+                  // Erreur existe deja est OK
+                  if(err.code !== 'EEXIST') {
+                    return reject({err});
+                  }
                 }
-              }
 
+                createHardLink(idx+1);
+              });
+            } else {
               createHardLink(idx+1);
-            });
-          } else {
-            createHardLink(idx+1);
+            }
           }
 
         };
@@ -570,6 +597,11 @@ class TraitementFichier {
 
       });
     });
+
+    const {err} = resultatHardLinksArchives;
+    if(err) throw err;
+
+    return {horaire: resultatHardLinksArchives.listeCatalogues};
 
   }
 
@@ -584,18 +616,28 @@ class TraitementFichier {
     ]
 
     // console.debug(`Path staging ${pathStaging}`);
+    const catalogues = {};
 
     for(let idxRep in listeRepertoires) {
       if(idxRep == 3) continue;
 
       const repertoire = listeRepertoires[idxRep];
       // console.debug(`Extraire archives tar.xz sous ${repertoire}`)
-      var errArchives = await new Promise((resolve, reject)=>{
+      var resultatArchives = await new Promise((resolve, reject)=>{
         fs.readdir(repertoire, (err, files)=>{
-          if(err) return reject(err);
+          if(err) return reject({err});
 
           async function extraireTar(idx) {
-            if(idx >= files.length-1) return resolve();
+            if(idx >= files.length-1) {
+
+              var pathDestination = listeRepertoires[1+parseInt(idxRep)]; // Extraction granularite plus fine
+
+              // Generer rapport de catalogues
+              const cataloguesNiveau = await genererListeCatalogues(pathDestination);
+              const niveau = path.basename(pathDestination);
+
+              return resolve({niveau, catalogues: cataloguesNiveau});
+            }
 
             const fichier = path.join(repertoire, files[idx]);
 
@@ -629,10 +671,14 @@ class TraitementFichier {
         });
       });
 
-      if(errArchives) {
-        throw errArchives;
+      if(resultatArchives.err) {
+        throw resultatArchives.err;
       }
+
+      catalogues[resultatArchives.niveau] = resultatArchives.catalogues;
     }
+
+    return catalogues;
   }
 
 }
@@ -910,6 +956,47 @@ async function traiterVideo(pathVideo, sansTranscodage) {
       resolve({thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'});
     })
   })
+
+}
+
+async function genererListeCatalogues(repertoire) {
+  // Faire la liste des fichiers extraits - sera utilisee pour creer
+  // l'ordre de traitement des fichiers pour importer les transactions
+  const settingsReaddirp = {
+    type: 'files',
+    fileFilter: [
+       '*_catalogue_*.json.xz',
+    ],
+  }
+
+  const {err, listeCatalogues} = await new Promise((resolve, reject)=>{
+    const listeCatalogues = [];
+    // console.debug("Lister catalogues sous " + repertoire);
+
+    readdirp(
+      repertoire,
+      settingsReaddirp,
+    )
+    .on('data', entry=>{
+      // console.debug('Catalogue trouve');
+      // console.debug(entry);
+      listeCatalogues.push(entry.path)
+    })
+    .on('error', err=>{
+      reject({err});
+    })
+    .on('end', ()=>{
+      // console.debug("Fini");
+      // console.debug(listeCatalogues);
+      resolve({listeCatalogues});
+    });
+  });
+
+  if(err) throw err;
+
+  // console.debug("Resultat catalogues");
+  // console.debug(listeCatalogues);
+  return listeCatalogues;
 
 }
 

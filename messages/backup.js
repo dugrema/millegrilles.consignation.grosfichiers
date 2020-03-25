@@ -132,10 +132,12 @@ class GestionnaireMessagesBackup {
       const {correlationId, replyTo} = opts.properties;
 
       try {
-        const rapportRestauration = await preparerStagingRestauration(message);
+        const {listeCatalogues} = await preparerStagingRestauration(message);
+        console.debug("Rapport restauration");
+        console.debug(listeCatalogues);
 
         // Transmettre reponse
-        this.mq.transmettreReponse(rapportRestauration, replyTo, correlationId);
+        this.mq.transmettreReponse(listeCatalogues, replyTo, correlationId);
 
       } catch (err) {
         console.error("Erreur preparation staging restauration");
@@ -389,13 +391,17 @@ async function genererBackupMensuel(journal) {
 async function preparerStagingRestauration(commande) {
 
   // Creer hard-links pour archives existantes sous staging/
-  const rapportHardLinks = await traitementFichier.creerHardLinksBackupStaging();
+  const {horaire} = await traitementFichier.creerHardLinksBackupStaging();
 
   // Extraire tous les fichiers d'archives vers staging/horaire
   const rapportTarExtraction = await traitementFichier.extraireTarStaging();
 
+  const listeCatalogues = {
+    horaire, ...rapportTarExtraction
+  }
+
   // Verifie les SHA des archives pour chaque archive a partir des catalogues
-  return {};
+  return {listeCatalogues};
 
 }
 
