@@ -522,10 +522,11 @@ class RestaurateurBackup {
     // Creer hard-links pour archives existantes sous staging/
     const {horaire} = await this.creerHardLinksBackupStaging();
 
-    // Extraire tous les fichiers d'archives vers staging/horaire
+    // Extraire et verifier tous les fichiers d'archives vers staging/horaire
     const rapportTarExtraction = await this.extraireTarParNiveaux();
 
-    // // Verifier tous les catalogues, transactions et fichiers extraits
+    // Verifier le contenu horaire
+    const rapportVerificationHoraire = await this.verifierCataloguesHoraire();
     // const rapportVerificationCatalogues = await traitementFichier.verifierCataloguesStaging();
 
     const listeCatalogues = {
@@ -707,25 +708,20 @@ class RestaurateurBackup {
   async extraireTarRepertoire(repertoireSource, repertoireDestination, niveauDestination) {
 
     // Extraire variables du scope _this_ pour fonctions async
-    const {extraireCtalogueStaging, verifierContenuCatalogueStaging, verifierContenuCatalogueHoraireStaging} = this;
+    const {extraireCatalogueStaging, verifierContenuCatalogueStaging, verifierContenuCatalogueQuotidienStaging} = this;
 
     const validateurSignature = new ValidateurSignature();
 
     return new Promise((resolve, reject)=>{
 
       const erreursTraitement = [];
+      const cataloguesHorairesParJour = {}; // Conserve les catalogues horaires rencontres
 
       fs.readdir(repertoireSource, (err, files)=>{
         if(err) return reject({err});
 
         async function __extraireTar(idx) {
           if(idx === files.length) {
-
-            // var pathDestination = listeRepertoires[1+parseInt(idxRep)]; // Extraction granularite plus fine
-
-            // Generer rapport de catalogues
-            // const cataloguesNiveau = await genererListeCatalogues(pathDestination);
-
             // return resolve({niveau});
             console.debug("Extraction TAR terminee, erreurs:");
             console.debug(erreursTraitement);
@@ -760,7 +756,7 @@ class RestaurateurBackup {
             await utilitaireFichiers.extraireTarFile(fichierArchiveSource, pathDestination);
 
             // Verifier le catalogue de l'archive et nettoyer
-            const catalogue = await extraireCtalogueStaging(fichierArchiveSource, pathDestination);
+            const catalogue = await extraireCatalogueStaging(fichierArchiveSource, pathDestination);
 
             // Verifier la signature du catalogue
             const fingerprintFeuille = catalogue['en-tete'].certificat;
@@ -792,7 +788,7 @@ class RestaurateurBackup {
                     message: "Signature du catalogue invalide"
                   })
                 }
-                // console.debug(`Catalogue valide : (valide=${certValide})`);
+                // console.debug(`Catalogue valide (valide=${certValide}) : ${fichierArchiveSource}`);
               } catch (err) {
                 console.error(`Cataloge archive invalide : ${fichierArchiveSource}`);
                 console.error(err);
@@ -811,7 +807,9 @@ class RestaurateurBackup {
 
             let erreurs;
             if(niveauDestination === 'horaire') {
-              erreurs = await verifierContenuCatalogueHoraireStaging(catalogue, pathDestination);
+              // Catalogue quotidien, la destination est horaire et utilise un
+              // format de repertoire different (avec la date)
+              erreurs = await verifierContenuCatalogueQuotidienStaging(catalogue, pathDestination);
             } else {
               erreurs = await verifierContenuCatalogueStaging(catalogue, pathDestination);
             }
@@ -830,7 +828,7 @@ class RestaurateurBackup {
   }
 
   // Verifie la signature d'un catalogue est le hachage des fichiers
-  async extraireCtalogueStaging(nomArchive, pathDestination) {
+  async extraireCatalogueStaging(nomArchive, pathDestination) {
     // const pathStaging = this.pathStaging;
     var nomCatalogue = path.basename(nomArchive);
     nomCatalogue = nomCatalogue.replace('.tar.xz', '.json.xz').split('_');
@@ -897,7 +895,7 @@ class RestaurateurBackup {
     return dictErreurs;
   }
 
-  async verifierContenuCatalogueHoraireStaging(catalogue, pathFichiersStaging) {
+  async verifierContenuCatalogueQuotidienStaging(catalogue, pathFichiersStaging) {
     const dictFichiers = catalogue.fichiers_horaire;
 
     const erreursArchives = [];
@@ -972,6 +970,40 @@ class RestaurateurBackup {
     }
 
     return dictErreurs;
+  }
+
+  async verifierCataloguesHoraire() {
+    const pathStagingHoraire = this.pathAggregationStaging.horaire;
+
+    // Faire une fonction qui permet de parcourir les repertoires horaire
+    // et verifier les catalogues un a la fois.
+    async function parcourirRecursif(level, pathCourant) {
+
+      if(level === 4) { // 4 niveaux de sous-repertoires
+        console.debug(pathCourant);
+      } else {
+        // Parcourir prochain niveau de repertoire
+        await new Promise((resolve, reject)=>{
+          fs.readdir(pathCourant, async (err, valeurDateTriee)=>{
+            if(err) return reject(err);
+            valeurDateTriee.sort();
+
+            // Filtrer les repertoires/fichiers, on garde juste l'annee (level 0) et les mois, jours, heur (levels>0)
+            if(level === 0) valeurDateTriee = valeurDateTriee.filter(valeur=>valeur.length===4);
+            else valeurDateTriee = valeurDateTriee.filter(valeur=>valeur.length===2);
+
+            for(let valeurDateIdx in valeurDateTriee) {
+              const valeurDateStr = valeurDateTriee[valeurDateIdx];
+              await parcourirRecursif(level+1, path.join(pathCourant, valeurDateStr));
+            }
+            resolve();
+          })
+        });
+      }
+    };
+    await parcourirRecursif(0, pathStagingHoraire);
+
+
   }
 
 }
