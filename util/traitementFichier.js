@@ -495,6 +495,7 @@ class RestaurateurBackup {
     this.pathBackupArchives = opts.archives || pathConsignation.consignationPathBackupArchives;
     this.pathStaging = opts.staging || pathConsignation.consignationPathBackupStaging;
 
+    // Liste des niveaux d'aggregation en ordre annuel vers horaire
     this.listeAggregation = [
       'annuel',
       'mensuel',
@@ -520,15 +521,15 @@ class RestaurateurBackup {
     // Creer hard-links pour archives existantes sous staging/
     const {horaire} = await this.creerHardLinksBackupStaging();
 
-    // // Extraire tous les fichiers d'archives vers staging/horaire
-    // const rapportTarExtraction = await traitementFichier.extraireTarStaging();
-    //
+    // Extraire tous les fichiers d'archives vers staging/horaire
+    const rapportTarExtraction = await this.extraireTarParNiveaux();
+
     // // Verifier tous les catalogues, transactions et fichiers extraits
     // const rapportVerificationCatalogues = await traitementFichier.verifierCataloguesStaging();
 
     const listeCatalogues = {
       horaire,
-      // ...rapportTarExtraction,
+      ...rapportTarExtraction,
     }
 
     // Verifie les SHA des archives pour chaque archive a partir des catalogues
@@ -669,70 +670,28 @@ class RestaurateurBackup {
   }
 
   // Extrait tous les fichiers .tar.xz d'un repertoire vers la destination
-  async extraireTarRepertoire() {
+  // Ceci inclue les niveaux annuels, mensuels et quotidiens
+  async extraireTarParNiveaux() {
 
-    const listeRepertoires = [
-      path.join(this.pathStaging, 'annuel'),
-      path.join(this.pathStaging, 'mensuel'),
-      path.join(this.pathStaging, 'quotidien'),
-      path.join(this.pathStaging, 'horaire'),
-    ]
+    // Extraire variables du scope _this_ pour fonctions async
+    const {listeAggregation, pathAggregationStaging} = this;
 
     // console.debug(`Path staging ${this.pathStaging}`);
     const catalogues = {};
 
-    for(let idxRep in listeRepertoires) {
-      if(idxRep == 3) continue;
+    for(let idxRep in listeAggregation) {
+      const niveauSource = listeAggregation[idxRep];
+      const repertoireSource = pathAggregationStaging[niveauSource];
 
-      const repertoire = listeRepertoires[idxRep];
-      // console.debug(`Extraire archives tar.xz sous ${repertoire}`)
-      var resultatArchives = await new Promise((resolve, reject)=>{
-        fs.readdir(repertoire, (err, files)=>{
-          if(err) return reject({err});
+      if(niveauSource === 'horaire') break; // On ne fait pas le niveau horaire ici
 
-          async function extraireTar(idx) {
-            if(idx >= files.length-1) {
+      // Niveau et repertoire destination (prochain niveau d'aggregation)
+      const niveauDestination = listeAggregation[parseInt(idxRep) + 1];
+      const repertoireDestination = pathAggregationStaging[niveauDestination];
+      console.debug(`Niveau ${niveauSource} extrait vers ${niveauDestination}`);
+      console.debug(`Extraire et valider archives tar.xz sous ${repertoireSource} vers ${repertoireDestination}`)
 
-              var pathDestination = listeRepertoires[1+parseInt(idxRep)]; // Extraction granularite plus fine
-
-              // Generer rapport de catalogues
-              const cataloguesNiveau = await genererListeCatalogues(pathDestination);
-              const niveau = path.basename(pathDestination);
-
-              return resolve({niveau, catalogues: cataloguesNiveau});
-            }
-
-            const fichier = path.join(repertoire, files[idx]);
-
-            if(fichier.endsWith('.tar.xz')) {
-              // console.debug("Nom Fichier : " + fichier);
-              var pathDestination = listeRepertoires[1+parseInt(idxRep)]; // Extraction granularite plus fine
-              if(idxRep < 2) {
-                // console.debug("File actuelle : " + files[idx]);
-              } else {
-                // Path horaire, il faut ajouter AAAA/MM/JJ au path
-
-                var dateFichier = fichier.split('_')[1];
-                var annee = dateFichier.slice(0, 4);
-                var mois = dateFichier.slice(4, 6);
-                var jour = dateFichier.slice(6, 8);
-                pathDestination = path.join(pathDestination, annee, mois, jour);
-                await new Promise((resolve, reject)=>{
-                  fs.mkdir(pathDestination, {recursive: true, mode: 0o770}, err=>{
-                    if(err) reject(err);
-                    else resolve();
-                  })
-                })
-              }
-
-              // console.debug(`Extraire fichier ${fichier} vers ${pathDestination}`)
-              await utilitaireFichiers.extraireTarFile(fichier, pathDestination);
-            }
-            extraireTar(idx+1);
-          }
-          extraireTar(0);
-        });
-      });
+      var resultatArchives = await this.extraireTarRepertoire(repertoireSource, repertoireDestination, niveauDestination);
 
       if(resultatArchives.err) {
         throw resultatArchives.err;
@@ -744,9 +703,76 @@ class RestaurateurBackup {
     return catalogues;
   }
 
+  async extraireTarRepertoire(repertoireSource, repertoireDestination, niveauDestination) {
+
+    // Extraire variables du scope _this_ pour fonctions async
+    const {verifierCatalogueStaging} = this;
+
+    return new Promise((resolve, reject)=>{
+      fs.readdir(repertoireSource, (err, files)=>{
+        if(err) return reject({err});
+
+        async function __extraireTar(idx) {
+          if(idx >= files.length-1) {
+
+            // var pathDestination = listeRepertoires[1+parseInt(idxRep)]; // Extraction granularite plus fine
+
+            // Generer rapport de catalogues
+            // const cataloguesNiveau = await genererListeCatalogues(pathDestination);
+
+            // return resolve({niveau});
+            return resolve({});
+          }
+
+          const fichierArchiveSource = path.join(repertoireSource, files[idx]);
+          var pathDestination = repertoireDestination;
+
+          if(fichierArchiveSource.endsWith('.tar.xz')) {
+            console.debug("Nom Fichier : " + fichierArchiveSource);
+            if(niveauDestination === 'horaire') {
+              // Path horaire, il faut ajouter AAAA/MM/JJ au path
+
+              var dateFichier = fichierArchiveSource.split('_')[1];
+              var annee = dateFichier.slice(0, 4);
+              var mois = dateFichier.slice(4, 6);
+              var jour = dateFichier.slice(6, 8);
+
+              pathDestination = path.join(repertoireDestination, annee, mois, jour);
+
+              await new Promise((resolve, reject)=>{
+                fs.mkdir(pathDestination, {recursive: true, mode: 0o770}, err=>{
+                  if(err) reject(err);
+                  else resolve();
+                })
+              });
+
+            }
+
+            // console.debug(`Extraire fichier ${fichier} vers ${pathDestination}`)
+            await utilitaireFichiers.extraireTarFile(fichierArchiveSource, pathDestination);
+
+            // Verifier le catalogue de l'archive et nettoyer
+            await verifierCatalogueStaging(fichierArchiveSource, pathDestination);
+          }
+          __extraireTar(idx+1);
+        }
+        __extraireTar(0);
+      });
+    })
+  }
+
   // Verifie la signature d'un catalogue est le hachage des fichiers
-  async verifierCatalogueStaging(catalogue) {
-    const pathStaging = this.pathStaging;
+  async verifierCatalogueStaging(nomArchive, pathDestination) {
+    // const pathStaging = this.pathStaging;
+    var nomCatalogue = path.basename(nomArchive);
+    nomCatalogue = nomCatalogue.replace('.tar.xz', '.json.xz').split('_');
+    nomCatalogue[1] = 'catalogue_' + nomCatalogue[1];
+    nomCatalogue = nomCatalogue.join('_');
+
+    var pathArchive = path.dirname(nomArchive);
+    const pathCatalogue = path.join(pathDestination, nomCatalogue);
+
+    console.debug(`Path catalogue ${pathCatalogue}`);
 
   }
 
