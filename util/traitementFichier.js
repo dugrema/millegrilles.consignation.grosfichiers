@@ -713,7 +713,7 @@ class RestaurateurBackup {
         if(err) return reject({err});
 
         async function __extraireTar(idx) {
-          if(idx >= files.length-1) {
+          if(idx === files.length) {
 
             // var pathDestination = listeRepertoires[1+parseInt(idxRep)]; // Extraction granularite plus fine
 
@@ -773,6 +773,44 @@ class RestaurateurBackup {
     const pathCatalogue = path.join(pathDestination, nomCatalogue);
 
     console.debug(`Path catalogue ${pathCatalogue}`);
+
+    // Charger le JSON du catalogue en memoire
+    var input = fs.createReadStream(pathCatalogue);
+    const promiseChargement = new Promise((resolve, reject)=>{
+      var decompressor = lzma.createDecompressor();
+      var contenu = '';
+      input.pipe(decompressor);
+      decompressor.on('data', chunk=>{
+        contenu = contenu + chunk;
+      });
+      decompressor.on('end', ()=>{
+        var catalogue = JSON.parse(contenu);
+        resolve(catalogue);
+      });
+      decompressor.on('error', err=>{
+        reject(err);
+      })
+    });
+    input.read();
+
+    const catalogue = await promiseChargement;
+    // console.debug(catalogue);
+
+    // Verifier signature catalogue
+
+    // Verifier hachage des fichieres en reference dans le catalogue
+
+    // Supprimer l'archive originale
+    new Promise((resolve, reject)=>{
+      fs.unlink(nomArchive, err=>{
+        if(err) {
+          // Ce n'est pas une erreur grave, on rapporte et continue
+          console.warn(`Erreur suppression archive ${nomArchive}`);
+          console.warn(err);
+        }
+        resolve();
+      });
+    })
 
   }
 
