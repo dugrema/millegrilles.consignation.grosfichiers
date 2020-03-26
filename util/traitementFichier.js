@@ -491,6 +491,7 @@ class RestaurateurBackup {
     if(!opts) opts = {};
 
     // Configuration optionnelle
+    this.pathBackupHoraire = opts.backupHoraire || pathConsignation.consignationPathBackupHoraire;
     this.pathBackupArchives = opts.archives || pathConsignation.consignationPathBackupArchives;
     this.pathStaging = opts.staging || pathConsignation.consignationPathBackupStaging;
 
@@ -500,13 +501,6 @@ class RestaurateurBackup {
       'quotidien',
       'horaire'
     ];
-
-    this.pathAggregationArchives = {
-      horaire: opts.backupHoraire || pathConsignation.consignationPathBackupHoraire,
-      quotidien: opts.archivesBackupQuotidien || path.join(this.pathBackupArchives, 'quotidien'),
-      mensuel: opts.archivesBackupMensuel || path.join(this.pathBackupArchives, 'mensuel'),
-      annuel: opts.archivesBackupAnnuel || path.join(this.pathBackupArchives, 'annuel'),
-    }
 
     this.pathAggregationStaging = {
       horaire: opts.stagingBackupHoraire || path.join(this.pathStaging, 'horaire'),
@@ -546,8 +540,8 @@ class RestaurateurBackup {
 
     // Extraire variables du scope _this_ pour fonctions async
     const {
-      listeAggregation, pathStaging,
-      pathAggregationArchives, pathAggregationStaging,
+      listeAggregation, pathBackupHoraire, pathBackupArchives,
+      pathStaging, pathAggregationStaging,
     } = this;
 
     // S'assurer que les repertoires sous /staging existent
@@ -580,7 +574,7 @@ class RestaurateurBackup {
 
       const commandeHardLinkHoraire = spawn(
         '/bin/sh',
-        ['-c', `cp -rl ${pathAggregationArchives.horaire}/* ${pathAggregationStaging.horaire}/`]
+        ['-c', `cp -rl ${pathBackupHoraire}/* ${pathAggregationStaging.horaire}/`]
       );
       commandeHardLinkHoraire.stderr.on('data', data=>{
         console.error(`Erreur nettoyage repertoires : ${data}`);
@@ -599,8 +593,8 @@ class RestaurateurBackup {
     });
 
     // Faire liste des archives et creer hard links sous staging/ approprie.
-    const resultatHardLinksArchives = await new Promise((resolve, reject)=>{
-      fs.readdir(pathAggregationArchives.horaire, (err, files)=>{
+    const errResultatHardLinksArchives = await new Promise((resolve, reject)=>{
+      fs.readdir(pathBackupArchives, (err, files)=>{
         if(err) return reject(err);
 
         async function createHardLink(idx) {
@@ -610,20 +604,21 @@ class RestaurateurBackup {
 
             // Faire la liste des fichiers extraits - sera utilisee pour creer
             // l'ordre de traitement des fichiers pour importer les transactions
-            try {
-              const listeCatalogues = await genererListeCatalogues(pathAggregationStaging.horaire);
-              console.debug("Liste catalogues horaire");
-              console.debug(listeCatalogues);
-
-              return resolve({listeCatalogues});
-            } catch (err) {
-              return reject({err});
-            }
+            // try {
+            //   const listeCatalogues = await genererListeCatalogues(pathAggregationStaging.horaire);
+            //   console.debug("Liste catalogues horaire");
+            //   console.debug(listeCatalogues);
+            //
+            //   return resolve({listeCatalogues});
+            // } catch (err) {
+            //   return reject({err});
+            // }
+            resolve();
 
           } else {
 
             const nomFichier = files[idx];
-            const fichier = path.join(pathAggregationArchives.horaire, nomFichier);
+            const fichier = path.join(pathBackupArchives, nomFichier);
             // console.debug(`Fichier archive, creer hard link : ${fichier}`);
 
             // Verifier si c'est une archive annuelle, mensuelle ou quotidienne
@@ -633,15 +628,13 @@ class RestaurateurBackup {
             if(dateFichier) {
               if(dateFichier.length == 8) {
                 // Fichier quotidien
-                pathStagingFichier = path.join(pathAggregationStaging.horaire, 'quotidien', nomFichier);
+                pathStagingFichier = path.join(pathAggregationStaging.quotidien, nomFichier);
               } else if(dateFichier.length == 6) {
                 // Fichier mensuel
-                pathStagingFichier = path.join(pathAggregationStaging.horaire, 'mensuel', nomFichier);
+                pathStagingFichier = path.join(pathAggregationStaging.mensuel, nomFichier);
               } else if(dateFichier.length == 4) {
                 // Fichier annuel
-                pathStagingFichier = path.join(pathAggregationStaging.horaire, 'annuel', nomFichier);
-              } else {
-                console.warning(`Fichier non reconnu: ${fichier}`)
+                pathStagingFichier = path.join(pathAggregationStaging.annuel, nomFichier);
               }
             }
 
@@ -658,6 +651,7 @@ class RestaurateurBackup {
                 createHardLink(idx+1);
               });
             } else {
+              console.warning(`Fichier non reconnu: ${fichier}`)
               createHardLink(idx+1);
             }
           }
@@ -668,10 +662,9 @@ class RestaurateurBackup {
       });
     });
 
-    const {err} = resultatHardLinksArchives;
-    if(err) throw err;
+    if(errResultatHardLinksArchives) throw errResultatHardLinksArchives;
 
-    return {horaire: resultatHardLinksArchives.listeCatalogues};
+    return {};
 
   }
 
