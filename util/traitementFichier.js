@@ -697,7 +697,7 @@ class RestaurateurBackup {
         throw resultatArchives.err;
       }
 
-      catalogues[resultatArchives.niveau] = resultatArchives.catalogues;
+      catalogues[resultatArchives.niveau] = resultatArchives.erreursTraitement;
     }
 
     return catalogues;
@@ -706,9 +706,12 @@ class RestaurateurBackup {
   async extraireTarRepertoire(repertoireSource, repertoireDestination, niveauDestination) {
 
     // Extraire variables du scope _this_ pour fonctions async
-    const {verifierCatalogueStaging} = this;
+    const {extraireCtalogueStaging, verifierContenuCatalogueStaging, verifierContenuCatalogueHoraireStaging} = this;
 
     return new Promise((resolve, reject)=>{
+
+      const erreursTraitement = [];
+
       fs.readdir(repertoireSource, (err, files)=>{
         if(err) return reject({err});
 
@@ -721,14 +724,16 @@ class RestaurateurBackup {
             // const cataloguesNiveau = await genererListeCatalogues(pathDestination);
 
             // return resolve({niveau});
-            return resolve({});
+            console.debug("Extraction TAR terminee, erreurs:");
+            console.debug(erreursTraitement);
+            return resolve({erreursTraitement});
           }
 
           const fichierArchiveSource = path.join(repertoireSource, files[idx]);
           var pathDestination = repertoireDestination;
 
           if(fichierArchiveSource.endsWith('.tar.xz')) {
-            console.debug("Nom Fichier : " + fichierArchiveSource);
+            // console.debug("Nom Fichier : " + fichierArchiveSource);
             if(niveauDestination === 'horaire') {
               // Path horaire, il faut ajouter AAAA/MM/JJ au path
 
@@ -752,7 +757,20 @@ class RestaurateurBackup {
             await utilitaireFichiers.extraireTarFile(fichierArchiveSource, pathDestination);
 
             // Verifier le catalogue de l'archive et nettoyer
-            await verifierCatalogueStaging(fichierArchiveSource, pathDestination);
+            const catalogue = await extraireCtalogueStaging(fichierArchiveSource, pathDestination);
+
+            let erreurs;
+            if(niveauDestination === 'horaire') {
+              erreurs = await verifierContenuCatalogueHoraireStaging(catalogue, pathDestination);
+            } else {
+              erreurs = await verifierContenuCatalogueStaging(catalogue, pathDestination);
+            }
+            if(erreurs.erreursArchives) {
+              erreursTraitement.push(...erreurs.erreursArchives);  // Concatener erreurs
+            }
+
+            // Supprimer l'archive originale
+            await utilitaireFichiers.supprimerFichiers([files[idx]], repertoireSource);
           }
           __extraireTar(idx+1);
         }
@@ -762,7 +780,7 @@ class RestaurateurBackup {
   }
 
   // Verifie la signature d'un catalogue est le hachage des fichiers
-  async verifierCatalogueStaging(nomArchive, pathDestination) {
+  async extraireCtalogueStaging(nomArchive, pathDestination) {
     // const pathStaging = this.pathStaging;
     var nomCatalogue = path.basename(nomArchive);
     nomCatalogue = nomCatalogue.replace('.tar.xz', '.json.xz').split('_');
@@ -772,7 +790,7 @@ class RestaurateurBackup {
     var pathArchive = path.dirname(nomArchive);
     const pathCatalogue = path.join(pathDestination, nomCatalogue);
 
-    console.debug(`Path catalogue ${pathCatalogue}`);
+    // console.debug(`Path catalogue ${pathCatalogue}`);
 
     // Charger le JSON du catalogue en memoire
     var input = fs.createReadStream(pathCatalogue);
@@ -794,29 +812,121 @@ class RestaurateurBackup {
     input.read();
 
     const catalogue = await promiseChargement;
+
+    return catalogue;
     // console.debug(catalogue);
 
     // Verifier signature catalogue
 
-    // Verifier hachage des fichieres en reference dans le catalogue
-
-    // Supprimer l'archive originale
-    new Promise((resolve, reject)=>{
-      fs.unlink(nomArchive, err=>{
-        if(err) {
-          // Ce n'est pas une erreur grave, on rapporte et continue
-          console.warn(`Erreur suppression archive ${nomArchive}`);
-          console.warn(err);
-        }
-        resolve();
-      });
-    })
 
   }
 
   // Verifier la chaine
-  async verifierCatalogueHoraireStaging(catalogue) {
+  async verifierContenuCatalogueStaging(catalogue, pathFichiersStaging) {
+    const dictFichiers = catalogue.fichiers_quotidien || catalogue.fichiers_mensuels;
 
+    const erreursArchives = [];
+    const dictErreurs = {erreursArchives};
+
+    for(let sousRep in dictFichiers) {
+      const infoFichier = dictFichiers[sousRep];
+      const nomFichier = infoFichier.archive_nomfichier;
+      const sha3_512 =  infoFichier.archive_sha3_512;
+
+      // Ajouter 0 au sousRep pour le path du repertoire
+      const pathFichier = path.join(pathFichiersStaging, nomFichier);
+      // console.debug(`Verifier SHA3_512 fichier ${pathFichier}`);
+
+      try {
+        const shaCalcule = await utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash: 'sha3-512'});
+        if(sha3_512 !== shaCalcule) {
+          erreursArchives.push({nomFichier, message: "Hachage invalide"});
+        }
+      } catch(err) {
+        console.warn(`Erreur verification SHA3_512 fichier ${pathFichier}`);
+        console.warn(err);
+        erreursArchives.push({nomFichier, message: err});
+      }
+    }
+
+    return dictErreurs;
+  }
+
+  async verifierContenuCatalogueHoraireStaging(catalogue, pathFichiersStaging) {
+    const dictFichiers = catalogue.fichiers_horaire;
+
+    const erreursArchives = [];
+    const dictErreurs = {erreursArchives};
+
+    const fichiersAVerifier = [];
+
+    // Faire la liste des catalogues et transactions
+    for(let sousRep in dictFichiers) {
+      const infoFichiers = dictFichiers[sousRep];
+
+      // Ajouter 0 au sousRep pour le path du repertoire
+      if(sousRep.length == 1) sousRep = '0' + sousRep;
+
+      fichiersAVerifier.push({
+        nomFichier: infoFichiers.catalogue_nomfichier,
+        hachage: infoFichiers.catalogue_sha3_512,
+        sousRepertoire: path.join(sousRep, 'catalogues')
+      });
+      fichiersAVerifier.push({
+        nomFichier: infoFichiers.transactions_nomfichier,
+        hachage: infoFichiers.transactions_sha3_512,
+        sousRepertoire: path.join(sousRep, 'transactions')
+      });
+
+    }
+
+    // Pour GrosFichiers, faire la liste de tous les fichiers
+    for(let fuuid in catalogue.fuuid_grosfichiers) {
+      const {extension, securite, sha256, heure} = catalogue.fuuid_grosfichiers[fuuid];
+
+      if(sha256) {  // Note : le hachage est optionnel pour fichiers generes
+        var nomFichier = fuuid;
+        if(securite === '3.protege' || securite === '4.secure') {
+          nomFichier = nomFichier + '.mgs1';
+        } else {
+          nomFichier = nomFichier + '.' + extension;
+        }
+
+        // Ajouter 0 au sousRep pour le path du repertoire
+        if(heure.length == 1) heure = '0' + heure;
+
+        fichiersAVerifier.push({
+          fonctionHash: 'sha256',
+          nomFichier,
+          hachage: sha256,
+          sousRepertoire: path.join(heure, 'grosfichiers'),
+        })
+      }
+    }
+
+    // Verifier les fichiers, concatener les erreurs dans le rapport
+    for(let idxFichier in fichiersAVerifier) {
+      const {nomFichier, hachage, sousRepertoire} = fichiersAVerifier[idxFichier];
+      const fonctionHash = fichiersAVerifier[idxFichier].fonctionHash || 'sha3-512';
+
+      const pathFichier = path.join(pathFichiersStaging, sousRepertoire, nomFichier);
+
+      // console.debug(`Verifier hachage fichier ${pathFichier}`);
+
+      try {
+        const shaCalcule = await utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash});
+        if(hachage !== shaCalcule) {
+          console.warn(`Hachage ${pathFichier} est invalide`);
+          erreursArchives.push({nomFichier, message: "Hachage invalide"});
+        }
+      } catch(err) {
+        console.warn(`Erreur verification hachage fichier horaire ${pathFichier}`);
+        console.warn(err);
+        erreursArchives.push({nomFichier, message: err});
+      }
+    }
+
+    return dictErreurs;
   }
 
 }
