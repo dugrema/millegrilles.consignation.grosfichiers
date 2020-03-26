@@ -9,6 +9,7 @@ const { spawn } = require('child_process');
 const {uuidToDate} = require('./UUIDUtils');
 const rabbitMQ = require('./rabbitMQ');
 const transformationImages = require('./transformationImages');
+const {ValidateurSignature} = require('./pki');
 
 const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json');
 const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json');
@@ -708,6 +709,8 @@ class RestaurateurBackup {
     // Extraire variables du scope _this_ pour fonctions async
     const {extraireCtalogueStaging, verifierContenuCatalogueStaging, verifierContenuCatalogueHoraireStaging} = this;
 
+    const validateurSignature = new ValidateurSignature();
+
     return new Promise((resolve, reject)=>{
 
       const erreursTraitement = [];
@@ -758,6 +761,53 @@ class RestaurateurBackup {
 
             // Verifier le catalogue de l'archive et nettoyer
             const catalogue = await extraireCtalogueStaging(fichierArchiveSource, pathDestination);
+
+            // Verifier la signature du catalogue
+            const fingerprintFeuille = catalogue['en-tete'].certificat;
+
+            var certificatsValides = false;
+            if(!validateurSignature.isChainValid()) {
+              // Charger la chaine de certificats
+              const chaineFingerprints = catalogue.certificats_chaine_catalogue;
+              const chaineCertificatsNonVerifies = chaineFingerprints.reduce((liste, fingerprint)=>{
+                // Charger le certificate avec PKI, cert store
+                liste.push(catalogue.certificats_pem[fingerprint]);
+                return liste;
+              }, [])
+
+              // Ajouter cert CA de cette chaine
+              validateurSignature.ajouterCertificatCA(chaineCertificatsNonVerifies[chaineCertificatsNonVerifies.length-1]);
+              if(validateurSignature.verifierChaine(chaineCertificatsNonVerifies)) {
+                certificatsValides = true;
+              }
+            }
+
+            // Verifier chaine et signature du catalogue
+            if(certificatsValides) {
+              try {
+                var certValide = await validateurSignature.verifierSignature(catalogue);
+                if(!certValide) {
+                  erreursTraitement.push({
+                    nomFichier: fichierArchiveSource,
+                    message: "Signature du catalogue invalide"
+                  })
+                }
+                // console.debug(`Catalogue valide : (valide=${certValide})`);
+              } catch (err) {
+                console.error(`Cataloge archive invalide : ${fichierArchiveSource}`);
+                console.error(err);
+                erreursTraitement.push({
+                  nomFichier: fichierArchiveSource,
+                  message: "Erreur de verification du catalogue",
+                  err,
+                })
+              }
+            } else {
+              erreursTraitement.push({
+                nomFichier: fichierArchiveSource,
+                message: "Certificats du catalogue invalide, signature non verifiee"
+              })
+            }
 
             let erreurs;
             if(niveauDestination === 'horaire') {
@@ -814,11 +864,6 @@ class RestaurateurBackup {
     const catalogue = await promiseChargement;
 
     return catalogue;
-    // console.debug(catalogue);
-
-    // Verifier signature catalogue
-
-
   }
 
   // Verifier la chaine
@@ -845,7 +890,7 @@ class RestaurateurBackup {
       } catch(err) {
         console.warn(`Erreur verification SHA3_512 fichier ${pathFichier}`);
         console.warn(err);
-        erreursArchives.push({nomFichier, message: err});
+        erreursArchives.push({nomFichier, err, message: 'Erreur de verification hachage du fichier'});
       }
     }
 
@@ -922,7 +967,7 @@ class RestaurateurBackup {
       } catch(err) {
         console.warn(`Erreur verification hachage fichier horaire ${pathFichier}`);
         console.warn(err);
-        erreursArchives.push({nomFichier, message: err});
+        erreursArchives.push({nomFichier, err, message: "Erreur de verification du hachage du fichier"});
       }
     }
 

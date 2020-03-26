@@ -276,16 +276,19 @@ class PKIUtils {
 
   // Verifie la signature d'un message
   // Retourne vrai si le message est valide, faux si invalide.
-  async verifierSignatureMessage(message) {
+  async verifierSignatureMessage(message, certificat) {
     let fingerprint = message['en-tete']['certificat'];
     let signatureBase64 = message['_signature'];
     let signature = Buffer.from(signatureBase64, 'base64');
-    let certificatChaine = await this.getCertificate(fingerprint);
-    if( ! certificatChaine ) {
-      console.debug("Certificat inconnu : " + fingerprint);
-      throw new CertificatInconnu("Certificat inconnu : " + fingerprint);
+
+    if(!certificat) {
+      let certificatChaine = await this.getCertificate(fingerprint);
+      if( ! certificatChaine ) {
+        console.debug("Certificat inconnu : " + fingerprint);
+        throw new CertificatInconnu("Certificat inconnu : " + fingerprint);
+      }
+      certificat = certificatChaine[0];
     }
-    const certificat = certificatChaine[0];
 
     let messageFiltre = {};
     for(let cle in message) {
@@ -339,6 +342,68 @@ function splitPEMCerts(certs) {
   return splitCerts.slice(1);
 }
 
+class ValidateurSignature {
+
+  constructor(caCertPEM) {
+    this.caStore = forge.pki.createCaStore([]);
+
+    // Creer un cache des chaines valides
+    // Permet d'eviter de verifier les chaines a chaque fois, on passe
+    // directement a la verification de la signature.
+    this.chainCache = {};
+  }
+
+  ajouterCertificatCA(caCertPEM) {
+    // let parsedCACert = pki.chargerCertificatPEM(caCertPEM);
+    this.caStore.addCertificate(caCertPEM);
+  }
+
+  verifierChaine(chaineCertsPEM) {
+    const chainePki = chaineCertsPEM.reduce((liste, certPEM)=>{
+      let parsedCert = pki.chargerCertificatPEM(certPEM);
+      liste.push(parsedCert);
+      return liste;
+    }, []);
+
+    if(forge.pki.verifyCertificateChain(this.caStore, chainePki)) {
+
+      // Sauvegarder la chaine de certificats dans le cache memoire
+      const certificatFeuille = chainePki[0];
+      const fingerprint = getCertificateFingerprint(certificatFeuille);
+      this.chainCache[fingerprint] = chainePki;
+
+      return true;
+    }
+    return false;
+
+  }
+
+  async verifierSignature(message, chaineCerts) {
+    if(chaineCerts) {
+      if(this.verifierChaine(chaineCerts)) {
+        // Charger le certificat PEM en format node-forge pour verifier signature
+        const certificat = forge.pki.certificateFromPem(chaineCerts[0]);
+        return await pki.verifierSignatureMessage(message, certificat);
+      } else {
+        return false;
+      }
+    } else {
+      // On utilise le cache, permet d'eviter de verifier la chaine
+      const fingerprint = message['en-tete'].certificat;
+      const certificat = this.chainCache[fingerprint][0];
+      return await pki.verifierSignatureMessage(message, certificat);
+    }
+  }
+
+  isChainValid(fingerprint) {
+    if(this.chainCache[fingerprint]) {
+      return true;
+    }
+    return false;
+  }
+
+}
+
 class CertificatInconnu extends Error {
   constructor(message) {
     super(message);
@@ -347,4 +412,4 @@ class CertificatInconnu extends Error {
 }
 
 const pki = new PKIUtils();
-module.exports = pki;
+module.exports = {pki, ValidateurSignature};

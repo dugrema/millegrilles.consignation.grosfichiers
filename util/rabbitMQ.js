@@ -2,7 +2,7 @@ var amqplib = require('amqplib');
 var os = require('os');
 var fs = require('fs');
 var uuidv4 = require('uuid/v4');
-var pki = require('./pki.js');
+var {pki} = require('./pki.js');
 
 class RabbitMQWrapper {
 

@@ -1,4 +1,4 @@
-const pki = require('../util/pki');
+const {pki} = require('../util/pki');
 
 class PkiMessages {
 
