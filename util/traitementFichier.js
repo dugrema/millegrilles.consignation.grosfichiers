@@ -481,20 +481,87 @@ class TraitementFichier {
     return {pathJournal: fullPathFichier, sha512: sha512Journal};
   }
 
+}
+
+// Classe qui s'occupe du staging d'archives et fichiers de backup
+// Prepare et valide le contenu du repertoire staging/
+class RestaurateurBackup {
+
+  constructor(opts) {
+    if(!opts) opts = {};
+
+    // Configuration optionnelle
+    this.pathBackupArchives = opts.archives || pathConsignation.consignationPathBackupArchives;
+    this.pathStaging = opts.staging || pathConsignation.consignationPathBackupStaging;
+
+    this.listeAggregation = [
+      'annuel',
+      'mensuel',
+      'quotidien',
+      'horaire'
+    ];
+
+    this.pathAggregationArchives = {
+      horaire: opts.backupHoraire || pathConsignation.consignationPathBackupHoraire,
+      quotidien: opts.archivesBackupQuotidien || path.join(this.pathBackupArchives, 'quotidien'),
+      mensuel: opts.archivesBackupMensuel || path.join(this.pathBackupArchives, 'mensuel'),
+      annuel: opts.archivesBackupAnnuel || path.join(this.pathBackupArchives, 'annuel'),
+    }
+
+    this.pathAggregationStaging = {
+      horaire: opts.stagingBackupHoraire || path.join(this.pathStaging, 'horaire'),
+      quotidien: opts.stagingBackupQuotidien || path.join(this.pathStaging, 'quotidien'),
+      mensuel: opts.stagingBackupMensuel || path.join(this.pathStaging, 'mensuel'),
+      annuel: opts.stagingBackupAnnuel || path.join(this.pathStaging, 'annuel'),
+    }
+
+  }
+
+  // Methode qui lance une restauration complete d'une MilleGrille
+  // Le consignateur de fichiers va extraire, valider et re-transmettre
+  // toutes les transactions de tous les domaines.
+  async restaurationComplete() {
+    console.debug("Debut restauration complete");
+
+    // Creer hard-links pour archives existantes sous staging/
+    const {horaire} = await this.creerHardLinksBackupStaging();
+
+    // // Extraire tous les fichiers d'archives vers staging/horaire
+    // const rapportTarExtraction = await traitementFichier.extraireTarStaging();
+    //
+    // // Verifier tous les catalogues, transactions et fichiers extraits
+    // const rapportVerificationCatalogues = await traitementFichier.verifierCataloguesStaging();
+
+    const listeCatalogues = {
+      horaire,
+      // ...rapportTarExtraction,
+    }
+
+    // Verifie les SHA des archives pour chaque archive a partir des catalogues
+    console.debug("Fin restauration complete");
+    return {listeCatalogues};
+  }
+
   async creerHardLinksBackupStaging() {
 
+    // Extraire variables du scope _this_ pour fonctions async
+    const {
+      listeAggregation, pathStaging,
+      pathAggregationArchives, pathAggregationStaging,
+    } = this;
+
     // S'assurer que les repertoires sous /staging existent
-    const pathStaging = pathConsignation.consignationPathBackupStaging;
-    let listeSousRepertoires = ['horaire', 'quotidien', 'mensuel', 'annuel'];
     var errMkdir = await new Promise((resolve, reject)=>{
+
+      const listeStagingDirs = Object.values(this.pathAggregationStaging);
 
       // Nettoyer (supprimer) repertoire staging/
       fs.rmdir(pathStaging, { recursive: true }, err=>{
         if(err) return reject(err);
 
         function creerRepertoires(idx) {
-          if(idx === listeSousRepertoires.length) return resolve();
-          let sousRepertoire = path.join(pathStaging, listeSousRepertoires[idx]);
+          if(idx === listeStagingDirs.length) return resolve();
+          let sousRepertoire = listeStagingDirs[idx];
           fs.mkdir(sousRepertoire, {recursive: true, mode: 0o770}, err=>{
             if(err) reject(err);
             else creerRepertoires(idx+1);
@@ -509,41 +576,42 @@ class TraitementFichier {
 
     // Creer hard-link pour tous les fichiers courants sous backup/horaire
     // vers backup/staging/horaire
-    const pathBackupHoraire = pathConsignation.consignationPathBackupHoraire;
-    const commandeHardLinkHoraire = spawn('cp', ['-rl', pathBackupHoraire, pathStaging]);
-    commandeHardLinkHoraire.stderr.on('data', data=>{
-      console.error(`Erreur nettoyage repertoires : ${data}`);
-    })
-
     const resultatHardLinkHoraire = await new Promise(async (resolve, reject) => {
+
+      const commandeHardLinkHoraire = spawn(
+        '/bin/sh',
+        ['-c', `cp -rl ${pathAggregationArchives.horaire}/* ${pathAggregationStaging.horaire}/`]
+      );
+      commandeHardLinkHoraire.stderr.on('data', data=>{
+        console.error(`Erreur nettoyage repertoires : ${data}`);
+      })
+
       commandeHardLinkHoraire.on('close', async code =>{
         if(code != 0) {
           return reject(code);
         }
         return resolve();
-      })
+      });
+
     })
     .catch(err=>{
       return({err});
     });
 
     // Faire liste des archives et creer hard links sous staging/ approprie.
-    const pathBackupArchives = pathConsignation.consignationPathBackupArchives;
-
     const resultatHardLinksArchives = await new Promise((resolve, reject)=>{
-      fs.readdir(pathBackupArchives, (err, files)=>{
+      fs.readdir(pathAggregationArchives.horaire, (err, files)=>{
         if(err) return reject(err);
 
         async function createHardLink(idx) {
           if(idx === files.length) {
             // Creation hard links terminee
-            const pathStagingHoraire = path.join(pathStaging, 'horaire');
-            // console.debug(`Creation hard links terminee, lectures archives sous ${pathStagingHoraire}`);
+            // console.debug(`Creation hard links terminee, lectures archives sous ${pathAggregationStaging.horaire}`);
 
             // Faire la liste des fichiers extraits - sera utilisee pour creer
             // l'ordre de traitement des fichiers pour importer les transactions
             try {
-              const listeCatalogues = await genererListeCatalogues(pathStagingHoraire);
+              const listeCatalogues = await genererListeCatalogues(pathAggregationStaging.horaire);
               console.debug("Liste catalogues horaire");
               console.debug(listeCatalogues);
 
@@ -555,24 +623,26 @@ class TraitementFichier {
           } else {
 
             const nomFichier = files[idx];
-            const fichier = path.join(pathBackupArchives, nomFichier);
+            const fichier = path.join(pathAggregationArchives.horaire, nomFichier);
             // console.debug(`Fichier archive, creer hard link : ${fichier}`);
 
             // Verifier si c'est une archive annuelle, mensuelle ou quotidienne
             const dateFichier = nomFichier.split('_')[1];
 
             var pathStagingFichier = null;
-            if(dateFichier.length == 8) {
-              // Fichier quotidien
-              pathStagingFichier = path.join(pathStaging, 'quotidien', nomFichier);
-            } else if(dateFichier.length == 6) {
-              // Fichier mensuel
-              pathStagingFichier = path.join(pathStaging, 'mensuel', nomFichier);
-            } else if(dateFichier.length == 4) {
-              // Fichier annuel
-              pathStagingFichier = path.join(pathStaging, 'annuel', nomFichier);
-            } else {
-              console.warning(`Fichier non reconnu: ${fichier}`)
+            if(dateFichier) {
+              if(dateFichier.length == 8) {
+                // Fichier quotidien
+                pathStagingFichier = path.join(pathAggregationStaging.horaire, 'quotidien', nomFichier);
+              } else if(dateFichier.length == 6) {
+                // Fichier mensuel
+                pathStagingFichier = path.join(pathAggregationStaging.horaire, 'mensuel', nomFichier);
+              } else if(dateFichier.length == 4) {
+                // Fichier annuel
+                pathStagingFichier = path.join(pathAggregationStaging.horaire, 'annuel', nomFichier);
+              } else {
+                console.warning(`Fichier non reconnu: ${fichier}`)
+              }
             }
 
             if(pathStagingFichier) {
@@ -605,17 +675,17 @@ class TraitementFichier {
 
   }
 
-  async extraireTarStaging() {
+  // Extrait tous les fichiers .tar.xz d'un repertoire vers la destination
+  async extraireTarRepertoire() {
 
-    const pathStaging = pathConsignation.consignationPathBackupStaging;
     const listeRepertoires = [
-      path.join(pathStaging, 'annuel'),
-      path.join(pathStaging, 'mensuel'),
-      path.join(pathStaging, 'quotidien'),
-      path.join(pathStaging, 'horaire'),
+      path.join(this.pathStaging, 'annuel'),
+      path.join(this.pathStaging, 'mensuel'),
+      path.join(this.pathStaging, 'quotidien'),
+      path.join(this.pathStaging, 'horaire'),
     ]
 
-    // console.debug(`Path staging ${pathStaging}`);
+    // console.debug(`Path staging ${this.pathStaging}`);
     const catalogues = {};
 
     for(let idxRep in listeRepertoires) {
@@ -679,6 +749,17 @@ class TraitementFichier {
     }
 
     return catalogues;
+  }
+
+  // Verifie la signature d'un catalogue est le hachage des fichiers
+  async verifierCatalogueStaging(catalogue) {
+    const pathStaging = this.pathStaging;
+
+  }
+
+  // Verifier la chaine
+  async verifierCatalogueHoraireStaging(catalogue) {
+
   }
 
 }
@@ -1000,7 +1081,9 @@ async function genererListeCatalogues(repertoire) {
 
 }
 
+// Instances
+
 const traitementFichier = new TraitementFichier();
 const utilitaireFichiers = new UtilitaireFichiers();
 
-module.exports = {traitementFichier, pathConsignation, utilitaireFichiers};
+module.exports = {traitementFichier, pathConsignation, utilitaireFichiers, RestaurateurBackup};

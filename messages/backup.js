@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
 const { spawn } = require('child_process');
-const { traitementFichier, pathConsignation, utilitaireFichiers } = require('../util/traitementFichier');
+const { traitementFichier, pathConsignation, utilitaireFichiers, RestaurateurBackup } = require('../util/traitementFichier');
 
 class GestionnaireMessagesBackup {
 
@@ -132,19 +132,20 @@ class GestionnaireMessagesBackup {
       const {correlationId, replyTo} = opts.properties;
 
       try {
-        const {listeCatalogues} = await preparerStagingRestauration(message);
+        const restaurateur = new RestaurateurBackup();
+        const rapportRestauration = await restaurateur.restaurationComplete();
+
         console.debug("Rapport restauration");
-        console.debug(listeCatalogues);
+        console.debug(rapportRestauration);
 
         // Transmettre reponse
-        this.mq.transmettreReponse(listeCatalogues, replyTo, correlationId);
+        this.mq.transmettreReponse(rapportRestauration, replyTo, correlationId);
 
       } catch (err) {
         console.error("Erreur preparation staging restauration");
         console.error(err);
         reject(err);
       }
-
 
       console.info("Staging restauration complete");
       resolve();
@@ -385,23 +386,6 @@ async function genererBackupMensuel(journal) {
   }
 
   return resultatTar;
-
-}
-
-async function preparerStagingRestauration(commande) {
-
-  // Creer hard-links pour archives existantes sous staging/
-  const {horaire} = await traitementFichier.creerHardLinksBackupStaging();
-
-  // Extraire tous les fichiers d'archives vers staging/horaire
-  const rapportTarExtraction = await traitementFichier.extraireTarStaging();
-
-  const listeCatalogues = {
-    horaire, ...rapportTarExtraction
-  }
-
-  // Verifie les SHA des archives pour chaque archive a partir des catalogues
-  return {listeCatalogues};
 
 }
 
