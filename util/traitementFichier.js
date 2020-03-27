@@ -1031,9 +1031,12 @@ class RestaurateurBackup {
 
   }
 
+  // Verifier la signature des catalogues et les chaines de backup horaire.
+  // Verifie aussi les fichiers de transaction et autres (e.g. grosfichiers)
   async verifierBackupHoraire(pathCourant, fichierCatalogue) {
     // console.debug(pathCourant);
     const pathCatalogue = path.join(pathCourant, 'catalogues', fichierCatalogue);
+    const erreurs = [];
 
     // Ouvrir le catalogue
     // Charger le JSON du catalogue en memoire
@@ -1118,7 +1121,54 @@ class RestaurateurBackup {
     // console.debug("Hachage calcule");
     // console.debug(noeudCourant);
 
+    // Verifier les fichiers identifies dans le catalogue
+    const fichiersAVerifier = [{
+      nomFichier: catalogue.transactions_nomfichier,
+      hachage: catalogue.transactions_sha3_512,
+      sousRepertoire: path.join(pathCourant, 'transactions'),
+      fonctionHachage: 'sha3-512',
+    }];
+    for(let fuuid in catalogue.fuuid_grosfichiers) {
+      const {extension, securite, sha256} = catalogue.fuuid_grosfichiers[fuuid];
+      var nomFichier = fuuid;
+      if(securite === '3.protege' || securite === '4.secure') {
+        nomFichier = nomFichier + '.mgs1';
+      } else {
+        nomFichier = nomFichier + '.' + extension;
+      }
+      fichiersAVerifier.push({
+        nomFichier,
+        hachage: sha256,
+        sousRepertoire: path.join(pathCourant, 'grosfichiers'),
+        fonctionHachage: 'SHA256',
+      });
+    }
+
+    // Verifier les fichiers, concatener les erreurs dans le rapport
+    for(let idxFichier in fichiersAVerifier) {
+      const {nomFichier, hachage, fonctionHachage, sousRepertoire} = fichiersAVerifier[idxFichier];
+      const fonctionHash = fonctionHachage || 'sha3-512';
+
+      const pathFichier = path.join(sousRepertoire, nomFichier);
+
+      // console.debug(`Verifier hachage fichier ${pathFichier}`);
+
+      try {
+        const shaCalcule = await utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash});
+        if(hachage !== shaCalcule) {
+          console.warn(`Hachage ${pathFichier} est invalide`);
+          erreurs.push({nomFichier, message: "Hachage invalide"});
+        }
+      } catch(err) {
+        console.warn(`Erreur verification hachage fichier horaire ${pathFichier}`);
+        console.warn(err);
+        erreurs.push({nomFichier, err, message: "Erreur de verification du hachage du fichier"});
+      }
+    }
+
     this.chaineBackupHoraire[cleChaine] = noeudCourant;
+
+    return erreurs;
   }
 
 }
