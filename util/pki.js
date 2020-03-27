@@ -128,9 +128,11 @@ class PKIUtils {
     return signature;
   }
 
-  hacherTransaction(transaction) {
+  hacherTransaction(transaction, opts) {
+    if(!opts) opts = {};
+
     let hachage_transaction = 'N/A';
-    const hash = crypto.createHash('sha256');
+    const hash = crypto.createHash(opts.hachage || 'sha256');
 
     // Copier transaction sans l'entete
     let copie_transaction = {};

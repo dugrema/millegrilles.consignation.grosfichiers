@@ -9,7 +9,7 @@ const { spawn } = require('child_process');
 const {uuidToDate} = require('./UUIDUtils');
 const rabbitMQ = require('./rabbitMQ');
 const transformationImages = require('./transformationImages');
-const {ValidateurSignature} = require('./pki');
+const {pki, ValidateurSignature} = require('./pki');
 
 const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json');
 const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json');
@@ -1031,7 +1031,7 @@ class RestaurateurBackup {
   }
 
   async verifierBackupHoraire(pathCourant, fichierCatalogue) {
-    console.debug(pathCourant);
+    // console.debug(pathCourant);
     const pathCatalogue = path.join(pathCourant, 'catalogues', fichierCatalogue);
 
     // Ouvrir le catalogue
@@ -1064,9 +1064,11 @@ class RestaurateurBackup {
       if(noeudPrecedent['uuid-transaction'] !== catalogue.backup_precedent['uuid-transaction']) {
         console.error("Mismatch UUID durant chainage pour la comparaison du catalogue " + fichierCatalogue);
       }
-      // if(cleChaine.hachage_entete !== catalogue.backup_precedent.hachage_entete) {
-      //   console.error("Mismatch hachage durant chainage pour la comparaison du catalogue " + fichierCatalogue);
-      // }
+      if(noeudPrecedent['hachage_entete'] !== catalogue.backup_precedent.hachage_entete) {
+        console.error("Mismatch hachage durant chainage pour la comparaison du catalogue " + fichierCatalogue);
+        // console.debug(noeudPrecedent.hachage_entete);
+        // console.debug(catalogue.backup_precedent.hachage_entete);
+      }
     } else if(noeudPrecedent || catalogue.backup_precedent) {
       // Mismatch, il manque un des deux elements de chainage pour
       // la comparaison. Rapporter l'erreur.
@@ -1074,11 +1076,14 @@ class RestaurateurBackup {
     }
 
     // Calculer SHA3_512 pour entete courante
-    // const hachageEntreteCourante = ...;
+    const hachageEnteteCourante = pki.hacherTransaction(catalogue['en-tete'], {hachage: 'sha3-512'});
     var noeudCourant = {
-    //  hachage_entete: hachageEntreteCourante,
-       'uuid-transaction': catalogue['en-tete']['uuid-transaction'],
+      'hachage_entete': hachageEnteteCourante,
+      'uuid-transaction': catalogue['en-tete']['uuid-transaction'],
     }
+    // console.debug("Hachage calcule");
+    // console.debug(noeudCourant);
+
     this.chaineBackupHoraire[cleChaine] = noeudCourant;
   }
 
