@@ -536,8 +536,19 @@ class RestaurateurBackup {
     const rapportTarExtraction = await this.extraireTarParNiveaux();
 
     // Verifier le contenu horaire
-    const rapportVerificationHoraire = await this.verifierCataloguesHoraire();
-    // const rapportVerificationCatalogues = await traitementFichier.verifierCataloguesStaging();
+    const rapportVerificationHoraire = await this.parcourirCataloguesHoraire(
+      (pathCourant, fichierCatalogue, catalogue) => {
+        return this.verifierBackupHoraire(pathCourant, fichierCatalogue, catalogue);
+      }
+    );
+
+    // Retransmettre toutes les transactions
+    const rapportRetransmissionTransactions = await this.parcourirCataloguesHoraire(
+      (pathCourant, fichierCatalogue, catalogue) => {
+        return this.resoumettreTransactions(pathCourant, fichierCatalogue, catalogue);
+      }
+    );
+
 
     const rapports = {
       rapportHardLinks,
@@ -989,7 +1000,7 @@ class RestaurateurBackup {
   }
 
   // Methode qui parcourt tous les repertoires horaires et invoque verifierBackupHoraire()
-  async verifierCataloguesHoraire() {
+  async parcourirCataloguesHoraire(fonctionTraitement) {
     const pathStagingHoraire = this.pathAggregationStaging.horaire;
 
     // Faire une fonction qui permet de parcourir les repertoires horaire
@@ -1012,8 +1023,32 @@ class RestaurateurBackup {
         });
 
         for(let idxCatalogue in catalogues) {
-          const catalogue = catalogues[idxCatalogue]
-          const erreursBackup = await obj.verifierBackupHoraire(pathCourant, catalogue);
+          const fichierCatalogue = catalogues[idxCatalogue]
+
+          // Ouvrir le catalogue
+          // Charger le JSON du catalogue en memoire
+          const pathCatalogue = path.join(pathCourant, 'catalogues', fichierCatalogue);
+          var input = fs.createReadStream(pathCatalogue);
+          const promiseChargement = new Promise((resolve, reject)=>{
+            var decompressor = lzma.createDecompressor();
+            var contenu = '';
+            input.pipe(decompressor);
+            decompressor.on('data', chunk=>{
+              contenu = contenu + chunk;
+            });
+            decompressor.on('end', ()=>{
+              var catalogue = JSON.parse(contenu);
+              resolve(catalogue);
+            });
+            decompressor.on('error', err=>{
+              reject(err);
+            })
+          });
+          input.read();
+
+          const catalogue = await promiseChargement;
+
+          const erreursBackup = await fonctionTraitement(pathCourant, fichierCatalogue, catalogue);
           erreurs.push(...erreursBackup); // Concatener toutes les erreurs
         }
 
@@ -1052,32 +1087,9 @@ class RestaurateurBackup {
 
   // Verifier la signature des catalogues et les chaines de backup horaire.
   // Verifie aussi les fichiers de transaction et autres (e.g. grosfichiers)
-  async verifierBackupHoraire(pathCourant, fichierCatalogue) {
+  async verifierBackupHoraire(pathCourant, fichierCatalogue, catalogue) {
     // console.debug(pathCourant);
-    const pathCatalogue = path.join(pathCourant, 'catalogues', fichierCatalogue);
     const erreurs = [];
-
-    // Ouvrir le catalogue
-    // Charger le JSON du catalogue en memoire
-    var input = fs.createReadStream(pathCatalogue);
-    const promiseChargement = new Promise((resolve, reject)=>{
-      var decompressor = lzma.createDecompressor();
-      var contenu = '';
-      input.pipe(decompressor);
-      decompressor.on('data', chunk=>{
-        contenu = contenu + chunk;
-      });
-      decompressor.on('end', ()=>{
-        var catalogue = JSON.parse(contenu);
-        resolve(catalogue);
-      });
-      decompressor.on('error', err=>{
-        reject(err);
-      })
-    });
-    input.read();
-
-    const catalogue = await promiseChargement;
 
     // Verifier la signature du catalogue
     const fingerprintFeuille = catalogue['en-tete'].certificat;
@@ -1197,6 +1209,14 @@ class RestaurateurBackup {
     }
 
     this.chaineBackupHoraire[cleChaine] = noeudCourant;
+
+    return erreurs;
+  }
+
+  // Soumet les transactions en parcourant les backup horaires en ordre
+  async resoumettreTransactions(pathCourant, fichierCatalogue, catalogue) {
+    console.debug(`Resoumettre transactions ${fichierCatalogue}`);
+    const erreurs = [];
 
     return erreurs;
   }
