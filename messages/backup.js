@@ -137,6 +137,12 @@ class GestionnaireMessagesBackup {
 
         console.debug("Rapport restauration");
         console.debug(rapportRestauration);
+        console.debug("rapportHardLinks :");
+        console.debug(rapportRestauration.rapports.rapportHardLinks);
+        console.debug("rapportTarExtraction :");
+        console.debug(rapportRestauration.rapports.rapportTarExtraction);
+        console.debug("rapportVerificationHoraire.erreurs :");
+        console.debug(rapportRestauration.rapports.rapportVerificationHoraire.erreurs);
 
         // Transmettre reponse
         this.mq.transmettreReponse(rapportRestauration, replyTo, correlationId);

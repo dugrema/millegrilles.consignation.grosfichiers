@@ -530,7 +530,7 @@ class RestaurateurBackup {
     console.debug("Debut restauration complete");
 
     // Creer hard-links pour archives existantes sous staging/
-    const {horaire} = await this.creerHardLinksBackupStaging();
+    const rapportHardLinks = await this.creerHardLinksBackupStaging();
 
     // Extraire et verifier tous les fichiers d'archives vers staging/horaire
     const rapportTarExtraction = await this.extraireTarParNiveaux();
@@ -539,14 +539,15 @@ class RestaurateurBackup {
     const rapportVerificationHoraire = await this.verifierCataloguesHoraire();
     // const rapportVerificationCatalogues = await traitementFichier.verifierCataloguesStaging();
 
-    const listeCatalogues = {
-      horaire,
-      ...rapportTarExtraction,
+    const rapports = {
+      rapportHardLinks,
+      rapportTarExtraction,
+      rapportVerificationHoraire
     }
 
     // Verifie les SHA des archives pour chaque archive a partir des catalogues
     console.debug("Fin restauration complete");
-    return {listeCatalogues};
+    return {rapports};
   }
 
   async creerHardLinksBackupStaging() {
@@ -951,6 +952,7 @@ class RestaurateurBackup {
         fichiersAVerifier.push({
           fonctionHash: 'sha256',
           nomFichier,
+          fuuid,
           hachage: sha256,
           sousRepertoire: path.join(heure, 'grosfichiers'),
         })
@@ -959,23 +961,27 @@ class RestaurateurBackup {
 
     // Verifier les fichiers, concatener les erreurs dans le rapport
     for(let idxFichier in fichiersAVerifier) {
-      const {nomFichier, hachage, sousRepertoire} = fichiersAVerifier[idxFichier];
+      const {nomFichier, hachage, sousRepertoire, fuuid} = fichiersAVerifier[idxFichier];
       const fonctionHash = fichiersAVerifier[idxFichier].fonctionHash || 'sha3-512';
 
       const pathFichier = path.join(pathFichiersStaging, sousRepertoire, nomFichier);
 
-      // console.debug(`Verifier hachage fichier ${pathFichier}`);
+      // console.debug(`Verifier hachage fichier ${pathFichier}, ${fuuid}`);
 
       try {
         const shaCalcule = await utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash});
         if(hachage !== shaCalcule) {
           console.warn(`Hachage ${pathFichier} est invalide`);
-          erreursArchives.push({nomFichier, message: "Hachage invalide"});
+          const messageErreur = {nomFichier, message: "Hachage invalide"};
+          if(fuuid) messageErreur.fuuid = fuuid;
+          erreursArchives.push(messageErreur);
         }
       } catch(err) {
         console.warn(`Erreur verification hachage fichier horaire ${pathFichier}`);
         console.warn(err);
-        erreursArchives.push({nomFichier, err, message: "Erreur de verification du hachage du fichier"});
+        const messageErreur = {nomFichier, err, message: "Erreur de verification du hachage du fichier"};
+        if(fuuid) messageErreur.fuuid = fuuid;
+        erreursArchives.push(messageErreur);
       }
     }
 
@@ -990,8 +996,11 @@ class RestaurateurBackup {
     // et verifier les catalogues un a la fois.
     async function parcourirRecursif(obj, level, pathCourant) {
 
+      const erreurs = [];
+
       if(level === 4) { // 4 niveaux de sous-repertoires
         // console.debug(pathCourant);
+
         const catalogues = await new Promise(async (resolve, reject)=>{
           const pathCataloguesHoraire = path.join(pathCourant, 'catalogues');
           fs.readdir(pathCataloguesHoraire, async (err, catalogues)=>{
@@ -1004,12 +1013,13 @@ class RestaurateurBackup {
 
         for(let idxCatalogue in catalogues) {
           const catalogue = catalogues[idxCatalogue]
-          await obj.verifierBackupHoraire(pathCourant, catalogue);
+          const erreursBackup = await obj.verifierBackupHoraire(pathCourant, catalogue);
+          erreurs.push(...erreursBackup); // Concatener toutes les erreurs
         }
 
       } else {
         // Parcourir prochain niveau de repertoire
-        await new Promise((resolve, reject)=>{
+        var erreursCumulees = await new Promise((resolve, reject)=>{
           fs.readdir(pathCourant, async (err, valeurDateTriee)=>{
             if(err) return reject(err);
             valeurDateTriee.sort();
@@ -1018,16 +1028,25 @@ class RestaurateurBackup {
             if(level === 0) valeurDateTriee = valeurDateTriee.filter(valeur=>valeur.length===4);
             else valeurDateTriee = valeurDateTriee.filter(valeur=>valeur.length===2);
 
+            var erreursRecursif = [];
             for(let valeurDateIdx in valeurDateTriee) {
               const valeurDateStr = valeurDateTriee[valeurDateIdx];
-              await parcourirRecursif(obj, level+1, path.join(pathCourant, valeurDateStr));
+              const erreurEtape = await parcourirRecursif(obj, level+1, path.join(pathCourant, valeurDateStr));
+              erreursRecursif.push(...erreurEtape);
             }
-            resolve();
+            resolve(erreursRecursif);
           })
         });
+        erreurs.push(...erreursCumulees);
+
       }
+
+      return erreurs;
+
     };
-    await parcourirRecursif(this, 0, pathStagingHoraire);
+
+    var erreurs = await parcourirRecursif(this, 0, pathStagingHoraire);
+    return {erreurs};
 
   }
 
@@ -1084,13 +1103,16 @@ class RestaurateurBackup {
         var signatureValide = await this.validateurSignature.verifierSignature(catalogue);
         if(!signatureValide) {
           console.error("Erreur signature catalogue invalide : " + fichierCatalogue);
+          erreurs.push({nomFichier: fichierCatalogue, message: "Erreur signature catalogue invalide"});
         }
       } catch(err) {
         console.error("Erreur verification signature catalogue " + fichierCatalogue);
         console.error(err);
+        erreurs.push({nomFichier: fichierCatalogue, message: "Erreur verification signature catalogue"});
       }
     } else {
-      console.error("Erreur verification catalogue, certificats invalide : " + fichierCatalogue);
+      console.error("Erreur verification catalogue, certificats invalides : " + fichierCatalogue);
+      erreurs.push({nomFichier: fichierCatalogue, message: "Erreur verification catalogue, certificats invalides"});
     }
 
     const cleChaine = catalogue.domaine + '/' + catalogue.securite;
@@ -1100,11 +1122,13 @@ class RestaurateurBackup {
     if(noeudPrecedent && catalogue.backup_precedent) {
       if(noeudPrecedent['uuid-transaction'] !== catalogue.backup_precedent['uuid-transaction']) {
         console.error("Mismatch UUID durant chainage pour la comparaison du catalogue " + fichierCatalogue);
+        erreurs.push({nomFichier: fichierCatalogue, message: "Mismatch UUID durant chainage pour la comparaison du catalogue"});
       }
       if(noeudPrecedent['hachage_entete'] !== catalogue.backup_precedent.hachage_entete) {
         console.error("Mismatch hachage durant chainage pour la comparaison du catalogue " + fichierCatalogue);
         // console.debug(noeudPrecedent.hachage_entete);
         // console.debug(catalogue.backup_precedent.hachage_entete);
+        erreurs.push({nomFichier: fichierCatalogue, message: "Hachage entete chaine horaire invalide"});
       }
     } else if(noeudPrecedent || catalogue.backup_precedent) {
       // Mismatch, il manque un des deux elements de chainage pour
@@ -1139,6 +1163,7 @@ class RestaurateurBackup {
       fichiersAVerifier.push({
         nomFichier,
         hachage: sha256,
+        fuuid,
         sousRepertoire: path.join(pathCourant, 'grosfichiers'),
         fonctionHachage: 'SHA256',
       });
@@ -1146,7 +1171,7 @@ class RestaurateurBackup {
 
     // Verifier les fichiers, concatener les erreurs dans le rapport
     for(let idxFichier in fichiersAVerifier) {
-      const {nomFichier, hachage, fonctionHachage, sousRepertoire} = fichiersAVerifier[idxFichier];
+      const {nomFichier, hachage, fonctionHachage, sousRepertoire, fuuid} = fichiersAVerifier[idxFichier];
       const fonctionHash = fonctionHachage || 'sha3-512';
 
       const pathFichier = path.join(sousRepertoire, nomFichier);
@@ -1154,15 +1179,20 @@ class RestaurateurBackup {
       // console.debug(`Verifier hachage fichier ${pathFichier}`);
 
       try {
+        const {heure, domaine, securite} = catalogue;
         const shaCalcule = await utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash});
         if(hachage !== shaCalcule) {
           console.warn(`Hachage ${pathFichier} est invalide`);
-          erreurs.push({nomFichier, message: "Hachage invalide"});
+          const messageErreur = {nomFichier, fichierCatalogue, heure, domaine, securite, errcode: 'digest.invalid', message: "Hachage invalide"};
+          if(fuuid) messageErreur.fuuid = fuuid;
+          erreurs.push(messageErreur);
         }
       } catch(err) {
         console.warn(`Erreur verification hachage fichier horaire ${pathFichier}`);
         console.warn(err);
-        erreurs.push({nomFichier, err, message: "Erreur de verification du hachage du fichier"});
+        const messageErreur = {nomFichier, err, fichierCatalogue, heure, domaine, securite, errcode: 'digest.error', message: "Erreur de verification du hachage du fichier"};
+        if(fuuid) messageErreur.fuuid = fuuid;
+        erreurs.push(messageErreur);
       }
     }
 
