@@ -5,6 +5,7 @@ const uuidv1 = require('uuid/v1');
 const crypto = require('crypto');
 const lzma = require('lzma-native');
 const { spawn } = require('child_process');
+const readline = require('readline');
 
 const {uuidToDate} = require('./UUIDUtils');
 const rabbitMQ = require('./rabbitMQ');
@@ -1217,6 +1218,23 @@ class RestaurateurBackup {
   async resoumettreTransactions(pathCourant, fichierCatalogue, catalogue) {
     console.debug(`Resoumettre transactions ${fichierCatalogue}`);
     const erreurs = [];
+
+    const pathTransactions = path.join(pathCourant, 'transactions', catalogue.transactions_nomfichier)
+
+    // Charger le JSON du catalogue en memoire
+    var input = fs.createReadStream(pathTransactions);
+    var decompressor = lzma.createDecompressor();
+    input.pipe(decompressor);
+
+    const rl = readline.createInterface({
+      input: decompressor,
+      crlfDelay: Infinity
+    });
+
+    for await (const transaction of rl) {
+      console.debug("C: " + transaction);
+      await rabbitMQ.restaurerTransaction(transaction);
+    }
 
     return erreurs;
   }

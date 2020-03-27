@@ -456,6 +456,14 @@ class RabbitMQWrapper {
     return promise;
   }
 
+  // Transmet une transaction en mode de restauration (i.e. provient d'un backup)
+  restaurerTransaction(transactionStr) {
+    // Extraire correlation
+    const routingKey = 'transaction.restaurer';
+    const promise = this._transmettre(routingKey, transactionStr);
+    return promise;
+  }
+
   formatterTransaction(domaine, message) {
     let messageFormatte = message;  // Meme objet si ca cause pas de problemes
     let infoTransaction = this._formatterInfoTransaction(domaine);
@@ -595,32 +603,37 @@ class RabbitMQWrapper {
     let promise = new Promise((resolve, reject) => {
 
       var processed = false;
-      const pendingResponses = this.pendingResponses;
-      fonction_callback = function(msg, err) {
-        // Cleanup du callback
-        delete pendingResponses[correlationId];
-        clearTimeout(timeout);
-
-        if(msg && !err) {
-          resolve(msg);
-        } else {
-          reject(err);
-        }
-      };
 
       // Exporter la fonction de callback dans l'objet RabbitMQ.
       // Permet de faire la correlation lorsqu'on recoit la reponse.
-      pendingResponses[correlationId] = fonction_callback;
+      const properties = {
+        replyTo: this.reply_q.queue,
+      };
+
+      if(correlationId) {
+        // On a un correlationId, generer promise et callback
+        const pendingResponses = this.pendingResponses;
+        fonction_callback = function(msg, err) {
+          // Cleanup du callback
+          delete pendingResponses[correlationId];
+          clearTimeout(timeout);
+
+          if(msg && !err) {
+            resolve(msg);
+          } else {
+            reject(err);
+          }
+        };
+        pendingResponses[correlationId] = fonction_callback;
+        properties.correlationId = correlationId;
+      }
 
       // Faire la publication
       this.channel.publish(
         'millegrilles.noeuds',
         routingKey,
         Buffer.from(jsonMessage),
-        {
-          correlationId: correlationId,
-          replyTo: this.reply_q.queue,
-        },
+        properties,
         function(err, ok) {
           console.error("Erreur MQ Callback");
           console.error(err);
@@ -629,14 +642,20 @@ class RabbitMQWrapper {
         }
       );
 
+      if(!correlationId) {
+        resolve();
+      }
+
     });
 
-    // Lancer un timer pour permettre d'eviter qu'une requete ne soit
-    // jamais nettoyee ou repondue.
-    timeout = setTimeout(
-      () => {fonction_callback(null, {'err': 'mq.timeout'})},
-      15000
-    );
+    if(correlationId) {
+      // Lancer un timer pour permettre d'eviter qu'une requete ne soit
+      // jamais nettoyee ou repondue.
+      timeout = setTimeout(
+        () => {fonction_callback(null, {'err': 'mq.timeout'})},
+        15000
+      );
+    }
 
     return promise;
   };
