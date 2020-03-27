@@ -1236,6 +1236,9 @@ class RestaurateurBackup {
       await rabbitMQ.restaurerTransaction(transaction);
     }
 
+    // Retransmettre le catalogue horaire lui-meme
+    await rabbitMQ.restaurerTransaction(JSON.stringify(catalogue));
+
     return erreurs;
   }
 
