@@ -511,6 +511,15 @@ class RestaurateurBackup {
       annuel: opts.stagingBackupAnnuel || path.join(this.pathStaging, 'annuel'),
     }
 
+    // Conserve la plus recente information de backup horaire par domaine/securite
+    // Cle: domaine/securite, e.g. "millegrilles.domaines.SenseursPassifs/2.prive"
+    // Valeur: Valeur de hachage de l'entete dans le catalogue, e.g. :
+    // {
+    //     "hachage_entete": "5uPgda0G9u/rxN89PT38Y6noxpX90TM7x5F30zcNHxi5AwMwrIqblqf+llmVU7tbJYQphhD/Q4UNvSUS13vybA==",
+    //     "uuid-transaction": "dccc3059-6ef5-11ea-8ed2-00155d011f09"
+    // }
+    this.chaineBackupHoraire = {};
+
   }
 
   // Methode qui lance une restauration complete d'une MilleGrille
@@ -972,15 +981,31 @@ class RestaurateurBackup {
     return dictErreurs;
   }
 
+  // Methode qui parcourt tous les repertoires horaires et invoque verifierBackupHoraire()
   async verifierCataloguesHoraire() {
     const pathStagingHoraire = this.pathAggregationStaging.horaire;
 
     // Faire une fonction qui permet de parcourir les repertoires horaire
     // et verifier les catalogues un a la fois.
-    async function parcourirRecursif(level, pathCourant) {
+    async function parcourirRecursif(obj, level, pathCourant) {
 
       if(level === 4) { // 4 niveaux de sous-repertoires
-        console.debug(pathCourant);
+        // console.debug(pathCourant);
+        const catalogues = await new Promise(async (resolve, reject)=>{
+          const pathCataloguesHoraire = path.join(pathCourant, 'catalogues');
+          fs.readdir(pathCataloguesHoraire, async (err, catalogues)=>{
+            if(err) return reject(err);
+            // console.debug("Catalogues horaire")
+            // console.debug(catalogues);
+            resolve(catalogues);
+          });
+        });
+
+        for(let idxCatalogue in catalogues) {
+          const catalogue = catalogues[idxCatalogue]
+          await obj.verifierBackupHoraire(pathCourant, catalogue);
+        }
+
       } else {
         // Parcourir prochain niveau de repertoire
         await new Promise((resolve, reject)=>{
@@ -994,16 +1019,67 @@ class RestaurateurBackup {
 
             for(let valeurDateIdx in valeurDateTriee) {
               const valeurDateStr = valeurDateTriee[valeurDateIdx];
-              await parcourirRecursif(level+1, path.join(pathCourant, valeurDateStr));
+              await parcourirRecursif(obj, level+1, path.join(pathCourant, valeurDateStr));
             }
             resolve();
           })
         });
       }
     };
-    await parcourirRecursif(0, pathStagingHoraire);
+    await parcourirRecursif(this, 0, pathStagingHoraire);
 
+  }
 
+  async verifierBackupHoraire(pathCourant, fichierCatalogue) {
+    console.debug(pathCourant);
+    const pathCatalogue = path.join(pathCourant, 'catalogues', fichierCatalogue);
+
+    // Ouvrir le catalogue
+    // Charger le JSON du catalogue en memoire
+    var input = fs.createReadStream(pathCatalogue);
+    const promiseChargement = new Promise((resolve, reject)=>{
+      var decompressor = lzma.createDecompressor();
+      var contenu = '';
+      input.pipe(decompressor);
+      decompressor.on('data', chunk=>{
+        contenu = contenu + chunk;
+      });
+      decompressor.on('end', ()=>{
+        var catalogue = JSON.parse(contenu);
+        resolve(catalogue);
+      });
+      decompressor.on('error', err=>{
+        reject(err);
+      })
+    });
+    input.read();
+
+    const catalogue = await promiseChargement;
+
+    const cleChaine = catalogue.domaine + '/' + catalogue.securite;
+    var noeudPrecedent = this.chaineBackupHoraire[cleChaine];
+
+    // Comparer valeur precedente, rapporter erreur
+    if(noeudPrecedent && catalogue.backup_precedent) {
+      if(noeudPrecedent['uuid-transaction'] !== catalogue.backup_precedent['uuid-transaction']) {
+        console.error("Mismatch UUID durant chainage pour la comparaison du catalogue " + fichierCatalogue);
+      }
+      // if(cleChaine.hachage_entete !== catalogue.backup_precedent.hachage_entete) {
+      //   console.error("Mismatch hachage durant chainage pour la comparaison du catalogue " + fichierCatalogue);
+      // }
+    } else if(noeudPrecedent || catalogue.backup_precedent) {
+      // Mismatch, il manque un des deux elements de chainage pour
+      // la comparaison. Rapporter l'erreur.
+      console.error("Mismatch, il manque un des deux elements de chainage pour la comparaison du catalogue " + fichierCatalogue);
+    }
+
+    // Calculer SHA3_512 pour entete courante
+    // const hachageEntreteCourante = ...;
+    var noeudCourant = {
+    //  hachage_entete: hachageEntreteCourante,
+       'uuid-transaction': catalogue['en-tete']['uuid-transaction'],
+    }
+    this.chaineBackupHoraire[cleChaine] = noeudCourant;
   }
 
 }
