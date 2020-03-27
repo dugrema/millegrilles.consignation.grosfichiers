@@ -519,6 +519,7 @@ class RestaurateurBackup {
     //     "uuid-transaction": "dccc3059-6ef5-11ea-8ed2-00155d011f09"
     // }
     this.chaineBackupHoraire = {};
+    this.validateurSignature = new ValidateurSignature();
 
   }
 
@@ -1055,6 +1056,39 @@ class RestaurateurBackup {
     input.read();
 
     const catalogue = await promiseChargement;
+
+    // Verifier la signature du catalogue
+    const fingerprintFeuille = catalogue['en-tete'].certificat;
+    var certificatsValides = false;
+    if(!this.validateurSignature.isChainValid()) {
+      // Charger la chaine de certificats
+      const chaineFingerprints = catalogue.certificats_chaine_catalogue;
+      const chaineCertificatsNonVerifies = chaineFingerprints.reduce((liste, fingerprint)=>{
+        // Charger le certificate avec PKI, cert store
+        liste.push(catalogue.certificats_pem[fingerprint]);
+        return liste;
+      }, [])
+
+      // Ajouter cert CA de cette chaine
+      this.validateurSignature.ajouterCertificatCA(chaineCertificatsNonVerifies[chaineCertificatsNonVerifies.length-1]);
+      if(this.validateurSignature.verifierChaine(chaineCertificatsNonVerifies)) {
+        certificatsValides = true;
+      }
+    }
+
+    if(certificatsValides) {
+      try {
+        var signatureValide = await this.validateurSignature.verifierSignature(catalogue);
+        if(!signatureValide) {
+          console.error("Erreur signature catalogue invalide : " + fichierCatalogue);
+        }
+      } catch(err) {
+        console.error("Erreur verification signature catalogue " + fichierCatalogue);
+        console.error(err);
+      }
+    } else {
+      console.error("Erreur verification catalogue, certificats invalide : " + fichierCatalogue);
+    }
 
     const cleChaine = catalogue.domaine + '/' + catalogue.securite;
     var noeudPrecedent = this.chaineBackupHoraire[cleChaine];
