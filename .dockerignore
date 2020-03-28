@@ -1,6 +1,10 @@
-**/node_modules
+node_modules/
 .gitignore
 .git
 dev
 scripts
 backup_uploads/
+*.log
+Dockerfile
+image_info.txt
+*.sh

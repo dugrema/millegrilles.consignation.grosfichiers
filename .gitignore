@@ -1,7 +1,3 @@
 node_modules
 backup_uploads
-.git
-Dockerfile
-image_info.txt
 *.log
-*.sh
