@@ -43,7 +43,7 @@ class PathConsignation {
   async trouverPathFuuidExistant(fichierUuid, encrypte) {
     let pathFichier = this._formatterPath(fichierUuid, encrypte, {});
     let pathRepertoire = path.join(this.consignationPathLocal, path.dirname(pathFichier));
-    console.debug("Aller chercher fichiers du repertoire " + pathRepertoire);
+    // console.debug("Aller chercher fichiers du repertoire " + pathRepertoire);
 
     var {err, fichier} = await new Promise((resolve, reject)=>{
       fs.readdir(pathRepertoire, (err, files)=>{
@@ -61,7 +61,7 @@ class PathConsignation {
         if(fichiersTrouves.length == 1) {
           // On a trouve un seul fichier qui correspond au uuid, OK
           const fichierPath = path.join(pathRepertoire, fichiersTrouves[0]);
-          console.debug("Fichier trouve : " + fichier);
+          // console.debug("Fichier trouve : " + fichierPath);
           return resolve({fichier: fichierPath})
         } else if(fichiersTrouves.length == 0) {
           // Aucun fichier trouve
@@ -278,12 +278,19 @@ class TraitementFichier {
         // console.debug(fuuidDict);
 
         const pathBackupGrosFichiers = path.join(pathRepertoire, 'grosfichiers');
-        await new Promise((resolve, reject)=>{
-          fs.mkdir(pathBackupGrosFichiers, { recursive: true, mode: 0o770 }, (err)=>{
-            if(err) return reject(err);
-            resolve();
+        const {erreurMkdir} = await new Promise((resolve, reject)=>{
+          fs.mkdir(pathBackupGrosFichiers, { recursive: true, mode: 0o770 }, (erreurMkdir)=>{
+            if(erreurMkdir) {
+              console.error("Erreur mkdir grosfichiers : " + pathBackupGrosFichiers);
+              return reject({erreurMkdir});
+            }
+            resolve({});
           });
+        })
+        .catch(err=>{
+          return {erreurMkdir: err};
         });
+        if(erreurMkdir) return reject(erreurMkdir);
 
         for(const fuuid in fuuidDict) {
           const paramFichier = fuuidDict[fuuid];
@@ -1403,12 +1410,12 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
 
             if(errCopy) return reject(errCopy);
 
-            resolve();
+            return resolve();
           })
+        } else {
+         // Erreur irrecuperable
+          return reject(err);
         }
-
-        // Erreur irrecuperable
-        return reject(err);
       }
       resolve();
     });
@@ -1459,10 +1466,13 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
 
       // console.debug("Sauvegarde " + nouveauPath);
       fs.rename(fichierDict.path, nouveauPath, err=>{
+        // console.debug("Copie fichier " + fichierCatalogue.path);
         if(err) {
           if(err.code === 'EXDEV') {
             // Rename non supporte, faire un copy et supprimer le fichier
             fs.copyFile(fichierCatalogue.path, nouveauPath, errCopy=>{
+              console.debug("Copie complete : " + nouveauPath);
+
               // Supprimer ancien fichier
               fs.unlink(fichierCatalogue.path, errUnlink=>{
                 if(errUnlink) {
@@ -1470,7 +1480,10 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
                 }
               });
 
-              if(errCopy) throw errCopy;
+              if(errCopy) {
+                console.error("Erreur copie fichier " + fichierCatalogue.path);
+                throw errCopy;
+              }
 
               _fctDeplacerFichier(pos+1); // Loop
             })
@@ -1484,7 +1497,11 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
 
     };
 
+    // console.debug(`Debug deplacement fichiers ${pathRepertoire}`);
+
     await _fctDeplacerFichier(0);  // Lancer boucle
+
+    // console.debug(`Fin deplacement fichiers ${pathRepertoire}`);
 
     return {resultatHash};
 

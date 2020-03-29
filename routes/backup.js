@@ -38,7 +38,7 @@ async function traiterUploadHoraire(req, res, next) {
   // console.debug(req.files);
 
   // Streamer fichier vers FS
-  traitementFichier.traiterPutBackup(req)
+  await traitementFichier.traiterPutBackup(req)
   .then(msg=>{
       // console.debug("Retour top, grosfichier traite");
       // console.debug(msg);
@@ -56,17 +56,23 @@ async function traiterUploadHoraire(req, res, next) {
     res.sendStatus(500);
 
     // Tenter de supprimer les fichiers
-    req.files.forEach(file=>{
-      // console.debug("Supprimer fichier " + file.path);
-      fs.unlink(file.path, err=>{
-        if(err) {
-          console.warn("Erreur suppression fichier backup " + file.path);
-          console.warn(err);
-        }
+    try {
+      req.files.forEach(file=>{
+        // console.debug("Supprimer fichier " + file.path);
+        fs.unlink(file.path, err=>{
+          if(err) {
+            console.warn("Erreur suppression fichier backup " + file.path);
+            console.warn(err);
+            return({err});
+          }
+        });
       });
-    });
+    } catch(err) {
+      console.warn("Unlink fichiers non complete pour requete " + req.url);
+    }
 
-  })
+  });
+
 
 };
 
