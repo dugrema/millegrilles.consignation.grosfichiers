@@ -1470,18 +1470,18 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
         if(err) {
           if(err.code === 'EXDEV') {
             // Rename non supporte, faire un copy et supprimer le fichier
-            fs.copyFile(fichierCatalogue.path, nouveauPath, errCopy=>{
+            fs.copyFile(fichierDict.path, nouveauPath, errCopy=>{
               console.debug("Copie complete : " + nouveauPath);
 
               // Supprimer ancien fichier
-              fs.unlink(fichierCatalogue.path, errUnlink=>{
+              fs.unlink(fichierDict.path, errUnlink=>{
                 if(errUnlink) {
-                  console.error("Erreur suppression calalogue uploade " + fichierCatalogue.path);
+                  console.error("Erreur suppression transactions uploade " + fichierDict.path);
                 }
               });
 
               if(errCopy) {
-                console.error("Erreur copie fichier " + fichierCatalogue.path);
+                console.error("Erreur copie fichier " + fichierDict.path);
                 throw errCopy;
               }
 
