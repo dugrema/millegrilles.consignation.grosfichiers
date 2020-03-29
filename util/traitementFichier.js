@@ -1388,8 +1388,28 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
     const nomFichier = fichierCatalogue.originalname;
     const nouveauPath = path.join(pathCatalogues, nomFichier);
 
+    // Tenter de faire un move via rename
     fs.rename(fichierCatalogue.path, nouveauPath, err=>{
-      if(err) return reject(err);
+      if(err) {
+        if(err.code === 'EXDEV') {
+          // Rename non supporte, faire un copy et supprimer le fichier
+          fs.copyFile(fichierCatalogue.path, nouveauPath, errCopy=>{
+            // Supprimer ancien fichier
+            fs.unlink(fichierCatalogue.path, errUnlink=>{
+              if(errUnlink) {
+                console.error("Erreur suppression calalogue uploade " + fichierCatalogue.path);
+              }
+            });
+
+            if(errCopy) return reject(errCopy);
+
+            resolve();
+          })
+        }
+
+        // Erreur irrecuperable
+        return reject(err);
+      }
       resolve();
     });
 
@@ -1439,9 +1459,27 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
 
       // console.debug("Sauvegarde " + nouveauPath);
       fs.rename(fichierDict.path, nouveauPath, err=>{
-        if(err) throw err;
+        if(err) {
+          if(err.code === 'EXDEV') {
+            // Rename non supporte, faire un copy et supprimer le fichier
+            fs.copyFile(fichierCatalogue.path, nouveauPath, errCopy=>{
+              // Supprimer ancien fichier
+              fs.unlink(fichierCatalogue.path, errUnlink=>{
+                if(errUnlink) {
+                  console.error("Erreur suppression calalogue uploade " + fichierCatalogue.path);
+                }
+              });
 
-        _fctDeplacerFichier(pos+1); // Loop
+              if(errCopy) throw errCopy;
+
+              _fctDeplacerFichier(pos+1); // Loop
+            })
+          } else {
+            throw err;
+          }
+        } else {
+          _fctDeplacerFichier(pos+1); // Loop
+        }
       });
 
     };
