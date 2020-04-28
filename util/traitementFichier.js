@@ -148,12 +148,18 @@ class PathConsignation {
 
 }
 
-const pathConsignation = new PathConsignation();
+// const pathConsignation = new PathConsignation();
 
 class TraitementFichier {
 
+  constructor(rabbitMQ) {
+    this.rabbitMQ = rabbitMQ;
+  }
+
   traiterPut(req) {
     // Sauvegarde le fichier dans le repertoire de consignation local.
+
+    const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
 
     const promise = new Promise((resolve, reject) => {
 
@@ -218,7 +224,7 @@ class TraitementFichier {
                 }
               }
 
-              rabbitMQ.transmettreTransactionFormattee(
+              this.rabbitMQ.transmettreTransactionFormattee(
                 messageConfirmation,
                 'millegrilles.domaines.GrosFichiers.nouvelleVersion.transfertComplete')
               .then( msg => {
@@ -267,6 +273,9 @@ class TraitementFichier {
 
   // PUT pour un fichier de backup
   async traiterPutBackup(req) {
+
+    const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
+
     return await new Promise(async (resolve, reject) => {
       const timestampBackup = new Date(req.body.timestamp_backup * 1000);
       if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
@@ -353,6 +362,8 @@ class TraitementFichier {
 
   async genererListeBackupsHoraire(req) {
 
+    const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
+
     const domaine = req.body.domaine;
     const pathRepertoire = path.join(pathConsignation.consignationPathBackup, 'horaire');
     // console.debug("Path repertoire backup");
@@ -417,6 +428,7 @@ class TraitementFichier {
   }
 
   async getStatFichierBackup(pathFichier, aggregation) {
+
     const fullPathFichier = path.join(pathConsignation.consignationPathBackup, aggregation, pathFichier);
 
     const {err, size} = await new Promise((resolve, reject)=>{
@@ -513,8 +525,10 @@ class TraitementFichier {
 // Prepare et valide le contenu du repertoire staging/
 class RestaurateurBackup {
 
-  constructor(opts) {
+  constructor(pki, opts) {
     if(!opts) opts = {};
+
+    this.pki = pki;
 
     // Configuration optionnelle
     this.pathBackupHoraire = opts.backupHoraire || pathConsignation.consignationPathBackupHoraire;
@@ -1635,7 +1649,4 @@ async function genererListeCatalogues(repertoire) {
 
 // Instances
 
-const traitementFichier = new TraitementFichier();
-const utilitaireFichiers = new UtilitaireFichiers();
-
-module.exports = {traitementFichier, PathConsignation, utilitaireFichiers, RestaurateurBackup};
+module.exports = {TraitementFichier, PathConsignation, UtilitaireFichiers, RestaurateurBackup};

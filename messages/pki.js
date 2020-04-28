@@ -1,5 +1,3 @@
-const {pki} = require('../util/pki');
-
 class PkiMessages {
 
   constructor(mq) {
@@ -41,7 +39,7 @@ function transmettreCertificat(mq, routingKeys, message, opts) {
     correlationId = opts.properties.correlationId;
   }
 
-  let messageCertificat = pki.preparerMessageCertificat();
+  let messageCertificat = mq.pki.preparerMessageCertificat();
   let fingerprint = messageCertificat.fingerprint;
 
   if(replyTo && correlationId) {

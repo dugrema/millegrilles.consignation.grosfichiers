@@ -8,9 +8,7 @@ const REPERTOIRE_CERTS_TMP = '/tmp/consignationfichiers.certs';
 
 const PEM_CERT_DEBUT = '-----BEGIN CERTIFICATE-----';
 const PEM_CERT_FIN = '-----END CERTIFICATE-----';
-const ROLES_PERMIS_SSL = [
-  'coupdoeil'
-]
+const ROLES_PERMIS_SSL = ['coupdoeil', 'domaines']
 
 class PKIUtils {
   // Classe qui supporte des operations avec certificats et cles privees.
@@ -24,15 +22,13 @@ class PKIUtils {
     this.certFile = mq_cert;
     this.keyFile = mq_key;
 
+    this.idmg = null;
     this.cle = null;
     this.cert = null;
     this.ca = null;
     this.caStore = null;
     this.caIntermediaires = [];
     this.cacheCertsParFingerprint = {};
-
-    this.chargerPEMs();
-    this._verifierCertificat();
   }
 
   chargerCertificatPEM(pem) {
@@ -40,7 +36,7 @@ class PKIUtils {
     return parsedCert;
   }
 
-  chargerPEMs() {
+  async chargerPEMs() {
     // Preparer repertoire pour sauvegarder PEMS
     fs.mkdir(REPERTOIRE_CERTS_TMP, {recursive: true, mode: 0o700}, e=>{
       if(e) {
@@ -53,7 +49,11 @@ class PKIUtils {
     this.ca = fs.readFileSync(this.cacertFile);
 
     // Charger le certificat pour conserver commonName, fingerprint
-    this.chargerCertificats();
+    await this.chargerCertificats();
+    this.idmg = this.cert.issuer.getField('O').value;
+    console.info("PKI: IDMG du certificat (issuer) : %s", this.idmg);
+
+    this.getFingerprint();
   }
 
   _verifierCertificat() {
@@ -69,7 +69,7 @@ class PKIUtils {
           return reject(err);
         }
 
-        console.debug("CERT PEM DATA")
+        // console.debug("CERT PEM DATA")
         var certs = splitPEMCerts(data.toString('utf8'));
         // console.debug(certs);
 
@@ -420,7 +420,9 @@ function verificationCertificatSSL(req, res, next) {
 
   const typeCertificat = peerCertificate.subject.OU;
   if( ! ROLES_PERMIS_SSL.includes(typeCertificat)) {
-    throw new Error("Nom 'OU' non supporte: " + typeCertificat);
+    console.error("Nom 'OU' non supporte: " + typeCertificat);
+    res.sendStatus(403);  // Access denied
+    return;
   }
 
   // Utilisation du issuer pour identifier le idmg -> dans le cas d'un XS,
@@ -446,4 +448,4 @@ class CertificatInconnu extends Error {
 }
 
 const pki = new PKIUtils();
-module.exports = {pki, ValidateurSignature, verificationCertificatSSL};
+module.exports = {PKIUtils, pki, ValidateurSignature, verificationCertificatSSL};

@@ -2,13 +2,15 @@ const fs = require('fs');
 const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
 const { spawn } = require('child_process');
-const { traitementFichier, pathConsignation, utilitaireFichiers, RestaurateurBackup } = require('../util/traitementFichier');
+const { TraitementFichier, PathConsignation, utilitaireFichiers, RestaurateurBackup } = require('../util/traitementFichier');
 
 class GestionnaireMessagesBackup {
 
   constructor(mq) {
     this.mq = mq;
     this.genererBackupQuotidien.bind(this);
+    this.pathConsignation = new PathConsignation({idmg: this.mq.idmg});
+    this.traitementFichier = new TraitementFichier();
   }
 
   // Appele lors d'une reconnexion MQ
@@ -68,7 +70,7 @@ class GestionnaireMessagesBackup {
 
         // Effacer les fichiers transferes dans l'archive quotidienne
         await utilitaireFichiers.supprimerFichiers(fichiersInclure, pathRepertoireBackup);
-        await utilitaireFichiers.supprimerRepertoiresVides(pathConsignation.consignationPathBackupHoraire);
+        await utilitaireFichiers.supprimerRepertoiresVides(this.pathConsignation.consignationPathBackupHoraire);
 
       } catch (err) {
         console.error("Erreur creation backup quotidien");
@@ -107,7 +109,7 @@ class GestionnaireMessagesBackup {
         await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveMensuelleInfo');
 
         // console.debug("Info archive mensuelle transmise, nettoyage des fichiers locaux");
-        await utilitaireFichiers.supprimerFichiers(fichiersInclure, pathConsignation.consignationPathBackupArchives);
+        await utilitaireFichiers.supprimerFichiers(fichiersInclure, this.pathConsignation.consignationPathBackupArchives);
 
       } catch (err) {
         console.error("Erreur creation backup mensuel");
@@ -132,7 +134,7 @@ class GestionnaireMessagesBackup {
       const {correlationId, replyTo} = opts.properties;
 
       try {
-        const restaurateur = new RestaurateurBackup();
+        const restaurateur = new RestaurateurBackup(this.pki);
         const rapportRestauration = await restaurateur.restaurationComplete();
 
         console.debug("Rapport restauration");
@@ -170,14 +172,14 @@ async function genererBackupQuotidien(journal) {
   // console.debug(jourBackup);
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
-  var resultat = await traitementFichier.sauvegarderJournalQuotidien(journal);
+  var resultat = await this.traitementFichier.sauvegarderJournalQuotidien(journal);
   const pathJournal = resultat.path;
   const nomJournal = path.basename(pathJournal);
   const pathRepertoireBackup = path.dirname(pathJournal);
 
   // console.debug(`Path backup : ${pathRepertoireBackup}`);
 
-  const pathArchive = pathConsignation.consignationPathBackupArchives;
+  const pathArchive = this.pathConsignation.consignationPathBackupArchives;
   await new Promise((resolve, reject)=>{
     fs.mkdir(pathArchive, { recursive: true, mode: 0o770 }, err=>{
       if(err) reject(err);
@@ -305,13 +307,13 @@ async function genererBackupMensuel(journal) {
   // console.debug(moisBackup);
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
-  var resultat = await traitementFichier.sauvegarderJournalMensuel(journal);
+  var resultat = await this.traitementFichier.sauvegarderJournalMensuel(journal);
   const pathJournal = resultat.pathJournal;
   const nomJournal = path.basename(pathJournal);
 
   // console.debug(`Path journal mensuel : ${pathJournal}`);
 
-  const pathArchives = pathConsignation.consignationPathBackupArchives;
+  const pathArchives = this.pathConsignation.consignationPathBackupArchives;
 
   // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
   const nomArchive = nomJournal.replace('_catalogue', '').replace('.json', '.tar');

@@ -6,8 +6,8 @@ var {pki} = require('./pki.js');
 
 class RabbitMQWrapper {
 
-  constructor() {
-    this.idmg = process.env.MG_IDMG;
+  constructor(pki) {
+    this.pki = pki;
 
     this.url = null;
     this.connection = null;
@@ -272,12 +272,12 @@ class RabbitMQWrapper {
 
     if(routingKey && routingKey.startsWith('pki.certificat.')) {
       // Sauvegarder le certificat localement pour usage futur
-      pki.sauvegarderMessageCertificat(messageContent, json_message.fingerprint);
+      this.pki.sauvegarderMessageCertificat(messageContent, json_message.fingerprint);
       return; // Ce message ne correspond pas au format standard
     }
 
     // Valider le contenu du message - hachage et signature
-    let hashTransactionCalcule = pki.hacherTransaction(json_message);
+    let hashTransactionCalcule = this.pki.hacherTransaction(json_message);
     let hashTransactionRecu = json_message['en-tete']['hachage-contenu'];
     if(hashTransactionCalcule !== hashTransactionRecu) {
       console.warn("Erreur hachage incorrect : " + hashTransactionCalcule + ", message dropped");
@@ -286,7 +286,7 @@ class RabbitMQWrapper {
       return;
     }
 
-    return pki.verifierSignatureMessage(json_message)
+    return this.pki.verifierSignatureMessage(json_message)
     .then(signatureValide=>{
       if(signatureValide) {
         return this.traiterMessageValide(json_message, msg, callback);
@@ -333,8 +333,8 @@ class RabbitMQWrapper {
               this.certificatsConnus[fingerprint] = etatCertificat;
 
               // Sauvegarder le certificat et tenter de valider le message en attente
-              pki.sauvegarderMessageCertificat(JSON.stringify(reponse.resultats))
-              .then(()=>pki.verifierSignatureMessage(json_message))
+              this.pki.sauvegarderMessageCertificat(JSON.stringify(reponse.resultats))
+              .then(()=>this.pki.verifierSignatureMessage(json_message))
               .then(signatureValide=>{
                 if(signatureValide) {
                   return this.traiterMessageValide(json_message, msg, callback);
@@ -511,14 +511,14 @@ class RabbitMQWrapper {
     // Calculer secondes UTC (getTime retourne millisecondes locales)
     let dateUTC = (new Date().getTime()/1000) + new Date().getTimezoneOffset()*60;
     let tempsLecture = Math.trunc(dateUTC);
-    let sourceSystem = 'coupdoeil/' + 'dev2.maple.mdugre.info' + "@" + pki.getCommonName();
+    let sourceSystem = 'coupdoeil/' + 'dev2.maple.mdugre.info' + "@" + this.pki.getCommonName();
     let infoTransaction = {
       'domaine': domaine,
        //'source-systeme': sourceSystem,
-      'idmg': this.idmg,
+      'idmg': this.pki.idmg,
       'uuid-transaction': uuidv4(),
       'estampille': tempsLecture,
-      'certificat': pki.getFingerprint(),
+      'certificat': this.pki.getFingerprint(),
       'hachage-contenu': '',  // Doit etre calcule a partir du contenu
       'version': 6
     };
@@ -529,11 +529,11 @@ class RabbitMQWrapper {
   _signerMessage(message) {
     // Produire le hachage du contenu avant de signer - le hash doit
     // etre inclus dans l'entete pour faire partie de la signature.
-    let hachage = pki.hacherTransaction(message);
+    let hachage = this.pki.hacherTransaction(message);
     message['en-tete']['hachage-contenu'] = hachage;
 
     // Signer la transaction. Ajoute l'information du certificat dans l'entete.
-    let signature = pki.signerTransaction(message);
+    let signature = this.pki.signerTransaction(message);
     message['_signature'] = signature;
   }
 
@@ -780,6 +780,4 @@ class RoutingKeyManager {
 
 }
 
-const rabbitMQ = new RabbitMQWrapper();
-
-module.exports = rabbitMQ;
+module.exports = {RabbitMQWrapper};

@@ -4,58 +4,83 @@
  * Module dependencies.
  */
 
-var app = require('../app');
+var {InitialiserApp} = require('../app');
 var debug = require('debug')('millegrilles.consignation.grosfichiers:server');
 const Spdy = require('spdy');
 const FS = require('fs');
-const rabbitMQ = require('../util/rabbitMQ');
+const {RabbitMQWrapper} = require('../util/rabbitMQ');
 const {PkiMessages} = require('../messages/pki');
 const {TorrentMessages} = require('../messages/torrent');
 const {DecrypterFichier} = require('../messages/crypto');
 const {GenerateurImages} = require('../messages/images');
 const {PublicateurAWS} = require('../messages/aws');
 const {GestionnaireMessagesBackup} = require('../messages/backup');
-
-/**
- * Get port from environment and store in Express.
- */
-
-var port = normalizePort(process.env.PORT || '4000');
-app.set('port', port);
-
-const hostIp = process.env.HOST || 'dev2.maple.mdugre.info';
-const key_path = process.env.PRIVKEY;
-const cert_path = process.env.CERT;
-const ca_path = process.env.MG_MQ_CAFILE;
-
-/**
- * Create SPDY/http2 server.
- */
-
-const config = {
-    hostIp: hostIp,
-    cert: FS.readFileSync(cert_path),
-    key: FS.readFileSync(key_path),
-    ca: FS.readFileSync(ca_path),
-    requestCert: true,
-    rejectUnauthorized: true,
-    // enableTrace: true,
-};
-
-/**
- * Create HTTP server.
- */
-const server = Spdy.createServer(config, app).listen(port, () => {
-  server.on('error', onError);
-  server.on('listening', onListening);
-  console.log('Server is listening at https://localhost:' + port + '. Ctrl^C to stop it.');
-});
+const {PKIUtils} = require('../util/pki');
 
 // Connecter a RabbitMQ
-let idmg = process.env.MG_IDMG;
-let mqConnectionUrl = process.env.MG_MQ_URL || 'amqps://mq:5673/' + idmg;
-rabbitMQ.connect(mqConnectionUrl)
-.then(()=>{
+// let idmg = process.env.MG_IDMG;
+
+new Promise(async (resolve, reject)=>{
+  // Charger les certificats pour obtenir l'identite de la MilleGrille (idmg)
+  const pki = new PKIUtils();
+  await pki.chargerPEMs();
+  const idmg = pki.idmg;
+
+  const {rabbitMQ} = await initialiserRabbitMQ(pki);
+
+  // Creer une liste des serveurs RabbitMQ (un seul dans le cas d'un hote, plusieurs pour hebergement)
+  const dictRabbitMQ = {
+    [idmg]: rabbitMQ
+  }
+
+  await initialiserApp(dictRabbitMQ);
+
+})
+
+async function initialiserApp(dictRabbitMQ) {
+  const app = new InitialiserApp(dictRabbitMQ);
+
+  var port = normalizePort(process.env.PORT || '4000');
+  app.set('port', port);
+
+  const hostIp = process.env.HOST;
+  const key_path = process.env.WEB_KEY;
+  const cert_path = process.env.WEB_CERT;
+  const ca_path = process.env.MG_MQ_CAFILE;
+
+  /**
+   * Create SPDY/http2 server.
+   */
+
+  const config = {
+      hostIp: hostIp,
+      cert: FS.readFileSync(cert_path),
+      key: FS.readFileSync(key_path),
+      ca: FS.readFileSync(ca_path),
+      requestCert: true,
+      rejectUnauthorized: true,
+      // enableTrace: true,
+  };
+
+  /**
+   * Create HTTP server.
+   */
+  const server = Spdy.createServer(config, app).listen(port, () => {
+    server.on('error', onError);
+    server.on('listening', onListening);
+    console.log('Server is listening at https://localhost:' + port + '. Ctrl^C to stop it.');
+  });
+
+  return {server};
+}
+
+async function initialiserRabbitMQ(pki) {
+  const idmg = pki.idmg;
+  let mqConnectionUrl = process.env.MG_MQ_URL + "/" + idmg || 'amqps://mq:5673/' + idmg;
+
+  const rabbitMQ = new RabbitMQWrapper(pki);
+  await rabbitMQ.connect(mqConnectionUrl);
+
   // Creer objets de connexion a MQ
   const pkiMessageHandler = new PkiMessages(rabbitMQ);
   rabbitMQ.enregistrerListenerConnexion(pkiMessageHandler);
@@ -73,7 +98,8 @@ rabbitMQ.connect(mqConnectionUrl)
 
   rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ));
 
-});
+  return {rabbitMQ};
+}
 
 
 // var server = http.createServer(app);

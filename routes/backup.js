@@ -4,77 +4,81 @@ const fs = require('fs');
 const multer = require('multer');
 const bodyParser = require('body-parser');
 
-const {traitementFichier, pathConsignation} = require('../util/traitementFichier');
+const {TraitementFichier, PathConsignation} = require('../util/traitementFichier');
 
-const router = express.Router();
-const jsonParser = bodyParser.json();
+function InitialiserBackup(dictRabbitMQ) {
 
-// Creer path stockage temporaire pour upload fichiers backup
-const pathBackup = '/tmp/backup_uploads/';
-fs.mkdirSync(pathBackup, {recursive: true, mode: 0o700});
-const backupUpload = multer({ dest: pathBackup });
+  const router = express.Router();
+  const jsonParser = bodyParser.json();
 
-// Router pour fichiers locaux (meme MilleGrille)
-const backupRouter = express.Router();
+  // Creer path stockage temporaire pour upload fichiers backup
+  const pathBackup = '/tmp/backup_uploads/';
+  fs.mkdirSync(pathBackup, {recursive: true, mode: 0o700});
+  const backupUpload = multer({ dest: pathBackup });
 
-const backupFileFields = [
-  {name: 'transactions', maxcount: 4},
-  {name: 'catalogue', maxcount: 1},
-]
+  // Router pour fichiers locaux (meme MilleGrille)
+  const backupRouter = express.Router();
 
-router.put('/domaine/*', backupUpload.fields(backupFileFields), traiterUploadHoraire);
+  const backupFileFields = [
+    {name: 'transactions', maxcount: 4},
+    {name: 'catalogue', maxcount: 1},
+  ]
 
-// Path de download des fichiers de backup horaires
-router.get('/liste/backups_horaire', getListeBackupHoraire);
-router.get('/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup);
-router.get('/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup);
+  router.put('/domaine/*', backupUpload.fields(backupFileFields), traiterUploadHoraire);
 
-async function traiterUploadHoraire(req, res, next) {
-  // console.debug("fichier backup PUT " + req.url);
-  // console.debug("Headers: ");
-  // console.debug(req.headers);
-  // console.debug("Body: ");
-  // console.debug(req.body);
-  // console.debug(req.files);
+  // Path de download des fichiers de backup horaires
+  router.get('/liste/backups_horaire', getListeBackupHoraire);
+  router.get('/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup);
+  router.get('/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup);
 
-  // Streamer fichier vers FS
-  await traitementFichier.traiterPutBackup(req)
-  .then(msg=>{
-      // console.debug("Retour top, grosfichier traite");
-      // console.debug(msg);
-      response = {
-       ...msg,
-      };
-      res.end(JSON.stringify(response));
+  async function traiterUploadHoraire(req, res, next) {
+    // console.debug("fichier backup PUT " + req.url);
+    // console.debug("Headers: ");
+    // console.debug(req.headers);
+    // console.debug("Body: ");
+    // console.debug(req.body);
+    // console.debug(req.files);
 
-      // res.sendStatus(200);
+    // Streamer fichier vers FS
+    await traitementFichier.traiterPutBackup(req)
+    .then(msg=>{
+        // console.debug("Retour top, grosfichier traite");
+        // console.debug(msg);
+        response = {
+         ...msg,
+        };
+        res.end(JSON.stringify(response));
 
-  })
-  .catch(err=>{
-    console.error("Erreur traitement fichier " + req.url);
-    console.error(err);
-    res.sendStatus(500);
+        // res.sendStatus(200);
 
-    // Tenter de supprimer les fichiers
-    try {
-      req.files.forEach(file=>{
-        // console.debug("Supprimer fichier " + file.path);
-        fs.unlink(file.path, err=>{
-          if(err) {
-            console.warn("Erreur suppression fichier backup " + file.path);
-            console.warn(err);
-            return({err});
-          }
+    })
+    .catch(err=>{
+      console.error("Erreur traitement fichier " + req.url);
+      console.error(err);
+      res.sendStatus(500);
+
+      // Tenter de supprimer les fichiers
+      try {
+        req.files.forEach(file=>{
+          // console.debug("Supprimer fichier " + file.path);
+          fs.unlink(file.path, err=>{
+            if(err) {
+              console.warn("Erreur suppression fichier backup " + file.path);
+              console.warn(err);
+              return({err});
+            }
+          });
         });
-      });
-    } catch(err) {
-      console.warn("Unlink fichiers non complete pour requete " + req.url);
-    }
+      } catch(err) {
+        console.warn("Unlink fichiers non complete pour requete " + req.url);
+      }
 
-  });
+    });
 
+  };
 
-};
+  return router;
+}
 
 async function getListeBackupHoraire(req, res, next) {
 
@@ -134,4 +138,4 @@ async function getFichierBackup(req, res, next) {
 
 };
 
-module.exports = router;
+module.exports = {InitialiserBackup};

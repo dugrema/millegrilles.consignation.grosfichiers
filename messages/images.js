@@ -6,7 +6,7 @@ const im = require('imagemagick');
 const uuidv1 = require('uuid/v1');
 const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
 const { Decrypteur } = require('../util/cryptoUtils.js');
-const {pathConsignation} = require('../util/traitementFichier');
+const {PathConsignation} = require('../util/traitementFichier');
 const transformationImages = require('../util/transformationImages');
 
 const decrypteur = new Decrypteur();
@@ -16,9 +16,14 @@ class GenerateurImages {
 
   constructor(mq) {
     this.mq = mq;
+    this.idmg = this.mq.pki.idmg;
 
     this.genererThumbnail.bind(this);
     this.transcoderVideoDecrypte.bind(this);
+    this.pathConsignation = new PathConsignation({idmg: this.idmg});
+
+    console.info("Path RabbitMQ %s : %s", this.idmg, this.pathConsignation.consignationPath);
+
   }
 
   // Appele lors d'une reconnexion MQ
@@ -46,7 +51,7 @@ class GenerateurImages {
     const cleSecreteDechiffree = decrypterCleSecrete(cleSecreteChiffree);
 
     // Trouver fichier original crypte
-    const pathFichierCrypte = pathConsignation.trouverPathLocal(fuuid, true);
+    const pathFichierCrypte = this.pathConsignation.trouverPathLocal(fuuid, true);
 
     // Preparer fichier destination decrypte
     // Aussi preparer un fichier tmp pour le thumbnail
@@ -90,7 +95,7 @@ class GenerateurImages {
 
     // console.debug("Message pour generer thumbnail protege " + message.fuuid);
 
-    const pathFichier = pathConsignation.trouverPathLocal(fuuid, false, {extension: extension});
+    const pathFichier = this.pathConsignation.trouverPathLocal(fuuid, false, {extension: extension});
 
     var thumbnailBase64Content, metadata;
 
@@ -100,8 +105,8 @@ class GenerateurImages {
     }
 
     const fuuidVideo480p = uuidv1(), fuuidPreviewImage = uuidv1();
-    const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
-    const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+    const pathVideo480p = this.pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
+    const pathPreviewImage = this.pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
     return await new Promise((resolve, reject)=>{
       fs.mkdir(path.dirname(pathVideo480p), {recursive: true}, e=>{
         if(e) reject(e);
