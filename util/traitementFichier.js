@@ -154,6 +154,8 @@ class TraitementFichier {
 
   constructor(rabbitMQ) {
     this.rabbitMQ = rabbitMQ;
+    const idmg = rabbitMQ.pki.idmg;
+    this.pathConsignation = new PathConsignation({idmg});
   }
 
   traiterPut(req) {
@@ -203,7 +205,7 @@ class TraitementFichier {
                 if(mimetype.split('/')[0] === 'image') {
                   try {
                     // console.debug("Creation preview image")
-                    var imagePreviewInfo = await traiterImage(nouveauPathFichier);
+                    var imagePreviewInfo = await traiterImage(pathConsignation, nouveauPathFichier);
                     messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
                     messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
                     messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
@@ -216,7 +218,7 @@ class TraitementFichier {
                   // On genere uniquement le thumbnail - le processus va
                   // faire un appel async pour le re-encoder
                   console.debug("Traitement video");
-                  var imagePreviewInfo = await traiterVideo(nouveauPathFichier);
+                  var imagePreviewInfo = await traiterVideo(pathConsignation, nouveauPathFichier);
                   messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
                   messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
                   messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
@@ -429,7 +431,7 @@ class TraitementFichier {
 
   async getStatFichierBackup(pathFichier, aggregation) {
 
-    const fullPathFichier = path.join(pathConsignation.consignationPathBackup, aggregation, pathFichier);
+    const fullPathFichier = path.join(this.pathConsignation.consignationPathBackup, aggregation, pathFichier);
 
     const {err, size} = await new Promise((resolve, reject)=>{
       fs.stat(fullPathFichier, (err, stat)=>{
@@ -447,7 +449,7 @@ class TraitementFichier {
     const {domaine, securite, jour} = journal;
 
     const dateJournal = new Date(jour*1000);
-    var repertoireBackup = pathConsignation.trouverPathBackupHoraire(dateJournal);
+    var repertoireBackup = this.pathConsignation.trouverPathBackupHoraire(dateJournal);
     // Remonter du niveau heure a jour
     repertoireBackup = path.dirname(repertoireBackup);
     let year = dateJournal.getUTCFullYear();
@@ -485,7 +487,7 @@ class TraitementFichier {
     const {domaine, securite, mois} = journal;
 
     const dateJournal = new Date(mois*1000);
-    var repertoireBackup = pathConsignation.consignationPathBackupArchives;
+    var repertoireBackup = this.pathConsignation.consignationPathBackupArchives;
 
     let year = dateJournal.getUTCFullYear();
     let month = dateJournal.getUTCMonth() + 1; if(month < 10) month = '0'+month;
@@ -527,13 +529,15 @@ class RestaurateurBackup {
 
   constructor(pki, opts) {
     if(!opts) opts = {};
-
     this.pki = pki;
 
+    const idmg = pki.idmg;
+    this.pathConsignation = new PathConsignation({idmg});
+
     // Configuration optionnelle
-    this.pathBackupHoraire = opts.backupHoraire || pathConsignation.consignationPathBackupHoraire;
-    this.pathBackupArchives = opts.archives || pathConsignation.consignationPathBackupArchives;
-    this.pathStaging = opts.staging || pathConsignation.consignationPathBackupStaging;
+    this.pathBackupHoraire = opts.backupHoraire || this.pathConsignation.consignationPathBackupHoraire;
+    this.pathBackupArchives = opts.archives || this.pathConsignation.consignationPathBackupArchives;
+    this.pathStaging = opts.staging || this.pathConsignation.consignationPathBackupStaging;
 
     // Liste des niveaux d'aggregation en ordre annuel vers horaire
     this.listeAggregation = [
@@ -1551,7 +1555,7 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
 }
 
 // Extraction de thumbnail et preview pour images
-async function traiterImage(pathImage) {
+async function traiterImage(pathConsignation, pathImage) {
   var fuuidPreviewImage = uuidv1();
   var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
 
@@ -1580,7 +1584,7 @@ async function traiterImage(pathImage) {
 }
 
 // Extraction de thumbnail, preview et recodage des videos pour le web
-async function traiterVideo(pathVideo, sansTranscodage) {
+async function traiterVideo(pathConsignation, pathVideo, sansTranscodage) {
   var fuuidPreviewImage = uuidv1();
 
   // Extraire un preview pleine resolution du video, faire un thumbnail

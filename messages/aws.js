@@ -3,7 +3,7 @@ const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
 const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
 const { decrypterSymmetrique } = require('../util/cryptoUtils')
-const { pathConsignation } = require('../util/traitementFichier');
+const { PathConsignation } = require('../util/traitementFichier');
 
 const AWS_API_VERSION = '2006-03-01';
 
@@ -12,6 +12,8 @@ class PublicateurAWS {
   constructor(mq) {
     this.mq = mq;
     this.publierCollection.bind(this);
+
+    this.pathConsignation = new PathConsignation({idmg: this.mq.idmg});
   }
 
   // Appele lors d'une reconnexion MQ

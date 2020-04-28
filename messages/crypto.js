@@ -4,7 +4,7 @@ const uuidv1 = require('uuid/v1');
 const crypto = require('crypto');
 const forge = require('node-forge');
 const { Decrypteur } = require('../util/cryptoUtils.js');
-const {pathConsignation} = require('../util/traitementFichier');
+const { PathConsignation } = require('../util/traitementFichier');
 const transformationImages = require('../util/transformationImages');
 
 const decrypteur = new Decrypteur();
@@ -23,6 +23,9 @@ class DecrypterFichier {
 
   constructor(mq) {
     this.mq = mq;
+
+    const idmg = mq.pki.idmg;
+    this.pathConsignation = new PathConsignation({idmg});
 
     this.decrypterFichier.bind(this);
   }
@@ -48,13 +51,13 @@ class DecrypterFichier {
     // console.log("Message de declassement de grosfichiers " + fuuid);
 
     // Trouver fichier original crypte
-    const pathFichierCrypte = pathConsignation.trouverPathLocal(fuuid, true);
+    const pathFichierCrypte = this.pathConsignation.trouverPathLocal(fuuid, true);
 
     // Preparer fichier destination decrypte
     const fuuidFichierDecrypte = uuidv1(), fuuidPreviewImage = uuidv1();
     let extension = message.extension || path.parse(message.nomfichier).ext.toLowerCase().substr(1);
     const paramsType = {extension, mimetype: message.mimetype};
-    const pathFichierDecrypte = pathConsignation.trouverPathLocal(fuuidFichierDecrypte, false, paramsType);
+    const pathFichierDecrypte = this.pathConsignation.trouverPathLocal(fuuidFichierDecrypte, false, paramsType);
     const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
     // console.debug("Creation repertoire");
@@ -76,7 +79,7 @@ class DecrypterFichier {
     .then(async resultat =>{
 
       if ( message.mimetype && message.mimetype.split('/')[0] === 'image' ) {
-        const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+        const pathPreviewImage = this.pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
         const repFichierDecrypte = path.dirname(pathFichierDecrypte);
         // console.debug("Decryptage image, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
 
@@ -88,9 +91,9 @@ class DecrypterFichier {
         resultat.securite = securite;
       } else if ( message.mimetype && message.mimetype.split('/')[0] === 'video' ) {
         const fuuidVideo480p = uuidv1();
-        const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
+        const pathVideo480p = this.pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
 
-        const pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
+        const pathPreviewImage = this.pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
         const repFichierDecrypte = path.dirname(pathFichierDecrypte);
 
         // console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);

@@ -10,7 +10,7 @@ class GestionnaireMessagesBackup {
     this.mq = mq;
     this.genererBackupQuotidien.bind(this);
     this.pathConsignation = new PathConsignation({idmg: this.mq.idmg});
-    this.traitementFichier = new TraitementFichier();
+    this.traitementFichier = new TraitementFichier(mq);
   }
 
   // Appele lors d'une reconnexion MQ

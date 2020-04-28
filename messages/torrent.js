@@ -7,7 +7,7 @@ const uuidv4 = require('uuid/v4');
 const TransmissionRPC = require('transmission');
 const crypto = require('crypto');
 const uuid = require('uuid');
-const {pathConsignation} = require('../util/traitementFichier');
+const {PathConsignation} = require('../util/traitementFichier');
 
 const domaineNouveauTorrent = 'millegrilles.domaines.GrosFichiers.nouveauTorrent';
 const domaineSeedingTorrent = 'millegrilles.domaines.GrosFichiers.seedingTorrent';
@@ -65,6 +65,8 @@ class TorrentMessages {
   constructor(mq) {
     this.mq = mq;
 
+    this.pathConsignation = new PathConsignation({idmg: this.mq.idmg});
+
     this.creerNouveauTorrent.bind(this);
     this.etatTorrent.bind(this);
     this.seederTorrent.bind(this);
@@ -106,7 +108,7 @@ class TorrentMessages {
 
     const nomCollection = message.nom;
     const uuidCollection = message['uuid'];
-    const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
+    const pathCollection = path.join(this.pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
     var pathFichierTorrent = null;
     var transactionTorrent_local = null;
 
@@ -168,8 +170,8 @@ class TorrentMessages {
 
     const crypte = false;   // Cryptage torrent pas encore supporte
     const uuidCollection = message['uuid'];
-    const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidCollection);
-    const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidCollection, crypte, {extension: 'torrent'});
+    const fichierTorrent = this.pathConsignation.formatPathFichierTorrent(uuidCollection);
+    const pathTorrentConsigne = this.pathConsignation.trouverPathLocal(uuidCollection, crypte, {extension: 'torrent'});
 
     fs.readFile(pathTorrentConsigne, (e, bufferTorrent)=>{
       if(e) {
@@ -212,7 +214,7 @@ class TorrentMessages {
       // console.debug("Fichiers dans torrent");
       // console.debug(fichiers);
 
-      const pathCollection = path.join(pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
+      const pathCollection = path.join(this.pathConsignation.consignationPathSeeding, uuidCollection, nomCollection);
       this._creerRepertoireHardlinks({documents: fichiers}, nomCollection, pathCollection)
       .catch(err=>{
         console.error("Erreur creation hard links pour seeder");
@@ -222,7 +224,7 @@ class TorrentMessages {
         // console.log("Hard links collection crees");
 
         // Creer hard link pour fichier torrent
-        const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidCollection);
+        const fichierTorrent = this.pathConsignation.formatPathFichierTorrent(uuidCollection);
         fs.link(pathTorrentConsigne, fichierTorrent, e=>{
           if(e) {
             if(e.code == 'EEXIST') {
@@ -306,7 +308,7 @@ class TorrentMessages {
           // console.debug(extension);
 
           if(fuuid) {
-            const pathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension});
+            const pathFichier = this.pathConsignation.trouverPathLocal(fuuid, encrypte, {extension});
             // console.debug("Creer hard link pour " + pathFichier);
 
             // Nom du fichier:
@@ -375,8 +377,8 @@ class TorrentMessages {
     const crypte = securite=='3.protege' || securite=='4.secure';
 
     const uuidTorrent = message['uuid'];
-    const fichierTorrent = pathConsignation.formatPathFichierTorrent(uuidTorrent, false, {extension: 'torrent'});
-    const pathTorrentConsigne = pathConsignation.trouverPathLocal(uuidTorrent, crypte, {extension: 'torrent'});
+    const fichierTorrent = this.pathConsignation.formatPathFichierTorrent(uuidTorrent, false, {extension: 'torrent'});
+    const pathTorrentConsigne = this.pathConsignation.trouverPathLocal(uuidTorrent, crypte, {extension: 'torrent'});
 
     const transactionTorrent = {
       'catalogue': message.documents,
