@@ -414,16 +414,19 @@ class ValidateurSignature {
 // params req, res, next proviennent d'express
 // rend disponible: {idmg: str, protege: bool, prive: bool}
 function verificationCertificatSSL(req, res, next) {
-  const peerCertificate = req.connection.getPeerCertificate(true);
-  console.debug("PEER Certificate");
-  console.debug(peerCertificate);
+  const peerCertificate = req.connection.getPeerCertificate();
+  // console.debug("PEER Certificate");
+  // console.debug(peerCertificate);
 
   const typeCertificat = peerCertificate.subject.OU;
   if( ! ROLES_PERMIS_SSL.includes(typeCertificat)) {
     throw new Error("Nom 'OU' non supporte: " + typeCertificat);
   }
 
+  // Utilisation du issuer pour identifier le idmg -> dans le cas d'un XS,
+  // le issuer est fiable parce qu'il est signe par la millegrille locale.
   const idmg = peerCertificate.issuer.O;
+
   const protege = typeCertificat === 'coupdoeil'; // TODO: verifier si exchange protege
   const prive = true;   // Cert valide donne toujours access a prive
 
