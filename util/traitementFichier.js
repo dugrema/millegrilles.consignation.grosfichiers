@@ -156,6 +156,7 @@ class TraitementFichier {
     this.rabbitMQ = rabbitMQ;
     const idmg = rabbitMQ.pki.idmg;
     this.pathConsignation = new PathConsignation({idmg});
+    this.utilitaireFichiers = new UtilitaireFichiers();
   }
 
   traiterPut(req) {
@@ -515,7 +516,7 @@ class TraitementFichier {
     compressor.end();
     await promiseSauvegarde;
 
-    const sha512Journal = await utilitaireFichiers.calculerSHAFichier(fullPathFichier);
+    const sha512Journal = await this.utilitaireFichiers.calculerSHAFichier(fullPathFichier);
 
     // console.debug("Fichier cree : " + fullPathFichier);
     return {pathJournal: fullPathFichier, sha512: sha512Journal};
@@ -533,6 +534,8 @@ class RestaurateurBackup {
 
     const idmg = pki.idmg;
     this.pathConsignation = new PathConsignation({idmg});
+
+    this.utilitaireFichiers = new UtilitaireFichiers();
 
     // Configuration optionnelle
     this.pathBackupHoraire = opts.backupHoraire || this.pathConsignation.consignationPathBackupHoraire;
@@ -818,7 +821,7 @@ class RestaurateurBackup {
             }
 
             // console.debug(`Extraire fichier ${fichier} vers ${pathDestination}`)
-            await utilitaireFichiers.extraireTarFile(fichierArchiveSource, pathDestination);
+            await this.utilitaireFichiers.extraireTarFile(fichierArchiveSource, pathDestination);
 
             // Verifier le catalogue de l'archive et nettoyer
             const catalogue = await extraireCatalogueStaging(fichierArchiveSource, pathDestination);
@@ -883,7 +886,7 @@ class RestaurateurBackup {
             }
 
             // Supprimer l'archive originale
-            await utilitaireFichiers.supprimerFichiers([files[idx]], repertoireSource);
+            await this.utilitaireFichiers.supprimerFichiers([files[idx]], repertoireSource);
           }
           __extraireTar(idx+1);
         }
@@ -946,7 +949,7 @@ class RestaurateurBackup {
       // console.debug(`Verifier SHA3_512 fichier ${pathFichier}`);
 
       try {
-        const shaCalcule = await utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash: 'sha3-512'});
+        const shaCalcule = await this.utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash: 'sha3-512'});
         if(sha3_512 !== shaCalcule) {
           erreursArchives.push({nomFichier, message: "Hachage invalide"});
         }
@@ -1023,7 +1026,7 @@ class RestaurateurBackup {
       // console.debug(`Verifier hachage fichier ${pathFichier}, ${fuuid}`);
 
       try {
-        const shaCalcule = await utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash});
+        const shaCalcule = await this.utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash});
         if(hachage !== shaCalcule) {
           console.warn(`Hachage ${pathFichier} est invalide`);
           const messageErreur = {nomFichier, message: "Hachage invalide"};
@@ -1235,7 +1238,7 @@ class RestaurateurBackup {
 
       try {
         const {heure, domaine, securite} = catalogue;
-        const shaCalcule = await utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash});
+        const shaCalcule = await this.utilitaireFichiers.calculerSHAFichier(pathFichier, {fonctionHash});
         if(hachage !== shaCalcule) {
           console.warn(`Hachage ${pathFichier} est invalide`);
           const messageErreur = {nomFichier, fichierCatalogue, heure, domaine, securite, errcode: 'digest.invalid', message: "Hachage invalide"};
