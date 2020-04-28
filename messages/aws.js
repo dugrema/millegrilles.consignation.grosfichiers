@@ -13,7 +13,8 @@ class PublicateurAWS {
     this.mq = mq;
     this.publierCollection.bind(this);
 
-    this.pathConsignation = new PathConsignation({idmg: this.mq.idmg});
+    const idmg = mq.pki.idmg;
+    this.pathConsignation = new PathConsignation({idmg});
   }
 
   // Appele lors d'une reconnexion MQ
@@ -171,7 +172,7 @@ function uploaderFichier(s3, fichiers, msg) {
     let fuuidFichier = fichier.fuuid;
     let extension = fichier.extension;
     let mimetype = fichier.mimetype;
-    let file = pathConsignation.trouverPathLocal(fuuidFichier, false, {extension});
+    let file = this.pathConsignation.trouverPathLocal(fuuidFichier, false, {extension});
 
     var fileStream = fs.createReadStream(file);
     fileStream.on('error', function(err) {
