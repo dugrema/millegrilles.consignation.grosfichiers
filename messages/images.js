@@ -82,6 +82,10 @@ class GenerateurImages {
         tmpDecrypted.cleanup();
       }
     })
+    .catch(err=>{
+      console.error("Erreur dechiffrage fichier multimedia pour thumbnail");
+      console.error(err);
+    })
 
   }
 
