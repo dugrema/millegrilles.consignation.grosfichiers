@@ -8,6 +8,9 @@ const REPERTOIRE_CERTS_TMP = '/tmp/consignationfichiers.certs';
 
 const PEM_CERT_DEBUT = '-----BEGIN CERTIFICATE-----';
 const PEM_CERT_FIN = '-----END CERTIFICATE-----';
+const ROLES_PERMIS_SSL = [
+  'coupdoeil'
+]
 
 class PKIUtils {
   // Classe qui supporte des operations avec certificats et cles privees.
@@ -406,6 +409,23 @@ class ValidateurSignature {
 
 }
 
+// Retourne de l'information sur le certificat et un flag
+// pour indiquer si le certificat est valide pour acceder a des ressources
+// params req, res, next proviennent d'express
+// rend disponible: {idmg: str, protege: bool, prive: bool}
+function verificationCertificatSSL(req, res, next) {
+  const peerCertificate = req.connection.getPeerCertificate(true);
+  console.debug("PEER Certificate");
+  console.debug(peerCertificate);
+
+  const typeCertificat = peerCertificate.subject.OU;
+  if( ! ROLES_PERMIS_SSL.includes(typeCertificat)) {
+    throw new Error("Nom 'OU' non supporte: " + typeCertificat);
+  }
+
+  next();
+}
+
 class CertificatInconnu extends Error {
   constructor(message) {
     super(message);
@@ -414,4 +434,4 @@ class CertificatInconnu extends Error {
 }
 
 const pki = new PKIUtils();
-module.exports = {pki, ValidateurSignature};
+module.exports = {pki, ValidateurSignature, verificationCertificatSSL};

@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+
 const {traitementFichier, pathConsignation} = require('../util/traitementFichier');
 // const throttle = require('@sitespeed.io/throttle');
 
@@ -8,9 +9,18 @@ const router = express.Router();
 
 // Router pour fichiers locaux (meme MilleGrille)
 const localRouter = express.Router();
+// router.use(clientCertificateAuth(checkAuth))
 router.use('/local', localRouter);
 
 localRouter.get('*', (req, res, next) => {
+  // console.debug("connection");
+  //
+  // const peerCertificate = req.connection.getPeerCertificate(true);
+  // console.debug(peerCertificate);
+  // const issuerCertificate = peerCertificate.issuerCertificate;
+
+  // const autorisation = verificationCertificatSSL(req);
+
   // Tenter de charger les parametres via MQ
   let fuuide = req.url;
   let contentType = 'application/octet-stream';
