@@ -65,7 +65,8 @@ class TorrentMessages {
   constructor(mq) {
     this.mq = mq;
 
-    this.pathConsignation = new PathConsignation({idmg: this.mq.idmg});
+    const idmg = mq.pki.idmg;
+    this.pathConsignation = new PathConsignation({idmg});
 
     this.creerNouveauTorrent.bind(this);
     this.etatTorrent.bind(this);
