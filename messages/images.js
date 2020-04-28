@@ -142,6 +142,10 @@ class GenerateurImages {
       // console.debug(convertedFile);
       this._transmettreTransactionVideoTranscode(fuuid, resultat)
     })
+    .catch(err=>{
+      console.error("Erreur conversion video");
+      console.error(err);
+    })
 
   }
 
