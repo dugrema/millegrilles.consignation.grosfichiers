@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 
-const {TraitementFichier} = require('../util/traitementFichier')
+const {PathConsignation, TraitementFichier} = require('../util/traitementFichier')
 
 // const throttle = require('@sitespeed.io/throttle');
 
