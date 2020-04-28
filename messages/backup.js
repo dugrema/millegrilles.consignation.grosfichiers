@@ -2,15 +2,18 @@ const fs = require('fs');
 const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
 const { spawn } = require('child_process');
-const { TraitementFichier, PathConsignation, utilitaireFichiers, RestaurateurBackup } = require('../util/traitementFichier');
+const { TraitementFichier, PathConsignation, UtilitaireFichiers, RestaurateurBackup } = require('../util/traitementFichier');
+
+const utilitaireFichiers = new UtilitaireFichiers();
 
 class GestionnaireMessagesBackup {
 
   constructor(mq) {
     this.mq = mq;
+    this.pki = mq.pki;
     this.genererBackupQuotidien.bind(this);
-    this.pathConsignation = new PathConsignation({idmg: this.mq.idmg});
     this.traitementFichier = new TraitementFichier(mq);
+    this.pathConsignation = this.traitementFichier.pathConsignation;
   }
 
   // Appele lors d'une reconnexion MQ
@@ -53,7 +56,7 @@ class GestionnaireMessagesBackup {
       // console.debug(message);
 
       try {
-        const informationArchive = await genererBackupQuotidien(message.catalogue);
+        const informationArchive = await genererBackupQuotidien(this.traitementFichier, message.catalogue);
         const { fichiersInclure, pathRepertoireBackup } = informationArchive;
         delete informationArchive.fichiersInclure; // Pas necessaire pour la transaction
         delete informationArchive.pathRepertoireBackup; // Pas necessaire pour la transaction
@@ -89,7 +92,7 @@ class GestionnaireMessagesBackup {
       // console.debug(message);
 
       try {
-        const informationArchive = await genererBackupMensuel(message.catalogue);
+        const informationArchive = await genererBackupMensuel(this.traitementFichier, message.catalogue);
 
         // console.debug("Information archive mensuelle:");
         // console.debug(informationArchive);
@@ -164,7 +167,7 @@ class GestionnaireMessagesBackup {
 }
 
 // Genere un fichier de backup quotidien qui correspond au journal
-async function genererBackupQuotidien(journal) {
+async function genererBackupQuotidien(traitementFichier, journal) {
 
   const {domaine, securite} = journal;
   const jourBackup = new Date(journal.jour * 1000);
@@ -172,14 +175,14 @@ async function genererBackupQuotidien(journal) {
   // console.debug(jourBackup);
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
-  var resultat = await this.traitementFichier.sauvegarderJournalQuotidien(journal);
+  var resultat = await traitementFichier.sauvegarderJournalQuotidien(journal);
   const pathJournal = resultat.path;
   const nomJournal = path.basename(pathJournal);
   const pathRepertoireBackup = path.dirname(pathJournal);
 
   // console.debug(`Path backup : ${pathRepertoireBackup}`);
 
-  const pathArchive = this.pathConsignation.consignationPathBackupArchives;
+  const pathArchive = traitementFichier.pathConsignation.consignationPathBackupArchives;
   await new Promise((resolve, reject)=>{
     fs.mkdir(pathArchive, { recursive: true, mode: 0o770 }, err=>{
       if(err) reject(err);
@@ -299,7 +302,7 @@ async function genererBackupQuotidien(journal) {
 }
 
 // Genere un fichier de backup mensuel qui correspond au journal
-async function genererBackupMensuel(journal) {
+async function genererBackupMensuel(traitementFichier, journal) {
 
   const {domaine, securite} = journal;
   const moisBackup = new Date(journal.mois * 1000);
@@ -307,13 +310,13 @@ async function genererBackupMensuel(journal) {
   // console.debug(moisBackup);
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
-  var resultat = await this.traitementFichier.sauvegarderJournalMensuel(journal);
+  var resultat = await traitementFichier.sauvegarderJournalMensuel(journal);
   const pathJournal = resultat.pathJournal;
   const nomJournal = path.basename(pathJournal);
 
   // console.debug(`Path journal mensuel : ${pathJournal}`);
 
-  const pathArchives = this.pathConsignation.consignationPathBackupArchives;
+  const pathArchives = traitementFichier.pathConsignation.consignationPathBackupArchives;
 
   // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
   const nomArchive = nomJournal.replace('_catalogue', '').replace('.json', '.tar');

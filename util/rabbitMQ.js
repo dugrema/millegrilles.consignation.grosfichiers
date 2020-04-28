@@ -705,9 +705,16 @@ class RabbitMQWrapper {
     var routingKey = 'requete.millegrilles.domaines.Pki.certificat';
     return this.transmettreRequete(routingKey, requete)
     .then(reponse=>{
-      let messageContent = decodeURIComponent(escape(reponse.content));
-      let json_message = JSON.parse(messageContent);
-      return json_message;
+      try {
+        let messageContent = decodeURIComponent(escape(reponse.content));
+        let json_message = JSON.parse(messageContent);
+        return json_message;
+      } catch(err) {
+        console.debug("Erreur reponse certificat, requete initiale : %s", requete);
+        console.debug(messageContent);
+        throw err;
+      }
+
     })
   }
 

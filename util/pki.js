@@ -8,7 +8,7 @@ const REPERTOIRE_CERTS_TMP = '/tmp/consignationfichiers.certs';
 
 const PEM_CERT_DEBUT = '-----BEGIN CERTIFICATE-----';
 const PEM_CERT_FIN = '-----END CERTIFICATE-----';
-const ROLES_PERMIS_SSL = ['coupdoeil', 'domaines']
+const ROLES_PERMIS_SSL = ['coupdoeil', 'domaines', 'maitrecles']
 
 class PKIUtils {
   // Classe qui supporte des operations avec certificats et cles privees.

@@ -39,6 +39,10 @@ function InitialiserBackup(dictRabbitMQ) {
     // console.debug(req.body);
     // console.debug(req.files);
 
+    const idmg = req.autorisationMillegrille.idmg;
+    const rabbitMQ = dictRabbitMQ[idmg];
+    const traitementFichier = new TraitementFichier(rabbitMQ);
+
     // Streamer fichier vers FS
     await traitementFichier.traiterPutBackup(req)
     .then(msg=>{
@@ -83,8 +87,11 @@ function InitialiserBackup(dictRabbitMQ) {
 async function getListeBackupHoraire(req, res, next) {
 
   // console.debug("Retourner la liste des backups horaires");
-
   try {
+    const idmg = req.autorisationMillegrille.idmg;
+    const rabbitMQ = dictRabbitMQ[idmg];
+    const traitementFichier = new TraitementFichier(rabbitMQ);
+
     const listeBackupsHoraires = await traitementFichier.genererListeBackupsHoraire(req);
     res.end(JSON.stringify(listeBackupsHoraires));
   } catch(err) {
