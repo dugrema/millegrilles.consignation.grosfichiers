@@ -17,10 +17,27 @@ const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json');
 
 class PathConsignation {
 
-  constructor() {
-    this.idmg = process.env.MG_IDMG || 'sansnom';
-    this.consignationPath = process.env.MG_CONSIGNATION_PATH ||
-      path.join('/var/opt/millegrilles/mounts/consignation');
+  constructor(opts) {
+    if(!opts) opts = {};
+
+    const idmg = opts.idmg || process.env.MG_IDMG;
+
+    // Methode de selection du path
+    // Les overrides sont via env MG_CONSIGNATION_PATH ou parametre direct opts.consignationPath
+    // Si IDMG fournit, formatte path avec /var/opt/millegrilles/IDMG
+    // Sinon utilise un path generique sans IDMG
+    var consignationPath = process.env.MG_CONSIGNATION_PATH || opts.consignationPath;
+    if(!consignationPath) {
+      if(idmg) {
+        consignationPath = path.join('/var/opt/millegrilles', idmg, '/mounts/consignation');
+      } else {
+        consignationPath = '/var/opt/millegrilles/mounts/consignation';
+      }
+    }
+
+    // var consignationPath = opts.consignationPath || '/var/opt/millegrilles/mounts/consignation';
+
+    this.consignationPath = consignationPath;
 
     // Path utilisable localement
     this.consignationPathLocal = path.join(this.consignationPath, '/local');
@@ -1621,4 +1638,4 @@ async function genererListeCatalogues(repertoire) {
 const traitementFichier = new TraitementFichier();
 const utilitaireFichiers = new UtilitaireFichiers();
 
-module.exports = {traitementFichier, pathConsignation, utilitaireFichiers, RestaurateurBackup};
+module.exports = {traitementFichier, PathConsignation, utilitaireFichiers, RestaurateurBackup};

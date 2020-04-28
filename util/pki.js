@@ -423,6 +423,15 @@ function verificationCertificatSSL(req, res, next) {
     throw new Error("Nom 'OU' non supporte: " + typeCertificat);
   }
 
+  const idmg = peerCertificate.issuer.O;
+  const protege = typeCertificat === 'coupdoeil'; // TODO: verifier si exchange protege
+  const prive = true;   // Cert valide donne toujours access a prive
+
+  // Sauvegarder l'information d'autorisation de MilleGrille sur objet req.
+  req.autorisationMillegrille = {
+    idmg, protege, prive
+  }
+
   next();
 }
 

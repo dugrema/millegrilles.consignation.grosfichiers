@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 
-const {traitementFichier, pathConsignation} = require('../util/traitementFichier');
+const {traitementFichier, PathConsignation} = require('../util/traitementFichier');
 // const throttle = require('@sitespeed.io/throttle');
 
 const router = express.Router();
@@ -13,14 +13,6 @@ const localRouter = express.Router();
 router.use('/local', localRouter);
 
 localRouter.get('*', (req, res, next) => {
-  // console.debug("connection");
-  //
-  // const peerCertificate = req.connection.getPeerCertificate(true);
-  // console.debug(peerCertificate);
-  // const issuerCertificate = peerCertificate.issuerCertificate;
-
-  // const autorisation = verificationCertificatSSL(req);
-
   // Tenter de charger les parametres via MQ
   let fuuide = req.url;
   let contentType = 'application/octet-stream';
@@ -42,13 +34,21 @@ localRouter.post('*', (req, res, next) => {
 });
 
 function processFichiersLocaux(header, req, res) {
-  console.log("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
+  // console.log("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
   // console.log(req.headers);
+  // console.debug(req.autorisationMillegrille)
+
+  const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
 
   // Le serveur supporte une requete GET ou POST pour aller chercher les fichiers
   // GET devrait surtout etre utilise pour le developpement
   let fuuid = header.fuuid;
   let encrypted = (req.headers.securite === '3.protege' || req.headers.securite === '4.secure');
+
+  if(encrypted && !req.autorisationMillegrille.protege) {
+    throw Exception("SSL Client Cert: Non autorise a acceder fichier protege/secure");
+  }
+
   let extension = req.headers.extension;
 
   var filePath = pathConsignation.trouverPathLocal(fuuid, encrypted, {extension});

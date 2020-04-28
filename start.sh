@@ -2,7 +2,7 @@
 
 CERT_FOLDER=/home/mathieu/mgdev/certs
 export MG_IDMG=vPXTaPjpUErFjV5d8pKrAHHqKhFUr7GSEruCL7
-export MG_CONSIGNATION_PATH=/var/opt/millegrilles/$MG_IDMG/mounts/consignation
+# export MG_CONSIGNATION_PATH=/var/opt/millegrilles/$MG_IDMG/mounts/consignation
 
 # export COUPDOEIL_SESSION_TIMEOUT=15000
 export MG_MQ_CAFILE=$CERT_FOLDER/pki.millegrille.cert
