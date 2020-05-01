@@ -9,12 +9,6 @@ var debug = require('debug')('millegrilles.consignation.grosfichiers:server');
 const Spdy = require('spdy');
 const fs = require('fs');
 const {RabbitMQWrapper} = require('../util/rabbitMQ');
-const {PkiMessages} = require('../messages/pki');
-const {TorrentMessages} = require('../messages/torrent');
-const {DecrypterFichier} = require('../messages/crypto');
-const {GenerateurImages} = require('../messages/images');
-const {PublicateurAWS} = require('../messages/aws');
-const {GestionnaireMessagesBackup} = require('../messages/backup');
 const {PKIUtils} = require('../util/pki');
 
 // Fonction main() demarre le serveur web et la connexion a RabbitMQ
@@ -99,37 +93,28 @@ async function initialiserRabbitMQ(pki) {
   const rabbitMQ = new RabbitMQWrapper(pki);
   await rabbitMQ.connect(mqConnectionUrl);
 
-  // Creer objets de connexion a MQ
-  const pkiMessageHandler = new PkiMessages(rabbitMQ);
-  rabbitMQ.enregistrerListenerConnexion(pkiMessageHandler);
+  // Creer objets de connexion a MQ - importer librairies requises
+  const {PkiMessages} = require('../messages/pki');
+  rabbitMQ.enregistrerListenerConnexion(new PkiMessages(rabbitMQ));
 
-  const torrentMessageHandler = new TorrentMessages(rabbitMQ);
-  rabbitMQ.enregistrerListenerConnexion(torrentMessageHandler);
+  const {TorrentMessages} = require('../messages/torrent');
+  rabbitMQ.enregistrerListenerConnexion(new TorrentMessages(rabbitMQ));
 
-  const decrypterFichier = new DecrypterFichier(rabbitMQ);
-  rabbitMQ.enregistrerListenerConnexion(decrypterFichier);
+  const {DecrypterFichier} = require('../messages/crypto');
+  rabbitMQ.enregistrerListenerConnexion(new DecrypterFichier(rabbitMQ));
 
-  const generateurImages = new GenerateurImages(rabbitMQ);
-  rabbitMQ.enregistrerListenerConnexion(generateurImages);
+  const {GenerateurImages} = require('../messages/images');
+  rabbitMQ.enregistrerListenerConnexion(new GenerateurImages(rabbitMQ));
 
+  const {PublicateurAWS} = require('../messages/aws');
   rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
 
+  const {GestionnaireMessagesBackup} = require('../messages/backup');
   rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ));
 
   return {rabbitMQ};
 }
 
-
-// var server = http.createServer(app);
-
-/**
- * Listen on provided port, on all network interfaces.
- */
-/*
-server.listen(port);
-server.on('error', onError);
-server.on('listening', onListening);
-*/
 
 /**
  * Normalize a port into a number, string, or false.
