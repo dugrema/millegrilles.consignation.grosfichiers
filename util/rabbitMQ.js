@@ -650,6 +650,26 @@ class RabbitMQWrapper {
     return promise;
   }
 
+  transmettreCommande(routingKey, message, opts) {
+    if(!opts) opts = {};
+
+    const infoTransaction = this._formatterInfoTransaction(routingKey);
+
+    message['en-tete'] = infoTransaction;
+    this._signerMessage(message);
+
+    var correlation = null;
+    if(!opts.nowait) {
+      correlation = infoTransaction['uuid-transaction'];
+    }
+
+    const jsonMessage = JSON.stringify(message);
+
+    // Transmettre requete - la promise permet de traiter la reponse
+    const promise = this._transmettre(routingKey, jsonMessage, correlation);
+    return promise;
+  }
+
   emettreEvenement(message, routingKey) {
 
     const infoTransaction = this._formatterInfoTransaction(routingKey);
@@ -774,9 +794,9 @@ class RabbitMQWrapper {
     return this.transmettreRequete(routingKey, requete)
     .then(reponse=>{
       try {
-        let messageContent = decodeURIComponent(escape(reponse.content));
-        let json_message = JSON.parse(messageContent);
-        return json_message;
+        //let messageContent = decodeURIComponent(escape(reponse.content));
+        // let json_message = JSON.parse(messageContent);
+        return reponse;
       } catch(err) {
         console.debug("Erreur reponse certificat, requete initiale : %s", requete);
         console.debug(messageContent);
@@ -796,7 +816,7 @@ class RabbitMQWrapper {
 
     return fingerprint;
   }
-  
+
 }
 
 class RoutingKeyManager {

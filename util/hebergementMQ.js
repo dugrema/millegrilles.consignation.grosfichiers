@@ -16,10 +16,10 @@ class HebergementFichiersMQ {
   async executer() {
 
     try {
-      console.debug("Transmettre requete pour MilleGrilles hebergees");
       const reponse = await this.mq.transmettreRequete(REQUETE_MILLEGRILLES_ACTIVES, {});
-      const content = JSON.parse(reponse.content.toString('utf-8'));
-      const milleGrillesHebergees = content.resultats;
+      // console.debug("Reponse hebergement millegrilles :");
+      // console.debug(reponse);
+      const milleGrillesHebergees = reponse.resultats;
       console.debug("MilleGrilles hebergees");
       console.debug(milleGrillesHebergees);
 
@@ -49,7 +49,8 @@ class HebergementFichiersMQ {
     // console.debug(infoMilleGrille);
 
     const requete = {'idmg': [idmg]}
-    const trousseau = decoderMessage(await this.mq.transmettreRequete(REQUETE_TROUSSEAU, requete));
+    // const trousseau = decoderMessage(await this.mq.transmettreRequete(REQUETE_TROUSSEAU, requete));
+    const trousseau = await this.mq.transmettreRequete(REQUETE_TROUSSEAU, requete);
     const {certificat_pem, certificats, cle, motdepasse_chiffre} = trousseau.resultats[0];
     const {hebergement, hote_pem, intermediaire, millegrille} = certificats;
 
@@ -72,7 +73,7 @@ class HebergementFichiersMQ {
         'chaine': hoteChain.slice(1),
     }
     console.debug("Ajouter compte coupdoeil pour hebergemenet %s", idmg);
-    await this.mq.transmettreCommande(COMMANDE_AJOUTER_COMPTE, commandeAjouterCompte)
+    await this.mq.transmettreCommande(COMMANDE_AJOUTER_COMPTE, commandeAjouterCompte);
 
     // Batir la chaine de validation de la MilleGrille hebergee
     //   1. certificat_pem : certificat de coupdoeil heberge

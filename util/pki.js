@@ -338,6 +338,25 @@ class PKIUtils {
     }
 
   }
+
+  async decrypterAsymetrique(contenuSecret) {
+    console.debug("CONTENU SECRET CHIFFRE : " + contenuSecret)
+    let cleSecrete = forge.util.decode64(contenuSecret);
+
+    // Decrypter la cle secrete avec notre cle privee
+    var decryptedSecretKey = this.cleForge.decrypt(cleSecrete, 'RSA-OAEP', {
+      md: forge.md.sha256.create(),
+      mgf1: {
+        md: forge.md.sha256.create()
+      }
+    });
+    // console.debug("Cle secrete decryptee string " + decryptedSecretKey);
+    // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
+    // console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
+    // console.debug(decryptedSecretKey);
+    return decryptedSecretKey;
+  }
+  
 };
 
 function getCertificateFingerprint(cert) {

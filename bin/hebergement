@@ -48,7 +48,7 @@ async function main() {
   await initialiserWeb(fctRabbitMQParIdmg);
 
   // Demarrer l'hebergement (partie RabbitMQ)
-  // hebergement.executer();
+  hebergement.executer();
 }
 
 // Initialise le serveur web
