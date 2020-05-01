@@ -7,7 +7,7 @@
 var {InitialiserApp} = require('../app');
 var debug = require('debug')('millegrilles.consignation.grosfichiers:server');
 const Spdy = require('spdy');
-const fs = require('fs');
+const FS = require('fs');
 const {RabbitMQWrapper} = require('../util/rabbitMQ');
 const {PkiMessages} = require('../messages/pki');
 const {TorrentMessages} = require('../messages/torrent');
@@ -17,40 +17,30 @@ const {PublicateurAWS} = require('../messages/aws');
 const {GestionnaireMessagesBackup} = require('../messages/backup');
 const {PKIUtils} = require('../util/pki');
 
-// Fonction main() demarre le serveur web et la connexion a RabbitMQ
+// Connecter a RabbitMQ
+// let idmg = process.env.MG_IDMG;
+
+// MAIN - sous forme de promise pour supporter async/then
 async function main() {
+  // Initialiser une liste des serveurs RabbitMQ pour l'hebergement
+  const dictRabbitMQ = {}
 
-  // Creer une liste des serveurs RabbitMQ (un seul dans le cas d'un hote, plusieurs pour hebergement)
-  const dictRabbitMQ = {};
 
-  await initialiserWeb(dictRabbitMQ);
+  try {
+    const {server} = await initialiserApp(dictRabbitMQ);
 
-  // Charger certificats, PKI
-  // Permet d'obtenir l'identite de la MilleGrille (idmg) et connexion a MQ
-  const certMillegrillePem = fs.readFileSync(process.env.MG_MQ_CAFILE).toString('utf-8');
-  const certPem = fs.readFileSync(process.env.MG_MQ_CERTFILE).toString('utf-8');
-  const keyPem = fs.readFileSync(process.env.MG_MQ_KEYFILE).toString('utf-8');
-  const pems = {
-    millegrille: certMillegrillePem,
-    cert: certPem,
-    key: keyPem,
-  };
-  await ajouterRabbitMQ(pems, dictRabbitMQ);
-}
+    // Charger les certificats pour obtenir l'identite de la MilleGrille (idmg)
+    const pki = new PKIUtils();
+    await pki.chargerPEMs();
+    const idmg = pki.idmg;
 
-async function ajouterRabbitMQ(certPems, dictRabbitMQ) {
-  const pki = new PKIUtils(certPems);
-  pki.chargerPEMs(certPems);
-  const idmg = pki.idmg;
-
-  const {rabbitMQ} = await initialiserRabbitMQ(pki);
-  if(rabbitMQ) {
-    dictRabbitMQ[idmg] = rabbitMQ;
+    const {rabbitMQ} = await initialiserRabbitMQ(pki);
   }
+
+
 }
 
-// Initialise le serveur web
-async function initialiserWeb(dictRabbitMQ) {
+async function initialiserApp(dictRabbitMQ) {
   const app = new InitialiserApp(dictRabbitMQ);
 
   var port = normalizePort(process.env.PORT || '4000');
@@ -61,22 +51,17 @@ async function initialiserWeb(dictRabbitMQ) {
   const cert_path = process.env.WEB_CERT;
   const ca_path = process.env.MG_MQ_CAFILE;
 
-  // Charger certificats WEB
-  const certMillegrillePem = fs.readFileSync(process.env.MG_MQ_CAFILE).toString('utf-8');
-  const webkeyPem = fs.readFileSync(process.env.WEB_KEY).toString('utf-8');
-  const webcertPem = fs.readFileSync(process.env.WEB_CERT).toString('utf-8');
-
   /**
    * Create SPDY/http2 server.
    */
 
   const config = {
-      hostIp,
-      cert: webcertPem,
-      key: webkeyPem,
-      ca: certMillegrillePem,
-      requestCert: true,        // Activer client ssl
-      rejectUnauthorized: true, // Authentification via ssl obligatoire
+      hostIp: hostIp,
+      cert: FS.readFileSync(cert_path),
+      key: FS.readFileSync(key_path),
+      ca: FS.readFileSync(ca_path),
+      requestCert: true,
+      rejectUnauthorized: true,
       // enableTrace: true,
   };
 
@@ -86,7 +71,7 @@ async function initialiserWeb(dictRabbitMQ) {
   const server = Spdy.createServer(config, app).listen(port, () => {
     server.on('error', onError);
     server.on('listening', onListening);
-    console.log('Server is listening on port %d', port);
+    console.log('Server is listening at https://localhost:' + port + '. Ctrl^C to stop it.');
   });
 
   return {server};
@@ -190,6 +175,3 @@ function onListening() {
     : 'port ' + addr.port;
   debug('Listening on ' + bind);
 }
-
-// *** Executer main  ***
-main()

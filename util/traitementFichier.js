@@ -231,7 +231,7 @@ class TraitementFichier {
                 messageConfirmation,
                 'millegrilles.domaines.GrosFichiers.nouvelleVersion.transfertComplete')
               .then( msg => {
-                console.log("Recu confirmation de nouvelleVersion transfertComplete");
+                // console.log("Recu confirmation de nouvelleVersion transfertComplete");
                 // console.log(msg);
               })
               .catch( err => {

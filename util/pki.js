@@ -13,22 +13,29 @@ const ROLES_PERMIS_SSL = ['coupdoeil', 'domaines', 'maitrecles']
 class PKIUtils {
   // Classe qui supporte des operations avec certificats et cles privees.
 
-  constructor() {
-    let mq_cacert = process.env.MG_MQ_CAFILE,
-        mq_cert = process.env.MG_MQ_CERTFILE,
-        mq_key = process.env.MG_MQ_KEYFILE;
-
-    this.cacertFile = mq_cacert;
-    this.certFile = mq_cert;
-    this.keyFile = mq_key;
-
+  constructor(certs) {
     this.idmg = null;
-    this.cle = null;
-    this.cert = null;
-    this.ca = null;
-    this.caStore = null;
+
+    // Cle pour cert
+    this.cle = certs.key;
+    this.password = certs.password;  // Mot de passe pour la cle, optionnel
+
+    // Contenu format texte PEM
+    this.chainePEM = certs.cert;
+    this.hotePEM = certs.hote || certs.cert;  // Chaine XS pour connexion middleware
+    this.hoteCA = certs.hoteMillegrille || certs.millegrille;
+    this.ca = certs.millegrille;
+
     this.caIntermediaires = [];
+
+    // Objets node-forge
+    this.certPEM = null;
+    this.cleForge = null; // Objet cle charge en memoire (forge)
+    this.cert = null;     // Objet certificat charge en memoire (forge)
+    this.caStore = null;  // CA store pour valider les chaines de certificats
+
     this.cacheCertsParFingerprint = {};
+
   }
 
   chargerCertificatPEM(pem) {
@@ -36,7 +43,7 @@ class PKIUtils {
     return parsedCert;
   }
 
-  async chargerPEMs() {
+  async chargerPEMs(certs) {
     // Preparer repertoire pour sauvegarder PEMS
     fs.mkdir(REPERTOIRE_CERTS_TMP, {recursive: true, mode: 0o700}, e=>{
       if(e) {
@@ -44,56 +51,57 @@ class PKIUtils {
       }
     });
 
-    console.log("PKI: Chargement cle " + this.keyFile + " et cert " + this.certFile);
-    this.cle = fs.readFileSync(this.keyFile);
-    this.ca = fs.readFileSync(this.cacertFile);
-
     // Charger le certificat pour conserver commonName, fingerprint
-    await this.chargerCertificats();
-    this.idmg = this.cert.issuer.getField('O').value;
-    console.info("PKI: IDMG du certificat (issuer) : %s", this.idmg);
+    await this.chargerCertificats(certs);
+    this._verifierCertificat();
 
-    this.getFingerprint();
+    let cle = this.cle;
+    if(this.password) {
+      console.debug("Cle chiffree");
+      this.cleForge = forge.pki.decryptRsaPrivateKey(cle, this.password);
+      // Re-exporter la cle en format PEM dechiffre (utilise par RabbitMQ)
+      this.cle = forge.pki.privateKeyToPem(this.cleForge);
+    } else {
+      this.cleForge = forge.pki.privateKeyFromPem(cle);
+    }
+    // console.debug(this.cleForge);
+
   }
 
   _verifierCertificat() {
     this.getFingerprint();
   }
 
-  async chargerCertificats() {
+  async chargerCertificats(certPems) {
 
     // Charger certificat local
-    await new Promise((resolve, reject) => {
-      fs.readFile(this.certFile, (err, data)=>{
-        if(err) {
-          return reject(err);
-        }
+    var certs = splitPEMCerts(certPems.cert);
+    // console.debug(certs);
+    this.certPEM = certs[0];
 
-        // console.debug("CERT PEM DATA")
-        var certs = splitPEMCerts(data.toString('utf8'));
-        // console.debug(certs);
+    // console.debug(this.certPEM);
+    let parsedCert = this.chargerCertificatPEM(this.certPEM);
+    // console.debug(parsedCert);
 
-        this.certPEM = certs[0];
-        // console.debug(this.certPEM);
-        let parsedCert = this.chargerCertificatPEM(this.certPEM);
-        // console.debug(parsedCert);
+    this.idmg = parsedCert.issuer.getField("O").value;
+    console.debug("IDMG %s", this.idmg);
 
-        this.fingerprint = getCertificateFingerprint(parsedCert);
-        this.cert = parsedCert;
-        this.commonName = parsedCert.subject.getField('CN').value;
+    this.fingerprint = getCertificateFingerprint(parsedCert);
+    this.cert = parsedCert;
+    this.commonName = parsedCert.subject.getField('CN').value;
 
-        // Sauvegarder certificats intermediaires
-        let intermediaire = this.chargerCertificatPEM(certs[1]);
-        this.caIntermediaires = [intermediaire];
+    // Sauvegarder certificats intermediaires
+    const certsChaineCAList = certs.slice(1);
+    const certsIntermediaires = [];
+    for(let idx in certsChaineCAList) {
+      var certIntermediaire = certsChaineCAList[idx];
+      let intermediaire = this.chargerCertificatPEM(certIntermediaire);
+      certsIntermediaires.push(intermediaire);
+    }
+    this.caIntermediaires = certsIntermediaires;
 
-        // console.log("Certificat du noeud. Sujet CN: " +
-        //   this.commonName + ", fingerprint: " + this.fingerprint);
-        resolve();
-      })
-    })
-    .catch(err=>{
-      throw new Error(err);
-    })
+    // console.log("Certificat du noeud. Sujet CN: " +
+    // this.commonName + ", fingerprint: " + this.fingerprint);
 
     // Creer le CA store pour verifier les certificats.
     let parsedCACert = this.chargerCertificatPEM(this.ca);
@@ -161,7 +169,7 @@ class PKIUtils {
   preparerMessageCertificat() {
     // Retourne un message qui peut etre transmis a MQ avec le certificat
     // utilise par ce noeud. Sert a verifier la signature des transactions.
-    let certificatBuffer = fs.readFileSync(this.certFile, 'utf8');
+    let certificatBuffer = this.chainePEM;
 
     let transactionCertificat = {
         evenement: 'pki.certificat',
@@ -447,5 +455,4 @@ class CertificatInconnu extends Error {
   }
 }
 
-const pki = new PKIUtils();
-module.exports = {PKIUtils, pki, ValidateurSignature, verificationCertificatSSL};
+module.exports = {PKIUtils, ValidateurSignature, verificationCertificatSSL};
