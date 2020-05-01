@@ -6,7 +6,7 @@ const bodyParser = require('body-parser');
 
 const {TraitementFichier, PathConsignation} = require('../util/traitementFichier');
 
-function InitialiserBackup(dictRabbitMQ) {
+function InitialiserBackup(fctRabbitMQParIdmg) {
 
   const router = express.Router();
   const jsonParser = bodyParser.json();
@@ -40,7 +40,7 @@ function InitialiserBackup(dictRabbitMQ) {
     // console.debug(req.files);
 
     const idmg = req.autorisationMillegrille.idmg;
-    const rabbitMQ = dictRabbitMQ[idmg];
+    const rabbitMQ = fctRabbitMQParIdmg(idmg);
     const traitementFichier = new TraitementFichier(rabbitMQ);
 
     // Streamer fichier vers FS
@@ -89,7 +89,7 @@ async function getListeBackupHoraire(req, res, next) {
   // console.debug("Retourner la liste des backups horaires");
   try {
     const idmg = req.autorisationMillegrille.idmg;
-    const rabbitMQ = dictRabbitMQ[idmg];
+    const rabbitMQ = fctRabbitMQParIdmg(idmg);
     const traitementFichier = new TraitementFichier(rabbitMQ);
 
     const listeBackupsHoraires = await traitementFichier.genererListeBackupsHoraire(req);

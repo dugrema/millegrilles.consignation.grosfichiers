@@ -9,7 +9,7 @@ const {InitialiserGrosFichiers} = require('./routes/grosfichiers');
 const {InitialiserBackup} = require('./routes/backup');
 const {verificationCertificatSSL} = require('./util/pki');
 
-function InitialiserApp(dictRabbitMQ) {
+function InitialiserApp(fctRabbitMQParIdmg) {
 
   var app = express();
 
@@ -27,8 +27,8 @@ function InitialiserApp(dictRabbitMQ) {
   // app.use(cookieParser());
   app.use(express.static(path.join(__dirname, 'public')));
 
-  const grosfichiersRouter = new InitialiserGrosFichiers(dictRabbitMQ);
-  const backupRouter = new InitialiserBackup(dictRabbitMQ);
+  const grosfichiersRouter = new InitialiserGrosFichiers(fctRabbitMQParIdmg);
+  const backupRouter = new InitialiserBackup(fctRabbitMQParIdmg);
 
   app.use('/grosFichiers', grosfichiersRouter);
   app.use('/backup', backupRouter);

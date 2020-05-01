@@ -6,7 +6,7 @@ const {PathConsignation, TraitementFichier} = require('../util/traitementFichier
 
 // const throttle = require('@sitespeed.io/throttle');
 
-function InitialiserGrosFichiers(dictRabbitMQ) {
+function InitialiserGrosFichiers(fctRabbitMQParIdmg) {
 
   const router = express.Router();
 
@@ -83,7 +83,7 @@ function InitialiserGrosFichiers(dictRabbitMQ) {
     console.debug("nouveauFichier PUT " + req.url);
     // console.debug(req.headers);
     const idmg = req.autorisationMillegrille.idmg;
-    const rabbitMQ = dictRabbitMQ[idmg];
+    const rabbitMQ = fctRabbitMQParIdmg(idmg);
     const traitementFichier = new TraitementFichier(rabbitMQ);
 
     // Streamer fichier vers FS

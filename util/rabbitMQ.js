@@ -43,35 +43,40 @@ class RabbitMQWrapper {
   }
 
   connect(url) {
-    this.url = url;
+    this.url = url + "/" + this.pki.idmg;
     return this._connect();
   }
 
   _connect() {
 
-    let mq_cacert = process.env.MG_MQ_CAFILE,
-        mq_cert = process.env.MG_MQ_CERTFILE,
-        mq_key = process.env.MG_MQ_KEYFILE;
+    // let mq_cacert = process.env.MG_MQ_CAFILE,
+    //     mq_cert = process.env.MG_MQ_CERTFILE,
+    //     mq_key = process.env.MG_MQ_KEYFILE;
 
     if(this.connection === null) {
-      let options = {}
-      if(mq_cacert !== undefined) {
-        var cacert = fs.readFileSync(mq_cacert);
-        options['ca'] = [cacert];
+      let options = {
+        ca: this.pki.hoteCA,
+        cert: this.pki.hotePEM,
+        key: this.pki.cle,
       }
-      if(mq_cert !== undefined) {
-        var cert = fs.readFileSync(mq_cert);
-        options['cert'] = cert;
-      }
-      if(mq_key !== undefined) {
-        var key = fs.readFileSync(mq_key);
-        options['key'] = key;
-      }
+      // if(mq_cacert !== undefined) {
+      //   var cacert = fs.readFileSync(mq_cacert);
+      //   options['ca'] = [cacert];
+      // }
+      // if(mq_cert !== undefined) {
+      //   var cert = fs.readFileSync(mq_cert);
+      //   options['cert'] = cert;
+      // }
+      // if(mq_key !== undefined) {
+      //   var key = fs.readFileSync(mq_key);
+      //   options['key'] = key;
+      // }
       options['credentials'] = amqplib.credentials.external();
 
+      console.info("Connecter a RabbitMQ : %s", this.url);
       return amqplib.connect(this.url, options)
       .then( conn => {
-        console.info("Connexion a RabbitMQ reussie");
+        console.debug("Connexion a RabbitMQ reussie");
         this.connection = conn;
 
         conn.on('close', (reason)=>{
@@ -83,9 +88,22 @@ class RabbitMQWrapper {
         return conn.createChannel();
       }).then( (ch) => {
         this.channel = ch;
-        console.info("Channel ouvert");
-        ch.prefetch(5);
+        console.debug("Channel ouvert");
         return this.ecouter();
+      }).then(()=>{
+        console.debug("Connexion et channel prets");
+
+        // Transmettre le certificat
+        let fingerprint = this.transmettreCertificat();
+
+        // Enregistrer routing key du certificat
+        // Permet de repondre si un autre composant demande notre certificat
+        this.routingKeyCertificat = 'pki.requete.' + fingerprint;
+        console.debug("Enregistrer routing key: " + fingerprint)
+        this.channel.bindQueue(this.reply_q.queue, 'millegrilles.noeuds', this.routingKeyCertificat);
+        this.channel.bindQueue(this.reply_q.queue, 'millegrilles.noeuds', 'pki.certificat.#');
+
+        // console.debug("Certificat transmis");
       }).catch(err => {
         this.connection = null;
         console.error("Erreur connexion RabbitMQ");
@@ -96,6 +114,56 @@ class RabbitMQWrapper {
     }
 
   }
+
+  // _connect() {
+  //
+  //   let mq_cacert = process.env.MG_MQ_CAFILE,
+  //       mq_cert = process.env.MG_MQ_CERTFILE,
+  //       mq_key = process.env.MG_MQ_KEYFILE;
+  //
+  //   if(this.connection === null) {
+  //     let options = {}
+  //     if(mq_cacert !== undefined) {
+  //       var cacert = fs.readFileSync(mq_cacert);
+  //       options['ca'] = [cacert];
+  //     }
+  //     if(mq_cert !== undefined) {
+  //       var cert = fs.readFileSync(mq_cert);
+  //       options['cert'] = cert;
+  //     }
+  //     if(mq_key !== undefined) {
+  //       var key = fs.readFileSync(mq_key);
+  //       options['key'] = key;
+  //     }
+  //     options['credentials'] = amqplib.credentials.external();
+  //
+  //     return amqplib.connect(this.url, options)
+  //     .then( conn => {
+  //       console.info("Connexion a RabbitMQ reussie");
+  //       this.connection = conn;
+  //
+  //       conn.on('close', (reason)=>{
+  //         console.warn("Fermeture connexion RabbitMQ");
+  //         console.info(reason);
+  //         this.scheduleReconnect();
+  //       });
+  //
+  //       return conn.createChannel();
+  //     }).then( (ch) => {
+  //       this.channel = ch;
+  //       console.info("Channel ouvert");
+  //       ch.prefetch(5);
+  //       return this.ecouter();
+  //     }).catch(err => {
+  //       this.connection = null;
+  //       console.error("Erreur connexion RabbitMQ");
+  //       console.error(err);
+  //       this.scheduleReconnect();
+  //     });
+  //
+  //   }
+  //
+  // }
 
   scheduleReconnect() {
     // Met un timer pour se reconnecter
@@ -718,6 +786,17 @@ class RabbitMQWrapper {
     })
   }
 
+  transmettreCertificat() {
+    let messageCertificat = this.pki.preparerMessageCertificat();
+    let fingerprint = messageCertificat.fingerprint;
+    let messageJSONStr = JSON.stringify(messageCertificat);
+    this._publish(
+      'pki.certificat.' + fingerprint, messageJSONStr
+    );
+
+    return fingerprint;
+  }
+  
 }
 
 class RoutingKeyManager {

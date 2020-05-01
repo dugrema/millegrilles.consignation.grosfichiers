@@ -16,8 +16,11 @@ async function main() {
 
   // Creer une liste des serveurs RabbitMQ (un seul dans le cas d'un hote, plusieurs pour hebergement)
   const dictRabbitMQ = {};
+  function fctRabbitMQParIdmg(idmg) {
+    return dictRabbitMQ[idmg];
+  }
 
-  await initialiserWeb(dictRabbitMQ);
+  await initialiserWeb(fctRabbitMQParIdmg);
 
   // Charger certificats, PKI
   // Permet d'obtenir l'identite de la MilleGrille (idmg) et connexion a MQ
@@ -44,8 +47,8 @@ async function ajouterRabbitMQ(certPems, dictRabbitMQ) {
 }
 
 // Initialise le serveur web
-async function initialiserWeb(dictRabbitMQ) {
-  const app = new InitialiserApp(dictRabbitMQ);
+async function initialiserWeb(fctRabbitMQParIdmg) {
+  const app = new InitialiserApp(fctRabbitMQParIdmg);
 
   var port = normalizePort(process.env.PORT || '4000');
   app.set('port', port);
@@ -88,7 +91,7 @@ async function initialiserWeb(dictRabbitMQ) {
 
 async function initialiserRabbitMQ(pki) {
   const idmg = pki.idmg;
-  let mqConnectionUrl = process.env.MG_MQ_URL + "/" + idmg || 'amqps://mq:5673/' + idmg;
+  let mqConnectionUrl = process.env.MG_MQ_URL || 'amqps://mq:5673';
 
   const rabbitMQ = new RabbitMQWrapper(pki);
   await rabbitMQ.connect(mqConnectionUrl);
