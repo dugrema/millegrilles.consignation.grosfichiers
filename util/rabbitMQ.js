@@ -378,8 +378,8 @@ class RabbitMQWrapper {
 
           return this.demanderCertificat(fingerprint)
           .then(reponse=>{
-            // console.debug("Reponse demande certificat " + fingerprint);
-            // console.debug(reponse);
+            console.debug("Reponse demande certificat " + fingerprint);
+            console.debug(reponse);
 
             var etatCertificat = this.certificatsConnus[fingerprint];
 
@@ -794,9 +794,13 @@ class RabbitMQWrapper {
     return this.transmettreRequete(routingKey, requete)
     .then(reponse=>{
       try {
-        //let messageContent = decodeURIComponent(escape(reponse.content));
-        // let json_message = JSON.parse(messageContent);
-        return reponse;
+        if(reponse.content) {
+          let messageContent = decodeURIComponent(escape(reponse.content));
+          let json_message = JSON.parse(messageContent);
+          return json_message;
+        } else {
+          return reponse;
+        }
       } catch(err) {
         console.debug("Erreur reponse certificat, requete initiale : %s", requete);
         console.debug(messageContent);

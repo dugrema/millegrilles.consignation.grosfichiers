@@ -26,6 +26,7 @@
     "parse-torrent": "^7.0.1",
     "readdirp": "^3.4.0",
     "spdy": "^4.0.0",
+    "tmp": "^0.2.1",
     "tmp-promise": "^2.0.2",
     "transmission": "^0.4.9",
     "uglify-js": "^3.8.0",
