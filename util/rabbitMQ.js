@@ -76,7 +76,7 @@ class RabbitMQWrapper {
       console.info("Connecter a RabbitMQ : %s", this.url);
       return amqplib.connect(this.url, options)
       .then( conn => {
-        console.debug("Connexion a RabbitMQ reussie");
+        console.info("Connexion a RabbitMQ reussie");
         this.connection = conn;
 
         conn.on('close', (reason)=>{
@@ -88,10 +88,10 @@ class RabbitMQWrapper {
         return conn.createChannel();
       }).then( (ch) => {
         this.channel = ch;
-        console.debug("Channel ouvert");
+        // console.debug("Channel ouvert");
         return this.ecouter();
       }).then(()=>{
-        console.debug("Connexion et channel prets");
+        console.info("Connexion et channel prets");
 
         // Transmettre le certificat
         let fingerprint = this.transmettreCertificat();
@@ -99,7 +99,7 @@ class RabbitMQWrapper {
         // Enregistrer routing key du certificat
         // Permet de repondre si un autre composant demande notre certificat
         this.routingKeyCertificat = 'pki.requete.' + fingerprint;
-        console.debug("Enregistrer routing key: " + fingerprint)
+        console.info("Enregistrer routing key: " + fingerprint)
         this.channel.bindQueue(this.reply_q.queue, 'millegrilles.noeuds', this.routingKeyCertificat);
         this.channel.bindQueue(this.reply_q.queue, 'millegrilles.noeuds', 'pki.certificat.#');
 
@@ -349,7 +349,7 @@ class RabbitMQWrapper {
     let hashTransactionRecu = json_message['en-tete']['hachage-contenu'];
     if(hashTransactionCalcule !== hashTransactionRecu) {
       console.warn("Erreur hachage incorrect : " + hashTransactionCalcule + ", message dropped");
-      console.debug(messageContent);
+      // console.debug(messageContent);
 
       return;
     }
@@ -378,8 +378,8 @@ class RabbitMQWrapper {
 
           return this.demanderCertificat(fingerprint)
           .then(reponse=>{
-            console.debug("Reponse demande certificat " + fingerprint);
-            console.debug(reponse);
+            // console.debug("Reponse demande certificat " + fingerprint);
+            // console.debug(reponse);
 
             var etatCertificat = this.certificatsConnus[fingerprint];
 

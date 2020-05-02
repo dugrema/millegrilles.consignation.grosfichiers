@@ -59,7 +59,7 @@ class PKIUtils {
 
     let cle = this.cle;
     if(this.password) {
-      console.debug("Cle chiffree");
+      // console.debug("Cle chiffree");
       this.cleForge = forge.pki.decryptRsaPrivateKey(cle, this.password);
       // Re-exporter la cle en format PEM dechiffre (utilise par RabbitMQ)
       this.cle = forge.pki.privateKeyToPem(this.cleForge);
@@ -194,7 +194,7 @@ class PKIUtils {
         let fichier = path.join(REPERTOIRE_CERTS_TMP, fingerprint + '.json');
         fs.access(fichier, fs.constants.F_OK, (err) => {
           let existe = ! err;
-          console.debug("Fichier existe ? " + existe);
+          // console.debug("Fichier existe ? " + existe);
           resolve(existe);
         });
       } else {
@@ -212,10 +212,10 @@ class PKIUtils {
 
       // Sauvegarder sur disque
       fs.writeFile(fichier, message, ()=>{
-        console.debug("Fichier certificat " + fingerprintCalcule + ".json sauvegarde");
+        // console.debug("Fichier certificat " + fingerprintCalcule + ".json sauvegarde");
       });
     } else {
-      console.debug("Fichier certificat existe deja : " + fingerprint + ".json");
+      // console.debug("Fichier certificat existe deja : " + fingerprint + ".json");
     }
   }
 
@@ -299,7 +299,7 @@ class PKIUtils {
     if(!certificat) {
       let certificatChaine = await this.getCertificate(fingerprint);
       if( ! certificatChaine ) {
-        console.debug("Certificat inconnu : " + fingerprint);
+        // console.debug("Certificat inconnu : " + fingerprint);
         throw new CertificatInconnu("Certificat inconnu : " + fingerprint);
       }
       certificat = certificatChaine[0];
@@ -342,7 +342,7 @@ class PKIUtils {
   }
 
   async decrypterAsymetrique(contenuSecret) {
-    console.debug("CONTENU SECRET CHIFFRE : " + contenuSecret)
+    // console.debug("CONTENU SECRET CHIFFRE : " + contenuSecret)
     let cleSecrete = forge.util.decode64(contenuSecret);
 
     // Decrypter la cle secrete avec notre cle privee
