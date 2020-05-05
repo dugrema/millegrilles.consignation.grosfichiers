@@ -31,9 +31,10 @@ class PathConsignation {
       if(idmg) {
         consignationPath = path.join('/var/opt/millegrilles', idmg, '/mounts/consignation');
       } else {
-        consignationPath = '/var/opt/millegrilles/mounts/consignation';
+        consignationPath = '/var/opt/millegrilles/hebergement/consignation';
       }
     }
+    console.info("Path fichiers : %s", consignationPath)
 
     // var consignationPath = opts.consignationPath || '/var/opt/millegrilles/mounts/consignation';
 

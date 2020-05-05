@@ -235,45 +235,51 @@ class PKIUtils {
             return resolve(); // No data
           }
 
-          let messageJson = JSON.parse(data.toString());
-          let pem = messageJson.certificat_pem;
-          let intermediaires = messageJson.certificats_intermediaires;
-
-          if( ! intermediaires ) {
-            // On va tenter d'introduire le certificat de MilleGrille local
-            intermediaires = this.caIntermediaires;
-          }
-
-          let certificat = this.chargerCertificatPEM(pem);
-
-          let chaine = [certificat, ...intermediaires];
-          // console.debug("CHAINE");
-          // console.debug(chaine);
-
-          let fingerprintCalcule = getCertificateFingerprint(certificat);
-          if(fingerprintCalcule !== fingerprint) {
-            // Supprimer fichier invalide
-            fs.unlink(fichier, ()=>{});
-            return reject('Fingerprint ' + fingerprintCalcule + ' ne correspond pas au fichier : ' + fingerprint + '.json. Fichier supprime.');
-          }
-
-          // Valider le certificat avec le store
-          let valide = true;
           try {
-            forge.pki.verifyCertificateChain(this.caStore, chaine);
-          } catch (err) {
-            valide = false;
-            console.log('Certificate verification failure: ' +
-              JSON.stringify(err, null, 2));
-          }
+            let messageJson = JSON.parse(data.toString());
+            let pem = messageJson.certificat_pem;
+            let intermediaires = messageJson.certificats_intermediaires;
 
-          if(valide) {
-            this.cacheCertsParFingerprint[fingerprintCalcule] = chaine;
-          } else {
-            certificat = null;
-          }
+            if( ! intermediaires ) {
+              // On va tenter d'introduire le certificat de MilleGrille local
+              intermediaires = this.caIntermediaires;
+            }
 
-          resolve(chaine);
+            let certificat = this.chargerCertificatPEM(pem);
+
+            let chaine = [certificat, ...intermediaires];
+            // console.debug("CHAINE");
+            // console.debug(chaine);
+
+            let fingerprintCalcule = getCertificateFingerprint(certificat);
+            if(fingerprintCalcule !== fingerprint) {
+              // Supprimer fichier invalide
+              fs.unlink(fichier, ()=>{});
+              return reject('Fingerprint ' + fingerprintCalcule + ' ne correspond pas au fichier : ' + fingerprint + '.json. Fichier supprime.');
+            }
+
+            // Valider le certificat avec le store
+            let valide = true;
+            try {
+              forge.pki.verifyCertificateChain(this.caStore, chaine);
+            } catch (err) {
+              valide = false;
+              console.log('Certificate verification failure: ' +
+                JSON.stringify(err, null, 2));
+            }
+
+            if(valide) {
+              this.cacheCertsParFingerprint[fingerprintCalcule] = chaine;
+            } else {
+              certificat = null;
+            }
+
+            resolve(chaine);
+          } catch(err) {
+            console.error("Erreur traitement certificat");
+            console.error(err);
+            reject(err);
+          }
 
         });
       })

@@ -346,12 +346,18 @@ class RabbitMQWrapper {
 
     // Valider le contenu du message - hachage et signature
     let hashTransactionCalcule = this.pki.hacherTransaction(json_message);
-    let hashTransactionRecu = json_message['en-tete']['hachage-contenu'];
-    if(hashTransactionCalcule !== hashTransactionRecu) {
-      console.warn("Erreur hachage incorrect : " + hashTransactionCalcule + ", message dropped");
-      // console.debug(messageContent);
+    const entete = json_message['en-tete'];
+    if(entete) {
+      let hashTransactionRecu = entete['hachage-contenu'];
+      if(hashTransactionCalcule !== hashTransactionRecu) {
+        console.warn("Erreur hachage incorrect : " + hashTransactionCalcule + ", message dropped");
+        // console.debug(messageContent);
 
-      return;
+        return;
+      }
+    } else {
+      console.warn("Reponse sans entete");
+      console.debug(json_message);
     }
 
     return this.pki.verifierSignatureMessage(json_message)
