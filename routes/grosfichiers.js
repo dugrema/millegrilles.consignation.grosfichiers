@@ -41,8 +41,9 @@ function InitialiserGrosFichiers(fctRabbitMQParIdmg) {
     // console.log("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
     // console.log(req.headers);
     // console.debug(req.autorisationMillegrille)
-
-    const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
+    const idmg = req.autorisationMillegrille.idmg;
+    const pathConsignation = new PathConsignation({idmg})
+    console.info("Path consignation idmg:%s = %s", idmg, pathConsignation);
 
     // Le serveur supporte une requete GET ou POST pour aller chercher les fichiers
     // GET devrait surtout etre utilise pour le developpement
