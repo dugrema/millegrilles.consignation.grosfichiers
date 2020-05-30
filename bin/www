@@ -1,183 +1,35 @@
 #!/usr/bin/env node
 
-/**
- * Module dependencies.
- */
+const debug = require('debug')('millegrilles:www')
+const express = require('express')
 
-var {InitialiserApp} = require('../app');
-var debug = require('debug')('millegrilles.consignation.grosfichiers:server');
-const Spdy = require('spdy');
-const fs = require('fs');
-const {RabbitMQWrapper} = require('../util/rabbitMQ');
-const {PKIUtils} = require('../util/pki');
+const {initialiser: initialiserServer} = require('./server')
+const {initialiser: initialiserApp} = require('./app');
+const amqpdao = require('../models/amqpdao')
 
-// Fonction main() demarre le serveur web et la connexion a RabbitMQ
-async function main() {
+async function init() {
 
-  // Creer une liste des serveurs RabbitMQ (un seul dans le cas d'un hote, plusieurs pour hebergement)
-  const dictRabbitMQ = {};
-  function fctRabbitMQParIdmg(idmg) {
-    return dictRabbitMQ[idmg];
+  // Connexion AMQ
+  const {amqpdao: instAmqpdao} = await amqpdao.init()
+  const idmg = instAmqpdao.pki.idmg
+
+  debug("Initialisation serveur IDMG : %s", idmg)
+
+  // Creer une collection avec la connexion a MQ (format qui supporte hebergement)
+  const rabbitMQParIdmg = {
+    [idmg]: instAmqpdao
   }
 
-  await initialiserWeb(fctRabbitMQParIdmg);
-
-  // Charger certificats, PKI
-  // Permet d'obtenir l'identite de la MilleGrille (idmg) et connexion a MQ
-  const certMillegrillePem = fs.readFileSync(process.env.MG_MQ_CAFILE).toString('utf-8');
-  const certPem = fs.readFileSync(process.env.MG_MQ_CERTFILE).toString('utf-8');
-  const keyPem = fs.readFileSync(process.env.MG_MQ_KEYFILE).toString('utf-8');
-  const pems = {
-    millegrille: certMillegrillePem,
-    cert: certPem,
-    key: keyPem,
-  };
-  await ajouterRabbitMQ(pems, dictRabbitMQ);
-}
-
-async function ajouterRabbitMQ(certPems, dictRabbitMQ) {
-  const pki = new PKIUtils(certPems);
-  pki.chargerPEMs(certPems);
-  const idmg = pki.idmg;
-
-  const {rabbitMQ} = await initialiserRabbitMQ(pki);
-  if(rabbitMQ) {
-    dictRabbitMQ[idmg] = rabbitMQ;
-  }
-}
-
-// Initialise le serveur web
-async function initialiserWeb(fctRabbitMQParIdmg) {
-  const app = new InitialiserApp(fctRabbitMQParIdmg);
-
-  var port = normalizePort(process.env.PORT || '4000');
-  app.set('port', port);
-
-  const hostIp = process.env.HOST;
-  const key_path = process.env.WEB_KEY;
-  const cert_path = process.env.WEB_CERT;
-  const ca_path = process.env.MG_MQ_CAFILE;
-
-  // Charger certificats WEB
-  const certMillegrillePem = fs.readFileSync(process.env.MG_MQ_CAFILE).toString('utf-8');
-  const webkeyPem = fs.readFileSync(process.env.WEB_KEY).toString('utf-8');
-  const webcertPem = fs.readFileSync(process.env.WEB_CERT).toString('utf-8');
-
-  /**
-   * Create SPDY/http2 server.
-   */
-
-  const config = {
-      hostIp,
-      cert: webcertPem,
-      key: webkeyPem,
-      ca: certMillegrillePem,
-      requestCert: true,        // Activer client ssl
-      rejectUnauthorized: true, // Authentification via ssl obligatoire
-      // enableTrace: true,
-  };
-
-  /**
-   * Create HTTP server.
-   */
-  const server = Spdy.createServer(config, app).listen(port, () => {
-    server.on('error', onError);
-    server.on('listening', onListening);
-    console.log('Server is listening on port %d', port);
-  });
-
-  return {server};
-}
-
-async function initialiserRabbitMQ(pki) {
-  const idmg = pki.idmg;
-  let mqConnectionUrl = process.env.MG_MQ_URL || 'amqps://mq:5673';
-
-  const rabbitMQ = new RabbitMQWrapper(pki);
-  await rabbitMQ.connect(mqConnectionUrl);
-
-  // Creer objets de connexion a MQ - importer librairies requises
-  const {PkiMessages} = require('../messages/pki');
-  rabbitMQ.enregistrerListenerConnexion(new PkiMessages(rabbitMQ));
-
-  const {TorrentMessages} = require('../messages/torrent');
-  rabbitMQ.enregistrerListenerConnexion(new TorrentMessages(rabbitMQ));
-
-  const {DecrypterFichier} = require('../messages/crypto');
-  rabbitMQ.enregistrerListenerConnexion(new DecrypterFichier(rabbitMQ));
-
-  const {GenerateurImages} = require('../messages/images');
-  rabbitMQ.enregistrerListenerConnexion(new GenerateurImages(rabbitMQ));
-
-  const {PublicateurAWS} = require('../messages/aws');
-  rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
-
-  const {GestionnaireMessagesBackup} = require('../messages/backup');
-  rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ));
-
-  return {rabbitMQ};
-}
-
-
-/**
- * Normalize a port into a number, string, or false.
- */
-
-function normalizePort(val) {
-  var port = parseInt(val, 10);
-
-  if (isNaN(port)) {
-    // named pipe
-    return val;
+  const fctRabbitMQParIdmg = (idmg) => {
+    return rabbitMQParIdmg[idmg]
   }
 
-  if (port >= 0) {
-    // port number
-    return port;
-  }
+  const root = express()
+  const serverInstance = initialiserServer(root)
 
-  return false;
+  const app = await initialiserApp(fctRabbitMQParIdmg, {idmg})
+  root.use('/coupdoeil', app)
+
 }
 
-/**
- * Event listener for HTTP server "error" event.
- */
-
-function onError(error) {
-  if (error.syscall !== 'listen') {
-    throw error;
-  }
-
-  var bind = typeof port === 'string'
-    ? 'Pipe ' + port
-    : 'Port ' + port;
-
-  // handle specific listen errors with friendly messages
-  switch (error.code) {
-    case 'EACCES':
-      console.error(bind + ' requires elevated privileges');
-      process.exit(1);
-      break;
-    case 'EADDRINUSE':
-      console.error(bind + ' is already in use');
-      process.exit(1);
-      break;
-    default:
-      throw error;
-  }
-}
-
-/**
- * Event listener for HTTP server "listening" event.
- */
-
-function onListening() {
-  var addr = server.address();
-  var bind = typeof addr === 'string'
-    ? 'pipe ' + addr
-    : 'port ' + addr.port;
-  debug('Listening on ' + bind);
-}
-
-// *** Executer main  ***
-main()
+init()

@@ -5,11 +5,11 @@ var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 
 // var indexRouter = require('./routes/index');
-const {InitialiserGrosFichiers} = require('./routes/grosfichiers');
-const {InitialiserBackup} = require('./routes/backup');
-const {verificationCertificatSSL} = require('./util/pki');
+const {InitialiserGrosFichiers} = require('../routes/grosfichiers');
+const {InitialiserBackup} = require('../routes/backup');
+const {verificationCertificatSSL} = require('../util/pki');
 
-function InitialiserApp(fctRabbitMQParIdmg) {
+function initialiser(fctRabbitMQParIdmg) {
 
   var app = express();
 
@@ -56,4 +56,4 @@ function InitialiserApp(fctRabbitMQParIdmg) {
   return app;
 }
 
-module.exports = {InitialiserApp};
+module.exports = {initialiser};
