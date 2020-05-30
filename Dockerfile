@@ -7,11 +7,10 @@ WORKDIR /usr/src/app
 VOLUME /opt/millegrilles/consignation
 
 ENV PORT=443 \
-    HOST=fichiers
+    HOST=fichiers \
+    NODE_ENV=production
 
 COPY ./package*.json ./
-
-RUN npm install
 
 # Bundle app source
 # Api est l'application node back-end et front-end est l'application react
