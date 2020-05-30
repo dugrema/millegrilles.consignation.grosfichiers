@@ -8,4 +8,4 @@ Dockerfile
 image_info.txt
 *.sh
 nodejsmedia/
-node_modules
+node_modules/
