@@ -7,3 +7,5 @@ backup_uploads/
 Dockerfile
 image_info.txt
 *.sh
+nodejsmedia/
+node_modules
