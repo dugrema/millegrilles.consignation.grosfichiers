@@ -2,6 +2,7 @@
 
 const debug = require('debug')('millegrilles:www')
 const express = require('express')
+const logger = require('morgan');
 
 const {initialiser: initialiserServer} = require('./server')
 const {initialiser: initialiserApp} = require('./app');
@@ -25,10 +26,12 @@ async function init() {
   }
 
   const root = express()
+  root.use(logger('dev'))
+
   const serverInstance = initialiserServer(root)
 
   const app = await initialiserApp(fctRabbitMQParIdmg, {idmg})
-  root.use('/coupdoeil', app)
+  root.use(app)
 
 }
 

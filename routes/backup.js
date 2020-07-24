@@ -1,10 +1,12 @@
+const debug = require('debug')('millegrilles:routes:backup')
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const bodyParser = require('body-parser');
 
-const {TraitementFichier, PathConsignation} = require('../util/traitementFichier');
+const {PathConsignation} = require('../util/traitementFichier');
+const {TraitementFichierBackup} = require('../util/traitementBackup');
 
 function InitialiserBackup(fctRabbitMQParIdmg) {
 
@@ -41,7 +43,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
 
     const idmg = req.autorisationMillegrille.idmg;
     const rabbitMQ = fctRabbitMQParIdmg(idmg);
-    const traitementFichier = new TraitementFichier(rabbitMQ);
+    const traitementFichier = new TraitementFichierBackup(rabbitMQ);
 
     // Streamer fichier vers FS
     await traitementFichier.traiterPutBackup(req)
@@ -90,7 +92,7 @@ async function getListeBackupHoraire(req, res, next) {
   try {
     const idmg = req.autorisationMillegrille.idmg;
     const rabbitMQ = fctRabbitMQParIdmg(idmg);
-    const traitementFichier = new TraitementFichier(rabbitMQ);
+    const traitementFichier = new TraitementFichierBackup(rabbitMQ);
 
     const listeBackupsHoraires = await traitementFichier.genererListeBackupsHoraire(req);
     res.end(JSON.stringify(listeBackupsHoraires));
