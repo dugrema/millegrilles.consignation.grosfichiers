@@ -7,6 +7,10 @@ const crypto = require('crypto');
 const lzma = require('lzma-native');
 const { spawn } = require('child_process');
 const readline = require('readline');
+const tar = require('tar')
+const streamBuffers = require('stream-buffers')
+const moment = require('moment')
+const tmp = require('tmp-promise')
 
 const {uuidToDate} = require('./UUIDUtils');
 const rabbitMQ = require('./rabbitMQ');
@@ -288,6 +292,76 @@ class TraitementFichierBackup {
     if(err) throw(err);
 
     return {size, fullPathFichier};
+  }
+
+  async getFichierTarBackupComplet(req, res) {
+
+    const tmpFichierBackup = await tmp.file({mode:0o600, prefix: 'backup-download-', postfix: '.tar'})
+    const fichierBackup = tmpFichierBackup.path
+    debug("Fichier TMP backup\n%s", fichierBackup)
+
+    const dateFormattee = moment().format('YYYY-MM-DD_hhmm')
+    const idmg = req.autorisationMillegrille.idmg
+    const downloadFileName = 'backup_' + idmg + '_' + dateFormattee + '.tar'
+
+    const pathBackup = this.pathConsignation.consignationPathBackup
+
+    // Creer une archive .tar de backup avec les repertoires de fichiers
+    // horaire, archive et instantanne
+    debug("Creer archive utilisant path %s", pathBackup)
+
+    // Trouver les repertoires existants pour ajouter au tar
+    const repertoires = ['horaire', 'archives', 'instantanne']
+
+    try {
+
+      // Faire la liste des sous-repertoires a filtrer
+      const files = await new Promise((resolve, reject)=>{
+        fs.readdir(pathBackup, (err, files)=>{
+          if(err) reject(err)
+          files.filter(item=>{
+            return repertoires.includes(item)
+          })
+          resolve(files)
+        })
+      })
+
+      await tar.create( // or tar.create
+        {
+          cwd: pathBackup,
+          file: fichierBackup,
+        },
+        files
+      )
+
+      // Creer outputstream de reponse
+      res.set('Content-Type', 'application/tar')
+      res.set('Content-Disposition', 'attachment; filename="' + downloadFileName + '"')
+      res.status(200)
+
+      const readStream = fs.createReadStream(fichierBackup)
+
+      await new Promise((resolve, reject)=>{
+        readStream.on('close', _=>{
+          resolve()
+        })
+        readStream.on('error', err=>{
+          console.error("Erreur transfert\n%O", err)
+          reject(err)
+        })
+        readStream.pipe(res)
+      })
+
+    } catch(err) {
+      console.error("Erreur traitement TAR file\n%O", err)
+      res.sendStatus(500)
+    } finally {
+      fs.unlink(fichierBackup, err=>{
+        if(err) console.error("Erreur unlink " + fichierBackup)
+      })
+      res.end('')  // S'assurer que le stream est ferme
+    }
+
   }
 
 }

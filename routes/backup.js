@@ -26,12 +26,14 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     {name: 'catalogue', maxcount: 1},
   ]
 
-  router.put('/domaine/*', backupUpload.fields(backupFileFields), traiterUploadHoraire);
+  router.put('/domaine/*', backupUpload.fields(backupFileFields), traiterUploadHoraire)
 
   // Path de download des fichiers de backup horaires
-  router.get('/liste/backups_horaire', getListeBackupHoraire);
-  router.get('/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup);
-  router.get('/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup);
+  router.get('/liste/backups_horaire', getListeBackupHoraire)
+  router.get('/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup)
+  router.get('/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup)
+
+  router.get('/backup.tar', getFichierTar)
 
   async function traiterUploadHoraire(req, res, next) {
     // console.debug("fichier backup PUT " + req.url);
@@ -82,6 +84,17 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     });
 
   };
+
+  // Recupere tous les fichiers dans une archive tar
+  async function getFichierTar(req, res, next) {
+    const idmg = req.autorisationMillegrille.idmg;
+    const rabbitMQ = fctRabbitMQParIdmg(idmg);
+    const traitementFichier = new TraitementFichierBackup(rabbitMQ);
+
+    traitementFichier.getFichierTarBackupComplet(req, res)
+
+    // res.sendStatus(200)
+  }
 
   return router;
 }
@@ -145,6 +158,7 @@ async function getFichierBackup(req, res, next) {
     res.sendStatus(500);
   }
 
-};
+}
+
 
 module.exports = {InitialiserBackup};

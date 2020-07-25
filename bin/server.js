@@ -23,6 +23,12 @@ function initialiser(app) {
       rejectUnauthorized: true, // Authentification via ssl obligatoire
       // enableTrace: true,
   };
+
+  if( process.env.DISABLE_SSL_AUTH ) {
+    config.requestCert = false
+    config.rejectUnauthorized = false
+  }
+
   debug('Demarrage server %s:%s', hostIp, port)
 
   const server = serverType === 'http2'?

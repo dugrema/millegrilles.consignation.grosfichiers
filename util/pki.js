@@ -450,8 +450,21 @@ class ValidateurSignature {
 // rend disponible: {idmg: str, protege: bool, prive: bool}
 function verificationCertificatSSL(req, res, next) {
   const peerCertificate = req.connection.getPeerCertificate();
-  // console.debug("PEER Certificate");
-  // console.debug(peerCertificate);
+  console.debug("PEER Certificate:\n%O", peerCertificate);
+
+  if ( ! peerCertificate || peerCertificate !== {} ) {
+    // DEV
+    if ( process.env.DISABLE_SSL_AUTH && process.env.IDMG ) {
+      req.autorisationMillegrille = {
+        idmg:process.env.IDMG, protege: true, prive: true,
+      }
+      return next()
+    } else {
+      console.error("Erreur cert SSL manquant, IDMG non fourni");
+      res.sendStatus(403);  // Access denied
+      return;
+    }
+  }
 
   const typeCertificat = peerCertificate.subject.OU;
   if( ! ROLES_PERMIS_SSL.includes(typeCertificat)) {

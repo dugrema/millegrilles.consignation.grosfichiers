@@ -13,7 +13,7 @@ function initialiser(fctRabbitMQParIdmg) {
   var app = express();
 
   // Ajouter composant d'autorisation par certificat client SSL
-  app.use(verificationCertificatSSL);
+  app.use(verificationCertificatSSL)
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
