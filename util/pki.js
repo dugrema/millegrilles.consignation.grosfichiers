@@ -298,10 +298,7 @@ class PKIUtils {
   // Verifie la signature d'un message
   // Retourne vrai si le message est valide, faux si invalide.
   async verifierSignatureMessage(message, certificat) {
-    let fingerprint = message['en-tete']['certificat'];
-    let signatureBase64 = message['_signature'];
-    let signature = Buffer.from(signatureBase64, 'base64');
-
+    // Par defaut utiliser le certificat deja charge
     if(!certificat) {
       let certificatChaine = await this.getCertificate(fingerprint);
       if( ! certificatChaine ) {
@@ -311,40 +308,7 @@ class PKIUtils {
       certificat = certificatChaine[0];
     }
 
-    let messageFiltre = {};
-    for(let cle in message) {
-      if( ! cle.startsWith('_') ) {
-        messageFiltre[cle] = message[cle];
-      }
-    }
-    // Stringify en ordre (stable)
-    messageFiltre = stringify(messageFiltre);
-
-    let keyLength = certificat.publicKey.n.bitLength();
-    // Calcul taille salt:
-    // http://bouncy-castle.1462172.n4.nabble.com/Is-Bouncy-Castle-SHA256withRSA-PSS-compatible-with-OpenSSL-RSA-PSS-padding-with-SHA256-digest-td4656843.html
-    let saltLength = (keyLength - 512) / 8 - 2;
-    // console.debug("Salt length: " + saltLength);
-
-    var pss = forge.pss.create({
-      md: forge.md.sha512.create(),
-      mgf: forge.mgf.mgf1.create(forge.md.sha512.create()),
-      saltLength,
-      // optionally pass 'prng' with a custom PRNG implementation
-    });
-    var md = forge.md.sha512.create();
-    md.update(messageFiltre, 'utf8');
-
-    try {
-      var publicKey = certificat.publicKey;
-      let valide = publicKey.verify(md.digest().getBytes(), signature, pss);
-      return valide;
-    } catch (err) {
-      console.debug("Erreur verification signature");
-      console.debug(err);
-      return false;
-    }
-
+    return verifierSignatureMessage(message, certificat)
   }
 
   async decrypterAsymetrique(contenuSecret) {
@@ -366,6 +330,49 @@ class PKIUtils {
   }
 
 };
+
+// Verifie la signature d'un message
+// Retourne vrai si le message est valide, faux si invalide.
+async function verifierSignatureMessage(message, certificat) {
+  let fingerprint = message['en-tete']['certificat'];
+  let signatureBase64 = message['_signature'];
+  let signature = Buffer.from(signatureBase64, 'base64');
+
+  let messageFiltre = {};
+  for(let cle in message) {
+    if( ! cle.startsWith('_') ) {
+      messageFiltre[cle] = message[cle];
+    }
+  }
+  // Stringify en ordre (stable)
+  messageFiltre = stringify(messageFiltre);
+
+  let keyLength = certificat.publicKey.n.bitLength();
+  // Calcul taille salt:
+  // http://bouncy-castle.1462172.n4.nabble.com/Is-Bouncy-Castle-SHA256withRSA-PSS-compatible-with-OpenSSL-RSA-PSS-padding-with-SHA256-digest-td4656843.html
+  let saltLength = (keyLength - 512) / 8 - 2;
+  // console.debug("Salt length: " + saltLength);
+
+  var pss = forge.pss.create({
+    md: forge.md.sha512.create(),
+    mgf: forge.mgf.mgf1.create(forge.md.sha512.create()),
+    saltLength,
+    // optionally pass 'prng' with a custom PRNG implementation
+  });
+  var md = forge.md.sha512.create();
+  md.update(messageFiltre, 'utf8');
+
+  try {
+    var publicKey = certificat.publicKey;
+    let valide = publicKey.verify(md.digest().getBytes(), signature, pss);
+    return valide;
+  } catch (err) {
+    console.debug("Erreur verification signature");
+    console.debug(err);
+    return false;
+  }
+
+}
 
 function getCertificateFingerprint(cert) {
   const fingerprint = forge.md.sha1.create()
@@ -400,9 +407,9 @@ class ValidateurSignature {
 
   verifierChaine(chaineCertsPEM) {
     const chainePki = chaineCertsPEM.reduce((liste, certPEM)=>{
-      let parsedCert = pki.chargerCertificatPEM(certPEM);
-      liste.push(parsedCert);
-      return liste;
+      let parsedCert = forge.pki.certificateFromPem(certPEM)
+      liste.push(parsedCert)
+      return liste
     }, []);
 
     if(forge.pki.verifyCertificateChain(this.caStore, chainePki)) {
@@ -423,7 +430,7 @@ class ValidateurSignature {
       if(this.verifierChaine(chaineCerts)) {
         // Charger le certificat PEM en format node-forge pour verifier signature
         const certificat = forge.pki.certificateFromPem(chaineCerts[0]);
-        return await pki.verifierSignatureMessage(message, certificat);
+        return await verifierSignatureMessage(message, certificat);
       } else {
         return false;
       }
@@ -431,7 +438,7 @@ class ValidateurSignature {
       // On utilise le cache, permet d'eviter de verifier la chaine
       const fingerprint = message['en-tete'].certificat;
       const certificat = this.chainCache[fingerprint][0];
-      return await pki.verifierSignatureMessage(message, certificat);
+      return await verifierSignatureMessage(message, certificat);
     }
   }
 

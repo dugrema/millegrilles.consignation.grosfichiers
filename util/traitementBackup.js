@@ -370,9 +370,10 @@ class TraitementFichierBackup {
 // Prepare et valide le contenu du repertoire staging/
 class RestaurateurBackup {
 
-  constructor(pki, opts) {
-    if(!opts) opts = {};
-    this.pki = pki;
+  constructor(mq, pki, opts) {
+    if(!opts) opts = {}
+    this.mq = mq
+    this.pki = pki
 
     const idmg = pki.idmg;
     this.pathConsignation = new PathConsignation({idmg});
@@ -415,7 +416,10 @@ class RestaurateurBackup {
   // Le consignateur de fichiers va extraire, valider et re-transmettre
   // toutes les transactions de tous les domaines.
   async restaurationComplete() {
-    debug("Debut restauration complete");
+    debug("Debut restauration complete")
+
+    // S'assurer que les repertoires destination de base existent
+    await this.creerRepertoires()
 
     // Creer hard-links pour archives existantes sous staging/
     const rapportHardLinks = await this.creerHardLinksBackupStaging();
@@ -447,6 +451,19 @@ class RestaurateurBackup {
     // Verifie les SHA des archives pour chaque archive a partir des catalogues
     debug("Fin restauration complete");
     return {rapports};
+  }
+
+  // S'assurer que les repertoires de base (horaire, archives) existent
+  async creerRepertoires() {
+    return new Promise((resolve, reject) => {
+      fs.mkdir(this.pathBackupHoraire, err=>{
+        if(err && err.code !== 'EEXIST') reject(err)
+        fs.mkdir(this.pathBackupArchives, err=>{
+          if(err && err.code !== 'EEXIST') reject(err)
+          resolve()
+        })
+      })
+    })
   }
 
   async creerHardLinksBackupStaging() {
@@ -1037,7 +1054,7 @@ class RestaurateurBackup {
     }
 
     // Calculer SHA3_512 pour entete courante
-    const hachageEnteteCourante = pki.hacherTransaction(catalogue['en-tete'], {hachage: 'sha3-512'});
+    const hachageEnteteCourante = this.pki.hacherTransaction(catalogue['en-tete'], {hachage: 'sha3-512'});
     var noeudCourant = {
       'hachage_entete': hachageEnteteCourante,
       'uuid-transaction': catalogue['en-tete']['uuid-transaction'],
@@ -1120,11 +1137,11 @@ class RestaurateurBackup {
 
     for await (const transaction of rl) {
       debug("C: " + transaction);
-      await rabbitMQ.restaurerTransaction(transaction);
+      await this.mq.restaurerTransaction(transaction);
     }
 
     // Retransmettre le catalogue horaire lui-meme
-    await rabbitMQ.restaurerTransaction(JSON.stringify(catalogue));
+    await this.mq.restaurerTransaction(JSON.stringify(catalogue));
 
     return erreurs;
   }

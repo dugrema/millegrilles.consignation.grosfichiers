@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
 const { spawn } = require('child_process');
-const { TraitementFichier, PathConsignation, UtilitaireFichiers, RestaurateurBackup } = require('../util/traitementFichier');
+const { TraitementFichier, PathConsignation, UtilitaireFichiers} = require('../util/traitementFichier');
+const { RestaurateurBackup } = require('../util/traitementBackup');
 
 const utilitaireFichiers = new UtilitaireFichiers();
 
@@ -137,7 +138,7 @@ class GestionnaireMessagesBackup {
       const {correlationId, replyTo} = opts.properties;
 
       try {
-        const restaurateur = new RestaurateurBackup(this.pki);
+        const restaurateur = new RestaurateurBackup(this.mq, this.pki);
         const rapportRestauration = await restaurateur.restaurationComplete();
 
         console.debug("Rapport restauration");

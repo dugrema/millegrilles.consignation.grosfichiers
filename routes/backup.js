@@ -5,8 +5,8 @@ const fs = require('fs');
 const multer = require('multer');
 const bodyParser = require('body-parser');
 
-const {PathConsignation} = require('../util/traitementFichier');
-const {TraitementFichierBackup} = require('../util/traitementBackup');
+const {PathConsignation} = require('../util/traitementFichier')
+const {TraitementFichierBackup} = require('../util/traitementBackup')
 
 function InitialiserBackup(fctRabbitMQParIdmg) {
 
