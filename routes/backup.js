@@ -26,6 +26,8 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     {name: 'catalogue', maxcount: 1},
   ]
 
+  router.use((req, res)=>{req.mq = fctRabbitMQParIdmg[req.autorisationMillegrille.idmg]})
+
   router.put('/domaine/*', backupUpload.fields(backupFileFields), traiterUploadHoraire)
 
   // Path de download des fichiers de backup horaires
@@ -103,16 +105,16 @@ async function getListeBackupHoraire(req, res, next) {
 
   // console.debug("Retourner la liste des backups horaires");
   try {
-    const idmg = req.autorisationMillegrille.idmg;
-    const rabbitMQ = fctRabbitMQParIdmg(idmg);
-    const traitementFichier = new TraitementFichierBackup(rabbitMQ);
+    const idmg = req.autorisationMillegrille.idmg
+    const rabbitMQ = req.mq
+    const traitementFichier = new TraitementFichierBackup(rabbitMQ)
 
-    const listeBackupsHoraires = await traitementFichier.genererListeBackupsHoraire(req);
-    res.end(JSON.stringify(listeBackupsHoraires));
+    const listeBackupsHoraires = await traitementFichier.genererListeBackupsHoraire(req)
+    res.end(JSON.stringify(listeBackupsHoraires))
   } catch(err) {
-    console.error("Erreur preparation liste backups horaire");
-    console.error(err);
-    res.sendStatus(500);
+    console.error("Erreur preparation liste backups horaire")
+    console.error(err)
+    res.sendStatus(500)
   }
 
 }

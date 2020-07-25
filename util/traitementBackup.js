@@ -441,7 +441,6 @@ class RestaurateurBackup {
       }
     );
 
-
     const rapports = {
       rapportHardLinks,
       rapportTarExtraction,
@@ -1136,7 +1135,7 @@ class RestaurateurBackup {
     });
 
     for await (const transaction of rl) {
-      debug("C: " + transaction);
+      debug("Resoumettre transaction\n%s" + transaction);
       await this.mq.restaurerTransaction(transaction);
     }
 
