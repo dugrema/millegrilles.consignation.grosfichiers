@@ -8,7 +8,6 @@ const lzma = require('lzma-native');
 const { spawn } = require('child_process');
 const readline = require('readline');
 const tar = require('tar')
-const streamBuffers = require('stream-buffers')
 const moment = require('moment')
 const tmp = require('tmp-promise')
 
