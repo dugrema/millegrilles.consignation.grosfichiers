@@ -15,7 +15,9 @@ export PORT=3003
 
 export DEBUG=millegrilles.*
 
+# export SERVER_TYPE=https
+
 export IDMG=JjP8L3xKtE1yAyQGMU5TSNmVjBzxu5wTGpU23CMHbXUT
-export DISABLE_SSL_AUTH=1
+# export DISABLE_SSL_AUTH=1
 
 npm start
