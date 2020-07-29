@@ -15,7 +15,7 @@ export PORT=3003
 
 export DEBUG=millegrilles.*
 
-export IDMG=PKkgZ3jKhfAztyAQXt7Xw6pQvyipPP8azgdtqxQFAG39
+export IDMG=JjP8L3xKtE1yAyQGMU5TSNmVjBzxu5wTGpU23CMHbXUT
 export DISABLE_SSL_AUTH=1
 
 npm start

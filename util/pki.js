@@ -1,3 +1,4 @@
+const debug = require('debug')('millegrilles:utilpki')
 const crypto = require('crypto');
 const forge = require('node-forge');
 const stringify = require('json-stable-stringify');
@@ -457,7 +458,6 @@ class ValidateurSignature {
 // rend disponible: {idmg: str, protege: bool, prive: bool}
 function verificationCertificatSSL(req, res, next) {
   const peerCertificate = req.connection.getPeerCertificate();
-  console.debug("PEER Certificate:\n%O", peerCertificate);
 
   if ( ! peerCertificate || peerCertificate !== {} ) {
     // DEV
@@ -465,6 +465,7 @@ function verificationCertificatSSL(req, res, next) {
       req.autorisationMillegrille = {
         idmg:process.env.IDMG, protege: true, prive: true,
       }
+      debug("Fake autorisation %s:\n%O", req.url, req.autorisationMillegrille)
       return next()
     } else {
       console.error("Erreur cert SSL manquant, IDMG non fourni");
@@ -473,6 +474,7 @@ function verificationCertificatSSL(req, res, next) {
     }
   }
 
+  console.debug("PEER Certificate:\n%O", peerCertificate);
   const typeCertificat = peerCertificate.subject.OU;
   if( ! ROLES_PERMIS_SSL.includes(typeCertificat)) {
     console.error("Nom 'OU' non supporte: " + typeCertificat);

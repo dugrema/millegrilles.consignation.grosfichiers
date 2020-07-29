@@ -26,9 +26,14 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     {name: 'catalogue', maxcount: 1},
   ]
 
-  router.use((req, res)=>{req.mq = fctRabbitMQParIdmg[req.autorisationMillegrille.idmg]})
+  router.use((req, res, next)=>{req.mq = fctRabbitMQParIdmg[req.autorisationMillegrille.idmg]; next()})
 
-  router.put('/domaine/*', backupUpload.fields(backupFileFields), traiterUploadHoraire)
+  router.put('/domaine/*',
+    (req, res, next)=>{debug("Avant upload"); next()},
+    backupUpload.fields(backupFileFields),
+    (req, res, next)=>{debug("Apres upload"); next()},
+    traiterUploadHoraire
+  )
 
   // Path de download des fichiers de backup horaires
   router.get('/liste/backups_horaire', getListeBackupHoraire)
@@ -38,9 +43,8 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   router.get('/backup.tar', getFichierTar)
 
   async function traiterUploadHoraire(req, res, next) {
-    // console.debug("fichier backup PUT " + req.url);
-    // console.debug("Headers: ");
-    // console.debug(req.headers);
+    debug("fichier backup PUT : %s", req.url);
+    debug("Headers:\n%O", req.headers);
     // console.debug("Body: ");
     // console.debug(req.body);
     // console.debug(req.files);
