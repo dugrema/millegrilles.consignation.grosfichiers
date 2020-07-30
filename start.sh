@@ -11,7 +11,7 @@ export WEB_CERT=$MG_MQ_CERTFILE
 export WEB_KEY=$MG_MQ_KEYFILE
 export MG_MQ_URL=amqps://$HOST:5673
 
-export PORT=3003
+export PORT=3021
 
 export DEBUG=millegrilles.*
 
