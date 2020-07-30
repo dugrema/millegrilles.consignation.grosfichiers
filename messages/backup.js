@@ -1,8 +1,10 @@
+const debug = require('debug')('millegrilles:messages:backup')
 const fs = require('fs');
 const path = require('path');
 const S3 = require('aws-sdk/clients/s3');
 const { spawn } = require('child_process');
 const { TraitementFichier, PathConsignation, UtilitaireFichiers} = require('../util/traitementFichier');
+const { TraitementFichierBackup } = require('../util/traitementBackup');
 const { RestaurateurBackup } = require('../util/traitementBackup');
 
 const utilitaireFichiers = new UtilitaireFichiers();
@@ -14,6 +16,7 @@ class GestionnaireMessagesBackup {
     this.pki = mq.pki;
     this.genererBackupQuotidien.bind(this);
     this.traitementFichier = new TraitementFichier(mq);
+    this.traitementFichierBackup = new TraitementFichierBackup(mq);
     this.pathConsignation = this.traitementFichier.pathConsignation;
   }
 
@@ -57,28 +60,28 @@ class GestionnaireMessagesBackup {
       // console.debug(message);
 
       try {
-        const informationArchive = await genererBackupQuotidien(this.traitementFichier, message.catalogue);
+        const informationArchive = await genererBackupQuotidien(this.traitementFichierBackup, message.catalogue);
         const { fichiersInclure, pathRepertoireBackup } = informationArchive;
         delete informationArchive.fichiersInclure; // Pas necessaire pour la transaction
         delete informationArchive.pathRepertoireBackup; // Pas necessaire pour la transaction
 
         // Finaliser le backup en retransmettant le journal comme transaction
         // de backup quotidien
-        await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'nouvelle.transaction');
+        debug("Transmettre journal backup quotidien comme transaction de backup quotidien")
+        await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'Backup.nouvelle');
 
         // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
-        // console.debug("Transmettre transaction informationArchive : ");
-        // console.debug(informationArchive);
+        debug("Transmettre transaction informationArchive :\n%O", informationArchive);
 
-        await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveQuotidienneInfo');
+        await this.mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo');
 
         // Effacer les fichiers transferes dans l'archive quotidienne
         await utilitaireFichiers.supprimerFichiers(fichiersInclure, pathRepertoireBackup);
         await utilitaireFichiers.supprimerRepertoiresVides(this.pathConsignation.consignationPathBackupHoraire);
 
       } catch (err) {
-        console.error("Erreur creation backup quotidien");
-        console.error(err);
+        console.error("Erreur creation backup quotidien:\n%O", err);
+        return reject(err)
       }
 
       // console.debug("Backup quotidien termine");
@@ -93,14 +96,14 @@ class GestionnaireMessagesBackup {
       // console.debug(message);
 
       try {
-        const informationArchive = await genererBackupMensuel(this.traitementFichier, message.catalogue);
+        const informationArchive = await genererBackupMensuel(this.traitementFichierBackup, message.catalogue);
 
         // console.debug("Information archive mensuelle:");
         // console.debug(informationArchive);
 
         // Finaliser le backup en retransmettant le journal comme transaction
         // de backup quotidien
-        await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'nouvelle.transaction');
+        await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'Backup.nouvelle');
 
         // Generer transaction pour journal annuel. Inclue SHA512 et nom de l'archive mensuelle
         // console.debug("Transmettre transaction informationArchive : ");
@@ -110,7 +113,7 @@ class GestionnaireMessagesBackup {
         delete informationArchive.fichiersInclure;
         delete informationArchive.nomJournal;
 
-        await this.mq.transmettreTransactionFormattee(informationArchive, 'millegrilles.domaines.Backup.archiveMensuelleInfo');
+        await this.mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveMensuelleInfo');
 
         // console.debug("Info archive mensuelle transmise, nettoyage des fichiers locaux");
         await utilitaireFichiers.supprimerFichiers(fichiersInclure, this.pathConsignation.consignationPathBackupArchives);

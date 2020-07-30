@@ -8,7 +8,6 @@ const { spawn } = require('child_process');
 const readline = require('readline');
 
 const {uuidToDate} = require('./UUIDUtils');
-const rabbitMQ = require('./rabbitMQ');
 const transformationImages = require('./transformationImages');
 const {pki, ValidateurSignature} = require('./pki');
 

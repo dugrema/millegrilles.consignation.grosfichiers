@@ -12,7 +12,7 @@ const moment = require('moment')
 const tmp = require('tmp-promise')
 
 const {uuidToDate} = require('./UUIDUtils');
-const rabbitMQ = require('./rabbitMQ');
+// const rabbitMQ = require('./rabbitMQ');
 const transformationImages = require('./transformationImages');
 const {pki, ValidateurSignature} = require('./pki');
 const {PathConsignation, UtilitaireFichiers} = require('./traitementFichier');
