@@ -15,3 +15,6 @@ COPY ./package*.json ./
 # Bundle app source
 # Api est l'application node back-end et front-end est l'application react
 COPY ./ ./
+
+RUN rm -rf node_modules/millegrilles.common && \
+    npm i --production
