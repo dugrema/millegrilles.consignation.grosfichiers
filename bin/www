@@ -28,9 +28,15 @@ async function init() {
   const root = express()
   root.use(logger('dev'))
 
+  // Injecter fonction de mapping de RabbitMQ
+  root.use((req, res, next) => {
+    req.fctRabbitMQParIdmg = fctRabbitMQParIdmg
+    next()
+  })
+
   const serverInstance = initialiserServer(root)
 
-  const app = await initialiserApp(fctRabbitMQParIdmg, {idmg})
+  const app = await initialiserApp()
   root.use(app)
 
 }

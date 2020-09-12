@@ -395,6 +395,10 @@ class ValidateurSignature {
   constructor(caCertPEM) {
     this.caStore = forge.pki.createCaStore([]);
 
+    if(caCertPEM) {
+      this.caStore.addCertificate(caCertPEM)  
+    }
+
     // Creer un cache des chaines valides
     // Permet d'eviter de verifier les chaines a chaque fois, on passe
     // directement a la verification de la signature.
@@ -481,7 +485,54 @@ function verificationCertificatSSL(req, res, next) {
   }
 
   const typeCertificat = peerCertificate.subject.OU;
-  if( ! ROLES_PERMIS_SSL.includes(typeCertificat)) {
+  if( typeCertificat === 'nginx' ) {
+    debug("Certificat nginx, valider l'autorisation d'acces via headers/contenu\nHeaders\n%O",
+      req.headers)
+
+    const nginxVerified = req.headers.verified && req.headers.verified !== 'NONE'
+
+    if(nginxVerified) {
+      debug("NGINX a verifie le certificat client, on utilise l'information des headers")
+      // ....
+    } else {
+      // Le certificat n'a pas ete fourni en mode "client ssl", il faut aller chercher dans
+      // le contenu des headers et valider la signature avant de proceder
+      const certificatsHeader = req.headers.certificat
+      if(!certificatsHeader) {
+        console.error("Requete url:%s refuse, aucun certificat SSL fourni", req.url)
+        res.sendStatus(403);  // Access denied
+        return;
+      }
+
+      const chaineCerts = certificatsHeader.split(';').join('\n')
+      const listeCerts = splitPEMCerts(chaineCerts)
+      let parsedCert = forge.pki.certificateFromPem(listeCerts[0]);
+      const idmg = parsedCert.issuer.getField('O').value
+      debug("IDMG certificat client : %s, certs:\n%O", idmg, parsedCert.issuer)
+
+      // Valider la chaine de certificats
+      const fctRabbitMQParIdmg = req.fctRabbitMQParIdmg
+      const rabbitMQ = fctRabbitMQParIdmg(idmg)
+      debug("Certificat CA: %O", rabbitMQ.pki.ca)
+      const validateurSignature = new ValidateurSignature(rabbitMQ.pki.ca)
+      var chaineCertValide = false
+      try {
+        chaineCertValide = validateurSignature.verifierChaine(listeCerts)
+        debug("Validite de chaine cert client : %s", chaineCertValide)
+      } catch(err) {
+        console.error("Erreur validation chaine de certificats: %O", err)
+      }
+
+      if(!chaineCertValide) {
+        console.error("Requete url:%s refuse, aucun certificat SSL fourni", req.url)
+        res.sendStatus(403);  // Access denied
+        return;
+      }
+
+    }
+
+  }
+  else if( ! ROLES_PERMIS_SSL.includes(typeCertificat)) {
     console.error("Nom 'OU' non supporte: " + typeCertificat);
     res.sendStatus(403);  // Access denied
     return;

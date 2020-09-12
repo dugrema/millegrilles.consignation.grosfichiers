@@ -6,25 +6,32 @@ var cookieParser = require('cookie-parser');
 // var indexRouter = require('./routes/index');
 const {InitialiserGrosFichiers} = require('../routes/grosfichiers');
 const {InitialiserBackup} = require('../routes/backup');
-const {verificationCertificatSSL} = require('../util/pki');
+const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki');
 
-function initialiser(fctRabbitMQParIdmg) {
+function initialiser() {
 
   var app = express();
 
   // Ajouter composant d'autorisation par certificat client SSL
   app.use(verificationCertificatSSL)
 
+  // Inject RabbitMQ pour la MilleGrille detectee sous etape SSL
+  app.use((req, res, next)=>{
+    const idmg = req.autorisationMillegrille.idmg
+    const rabbitMQ = fctRabbitMQParIdmg(idmg)
+    req.rabbitMQ = rabbitMQ
+    next()
+  })
+
   app.use(express.json());
+
   app.use(express.urlencoded({ extended: false }));
-  // app.use(cookieParser());
+
   app.use(express.static(path.join(__dirname, 'public')));
 
-  const grosfichiersRouter = new InitialiserGrosFichiers(fctRabbitMQParIdmg);
-  const backupRouter = new InitialiserBackup(fctRabbitMQParIdmg);
+  app.use('/fichiers', new InitialiserGrosFichiers());
 
-  app.use('/grosFichiers', grosfichiersRouter);
-  app.use('/backup', backupRouter);
+  app.use('/backup', new InitialiserBackup());
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {
