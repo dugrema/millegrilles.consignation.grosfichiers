@@ -160,160 +160,40 @@ class TraitementFichier {
     this.utilitaireFichiers = new UtilitaireFichiers();
   }
 
-  traiterPut(req) {
+  async traiterPut(req) {
     // Sauvegarde le fichier dans le repertoire de consignation local.
 
     const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
 
-    const promise = new Promise(async (resolve, reject) => {
+    // Le nom du fichier au complet, incluant path, est fourni dans fuuide.
+    const transactionFichier = JSON.parse(req.body['transaction-fichier'])
+    const transactionChiffrage = JSON.parse(req.body['transaction-chiffrage'])
 
-      try {
-        // Le nom du fichier au complet, incluant path, est fourni dans fuuide.
-        const transaction = JSON.parse(req.body.transaction)
+    // Valider la signature de la transaction
+    // Injecter le certificat recu pour s'assurer qu'il est distribue
+    transactionFichier['_certificat'] = req.certificat
+    transactionChiffrage['_certificat'] = req.certificat
+    const transactionValide =
+      await this.rabbitMQ.pki.verifierSignatureMessage(transactionFichier) &&
+      await this.rabbitMQ.pki.verifierSignatureMessage(transactionChiffrage)
+    if(!transactionValide) {
+      throw new Error("Signature transaction invalide")
+    }
 
-        // Valider la signature de la transaction
-        // Injecter le certificat recu pour s'assurer qu'il est distribue
-        transaction['_certificat'] = req.certificat
-        const transactionValide = await this.rabbitMQ.pki.verifierSignatureMessage(transaction)
-        if(!transactionValide) {
-          throw new Error("Signature transaction invalide")
-        }
+    // console.debug(headers);
+    const fuuid = transactionFichier.fuuid
+    const encrypte = transactionFichier.securite === '3.protege'
+    const extension = path.parse(transactionFichier.nomfichier).ext.replace('.', '')
+    const mimetype = transactionFichier.mimetype
 
-        // console.debug(headers);
-        const fuuid = transaction.fuuid
-        const encrypte = transaction.securite === '3.protege'
-        const extension = path.parse(transaction.nomfichier).ext.replace('.', '')
-        const mimetype = transaction.mimetype
+    let nouveauPathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension, mimetype});
 
-        let nouveauPathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension, mimetype});
-        // let nouveauPathFichier = path.join(pathConsignation.consignationPathLocal, fuuide);
+    // Creer le repertoire au besoin, puis deplacer le fichier (rename)
+    const hachage = await calculHachage(req, transactionFichier.hachage)
+    await deplacerFichier(req, nouveauPathFichier)
 
-        // Creer le repertoire au besoin, puis deplacer le fichier (rename)
-        let pathRepertoire = path.dirname(nouveauPathFichier);
-        // console.debug("Path a utiliser: " + pathRepertoire + ", complet: " + nouveauPathFichier + ", extension: " + extension);
-        fs.mkdir(pathRepertoire, { recursive: true }, (err)=>{
-          // console.debug("Path cree: " + pathRepertoire);
-          // console.debug(err);
+    return({hachage})
 
-          if(!err) {
-
-            // Deplacer le fichier
-            const fichier = req.file
-
-            const fichierReadStream = fs.createReadStream(fichier.path)
-            const digester = crypto.createHash('sha512');
-            fichierReadStream.on('end', data=>{
-              if(data) {
-                digester.update(data)
-              }
-              const digest = 'sha512_b64:' + digester.digest('base64')
-              debug("Digest calcule sur fichier %s", digest)
-
-              // Verifier que le digest calcule correspond a celui recu
-              if(digest !== transaction.hachage) {
-                reject("Hachage fichier invalide pour fuuid : " + fuuid)
-              }
-
-              fs.rename(fichier.path, nouveauPathFichier, err => {
-                resolve({hash: digest})
-              })
-
-            })
-
-            fichierReadStream.on('data', data=>{
-              debug("DATA!")
-              digester.update(data)
-            })
-            debug("Debut read")
-            // fichierReadStream.read()
-
-            // // console.debug("Ecriture fichier " + nouveauPathFichier);
-            // var sha256 = crypto.createHash('sha256');
-            // let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx', mode: 0o440});
-            // writeStream.on('finish', async data=>{
-            //   // console.debug("Fin transmission");
-            //   // console.debug(data);
-            //
-            //   // Comparer hash a celui du header
-            //   let sha256Hash = sha256.digest('hex');
-            //   // console.debug("Hash fichier remote : " + sha256Hash);
-            //
-            //   let messageConfirmation = {
-            //     fuuid,
-            //     sha256: sha256Hash
-            //   };
-            //
-            //   // Verifier si on doit generer des thumbnails/preview
-            //   if(!encrypte) {
-            //     if(mimetype.split('/')[0] === 'image') {
-            //       try {
-            //         // console.debug("Creation preview image")
-            //         var imagePreviewInfo = await traiterImage(pathConsignation, nouveauPathFichier);
-            //         messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
-            //         messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
-            //         messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
-            //         // console.debug("Info image, preview = " + messageConfirmation.fuuid_preview)
-            //       } catch (err) {
-            //         console.error("Erreur creation thumbnail/previews");
-            //         console.error(err);
-            //       }
-            //     } else if(mimetype.split('/')[0] === 'video') {
-            //       // On genere uniquement le thumbnail - le processus va
-            //       // faire un appel async pour le re-encoder
-            //       console.debug("Traitement video");
-            //       var imagePreviewInfo = await traiterVideo(pathConsignation, nouveauPathFichier);
-            //       messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
-            //       messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
-            //       messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
-            //       console.debug("Fuuid preview video: " + messageConfirmation.fuuid_preview)
-            //     }
-            //   }
-            //
-            //   this.rabbitMQ.transmettreTransactionFormattee(
-            //     messageConfirmation,
-            //     'millegrilles.domaines.GrosFichiers.nouvelleVersion.transfertComplete')
-            //   .then( msg => {
-            //     // console.log("Recu confirmation de nouvelleVersion transfertComplete");
-            //     // console.log(msg);
-            //   })
-            //   .catch( err => {
-            //     console.error("Erreur message");
-            //     console.error(err);
-            //   });
-            //
-            //   console.log("Fichier ecrit: " + nouveauPathFichier);
-            //   resolve({sha256Hash});
-            // })
-            // .on('error', err=>{
-            //   console.error("Erreur sauvegarde fichier: " + nouveauPathFichier);
-            //   reject(err);
-            // })
-            //
-            // req.on('data', chunk=>{
-            //   // Mettre le sha256 directement dans le pipe donne le mauvais
-            //   // resultat. L'update (avec digest plus bas) fonctionne correctement.
-            //   sha256.update(chunk);
-            //
-            //   // console.log('-------------');
-            //   // process.stdout.write(chunk);
-            //   // console.log('-------------');
-            // })
-            // .pipe(writeStream); // Traitement via event callbacks
-
-          } else {
-            reject(err);
-          }
-
-        });
-
-      } catch (err) {
-        console.error("Erreur traitement fichier " + req.headers.fuuide);
-        reject(err);
-      }
-
-    });
-
-    return promise;
   }
 
 }
@@ -531,6 +411,52 @@ async function genererListeCatalogues(repertoire) {
   // console.debug(listeCatalogues);
   return listeCatalogues;
 
+}
+
+async function calculHachage(req, hachage) {
+  new Promise((resolve, reject)=>{
+    // Deplacer le fichier
+    const fichier = req.file
+
+    const fichierReadStream = fs.createReadStream(fichier.path)
+    const digester = crypto.createHash('sha512');
+
+    fichierReadStream.on('data', data=>{
+      digester.update(data)
+    })
+
+    fichierReadStream.on('end', data=>{
+      if(data) {
+        digester.update(data)
+      }
+      const digest = 'sha512_b64:' + digester.digest('base64')
+      debug("Digest calcule sur fichier %s", digest)
+
+      // Verifier que le digest calcule correspond a celui recu
+      if(digest !== hachage) {
+        return reject("Hachage fichier invalide pour fuuid : " + fuuid)
+      }
+      resolve(digest)
+    })
+
+  })
+}
+
+async function deplacerFichier(req, nouveauPathFichier) {
+  await new Promise((resolve, reject)=>{
+    const fichier = req.file
+    const pathRepertoire = path.dirname(nouveauPathFichier);
+
+    fs.mkdir(pathRepertoire, err=>{
+      if(err) return reject(err)
+
+      fs.rename(fichier.path, nouveauPathFichier, err => {
+        if(err) return reject(err)
+        resolve()
+      })
+
+    })
+  })
 }
 
 // Instances

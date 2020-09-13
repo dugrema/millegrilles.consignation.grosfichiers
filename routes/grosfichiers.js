@@ -49,7 +49,7 @@ function InitialiserGrosFichiers() {
       const msg = await traitementFichier.traiterPut(req)
 
       response = {
-        sha256Hash: msg.sha256Hash
+        hachage: msg.hachage
       }
 
       res.end(JSON.stringify(response))
