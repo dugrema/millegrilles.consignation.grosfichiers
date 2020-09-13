@@ -1,3 +1,4 @@
+const debug = require('debug')('millegrilles:fichiers:traitementFichier')
 const fs = require('fs');
 const readdirp = require('readdirp');
 const path = require('path');
@@ -28,7 +29,7 @@ class PathConsignation {
     var consignationPath = process.env.MG_CONSIGNATION_PATH || opts.consignationPath;
     if(!consignationPath) {
       if(idmg) {
-        consignationPath = path.join('/var/opt/millegrilles', idmg, '/mounts/consignation');
+        consignationPath = path.join('/var/opt/millegrilles/consignation', idmg);
       } else {
         consignationPath = '/var/opt/millegrilles/hebergement/consignation';
       }
@@ -168,13 +169,14 @@ class TraitementFichier {
 
       try {
         // Le nom du fichier au complet, incluant path, est fourni dans fuuide.
-        let headers = req.headers;
+        const transaction = JSON.parse(req.body.transaction)
         // console.debug(headers);
-        let fileUuid = headers.fileuuid;
-        let encrypte = headers.encrypte === "true";
-        let extension = path.parse(headers.nomfichier).ext.replace('.', '');
-        let mimetype = headers.mimetype;
-        let nouveauPathFichier = pathConsignation.trouverPathLocal(fileUuid, encrypte, {extension, mimetype});
+        const fuuid = transaction.fuuid
+        const encrypte = transaction.securite === '3.protege'
+        const extension = path.parse(transaction.nomfichier).ext.replace('.', '')
+        const mimetype = transaction.mimetype
+
+        let nouveauPathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension, mimetype});
         // let nouveauPathFichier = path.join(pathConsignation.consignationPathLocal, fuuide);
 
         // Creer le repertoire au besoin, puis deplacer le fichier (rename)
@@ -185,78 +187,104 @@ class TraitementFichier {
           // console.debug(err);
 
           if(!err) {
-            // console.debug("Ecriture fichier " + nouveauPathFichier);
-            var sha256 = crypto.createHash('sha256');
-            let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx', mode: 0o440});
-            writeStream.on('finish', async data=>{
-              // console.debug("Fin transmission");
-              // console.debug(data);
 
-              // Comparer hash a celui du header
-              let sha256Hash = sha256.digest('hex');
-              // console.debug("Hash fichier remote : " + sha256Hash);
+            // Deplacer le fichier
+            const fichier = req.file
 
-              let messageConfirmation = {
-                fuuid: fileUuid,
-                sha256: sha256Hash
-              };
-
-              // Verifier si on doit generer des thumbnails/preview
-              if(!encrypte) {
-                if(mimetype.split('/')[0] === 'image') {
-                  try {
-                    // console.debug("Creation preview image")
-                    var imagePreviewInfo = await traiterImage(pathConsignation, nouveauPathFichier);
-                    messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
-                    messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
-                    messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
-                    // console.debug("Info image, preview = " + messageConfirmation.fuuid_preview)
-                  } catch (err) {
-                    console.error("Erreur creation thumbnail/previews");
-                    console.error(err);
-                  }
-                } else if(mimetype.split('/')[0] === 'video') {
-                  // On genere uniquement le thumbnail - le processus va
-                  // faire un appel async pour le re-encoder
-                  console.debug("Traitement video");
-                  var imagePreviewInfo = await traiterVideo(pathConsignation, nouveauPathFichier);
-                  messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
-                  messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
-                  messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
-                  console.debug("Fuuid preview video: " + messageConfirmation.fuuid_preview)
-                }
+            const fichierReadStream = fs.createReadStream(fichier.path)
+            const digester = crypto.createHash('sha512');
+            fichierReadStream.on('end', data=>{
+              if(data) {
+                digester.update(data)
               }
+              const digest = 'sha512_b64:' + digester.digest('base64')
+              debug("Digest calcule sur fichier %s", digest)
 
-              this.rabbitMQ.transmettreTransactionFormattee(
-                messageConfirmation,
-                'millegrilles.domaines.GrosFichiers.nouvelleVersion.transfertComplete')
-              .then( msg => {
-                // console.log("Recu confirmation de nouvelleVersion transfertComplete");
-                // console.log(msg);
+              fs.rename(fichier.path, nouveauPathFichier, err => {
+                resolve({hash: digest})
               })
-              .catch( err => {
-                console.error("Erreur message");
-                console.error(err);
-              });
 
-              console.log("Fichier ecrit: " + nouveauPathFichier);
-              resolve({sha256Hash});
-            })
-            .on('error', err=>{
-              console.error("Erreur sauvegarde fichier: " + nouveauPathFichier);
-              reject(err);
             })
 
-            req.on('data', chunk=>{
-              // Mettre le sha256 directement dans le pipe donne le mauvais
-              // resultat. L'update (avec digest plus bas) fonctionne correctement.
-              sha256.update(chunk);
-
-              // console.log('-------------');
-              // process.stdout.write(chunk);
-              // console.log('-------------');
+            fichierReadStream.on('data', data=>{
+              debug("DATA!")
+              digester.update(data)
             })
-            .pipe(writeStream); // Traitement via event callbacks
+            debug("Debut read")
+            // fichierReadStream.read()
+
+            // // console.debug("Ecriture fichier " + nouveauPathFichier);
+            // var sha256 = crypto.createHash('sha256');
+            // let writeStream = fs.createWriteStream(nouveauPathFichier, {flag: 'wx', mode: 0o440});
+            // writeStream.on('finish', async data=>{
+            //   // console.debug("Fin transmission");
+            //   // console.debug(data);
+            //
+            //   // Comparer hash a celui du header
+            //   let sha256Hash = sha256.digest('hex');
+            //   // console.debug("Hash fichier remote : " + sha256Hash);
+            //
+            //   let messageConfirmation = {
+            //     fuuid,
+            //     sha256: sha256Hash
+            //   };
+            //
+            //   // Verifier si on doit generer des thumbnails/preview
+            //   if(!encrypte) {
+            //     if(mimetype.split('/')[0] === 'image') {
+            //       try {
+            //         // console.debug("Creation preview image")
+            //         var imagePreviewInfo = await traiterImage(pathConsignation, nouveauPathFichier);
+            //         messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
+            //         messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
+            //         messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
+            //         // console.debug("Info image, preview = " + messageConfirmation.fuuid_preview)
+            //       } catch (err) {
+            //         console.error("Erreur creation thumbnail/previews");
+            //         console.error(err);
+            //       }
+            //     } else if(mimetype.split('/')[0] === 'video') {
+            //       // On genere uniquement le thumbnail - le processus va
+            //       // faire un appel async pour le re-encoder
+            //       console.debug("Traitement video");
+            //       var imagePreviewInfo = await traiterVideo(pathConsignation, nouveauPathFichier);
+            //       messageConfirmation.thumbnail = imagePreviewInfo.thumbnail;
+            //       messageConfirmation.fuuid_preview = imagePreviewInfo.fuuidPreviewImage;
+            //       messageConfirmation.mimetype_preview = imagePreviewInfo.mimetypePreviewImage;
+            //       console.debug("Fuuid preview video: " + messageConfirmation.fuuid_preview)
+            //     }
+            //   }
+            //
+            //   this.rabbitMQ.transmettreTransactionFormattee(
+            //     messageConfirmation,
+            //     'millegrilles.domaines.GrosFichiers.nouvelleVersion.transfertComplete')
+            //   .then( msg => {
+            //     // console.log("Recu confirmation de nouvelleVersion transfertComplete");
+            //     // console.log(msg);
+            //   })
+            //   .catch( err => {
+            //     console.error("Erreur message");
+            //     console.error(err);
+            //   });
+            //
+            //   console.log("Fichier ecrit: " + nouveauPathFichier);
+            //   resolve({sha256Hash});
+            // })
+            // .on('error', err=>{
+            //   console.error("Erreur sauvegarde fichier: " + nouveauPathFichier);
+            //   reject(err);
+            // })
+            //
+            // req.on('data', chunk=>{
+            //   // Mettre le sha256 directement dans le pipe donne le mauvais
+            //   // resultat. L'update (avec digest plus bas) fonctionne correctement.
+            //   sha256.update(chunk);
+            //
+            //   // console.log('-------------');
+            //   // process.stdout.write(chunk);
+            //   // console.log('-------------');
+            // })
+            // .pipe(writeStream); // Traitement via event callbacks
 
           } else {
             reject(err);

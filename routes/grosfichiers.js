@@ -1,6 +1,8 @@
+const debug = require('debug')('millegrilles:fichiers:grosfichiers')
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer')
 
 const {PathConsignation, TraitementFichier} = require('../util/traitementFichier')
 
@@ -32,9 +34,10 @@ function InitialiserGrosFichiers() {
     processFichiersLocaux(header, req, res);
   })
 
-  router.put( async (req, res, next) => {
-    console.debug("nouveauFichier PUT " + req.url)
-    console.debug(req.headers)
+  const multerProcessor = multer({dest: '/var/opt/millegrilles/consignation/multer'}).single('fichier')
+
+  router.put('*', multerProcessor, async (req, res, next) => {
+    console.debug("nouveauFichier PUT %s,\nHeaders: %O\nFichiers: %O\nBody: %O", req.url, req.headers, req.file, req.body)
 
     const idmg = req.autorisationMillegrille.idmg
     const rabbitMQ = req.rabbitMQ  //fctRabbitMQParIdmg(idmg)

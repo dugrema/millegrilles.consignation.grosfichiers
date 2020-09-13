@@ -1,3 +1,4 @@
+const debug = require('debug')('millegrilles:fichiers:app')
 var createError = require('http-errors');
 var express = require('express');
 var path = require('path');
@@ -18,7 +19,7 @@ function initialiser() {
   // Inject RabbitMQ pour la MilleGrille detectee sous etape SSL
   app.use((req, res, next)=>{
     const idmg = req.autorisationMillegrille.idmg
-    const rabbitMQ = fctRabbitMQParIdmg(idmg)
+    const rabbitMQ = req.fctRabbitMQParIdmg(idmg)
     req.rabbitMQ = rabbitMQ
     next()
   })
@@ -29,9 +30,9 @@ function initialiser() {
 
   app.use(express.static(path.join(__dirname, 'public')));
 
-  app.use('/fichiers', new InitialiserGrosFichiers());
+  app.all('/fichiers/*', (req, res, next)=>{debug("FICHIERS!"); next()}, InitialiserGrosFichiers());
 
-  app.use('/backup', new InitialiserBackup());
+  app.all('/backup/*', InitialiserBackup());
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {
