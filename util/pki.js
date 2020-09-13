@@ -334,7 +334,7 @@ class PKIUtils {
 
 // Verifie la signature d'un message
 // Retourne vrai si le message est valide, faux si invalide.
-async function verifierSignatureMessage(message, certificat) {
+async function f(message, certificat) {
   let fingerprint = message['en-tete']['certificat'];
   let signatureBase64 = message['_signature'];
   let signature = Buffer.from(signatureBase64, 'base64');
@@ -396,7 +396,7 @@ class ValidateurSignature {
     this.caStore = forge.pki.createCaStore([]);
 
     if(caCertPEM) {
-      this.caStore.addCertificate(caCertPEM)  
+      this.caStore.addCertificate(caCertPEM)
     }
 
     // Creer un cache des chaines valides
@@ -529,6 +529,9 @@ function verificationCertificatSSL(req, res, next) {
         return;
       }
 
+      // Injecter les certificats, validateur de signature
+      req.certificat = listeCerts
+      req.validateurSignature = validateurSignature
     }
 
   }

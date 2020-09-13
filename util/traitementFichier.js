@@ -165,11 +165,20 @@ class TraitementFichier {
 
     const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
 
-    const promise = new Promise((resolve, reject) => {
+    const promise = new Promise(async (resolve, reject) => {
 
       try {
         // Le nom du fichier au complet, incluant path, est fourni dans fuuide.
         const transaction = JSON.parse(req.body.transaction)
+
+        // Valider la signature de la transaction
+        // Injecter le certificat recu pour s'assurer qu'il est distribue
+        transaction['_certificat'] = req.certificat
+        const transactionValide = await this.rabbitMQ.pki.verifierSignatureMessage(transaction)
+        if(!transactionValide) {
+          throw new Error("Signature transaction invalide")
+        }
+
         // console.debug(headers);
         const fuuid = transaction.fuuid
         const encrypte = transaction.securite === '3.protege'
