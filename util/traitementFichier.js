@@ -209,6 +209,11 @@ class TraitementFichier {
               const digest = 'sha512_b64:' + digester.digest('base64')
               debug("Digest calcule sur fichier %s", digest)
 
+              // Verifier que le digest calcule correspond a celui recu
+              if(digest !== transaction.hachage) {
+                reject("Hachage fichier invalide pour fuuid : " + fuuid)
+              }
+
               fs.rename(fichier.path, nouveauPathFichier, err => {
                 resolve({hash: digest})
               })
