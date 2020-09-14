@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer')
+const bodyParser = require('body-parser')
 
 const {PathConsignation, TraitementFichier} = require('../util/traitementFichier')
 
@@ -12,27 +13,11 @@ function InitialiserGrosFichiers() {
 
   const router = express.Router();
 
-  router.get('*', (req, res, next) => {
-    // Tenter de charger les parametres via MQ
-    let fuuide = req.url;
-    let contentType = 'application/octet-stream';
-    header = {
-      fuuid: req.url,
-      contentType: contentType,
-    }
-    processFichiersLocaux(header, req, res);
-  })
+  const bodyParserInstance = bodyParser.urlencoded({ extended: false })
 
-  router.post('*', (req, res, next) => {
-    let fuuid = req.headers.fuuid;
-    // var contentType = req.headers.contenttype || 'application/octet-stream';
-    var contentType = 'application/octet-stream';
-    header = {
-      fuuid: fuuid,
-      'Content-Type': contentType,
-    }
-    processFichiersLocaux(header, req, res);
-  })
+  router.get('*', downloadFichierLocal)
+
+  router.post('*', bodyParserInstance, downloadFichierLocalChiffre)
 
   const multerProcessor = multer({dest: '/var/opt/millegrilles/consignation/multer'}).single('fichier')
 
@@ -64,26 +49,41 @@ function InitialiserGrosFichiers() {
   return router
 }
 
-function processFichiersLocaux(header, req, res) {
-  // console.log("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
-  // console.log(req.headers);
-  // console.debug(req.autorisationMillegrille)
+function downloadFichierLocal(header, req, res) {
+  debug("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
+  debug(req.headers);
+  debug(req.autorisationMillegrille)
+
+  res.sendStatus(503)
+}
+
+function downloadFichierLocalChiffre(req, res) {
+  debug("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
+  debug(req.headers);
+  debug(req.autorisationMillegrille)
+
+  let fuuid = req.body.fuuid
+
+  var contentType = req.headers.mimetype || 'application/octet-stream'
+  header = {
+    fuuid: fuuid,
+    'Content-Type': contentType,
+    securite: '3.protege',
+  }
+
   const idmg = req.autorisationMillegrille.idmg;
   const pathConsignation = new PathConsignation({idmg})
   console.info("Path consignation idmg:%s = %s", idmg, pathConsignation);
 
   // Le serveur supporte une requete GET ou POST pour aller chercher les fichiers
   // GET devrait surtout etre utilise pour le developpement
-  let fuuid = header.fuuid;
-  let encrypted = (req.headers.securite === '3.protege' || req.headers.securite === '4.secure');
+  let encrypted = true
 
-  if(encrypted && !req.autorisationMillegrille.protege) {
-    throw Exception("SSL Client Cert: Non autorise a acceder fichier protege/secure");
-  }
+  // if(!req.autorisationMillegrille.protege) {
+  //   throw Exception("SSL Client Cert: Non autorise a acceder fichier protege/secure");
+  // }
 
-  let extension = req.headers.extension;
-
-  var filePath = pathConsignation.trouverPathLocal(fuuid, encrypted, {extension});
+  var filePath = pathConsignation.trouverPathLocal(fuuid, encrypted);
   fs.stat(filePath, (err, stats)=>{
     if(err) {
       console.error(err);
@@ -97,12 +97,9 @@ function processFichiersLocaux(header, req, res) {
 
     header['Content-Length'] = stats.size,
     // Forcer download plutot que open dans le browser
-    header['Content-Disposition'] = 'attachment;';
-    // Pour mettre le nom complet: Content-Disposition: attachment; filename="titles.txt"
 
     res.writeHead(200, header);
     var readStream = fs.createReadStream(filePath);
-
     readStream.pipe(res);
   });
 }
