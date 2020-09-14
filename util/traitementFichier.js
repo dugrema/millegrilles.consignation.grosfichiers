@@ -183,17 +183,22 @@ class TraitementFichier {
     // console.debug(headers);
     const fuuid = transactionFichier.fuuid
     const encrypte = transactionFichier.securite === '3.protege'
-    const extension = path.parse(transactionFichier.nomfichier).ext.replace('.', '')
+    const extension = path.parse(transactionFichier.nom_fichier).ext.replace('.', '')
     const mimetype = transactionFichier.mimetype
 
     let nouveauPathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension, mimetype});
 
     // Creer le repertoire au besoin, puis deplacer le fichier (rename)
     const hachage = await calculHachage(req, transactionFichier.hachage)
+
+    // Transmettre les transactions et deplacer le fichier
     await deplacerFichier(req, nouveauPathFichier)
+    debug("Transmettre transaction chiffrage")
+    await this.rabbitMQ.transmettreEnveloppeTransaction(transactionChiffrage)
+    debug("Transmettre transaction fichier")
+    await this.rabbitMQ.transmettreEnveloppeTransaction(transactionFichier)
 
     return({hachage})
-
   }
 
 }
@@ -447,7 +452,7 @@ async function deplacerFichier(req, nouveauPathFichier) {
     const fichier = req.file
     const pathRepertoire = path.dirname(nouveauPathFichier);
 
-    fs.mkdir(pathRepertoire, err=>{
+    fs.mkdir(pathRepertoire, {recursive: true}, err=>{
       if(err) return reject(err)
 
       fs.rename(fichier.path, nouveauPathFichier, err => {
