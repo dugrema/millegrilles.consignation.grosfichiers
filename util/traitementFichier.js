@@ -173,11 +173,17 @@ class TraitementFichier {
     // Injecter le certificat recu pour s'assurer qu'il est distribue
     transactionFichier['_certificat'] = req.certificat
     transactionChiffrage['_certificat'] = req.certificat
-    const transactionValide =
-      await this.rabbitMQ.pki.verifierSignatureMessage(transactionFichier) &&
-      await this.rabbitMQ.pki.verifierSignatureMessage(transactionChiffrage)
-    if(!transactionValide) {
-      throw new Error("Signature transaction invalide")
+
+    const transactionValideFichier = await this.rabbitMQ.pki.verifierSignatureMessage(transactionFichier)
+    const transactionValideChiffrage = await this.rabbitMQ.pki.verifierSignatureMessage(transactionChiffrage)
+    const hachageTransactionChiffrage = await this.rabbitMQ.pki.hacherTransaction(transactionChiffrage)
+    const hachageTransactionFichier = await this.rabbitMQ.pki.hacherTransaction(transactionFichier)
+
+    const hachageValideChiffrage = hachageTransactionChiffrage === transactionChiffrage['en-tete']['hachage-contenu']
+    const hachageValideFichier = hachageTransactionFichier === transactionFichier['en-tete']['hachage-contenu']
+
+    if( ! (transactionValideFichier && transactionValideChiffrage && hachageValideChiffrage && hachageValideFichier) ) {
+      throw new Error(`Erreur validation transactions. Fichier signature:${transactionValideFichier}/hachage:${hachageValideFichier}. Chiffrage signature:${transactionValideChiffrage}/hachage:${hachageValideChiffrage}`)
     }
 
     // console.debug(headers);
