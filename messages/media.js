@@ -81,6 +81,15 @@ async function genererPreviewImage(mq, pathConsignation, message) {
 
   if(permission) {
     // Transmettre transaction info chiffrage
+    const domaineActionCles = 'MaitreDesCles.cleGrosFichier'
+    const transactionCles = {
+      domaine: 'GrosFichiers',
+      identificateurs_document: { fuuid: resultatPreview.fuuid },
+      cles: resultatPreview.clesChiffrees,
+      iv: resultatPreview.iv,
+      sujet: 'cles.grosFichiers',
+    }
+    mq.transmettreTransactionFormattee(transactionCles, domaineActionCles)
   }
 
   // Transmettre transaction preview
