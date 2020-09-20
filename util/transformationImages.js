@@ -91,7 +91,7 @@ function _imConvertPromise(params) {
   });
 }
 
-async function genererPreviewVideoPromise(sourcePath, previewPath) {
+async function genererPreviewVideo(sourcePath, previewPath) {
   var dataVideo;
   return await new Promise((resolve, reject) => {
     new FFmpeg({ source: sourcePath })
@@ -152,5 +152,5 @@ async function genererVideoMp4_480p(sourcePath, destinationPath) {
 
 module.exports = {
   genererThumbnail, genererThumbnailVideo, genererPreview, genererPreviewImage,
-  genererPreviewVideoPromise, genererVideoMp4_480p
+  genererPreviewVideo, genererVideoMp4_480p
 }

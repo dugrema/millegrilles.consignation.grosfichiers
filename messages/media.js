@@ -33,8 +33,8 @@ class GenerateurMedia {
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
       return genererPreviewImage(this.mq, this.pathConsignation, message)}, ['commande.fichiers.genererPreviewImage'], {operationLongue: true});
-    // this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-    //   return this.genererPreviewVideo(routingKey, message)}, ['commande.fichiers.genererPreviewVideo'], {operationLongue: true});
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
+      return genererPreviewVideo(this.mq, this.pathConsignation, message)}, ['commande.fichiers.genererPreviewVideo'], {operationLongue: true});
     // this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
     //   return this.transcoderVideoDecrypte(routingKey, message)}, ['commande.grosfichiers.transcoderVideo'], {operationLongue: true});
   }
@@ -43,6 +43,16 @@ class GenerateurMedia {
 }
 
 async function genererPreviewImage(mq, pathConsignation, message) {
+  const fctConversion = traitementMedia.genererPreviewImage
+  await _genererPreview(mq, pathConsignation, message, fctConversion)
+}
+
+async function genererPreviewVideo(mq, pathConsignation, message) {
+  const fctConversion = traitementMedia.genererPreviewVideo
+  await _genererPreview(mq, pathConsignation, message, fctConversion)
+}
+
+async function _genererPreview(mq, pathConsignation, message, fctConversion) {
   debug("Commande genererPreviewImage recue : %O", message)
 
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
@@ -76,7 +86,7 @@ async function genererPreviewImage(mq, pathConsignation, message) {
   }
 
   debug("Debut generation preview image")
-  const resultatPreview = await traitementMedia.genererPreviewImage(mq, pathConsignation, message, opts)
+  const resultatPreview = await fctConversion(mq, pathConsignation, message, opts)
   debug("Fin traitement preview image, resultat : %O", resultatPreview)
 
   if(permission) {

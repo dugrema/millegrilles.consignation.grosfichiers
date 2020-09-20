@@ -16,7 +16,19 @@ const decrypteur = new Decrypteur()
 // const {PathConsignation} = require('../util/traitementFichier');
 // const transformationImages = require('../util/transformationImages');
 
-async function genererPreviewImage(mq, pathConsignation, message, opts) {
+function genererPreviewImage(mq, pathConsignation, message, opts) {
+  if(!opts) opts = {}
+  const fctConversion = traiterImage
+  return _genererPreview(mq, pathConsignation, message, opts, fctConversion)
+}
+
+function genererPreviewVideo(mq, pathConsignation, message, opts) {
+  if(!opts) opts = {}
+  const fctConversion = traiterVideo
+  return _genererPreview(mq, pathConsignation, message, opts, fctConversion)
+}
+
+async function _genererPreview(mq, pathConsignation, message, opts, fctConversion) {
 
   const uuidDocument = message.uuid,
         fuuid = message.fuuid
@@ -57,7 +69,7 @@ async function genererPreviewImage(mq, pathConsignation, message, opts) {
     }
 
     debug("Fichier (dechiffre) %s pour generer preview image", fichierSource)
-    var resultatConversion = await traiterImage(fichierSource, fichierDestination)
+    var resultatConversion = await fctConversion(fichierSource, fichierDestination)
     debug("Resultat conversion : %O", resultatConversion)
     // const mimetypePreviewImage = resultatConversion.mimetype
 
@@ -283,32 +295,15 @@ async function traiterImage(pathImageSrc, pathImageDst) {
 }
 
 // Extraction de thumbnail, preview et recodage des videos pour le web
-async function traiterVideo(pathConsignation, pathVideo, sansTranscodage) {
-  var fuuidPreviewImage = uuidv1();
-
-  // Extraire un preview pleine resolution du video, faire un thumbnail
-  var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
-  console.debug("Path video " + pathVideo)
-  console.debug("Path preview " + pathPreviewImage)
-
-  return await new Promise((resolve, reject)=>{
-    fs.mkdir(path.dirname(pathPreviewImage), { recursive: true }, async err =>{
-      if(err) reject(err);
-
-      await transformationImages.genererPreviewVideoPromise(pathVideo, pathPreviewImage);
-      var thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
-
-      // Generer une nouvelle version downsamplee du video en mp4 a 480p, 3Mbit/s
-      if(!sansTranscodage) {
-
-      }
-
-      resolve({thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'});
-    })
-  })
-
+async function traiterVideo(pathImageSrc, pathImageDst) {
+  await transformationImages.genererPreviewVideo(pathImageSrc, pathImageDst)
+  //var thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
+  return {
+    mimetype: 'image/jpeg',
+    extension: 'jpg'
+  }
 }
 
 module.exports = {
-  genererPreviewImage,
+  genererPreviewImage, genererPreviewVideo,
 }
