@@ -327,62 +327,6 @@ class UtilitaireFichiers {
 
 }
 
-// Extraction de thumbnail et preview pour images
-async function traiterImage(pathConsignation, pathImage) {
-  var fuuidPreviewImage = uuidv1();
-  var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
-
-  let pathRepertoire = path.dirname(pathPreviewImage);
-  var thumbnail = null;
-
-  // console.debug("Path a utiliser: " + pathRepertoire + ", complet: " + nouveauPathFichier + ", extension: " + extension);
-  return await new Promise((resolve, reject) => {
-    fs.mkdir(pathRepertoire, { recursive: true }, async (err)=>{
-      if(err) reject(err);
-
-      try {
-        thumbnail = await transformationImages.genererThumbnail(pathImage);
-        await transformationImages.genererPreview(pathImage, pathPreviewImage);
-        // console.debug("2. thumbnail/preview prets")
-        resolve({thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'});
-      } catch(err) {
-        console.error("Erreur traitement image thumbnail/preview");
-        console.error(err);
-        reject(err);
-      }
-    })
-  })
-
-  // return {thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'};
-}
-
-// Extraction de thumbnail, preview et recodage des videos pour le web
-async function traiterVideo(pathConsignation, pathVideo, sansTranscodage) {
-  var fuuidPreviewImage = uuidv1();
-
-  // Extraire un preview pleine resolution du video, faire un thumbnail
-  var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
-  console.debug("Path video " + pathVideo)
-  console.debug("Path preview " + pathPreviewImage)
-
-  return await new Promise((resolve, reject)=>{
-    fs.mkdir(path.dirname(pathPreviewImage), { recursive: true }, async err =>{
-      if(err) reject(err);
-
-      await transformationImages.genererPreviewVideoPromise(pathVideo, pathPreviewImage);
-      var thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
-
-      // Generer une nouvelle version downsamplee du video en mp4 a 480p, 3Mbit/s
-      if(!sansTranscodage) {
-
-      }
-
-      resolve({thumbnail, fuuidPreviewImage, mimetypePreviewImage: 'image/jpeg'});
-    })
-  })
-
-}
-
 async function genererListeCatalogues(repertoire) {
   // Faire la liste des fichiers extraits - sera utilisee pour creer
   // l'ordre de traitement des fichiers pour importer les transactions

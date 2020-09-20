@@ -20,11 +20,10 @@ async function genererThumbnail(sourcePath, opts) {
       base64Content = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
       // console.debug("Thumbnail b64 genere")
     } catch(err) {
-      console.error("Erreur creation thumbnail");
-      console.error(err);
+      console.error("Erreur creation thumbnail : %O", err)
     } finally {
       // Effacer le fichier temporaire
-      o.cleanup();
+      o.cleanup()
     }
   })
 
@@ -74,6 +73,10 @@ async function genererThumbnailVideo(sourcePath, opts) {
 
 async function genererPreview(sourcePath, destinationPath, opts) {
   await _imConvertPromise([sourcePath+'[0]', '-resize', '720x540>', destinationPath]);
+}
+
+async function genererPreviewImage(sourcePath, destinationPath, opts) {
+  await _imConvertPromise([sourcePath+'[0]', '-resize', '720x540>', '-quality', '50', destinationPath]);
 }
 
 function _imConvertPromise(params) {
@@ -147,4 +150,7 @@ async function genererVideoMp4_480p(sourcePath, destinationPath) {
   });
 }
 
-module.exports = {genererThumbnail, genererThumbnailVideo, genererPreview, genererPreviewVideoPromise, genererVideoMp4_480p}
+module.exports = {
+  genererThumbnail, genererThumbnailVideo, genererPreview, genererPreviewImage,
+  genererPreviewVideoPromise, genererVideoMp4_480p
+}

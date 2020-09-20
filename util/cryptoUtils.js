@@ -8,9 +8,10 @@ const RSA_ALGORITHM = 'RSA-OAEP';
 
 class Decrypteur {
 
-  decrypter(sourceCryptee, destination, cleSecreteDecryptee, iv) {
+  decrypter(sourceCryptee, destination, cleSecreteDecryptee, iv, opts) {
+    if(!opts) opts = {}
     return new Promise((resolve, reject)=>{
-      let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv);
+      let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv, opts);
 
       // Calculer taille et sha256 du fichier decrypte. Necessaire pour transaction.
       const sha256 = crypto.createHash('sha256');
@@ -48,7 +49,8 @@ class Decrypteur {
 
 }
 
-function getDecipherPipe4fuuid(cleSecrete, iv) {
+function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
+  if(!opts) opts = {}
   // On prepare un decipher pipe pour decrypter le contenu.
 
   let ivBuffer = Buffer.from(iv, 'base64');
@@ -58,8 +60,12 @@ function getDecipherPipe4fuuid(cleSecrete, iv) {
   let decryptedSecretKey;
   if(typeof cleSecrete === 'string') {
     // decryptedSecretKey = Buffer.from(forge.util.binary.hex.decode(decryptedSecretKey));
-    decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
-    decryptedSecretKey = decryptedSecretKey.toString('utf8');
+    if( opts.cleFormat !== 'hex' ) {
+      decryptedSecretKey = Buffer.from(cleSecrete, 'base64');
+      decryptedSecretKey = decryptedSecretKey.toString('utf8');
+    } else {
+      decryptedSecretKey = cleSecrete
+    }
 
     var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
      return parseInt(h, 16)

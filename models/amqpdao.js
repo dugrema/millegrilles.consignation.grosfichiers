@@ -42,20 +42,20 @@ async function initialiserRabbitMQ(rabbitMQ) {
   const {PkiMessages} = require('../messages/pki');
   rabbitMQ.enregistrerListenerConnexion(new PkiMessages(rabbitMQ));
 
-  const {TorrentMessages} = require('../messages/torrent');
-  rabbitMQ.enregistrerListenerConnexion(new TorrentMessages(rabbitMQ));
+  // const {TorrentMessages} = require('../messages/torrent');
+  // rabbitMQ.enregistrerListenerConnexion(new TorrentMessages(rabbitMQ));
 
   const {DecrypterFichier} = require('../messages/crypto');
   rabbitMQ.enregistrerListenerConnexion(new DecrypterFichier(rabbitMQ));
 
-  const {GenerateurImages} = require('../messages/images');
-  rabbitMQ.enregistrerListenerConnexion(new GenerateurImages(rabbitMQ));
+  const {GenerateurMedia} = require('../messages/media');
+  rabbitMQ.enregistrerListenerConnexion(new GenerateurMedia(rabbitMQ));
 
-  const {PublicateurAWS} = require('../messages/aws');
-  rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
+  // const {PublicateurAWS} = require('../messages/aws');
+  // rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
 
-  const {GestionnaireMessagesBackup} = require('../messages/backup');
-  rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ));
+  // const {GestionnaireMessagesBackup} = require('../messages/backup');
+  // rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ));
 
   return {rabbitMQ};
 }
