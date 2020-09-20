@@ -76,8 +76,24 @@ async function genererPreviewImage(mq, pathConsignation, message) {
   }
 
   debug("Debut generation preview image")
-  traitementMedia.genererPreviewImage(mq, pathConsignation, message, opts)
-  debug("Fin traitement preview image")
+  const resultatPreview = await traitementMedia.genererPreviewImage(mq, pathConsignation, message, opts)
+  debug("Fin traitement preview image, resultat : %O", resultatPreview)
+
+  if(permission) {
+    // Transmettre transaction info chiffrage
+  }
+
+  // Transmettre transaction preview
+  const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
+  const transactionAssocierPreview = {
+    uuid: message.uuid,
+    fuuid: message.fuuid,
+    mimetype_preview: resultatPreview.mimetype,
+    fuuid_preview: resultatPreview.fuuid,
+    extension_preview: resultatPreview.extension,
+  }
+  mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
+
 }
 
 module.exports = {GenerateurMedia}

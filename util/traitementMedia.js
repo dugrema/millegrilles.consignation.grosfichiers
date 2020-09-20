@@ -59,12 +59,13 @@ async function genererPreviewImage(mq, pathConsignation, message, opts) {
     debug("Fichier (dechiffre) %s pour generer preview image", fichierSource)
     var resultatConversion = await traiterImage(fichierSource, fichierDestination)
     debug("Resultat conversion : %O", resultatConversion)
-    const mimetypePreviewImage = resultatConversion.mimetype
+    // const mimetypePreviewImage = resultatConversion.mimetype
 
+    var resultatChiffrage = {}
     if(fichierDstTmp) {
       // Chiffrer preview
       debug("Chiffrer preview de %s vers %s", fichierDstTmp, pathPreviewImage)
-      const resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathPreviewImage, opts.clesPubliques)
+      resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathPreviewImage, opts.clesPubliques)
       debug("Resultat chiffrage preview image : %O", resultatChiffrage)
     } else {
       extension = resultatConversion.extension
@@ -79,6 +80,13 @@ async function genererPreviewImage(mq, pathConsignation, message, opts) {
         resolve()
       })
     })
+
+    return {
+      fuuid: fuuidPreviewImage,
+      extension,
+      ...resultatConversion,
+      ...resultatChiffrage
+    }
 
   } finally {
     // Effacer le fichier temporaire
@@ -135,7 +143,7 @@ async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques) {
       tailleFichier += contenuCrypte.length
       writeStream.write(contenuCrypte)
       writeStream.close()
-      return resolve({tailleFichier})
+      return resolve({tailleFichier, iv, clesChiffrees})
     })
   })
 
