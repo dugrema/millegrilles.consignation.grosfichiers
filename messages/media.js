@@ -85,9 +85,9 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
     debug("Fichier non chiffre, on traite immediatement")
   }
 
-  debug("Debut generation preview image")
+  debug("Debut generation preview")
   const resultatPreview = await fctConversion(mq, pathConsignation, message, opts)
-  debug("Fin traitement preview image, resultat : %O", resultatPreview)
+  debug("Fin traitement preview, resultat : %O", resultatPreview)
 
   if(permission) {
     // Transmettre transaction info chiffrage
@@ -111,6 +111,12 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
     fuuid_preview: resultatPreview.fuuid,
     extension_preview: resultatPreview.extension,
   }
+
+  if(resultatPreview.dataVideo) {
+    transactionAssocierPreview.data_video = resultatPreview.dataVideo['data_video']
+  }
+  debug("Transaction associer preview : %O", transactionAssocierPreview)
+
   mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
 
 }

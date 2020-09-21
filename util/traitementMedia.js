@@ -296,11 +296,12 @@ async function traiterImage(pathImageSrc, pathImageDst) {
 
 // Extraction de thumbnail, preview et recodage des videos pour le web
 async function traiterVideo(pathImageSrc, pathImageDst) {
-  await transformationImages.genererPreviewVideo(pathImageSrc, pathImageDst)
+  const dataVideo = await transformationImages.genererPreviewVideo(pathImageSrc, pathImageDst)
   //var thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
   return {
     mimetype: 'image/jpeg',
-    extension: 'jpg'
+    extension: 'jpg',
+    dataVideo,
   }
 }
 
