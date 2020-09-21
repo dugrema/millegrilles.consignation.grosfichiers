@@ -149,9 +149,11 @@ async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques) {
       const contenuCrypte = cipher.update(data);
       tailleFichier += contenuCrypte.length
       writeStream.write(contenuCrypte)
+
+      // writeStream.write(data)
     })
     s.on('end', _ => {
-      const contenuCrypte = cipher.final('base64')
+      const contenuCrypte = cipher.final()
       tailleFichier += contenuCrypte.length
       writeStream.write(contenuCrypte)
       writeStream.close()
