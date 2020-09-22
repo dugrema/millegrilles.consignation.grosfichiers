@@ -463,13 +463,13 @@ class ValidateurSignature {
 function verificationCertificatSSL(req, res, next) {
   const peerCertificate = req.connection.getPeerCertificate();
 
-  if( peerCertificate ) {
+  if( peerCertificate && peerCertificate.subject ) {
     debug("PEER Certificate:\n%O", peerCertificate);
   } else {
     debug("PEER (client) cert manquant")
   }
 
-  if ( ! peerCertificate || peerCertificate === {} ) {
+  if ( ! peerCertificate || ! peerCertificate.subject ) {
     // DEV
     if ( process.env.DISABLE_SSL_AUTH && process.env.IDMG ) {
       req.autorisationMillegrille = {

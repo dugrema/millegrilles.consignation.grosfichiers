@@ -15,9 +15,9 @@ function InitialiserGrosFichiers() {
 
   const bodyParserInstance = bodyParser.urlencoded({ extended: false })
 
-  router.get('*', downloadFichierLocal)
+  router.get('*/:fuuid', downloadFichierLocal, pipeReponse)
 
-  router.post('*', bodyParserInstance, downloadFichierLocalChiffre)
+  // router.post('*', bodyParserInstance, downloadFichierLocalChiffre)
 
   const multerProcessor = multer({dest: '/var/opt/millegrilles/consignation/multer'}).single('fichier')
 
@@ -49,41 +49,41 @@ function InitialiserGrosFichiers() {
   return router
 }
 
-function downloadFichierLocal(header, req, res) {
-  debug("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
+function downloadFichierLocal(req, res, next) {
+  debug("downloadFichierLocalChiffre methode:" + req.method + ": " + req.url);
   debug(req.headers);
   debug(req.autorisationMillegrille)
 
-  res.sendStatus(503)
-}
+  const securite = req.headers.securite || '2.prive'
+  var encrypted = false
+  if(securite === '3.protege') encrypted = true
 
-function downloadFichierLocalChiffre(req, res) {
-  debug("ProcessFichiersLocaux methode:" + req.method + ": " + req.url);
-  debug(req.headers);
-  debug(req.autorisationMillegrille)
+  const fuuid = req.params.fuuid
 
-  let fuuid = req.body.fuuid
+  console.debug("Fuuid : %s", fuuid)
 
   var contentType = req.headers.mimetype || 'application/octet-stream'
-  header = {
-    fuuid: fuuid,
-    'Content-Type': contentType,
-    securite: '3.protege',
-  }
-
   const idmg = req.autorisationMillegrille.idmg;
   const pathConsignation = new PathConsignation({idmg})
-  console.info("Path consignation idmg:%s = %s", idmg, pathConsignation);
 
-  // Le serveur supporte une requete GET ou POST pour aller chercher les fichiers
-  // GET devrait surtout etre utilise pour le developpement
-  let encrypted = true
+  debug("Info idmg: %s, paths: %s", idmg, pathConsignation);
 
-  // if(!req.autorisationMillegrille.protege) {
-  //   throw Exception("SSL Client Cert: Non autorise a acceder fichier protege/secure");
-  // }
+  res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
+  res.setHeader('Content-Type', contentType)
+  res.setHeader('fuuid', fuuid)
+  res.setHeader('securite', securite)
 
-  var filePath = pathConsignation.trouverPathLocal(fuuid, encrypted);
+  // Note : ajouter extension fichier pour mode non-chiffre
+
+  res.filePath = pathConsignation.trouverPathLocal(fuuid, encrypted);
+
+  next()
+}
+
+function pipeReponse(req, res) {
+  const filePath = res.filePath
+  const header = res.responseHeader
+
   fs.stat(filePath, (err, stats)=>{
     if(err) {
       console.error(err);
@@ -95,10 +95,11 @@ function downloadFichierLocalChiffre(req, res) {
       return;
     }
 
-    header['Content-Length'] = stats.size,
-    // Forcer download plutot que open dans le browser
+    debug("Stats fichier : %O", stats)
+    res.setHeader('Content-Length', stats.size)
+    res.setHeader('Last-Modified', stats.mtime)
 
-    res.writeHead(200, header);
+    res.writeHead(200)
     var readStream = fs.createReadStream(filePath);
     readStream.pipe(res);
   });
