@@ -209,123 +209,120 @@ class TraitementFichier {
 
 }
 
-class UtilitaireFichiers {
+async function calculerHachageFichier(pathFichier, opts) {
+  if(!opts) opts = {};
 
-  async calculerSHAFichier(pathFichier, opts) {
-    if(!opts) opts = {};
+  let fonctionHash = opts.fonctionHash || 'sha512';
 
-    let fonctionHash = opts.fonctionHash || 'sha3-512';
+  // Calculer SHA512 sur fichier de backup
+  const sha = crypto.createHash(fonctionHash);
+  const readStream = fs.createReadStream(pathFichier);
 
-    // Calculer SHA512 sur fichier de backup
-    const sha = crypto.createHash(fonctionHash);
-    const readStream = fs.createReadStream(pathFichier);
-
-    const resultatSha = await new Promise(async (resolve, reject)=>{
-      readStream.on('data', chunk=>{
-        sha.update(chunk);
-      })
-      readStream.on('end', ()=>{
-        const resultat = sha.digest('hex');
-        resolve({sha: resultat});
-      });
-      readStream.on('error', err=> {
-        reject({err});
-      });
-
-      readStream.read();
+  const resultatSha = await new Promise(async (resolve, reject)=>{
+    readStream.on('data', chunk=>{
+      sha.update(chunk);
+    })
+    readStream.on('end', ()=>{
+      const resultat = sha.digest('base64');
+      resolve({sha: fonctionhash + '_b64:' + resultat});
+    });
+    readStream.on('error', err=> {
+      reject({err});
     });
 
-    if(resultatSha.err) {
-      throw resultatSha.err;
-    } else {
-      return resultatSha.sha;
-    }
+    readStream.read();
+  });
+
+  if(resultatSha.err) {
+    throw resultatSha.err;
+  } else {
+    return resultatSha.sha;
   }
-
-  async supprimerFichiers(fichiers, repertoire) {
-    // console.debug(`Supprimer fichiers sous ${repertoire}`);
-    // console.debug(fichiers);
-
-    var resultat = await new Promise((resolve, reject)=>{
-
-      var compteur = 0;
-      function supprimer(idx) {
-        if(idx == fichiers.length) {
-          return resolve({});
-        }
-
-        let fichier = fichiers[idx];
-
-        if(repertoire) {
-          fichier = path.join(repertoire, fichier);
-        }
-
-        // console.debug(`Supprimer ${fichier}`);
-
-        fs.unlink(fichier, err=>{
-          if(err) {
-            return reject(err);
-          }
-          else {
-            supprimer(idx+1)
-          }
-        });
-
-      }; supprimer(0);
-
-    })
-    .catch(err=>{
-      return({err});
-    });
-
-    if(resultat.err) {
-      throw resultat.err;
-    }
-  }
-
-  async supprimerRepertoiresVides(repertoireBase) {
-    const masqueRecherche = path.join(repertoireBase, '*');
-
-    const commandeBackup = spawn('/bin/sh', ['-c', `find ${masqueRecherche} -type d -empty -delete`]);
-    commandeBackup.stderr.on('data', data=>{
-      console.error(`Erreur nettoyage repertoires : ${data}`);
-    })
-
-    const resultatNettoyage = await new Promise(async (resolve, reject) => {
-      commandeBackup.on('close', async code =>{
-        if(code != 0) {
-          return reject(code);
-        }
-        return resolve();
-      })
-    })
-    .catch(err=>{
-      return({err});
-    });
-  }
-
-  async extraireTarFile(fichierTar, destination, opts) {
-    const commandeBackup = spawn('/bin/sh', ['-c', `cd ${destination}; tar -x --skip-old-files -Jf ${fichierTar}`]);
-    commandeBackup.stderr.on('data', data=>{
-      console.error(`Ouverture fichier tar : ${data}`);
-    })
-
-    const errResultatNettoyage = await new Promise(async (resolve, reject) => {
-      commandeBackup.on('close', async code =>{
-        if(code != 0) {
-          return reject(new Error(`Erreur backup code ${code}`));
-        }
-        return resolve();
-      })
-    })
-    .catch(err=>{
-      return(err);
-    });
-
-    if(errResultatNettoyage) throw errResultatNettoyage;
-  }
-
 }
+
+async function supprimerFichiers(fichiers, repertoire) {
+  // console.debug(`Supprimer fichiers sous ${repertoire}`);
+  // console.debug(fichiers);
+
+  var resultat = await new Promise((resolve, reject)=>{
+
+    var compteur = 0;
+    function supprimer(idx) {
+      if(idx == fichiers.length) {
+        return resolve({});
+      }
+
+      let fichier = fichiers[idx];
+
+      if(repertoire) {
+        fichier = path.join(repertoire, fichier);
+      }
+
+      // console.debug(`Supprimer ${fichier}`);
+
+      fs.unlink(fichier, err=>{
+        if(err) {
+          return reject(err);
+        }
+        else {
+          supprimer(idx+1)
+        }
+      });
+
+    }; supprimer(0);
+
+  })
+  .catch(err=>{
+    return({err});
+  });
+
+  if(resultat.err) {
+    throw resultat.err;
+  }
+}
+
+async function supprimerRepertoiresVides(repertoireBase) {
+  const masqueRecherche = path.join(repertoireBase, '*');
+
+  const commandeBackup = spawn('/bin/sh', ['-c', `find ${masqueRecherche} -type d -empty -delete`]);
+  commandeBackup.stderr.on('data', data=>{
+    console.error(`Erreur nettoyage repertoires : ${data}`);
+  })
+
+  const resultatNettoyage = await new Promise(async (resolve, reject) => {
+    commandeBackup.on('close', async code =>{
+      if(code != 0) {
+        return reject(code);
+      }
+      return resolve();
+    })
+  })
+  .catch(err=>{
+    return({err});
+  });
+}
+
+async function extraireTarFile(fichierTar, destination, opts) {
+  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${destination}; tar -x --skip-old-files -Jf ${fichierTar}`]);
+  commandeBackup.stderr.on('data', data=>{
+    console.error(`Ouverture fichier tar : ${data}`);
+  })
+
+  const errResultatNettoyage = await new Promise(async (resolve, reject) => {
+    commandeBackup.on('close', async code =>{
+      if(code != 0) {
+        return reject(new Error(`Erreur backup code ${code}`));
+      }
+      return resolve();
+    })
+  })
+  .catch(err=>{
+    return(err);
+  });
+
+  if(errResultatNettoyage) throw errResultatNettoyage;
+}
+
 
 async function genererListeCatalogues(repertoire) {
   // Faire la liste des fichiers extraits - sera utilisee pour creer
@@ -416,4 +413,7 @@ async function deplacerFichier(req, nouveauPathFichier) {
 
 // Instances
 
-module.exports = {TraitementFichier, PathConsignation, UtilitaireFichiers};
+module.exports = {
+  TraitementFichier, PathConsignation,
+  extraireTarFile, supprimerRepertoiresVides, supprimerFichiers, calculerHachageFichier,
+};
