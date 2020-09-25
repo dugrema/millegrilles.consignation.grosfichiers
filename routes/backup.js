@@ -66,18 +66,19 @@ async function traiterUploadHoraire(req, res, next) {
 
     // Tenter de supprimer les fichiers
     try {
-      req.files.forEach(file=>{
+      debug("Supprimer fichiers : %O", req.files)
+      const fichiers = [...req.files.transactions, ...req.files.catalogue]
+      fichiers.forEach(file=>{
         // console.debug("Supprimer fichier " + file.path);
         fs.unlink(file.path, err=>{
           if(err) {
             console.warn("Erreur suppression fichier backup " + file.path)
-            console.warn(err)
             return({err})
           }
         })
       })
     } catch(err) {
-      console.warn("Unlink fichiers non complete pour requete " + req.url)
+      console.warn("Unlink fichiers non complete pour requete %s :\n%O", req.url, err)
     }
 
   })

@@ -78,35 +78,6 @@ async function _fctDeplacerFichier(pathTransactions, fichiersTransactions, pos) 
 
   const hachage = await calculerHachageFichier(fichierDict.path)
 
-  // Calculer SHA512 sur fichier de backup
-  // const sha512 = crypto.createHash('sha512');
-  // const readStream = fs.createReadStream(fichierDict.path);
-
-  // const resultatSha512 = await new Promise(async (resolve, reject)=>{
-  //   readStream.on('data', chunk=>{
-  //     sha512.update(chunk);
-  //   })
-  //   readStream.on('end', ()=>{
-  //     const resultat = sha512.digest('hex');
-  //     // console.debug("Resultat SHA512 fichier :");
-  //     // console.debug(resultat);
-  //     resolve({sha512: resultat});
-  //   });
-  //   readStream.on('error', err=> {
-  //     reject({err});
-  //   });
-  //
-  //   // Commencer lecture stream
-  //   // console.debug("Debut lecture fichier pour SHA512");
-  //   readStream.read();
-  // });
-
-  // if(resultatSha512.err) {
-  //   throw resultatSha512.err;
-  // } else {
-  //   resultatHash[nomFichier] = resultatSha512.sha512;
-  // }
-
   // console.debug("Sauvegarde " + nouveauPath);
   await new Promise((resolve, reject)=>{
     fs.rename(fichierDict.path, nouveauPath, err=>{

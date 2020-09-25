@@ -1,25 +1,25 @@
 const debug = require('debug')('millegrilles:util:backup')
-const fs = require('fs');
-const readdirp = require('readdirp');
-const path = require('path');
-const uuidv1 = require('uuid/v1');
-const crypto = require('crypto');
-const lzma = require('lzma-native');
-const { spawn } = require('child_process');
-const readline = require('readline');
+const fs = require('fs')
+const readdirp = require('readdirp')
+const path = require('path')
+const uuidv1 = require('uuid/v1')
+const crypto = require('crypto')
+const lzma = require('lzma-native')
+const { spawn } = require('child_process')
+const readline = require('readline')
 const tar = require('tar')
 const moment = require('moment')
 const tmp = require('tmp-promise')
 
-const {uuidToDate} = require('./UUIDUtils');
-const transformationImages = require('./transformationImages');
-const {pki, ValidateurSignature} = require('./pki');
+const {uuidToDate} = require('./UUIDUtils')
+const transformationImages = require('./transformationImages')
+const {pki, ValidateurSignature} = require('./pki')
 const { calculerHachageFichier } = require('./utilitairesHachage')
-const {PathConsignation, extraireTarFile, supprimerFichiers} = require('./traitementFichier');
+const {PathConsignation, extraireTarFile, supprimerFichiers} = require('./traitementFichier')
 const {traiterFichiersBackup, traiterGrosfichiers} = require('./processFichiersBackup')
 
-const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json');
-const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json');
+const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json')
+const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json')
 
 class TraitementFichierBackup {
 
@@ -32,40 +32,32 @@ class TraitementFichierBackup {
   // PUT pour un fichier de backup
   async traiterPutBackup(req) {
 
+    debug("Body PUT traiterPutBackup : %O", req.body)
+
     const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
 
-    return await new Promise(async (resolve, reject) => {
-      const timestampBackup = new Date(req.body.timestamp_backup * 1000);
-      if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
+    const timestampBackup = new Date(req.body.timestamp_backup * 1000);
+    if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
 
-      let pathRepertoire = pathConsignation.trouverPathBackupHoraire(timestampBackup);
-      let fichiersTransactions = req.files.transactions;
-      let fichierCatalogue = req.files.catalogue[0];
+    let pathRepertoire = pathConsignation.trouverPathBackupHoraire(timestampBackup)
+    let fichiersTransactions = req.files.transactions;
+    let fichierCatalogue = req.files.catalogue[0];
 
-      // debug("Path a utiliser: " + pathRepertoire);
+    // Deplacer les fichiers de backup vers le bon repertoire /backup
+    const fichiersDomaines = await traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire)
 
-      // Deplacer les fichiers de backup vers le bon repertoire /backup
-      // debug("Deplacers fichiers recus");
-      var fichiersDomaines;
-      try {
-        fichiersDomaines = await traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire);
-      } catch(err) {
-        // console.error("ERREUR 2!");
-        // console.error(err);
-        return reject(err);
-      }
+    // Transmettre cles du fichier de transactions
+    const transactionMaitreDesCles = JSON.parse(req.body.transaction_maitredescles)
+    debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
+    await this.rabbitMQ.transmettreEnveloppeTransaction(transactionMaitreDesCles)
 
-      // Creer les hard links pour les grosfichiers
-      const fuuidDict = JSON.parse(req.body.fuuid_grosfichiers);
-      if(fuuidDict && Object.keys(fuuidDict).length > 0) {
-        await traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict)
-      }
+    // Creer les hard links pour les grosfichiers
+    const fuuidDict = JSON.parse(req.body.fuuid_grosfichiers)
+    if(fuuidDict && Object.keys(fuuidDict).length > 0) {
+      await traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict)
+    }
 
-      // debug("PUT backup Termine");
-      resolve({fichiersDomaines});
-
-    })
-
+    return {fichiersDomaines}
   }
 
   async genererListeBackupsHoraire(req) {
