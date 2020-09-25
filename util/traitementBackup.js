@@ -49,7 +49,7 @@ class TraitementFichierBackup {
     // Transmettre cles du fichier de transactions
     const transactionMaitreDesCles = JSON.parse(req.body.transaction_maitredescles)
     debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
-    await this.rabbitMQ.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+    this.rabbitMQ.transmettreEnveloppeTransaction(transactionMaitreDesCles)
 
     // Creer les hard links pour les grosfichiers
     const fuuidDict = JSON.parse(req.body.fuuid_grosfichiers)
