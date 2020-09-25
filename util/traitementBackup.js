@@ -14,7 +14,8 @@ const tmp = require('tmp-promise')
 const {uuidToDate} = require('./UUIDUtils');
 const transformationImages = require('./transformationImages');
 const {pki, ValidateurSignature} = require('./pki');
-const {PathConsignation, calculerHachageFichier, extraireTarFile, supprimerFichiers} = require('./traitementFichier');
+const { calculerHachageFichier } = require('./utilitairesHachage')
+const {PathConsignation, extraireTarFile, supprimerFichiers} = require('./traitementFichier');
 const {traiterFichiersBackup, traiterGrosfichiers} = require('./processFichiersBackup')
 
 const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json');

@@ -1,19 +1,20 @@
 const debug = require('debug')('millegrilles:fichiers:traitementFichier')
-const fs = require('fs');
-const readdirp = require('readdirp');
-const path = require('path');
-const uuidv1 = require('uuid/v1');
-const crypto = require('crypto');
-const lzma = require('lzma-native');
-const { spawn } = require('child_process');
-const readline = require('readline');
+const fs = require('fs')
+const readdirp = require('readdirp')
+const path = require('path')
+const uuidv1 = require('uuid/v1')
+const crypto = require('crypto')
+const lzma = require('lzma-native')
+const { spawn } = require('child_process')
+const readline = require('readline')
 
-const {uuidToDate} = require('./UUIDUtils');
-const transformationImages = require('./transformationImages');
-const {pki, ValidateurSignature} = require('./pki');
+const { uuidToDate } = require('./UUIDUtils')
+const transformationImages = require('./transformationImages')
+const { pki, ValidateurSignature } = require('./pki')
+const { calculerHachageFichier } = require('./utilitairesHachage')
 
-const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json');
-const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json');
+const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json')
+const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json')
 
 class PathConsignation {
 
@@ -209,37 +210,6 @@ class TraitementFichier {
 
 }
 
-async function calculerHachageFichier(pathFichier, opts) {
-  if(!opts) opts = {};
-
-  let fonctionHash = opts.fonctionHash || 'sha512';
-
-  // Calculer SHA512 sur fichier de backup
-  const sha = crypto.createHash(fonctionHash);
-  const readStream = fs.createReadStream(pathFichier);
-
-  const resultatSha = await new Promise(async (resolve, reject)=>{
-    readStream.on('data', chunk=>{
-      sha.update(chunk);
-    })
-    readStream.on('end', ()=>{
-      const resultat = sha.digest('base64');
-      resolve({sha: fonctionhash + '_b64:' + resultat});
-    });
-    readStream.on('error', err=> {
-      reject({err});
-    });
-
-    readStream.read();
-  });
-
-  if(resultatSha.err) {
-    throw resultatSha.err;
-  } else {
-    return resultatSha.sha;
-  }
-}
-
 async function supprimerFichiers(fichiers, repertoire) {
   // console.debug(`Supprimer fichiers sous ${repertoire}`);
   // console.debug(fichiers);
@@ -322,7 +292,6 @@ async function extraireTarFile(fichierTar, destination, opts) {
 
   if(errResultatNettoyage) throw errResultatNettoyage;
 }
-
 
 async function genererListeCatalogues(repertoire) {
   // Faire la liste des fichiers extraits - sera utilisee pour creer
@@ -415,5 +384,5 @@ async function deplacerFichier(req, nouveauPathFichier) {
 
 module.exports = {
   TraitementFichier, PathConsignation,
-  extraireTarFile, supprimerRepertoiresVides, supprimerFichiers, calculerHachageFichier,
-};
+  extraireTarFile, supprimerRepertoiresVides, supprimerFichiers,
+}
