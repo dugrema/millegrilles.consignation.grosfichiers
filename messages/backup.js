@@ -1,13 +1,13 @@
 const debug = require('debug')('millegrilles:messages:backup')
-const fs = require('fs');
-const path = require('path');
-const S3 = require('aws-sdk/clients/s3');
-const { spawn } = require('child_process');
-const { TraitementFichier, PathConsignation, UtilitaireFichiers} = require('../util/traitementFichier');
-const { TraitementFichierBackup } = require('../util/traitementBackup');
-const { RestaurateurBackup } = require('../util/traitementBackup');
-
-const utilitaireFichiers = new UtilitaireFichiers();
+const fs = require('fs')
+const path = require('path')
+const tar = require('tar')
+const S3 = require('aws-sdk/clients/s3')
+// const { spawn } = require('child_process');
+const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers} = require('../util/traitementFichier');
+const { TraitementFichierBackup } = require('../util/traitementBackup')
+const { RestaurateurBackup } = require('../util/traitementBackup')
+const { calculerHachageFichier } = require('../util/utilitairesHachage')
 
 class GestionnaireMessagesBackup {
 
@@ -35,14 +35,14 @@ class GestionnaireMessagesBackup {
       {operationLongue: true}
     );
 
-    this.mq.routingKeyManager.addRoutingKeyCallback(
-      (routingKey, message, opts) => {
-        // Retourner la promise pour rendre cette operation bloquante (longue duree)
-        return this.genererBackupMensuel(routingKey, message, opts)
-      },
-      ['commande.backup.genererBackupMensuel'],
-      {operationLongue: true}
-    );
+    // this.mq.routingKeyManager.addRoutingKeyCallback(
+    //   (routingKey, message, opts) => {
+    //     // Retourner la promise pour rendre cette operation bloquante (longue duree)
+    //     return this.genererBackupMensuel(routingKey, message, opts)
+    //   },
+    //   ['commande.backup.genererBackupMensuel'],
+    //   {operationLongue: true}
+    // );
 
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
@@ -60,7 +60,8 @@ class GestionnaireMessagesBackup {
       // console.debug(message);
 
       try {
-        const informationArchive = await genererBackupQuotidien(this.traitementFichierBackup, message.catalogue);
+        const informationArchive = await genererBackupQuotidien(
+          this.traitementFichierBackup, this.pathConsignation, message.catalogue);
         const { fichiersInclure, pathRepertoireBackup } = informationArchive;
         delete informationArchive.fichiersInclure; // Pas necessaire pour la transaction
         delete informationArchive.pathRepertoireBackup; // Pas necessaire pour la transaction
@@ -171,7 +172,8 @@ class GestionnaireMessagesBackup {
 }
 
 // Genere un fichier de backup quotidien qui correspond au journal
-async function genererBackupQuotidien(traitementFichier, journal) {
+async function genererBackupQuotidien(traitementFichier, pathConsignation, journal) {
+  debug("genererBackupQuotidien : journal \n%O", journal)
 
   const {domaine, securite} = journal;
   const jourBackup = new Date(journal.jour * 1000);
@@ -180,13 +182,15 @@ async function genererBackupQuotidien(traitementFichier, journal) {
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
   var resultat = await traitementFichier.sauvegarderJournalQuotidien(journal);
+  debug("Resultat sauvegarder journal quotidien : %O", resultat)
   const pathJournal = resultat.path;
   const nomJournal = path.basename(pathJournal);
   const pathRepertoireBackup = path.dirname(pathJournal);
 
   // console.debug(`Path backup : ${pathRepertoireBackup}`);
 
-  const pathArchive = traitementFichier.pathConsignation.consignationPathBackupArchives;
+  const pathArchive = pathConsignation.consignationPathBackupArchives
+  debug("Path archives : %s", pathArchive)
   await new Promise((resolve, reject)=>{
     fs.mkdir(pathArchive, { recursive: true, mode: 0o770 }, err=>{
       if(err) reject(err);
@@ -195,28 +199,31 @@ async function genererBackupQuotidien(traitementFichier, journal) {
   })
 
   // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
-  var nomArchive = nomJournal.replace('_catalogue', '').replace('.json', '.tar');
-  const pathArchiveQuotidienne = path.join(pathArchive, `${nomArchive}`)
+  var nomArchive = [domaine, resultat.dateFormattee, securite + '.tar'].join('_')
+  const pathArchiveQuotidienne = path.join(pathArchive, nomArchive)
+  debug("Path archive quotidienne : %s", pathArchiveQuotidienne)
 
   // Faire liste des fichiers de catalogue et transactions a inclure.
   var fichiersInclure = [nomJournal];
 
   for(let heureStr in journal.fichiers_horaire) {
-    let infoFichier = journal.fichiers_horaire[heureStr];
+    let infoFichier = journal.fichiers_horaire[heureStr]
+    debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
+
     if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
 
-    let fichierCatalogue = path.join(heureStr, 'catalogues', infoFichier.catalogue_nomfichier);
-    let fichierTransactions = path.join(heureStr, 'transactions', infoFichier.transactions_nomfichier);
+    let fichierCatalogue = path.join(heureStr, infoFichier.catalogue_nomfichier);
+    let fichierTransactions = path.join(heureStr, infoFichier.transactions_nomfichier);
 
     // Verifier SHA512
-    const sha512Catalogue = await utilitaireFichiers.calculerSHAFichier(path.join(pathRepertoireBackup, fichierCatalogue));
-    if(sha512Catalogue != infoFichier.catalogue_sha3_512) {
-      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA3-512`;
+    const sha512Catalogue = await calculerHachageFichier(path.join(pathRepertoireBackup, fichierCatalogue));
+    if(sha512Catalogue != infoFichier.catalogue_hachage) {
+      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au hachage`;
     }
 
-    const sha512Transactions = await utilitaireFichiers.calculerSHAFichier(path.join(pathRepertoireBackup, fichierTransactions));
-    if(sha512Transactions != infoFichier.transactions_sha3_512) {
-      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au SHA3-512`;
+    const sha512Transactions = await calculerHachageFichier(path.join(pathRepertoireBackup, fichierTransactions));
+    if(sha512Transactions != infoFichier.transactions_hachage) {
+      throw `Fichier transaction ${fichierCatalogue} ne correspond pas au hachage`;
     }
 
     fichiersInclure.push(fichierCatalogue);
@@ -252,7 +259,7 @@ async function genererBackupQuotidien(traitementFichier, journal) {
           path.join(pathRepertoireBackup, nomFichier));
 
         if(sha512Calcule != infoFichier.sha512) {
-          throw `Erreur SHA3-512 sur fichier : ${nomFichier}`;
+          throw `Erreur SHA512 sur fichier : ${nomFichier}`;
         }
       }
 
@@ -260,48 +267,33 @@ async function genererBackupQuotidien(traitementFichier, journal) {
     }
   }
 
-  var fichiersInclureStr = fichiersInclure.join(' ');
+  var fichiersInclureStr = fichiersInclure.join('\n');
+  console.debug(`Fichiers quotidien inclure relatif a ${pathArchive} : \n${fichiersInclure}`);
 
-  console.debug(`Fichiers quotidien inclure : ${fichiersInclure}`);
+  // Creer nouvelle archive quotidienne
+  await tar.c(
+    {
+      file: pathArchiveQuotidienne,
+      cwd: pathRepertoireBackup,
+    },
+    fichiersInclure
+  )
 
-  const commandeBackup = spawn('/bin/sh', ['-c', `cd ${pathRepertoireBackup}; tar -Jcf ${pathArchiveQuotidienne} ${fichiersInclureStr}`]);
-  commandeBackup.stderr.on('data', data=>{
-    console.error(`tar backup quotidien: ${data}`);
-  })
+  // Calculer le SHA512 du fichier d'archive
+  const sha512Archive = await calculerHachageFichier(pathArchiveQuotidienne)
 
-  const resultatTar = await new Promise(async (resolve, reject) => {
-    commandeBackup.on('close', async code =>{
-      if(code != 0) {
-        return reject(code);
-      }
+  const informationArchive = {
+    archive_sha3_512: sha512Archive,
+    archive_nomfichier: nomArchive,
+    jour: journal.jour,
+    domaine: journal.domaine,
+    securite: journal.securite,
 
-      // Calculer le SHA512 du fichier d'archive
-      const sha512Archive = await utilitaireFichiers.calculerSHAFichier(pathArchiveQuotidienne);
-
-      const informationArchive = {
-        archive_sha3_512: sha512Archive,
-        archive_nomfichier: nomArchive,
-        jour: journal.jour,
-        domaine: journal.domaine,
-        securite: journal.securite,
-
-        fichiersInclure,
-        pathRepertoireBackup,
-      }
-
-      return resolve(informationArchive);
-
-    })
-  })
-  .catch(err=>{
-    return({err});
-  });
-
-  if(resultatTar.err) {
-    throw err;
+    fichiersInclure,
+    pathRepertoireBackup,
   }
 
-  return resultatTar;
+  return informationArchive
 
 }
 
@@ -339,7 +331,7 @@ async function genererBackupMensuel(traitementFichier, journal) {
     let nomFichier = infoArchive.archive_nomfichier;
 
     let pathFichierArchive = path.join(pathArchives, nomFichier);
-    const sha512Archive = await utilitaireFichiers.calculerSHAFichier(pathFichierArchive);
+    const sha512Archive = await calculerHachageFichier(pathFichierArchive);
     if(sha512Archive != sha512_archive) {
       throw `SHA3-512 archive ${nomFichier} est incorrect, backup annule`;
     }
@@ -368,7 +360,7 @@ async function genererBackupMensuel(traitementFichier, journal) {
 
       // Calculer le SHA512 du fichier d'archive
       try {
-        const sha512Archive = await utilitaireFichiers.calculerSHAFichier(pathArchiveMensuelle);
+        const sha512Archive = await calculerHachageFichier(pathArchiveMensuelle);
         const informationArchive = {
           archive_sha3_512: sha512Archive,
           archive_nomfichier: nomArchive,

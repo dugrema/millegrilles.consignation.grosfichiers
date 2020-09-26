@@ -54,8 +54,8 @@ async function initialiserRabbitMQ(rabbitMQ) {
   // const {PublicateurAWS} = require('../messages/aws');
   // rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
 
-  // const {GestionnaireMessagesBackup} = require('../messages/backup');
-  // rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ));
+  const {GestionnaireMessagesBackup} = require('../messages/backup');
+  rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ));
 
   return {rabbitMQ};
 }

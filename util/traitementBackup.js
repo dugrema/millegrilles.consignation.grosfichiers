@@ -153,10 +153,8 @@ class TraitementFichierBackup {
     var repertoireBackup = this.pathConsignation.trouverPathBackupHoraire(dateJournal);
     // Remonter du niveau heure a jour
     repertoireBackup = path.dirname(repertoireBackup);
-    let year = dateJournal.getUTCFullYear();
-    let month = dateJournal.getUTCMonth() + 1; if(month < 10) month = '0'+month;
-    let day = dateJournal.getUTCDate(); if(day < 10) day = '0'+day;
-    const dateFormattee = "" + year + month + day;
+
+    const dateFormattee = formatterDateString(dateJournal).slice(0, 6)  // Retirer jours
 
     const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
 
@@ -181,7 +179,7 @@ class TraitementFichierBackup {
     await promiseSauvegarde;
 
     // debug("Fichier cree : " + fullPathFichier);
-    return {path: fullPathFichier};
+    return {path: fullPathFichier, nomFichier, dateFormattee};
   }
 
   async sauvegarderJournalMensuel(journal) {
@@ -1089,6 +1087,15 @@ class RestaurateurBackup {
 
 }
 
+function formatterDateString(date) {
+  let year = date.getUTCFullYear();
+  let month = date.getUTCMonth() + 1; if(month < 10) month = '0'+month;
+  let day = date.getUTCDate(); if(day < 10) day = '0'+day;
+  let hour = date.getUTCHours(); if(hour < 10) hour = '0'+hour;
+  const dateFormattee = "" + year + month + day + hour;
+  return dateFormattee
+}
+
 // Instances
 
-module.exports = {TraitementFichierBackup, RestaurateurBackup};
+module.exports = {TraitementFichierBackup, RestaurateurBackup, formatterDateString};
