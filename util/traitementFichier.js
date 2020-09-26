@@ -158,7 +158,6 @@ class TraitementFichier {
     this.rabbitMQ = rabbitMQ;
     const idmg = rabbitMQ.pki.idmg;
     this.pathConsignation = new PathConsignation({idmg});
-    this.utilitaireFichiers = new UtilitaireFichiers();
   }
 
   async traiterPut(req) {
