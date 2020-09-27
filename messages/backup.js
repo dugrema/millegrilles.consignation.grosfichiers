@@ -241,7 +241,7 @@ async function genererBackupQuotidien(traitementFichier, pathConsignation, journ
 
       debug("Ajout grosfichier %s", nomFichier)
 
-      // Verifier le SHA si disponible
+      // Verifier le hachage des fichiers a inclure
       if(infoFichier.hachage) {
         const fonctionHash = infoFichier.hachage.split(':')[0]
         const hachageCalcule = await calculerHachageFichier(
