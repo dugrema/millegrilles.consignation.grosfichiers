@@ -182,19 +182,18 @@ class TraitementFichierBackup {
     return {path: fullPathFichier, nomFichier, dateFormattee};
   }
 
-  async sauvegarderJournalMensuel(journal) {
-    const {domaine, securite, mois} = journal;
+  async sauvegarderJournalAnnuel(journal) {
+    const {domaine, securite, annee} = journal
 
-    const dateJournal = new Date(mois*1000);
-    var repertoireBackup = this.pathConsignation.consignationPathBackupArchives;
+    const dateJournal = new Date(annee*1000)
+    var repertoireBackup = this.pathConsignation.consignationPathBackupArchives
 
     let year = dateJournal.getUTCFullYear();
-    let month = dateJournal.getUTCMonth() + 1; if(month < 10) month = '0'+month;
-    const dateFormattee = "" + year + month;
+    const dateFormattee = "" + year;
 
     const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
 
-    const fullPathFichier = path.join(repertoireBackup, nomFichier);
+    const fullPathFichier = path.join(repertoireBackup, 'quotidiennes', domaine, nomFichier);
 
     // debug("Path fichier journal mensuel " + fullPathFichier);
     var compressor = lzma.createCompressor();
@@ -217,7 +216,7 @@ class TraitementFichierBackup {
     const sha512Journal = await calculerHachageFichier(fullPathFichier);
 
     // debug("Fichier cree : " + fullPathFichier);
-    return {pathJournal: fullPathFichier, hachage: sha512Journal};
+    return {pathJournal: fullPathFichier, hachage: sha512Journal, dateFormattee};
   }
 
   async getStatFichierBackup(pathFichier, aggregation) {
