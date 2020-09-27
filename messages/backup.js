@@ -229,31 +229,31 @@ async function genererBackupQuotidien(traitementFichier, pathConsignation, journ
     // fichiersInclureStr = `${fichiersInclureStr} */grosfichiers/*`
 
     for(let fuuid in journal.fuuid_grosfichiers) {
-      let infoFichier = journal.fuuid_grosfichiers[fuuid];
-      let heureStr = infoFichier.heure;
-      if(heureStr.length == 1) heureStr = '0' + heureStr;
+      let infoFichier = journal.fuuid_grosfichiers[fuuid]
+      let heureStr = infoFichier.heure
+      if(heureStr.length == 1) heureStr = '0' + heureStr
 
-      let extension = infoFichier.extension;
+      let extension = infoFichier.extension
       if(infoFichier.securite == '3.protege' || infoFichier.securite == '4.secure') {
-        extension = 'mgs1';
+        extension = 'mgs1'
       }
-      let nomFichier = path.join(heureStr, 'grosfichiers', `${fuuid}.${extension}`);
+      let nomFichier = path.join(heureStr, 'grosfichiers', `${fuuid}.${extension}`)
+
+      debug("Ajout grosfichier %s", nomFichier)
 
       // Verifier le SHA si disponible
-      if(infoFichier.sha256) {
-        const sha256Calcule = await utilitaireFichiers.calculerSHAFichier(
-          path.join(pathRepertoireBackup, nomFichier), {fonctionHash: 'sha256'});
+      if(infoFichier.hachage) {
+        const fonctionHash = infoFichier.hachage.split(':')[0]
+        const hachageCalcule = await calculerHachageFichier(
+          path.join(pathRepertoireBackup, nomFichier), {fonctionHash});
 
-        if(sha256Calcule != infoFichier.sha256) {
-          throw `Erreur SHA256 sur fichier : ${nomFichier}`
+        if(hachageCalcule !== infoFichier.hachage) {
+          throw `Erreur Hachage sur fichier : ${nomFichier}`
+        } else {
+          debug("Hachage grosfichier OK : %s => %s ", hachageCalcule, nomFichier)
         }
-      } else if(infoFichier.sha512) {
-        const sha512Calcule = await utilitaireFichiers.calculerSHAFichier(
-          path.join(pathRepertoireBackup, nomFichier));
-
-        if(sha512Calcule != infoFichier.sha512) {
-          throw `Erreur SHA512 sur fichier : ${nomFichier}`;
-        }
+      } else {
+        throw `Erreur Hachage absent sur fichier : ${nomFichier}`;
       }
 
       fichiersInclure.push(nomFichier);
