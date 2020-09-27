@@ -114,7 +114,9 @@ class GestionnaireMessagesBackup {
 
         const domaine = message.catalogue.domaine
         const pathArchivesQuotidiennes = path.join(this.pathConsignation.consignationPathBackupArchives, 'quotidiennes', domaine)
+
         await supprimerFichiers(fichiersInclure, pathArchivesQuotidiennes)
+        await supprimerRepertoiresVides(path.join(this.pathConsignation.consignationPathBackupArchives, 'quotidiennes'))
 
       } catch (err) {
         console.error("Erreur creation backup annuel")
