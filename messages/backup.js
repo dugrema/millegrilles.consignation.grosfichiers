@@ -77,8 +77,8 @@ class GestionnaireMessagesBackup {
         await this.mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo');
 
         // Effacer les fichiers transferes dans l'archive quotidienne
-        await utilitaireFichiers.supprimerFichiers(fichiersInclure, pathRepertoireBackup);
-        await utilitaireFichiers.supprimerRepertoiresVides(this.pathConsignation.consignationPathBackupHoraire);
+        await supprimerFichiers(fichiersInclure, pathRepertoireBackup);
+        await supprimerRepertoiresVides(this.pathConsignation.consignationPathBackupHoraire);
 
       } catch (err) {
         console.error("Erreur creation backup quotidien:\n%O", err);
@@ -190,17 +190,18 @@ async function genererBackupQuotidien(traitementFichier, pathConsignation, journ
   // console.debug(`Path backup : ${pathRepertoireBackup}`);
 
   const pathArchive = pathConsignation.consignationPathBackupArchives
-  debug("Path archives : %s", pathArchive)
+  // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
+  const pathArchiveQuotidienneRepertoire = path.join(pathArchive, 'quotidiennes', domaine)
+  debug("Path repertoire archive quotidienne : %s", pathArchiveQuotidienneRepertoire)
   await new Promise((resolve, reject)=>{
-    fs.mkdir(pathArchive, { recursive: true, mode: 0o770 }, err=>{
-      if(err) reject(err);
-      else resolve();
+    fs.mkdir(pathArchiveQuotidienneRepertoire, { recursive: true, mode: 0o770 }, err=>{
+      if(err) return reject(err);
+      resolve();
     })
   })
 
-  // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
   var nomArchive = [domaine, resultat.dateFormattee, securite + '.tar'].join('_')
-  const pathArchiveQuotidienne = path.join(pathArchive, nomArchive)
+  const pathArchiveQuotidienne = path.join(pathArchiveQuotidienneRepertoire, nomArchive)
   debug("Path archive quotidienne : %s", pathArchiveQuotidienne)
 
   // Faire liste des fichiers de catalogue et transactions a inclure.
@@ -280,10 +281,10 @@ async function genererBackupQuotidien(traitementFichier, pathConsignation, journ
   )
 
   // Calculer le SHA512 du fichier d'archive
-  const sha512Archive = await calculerHachageFichier(pathArchiveQuotidienne)
+  const hachageArchive = await calculerHachageFichier(pathArchiveQuotidienne)
 
   const informationArchive = {
-    archive_sha3_512: sha512Archive,
+    archive_hachage: hachageArchive,
     archive_nomfichier: nomArchive,
     jour: journal.jour,
     domaine: journal.domaine,

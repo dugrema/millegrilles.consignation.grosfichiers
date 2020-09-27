@@ -154,7 +154,7 @@ class TraitementFichierBackup {
     // Remonter du niveau heure a jour
     repertoireBackup = path.dirname(repertoireBackup);
 
-    const dateFormattee = formatterDateString(dateJournal).slice(0, 6)  // Retirer jours
+    const dateFormattee = formatterDateString(dateJournal).slice(0, 8)  // Retirer heures
 
     const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
 
