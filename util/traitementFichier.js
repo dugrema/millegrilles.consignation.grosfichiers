@@ -354,7 +354,7 @@ async function calculHachage(req, hachage) {
 
       // Verifier que le digest calcule correspond a celui recu
       if(digest !== hachage) {
-        return reject("Hachage fichier invalide pour fuuid : " + fuuid)
+        return reject("Hachage fichier invalide pour fuuid : " + fichier.path)
       }
       resolve(digest)
     })
