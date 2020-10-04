@@ -2,11 +2,11 @@ const debug = require('debug')('millegrilles:messages:backup')
 const fs = require('fs')
 const path = require('path')
 const tar = require('tar')
-const S3 = require('aws-sdk/clients/s3')
+
 // const { spawn } = require('child_process');
 const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers} = require('../util/traitementFichier');
 const { TraitementFichierBackup } = require('../util/traitementBackup')
-const { RestaurateurBackup } = require('../util/traitementBackup')
+const { RestaurateurBackup } = require('../util/restaurationBackup')
 const { calculerHachageFichier } = require('../util/utilitairesHachage')
 
 class GestionnaireMessagesBackup {
@@ -131,38 +131,23 @@ class GestionnaireMessagesBackup {
   // Generer le repertoire staging, extrait et verifie tous les fichiers
   // de catalogues, transactions et autres (e.g. grosfichiers)
   // Retourne un rapport avec les erreurs
-  prerarerStagingRestauration(routingKey, message, opts) {
-    return new Promise( async (resolve, reject) => {
-      console.info("Preparer staging restauration")
+  async prerarerStagingRestauration(routingKey, message, opts) {
+    debug("Preparer staging restauration")
 
-      const {correlationId, replyTo} = opts.properties;
+    const {correlationId, replyTo} = opts.properties
 
-      try {
-        const restaurateur = new RestaurateurBackup(this.mq, this.pki);
-        const rapportRestauration = await restaurateur.restaurationComplete();
+    const restaurateur = new RestaurateurBackup(this.mq, this.pki)
+    const rapportRestauration = await restaurateur.restaurationComplete()
+    debug("rapportRestauration : %O", rapportRestauration)
 
-        console.debug("Rapport restauration");
-        console.debug(rapportRestauration);
-        console.debug("rapportHardLinks :");
-        console.debug(rapportRestauration.rapports.rapportHardLinks);
-        console.debug("rapportTarExtraction :");
-        console.debug(rapportRestauration.rapports.rapportTarExtraction);
-        console.debug("rapportVerificationHoraire.erreurs :");
-        console.debug(rapportRestauration.rapports.rapportVerificationHoraire.erreurs);
+    // debug("rapportHardLinks : %O", rapportRestauration.rapportHardLinks)
+    // debug("rapportTarExtraction : %O", rapportRestauration.rapports.rapportTarExtraction)
+    // debug("rapportVerificationHoraire.erreurs : %O", rapportRestauration.rapports.rapportVerificationHoraire.erreurs)
+    //
+    // // Transmettre reponse
+    // this.mq.transmettreReponse(rapportRestauration, replyTo, correlationId)
 
-        // Transmettre reponse
-        this.mq.transmettreReponse(rapportRestauration, replyTo, correlationId);
-
-      } catch (err) {
-        console.error("Erreur preparation staging restauration");
-        console.error(err);
-        reject(err);
-      }
-
-      console.info("Staging restauration complete");
-      resolve();
-    });
-
+    debug("Staging restauration complete")
   }
 
 }
