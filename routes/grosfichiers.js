@@ -15,13 +15,13 @@ function InitialiserGrosFichiers() {
 
   const bodyParserInstance = bodyParser.urlencoded({ extended: false })
 
-  router.get('*/:fuuid', downloadFichierLocal, pipeReponse)
+  router.get('^/fichiers/*/:fuuid', downloadFichierLocal, pipeReponse)
 
   // router.post('*', bodyParserInstance, downloadFichierLocalChiffre)
 
   const multerProcessor = multer({dest: '/var/opt/millegrilles/consignation/multer'}).single('fichier')
 
-  router.put('*', multerProcessor, async (req, res, next) => {
+  router.put('^/fichiers/*', multerProcessor, async (req, res, next) => {
     console.debug("nouveauFichier PUT %s,\nHeaders: %O\nFichiers: %O\nBody: %O", req.url, req.headers, req.file, req.body)
 
     const idmg = req.autorisationMillegrille.idmg

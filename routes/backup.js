@@ -7,6 +7,7 @@ const bodyParser = require('body-parser')
 
 const {PathConsignation} = require('../util/traitementFichier')
 const {TraitementFichierBackup} = require('../util/traitementBackup')
+const {RestaurateurBackup} = require('../util/restaurationBackup')
 
 function InitialiserBackup(fctRabbitMQParIdmg) {
 
@@ -26,7 +27,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     {name: 'catalogue', maxcount: 1},
   ]
 
-  router.put('/backup/domaine/*',
+  router.put('/fichiers/backup/domaine/*',
     // (req, res, next)=>{debug("Avant upload"); next()},
     backupUpload.fields(backupFileFields),
     // (req, res, next)=>{debug("Apres upload"); next()},
@@ -34,11 +35,11 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   )
 
   // Path de download des fichiers de backup horaires
-  router.get('/backup/liste/backups_horaire', getListeBackupHoraire)
-  router.get('/backup/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup)
-  router.get('/backup/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup)
+  router.get('/fichiers/backup/liste/backups_horaire', getListeBackupHoraire)
+  router.get('/fichiers/backup/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup)
+  router.get('/fichiers/backup/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup)
 
-  router.get('/backup/backup.tar', getFichierTar)
+  router.get('/fichiers/backup/backup.tar', getFichierTar)
 
   return router
 }
@@ -100,7 +101,7 @@ async function getListeBackupHoraire(req, res, next) {
   try {
     const idmg = req.autorisationMillegrille.idmg
     const rabbitMQ = req.rabbitMQ
-    const traitementFichier = new TraitementFichierBackup(rabbitMQ)
+    const traitementFichier = new RestaurateurBackup(rabbitMQ)
 
     const listeBackupsHoraires = await traitementFichier.genererListeBackupsHoraire(req)
     res.end(JSON.stringify(listeBackupsHoraires))

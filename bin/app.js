@@ -30,9 +30,9 @@ function initialiser() {
 
   app.use(express.static(path.join(__dirname, 'public')));
 
-  app.all('/fichiers/*', (req, res, next)=>{debug("FICHIERS!"); next()}, InitialiserGrosFichiers());
+  app.all('^/fichiers/backup/*', (req, res, next)=>{debug("BACKUP!"); next()}, InitialiserBackup());
 
-  app.all('/backup/*', InitialiserBackup());
+  app.all('^/fichiers/*', (req, res, next)=>{debug("FICHIERS!"); next()}, InitialiserGrosFichiers());
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {

@@ -136,7 +136,7 @@ class GestionnaireMessagesBackup {
 
     const {correlationId, replyTo} = opts.properties
 
-    const restaurateur = new RestaurateurBackup(this.mq, this.pki)
+    const restaurateur = new RestaurateurBackup(this.mq)
     const rapportRestauration = await restaurateur.restaurationComplete()
     debug("rapportRestauration : %O", rapportRestauration)
 
