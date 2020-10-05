@@ -35,49 +35,16 @@ class RestaurateurBackup {
       this.pathConsignation.consignationPathBackup, req.params, req.query)
 
     const fichiers = await getFichiersDomaine(domaine, pathRepertoireBackup)
-
-    // Trier les fichiers pour permettre un traitement direct du stream
-    //   1. date backup (string compare)
-    //   2. sous-domaine
-    //   3. type fichier (ordre : catalogue, transaction)
-    fichiers.sort((a,b)=>{
-      if(a===b) return 0; if(!a) return -1; if(!b) return 1;
-      const typeFichierA = a.typeFichier, typeFichierB = b.typeFichier
-      const dateFichierA = a.dateFichier, dateFichierB = b.dateFichier
-      const sousdomaineA = a.sousdomaine, sousdomaineB = b.sousdomaine
-
-      var compare = 0
-
-      // // Utiliser longueur date pour type aggregation
-      // // 4=annuel, 8=quotidien, 10=horaire, 21=SNAPSHOT
-      // const aggA = dateFichierA.length, aggB = dateFichierB.length
-      //
-      // var compare = aggA - aggB
-      // if(compare !== 0) return compare
-
-      compare = dateFichierA.localeCompare(dateFichierB)
-      if(compare !== 0) return compare
-
-      compare = sousdomaineA.localeCompare(sousdomaineB)
-      if(compare !== 0) return compare
-
-      compare = typeFichierA.localeCompare(typeFichierB)
-      if(compare !== 0) return compare
-
-      return compare
-    })
+    sortFichiers(fichiers)  // Trier fichiers pour traitement stream
 
     debug("Fichiers du backup : %O", fichiers)
-    const listeFichiersPath = fichiers.map(fichier=>{
-      return fichier.basename
+
+    // Conserver parametres pour middleware streamListeFichiers
+    res.pathRacineFichiers = pathRepertoireBackup
+    res.listeFichiers = fichiers.map(item=>{
+      return item.path
     })
-    debug("Liste fichiers\n%O", listeFichiersPath)
-
-    // catalogues.sort();
-    // transactions.sort();
-
-    // return {catalogues, transactions};
-    // return {backupsHoraire};
+    next()
 
   }
 
@@ -728,6 +695,39 @@ async function mkdirs(repertoires) {
     })
   })
   return Promise.all(promises)
+}
+
+function sortFichiers(fichiers) {
+  // Trier les fichiers pour permettre un traitement direct du stream
+  //   1. date backup (string compare)
+  //   2. sous-domaine
+  //   3. type fichier (ordre : catalogue, transaction)
+  fichiers.sort((a,b)=>{
+    if(a===b) return 0; if(!a) return -1; if(!b) return 1;
+    const typeFichierA = a.typeFichier, typeFichierB = b.typeFichier
+    const dateFichierA = a.dateFichier, dateFichierB = b.dateFichier
+    const sousdomaineA = a.sousdomaine, sousdomaineB = b.sousdomaine
+
+    var compare = 0
+
+    // // Utiliser longueur date pour type aggregation
+    // // 4=annuel, 8=quotidien, 10=horaire, 21=SNAPSHOT
+    // const aggA = dateFichierA.length, aggB = dateFichierB.length
+    //
+    // var compare = aggA - aggB
+    // if(compare !== 0) return compare
+
+    compare = dateFichierA.localeCompare(dateFichierB)
+    if(compare !== 0) return compare
+
+    compare = sousdomaineA.localeCompare(sousdomaineB)
+    if(compare !== 0) return compare
+
+    compare = typeFichierA.localeCompare(typeFichierB)
+    if(compare !== 0) return compare
+
+    return compare
+  })
 }
 
 module.exports = { RestaurateurBackup };

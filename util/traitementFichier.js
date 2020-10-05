@@ -7,6 +7,8 @@ const crypto = require('crypto')
 const lzma = require('lzma-native')
 const { spawn } = require('child_process')
 const readline = require('readline')
+const tmp = require('tmp-promise')
+const tar = require('tar')
 
 const { uuidToDate } = require('./UUIDUtils')
 const transformationImages = require('./transformationImages')
@@ -379,9 +381,66 @@ async function deplacerFichier(req, nouveauPathFichier) {
   })
 }
 
+async function streamListeFichiers(req, res, next) {
+  // Transmet une liste de fichiers sous format .tar
+
+  const tmpFichierBackup = await tmp.file({mode:0o600, prefix: 'backup-download-', postfix: '.tar'})
+  const fichierBackup = tmpFichierBackup.path
+
+  try {
+    debug("Fichier TMP backup\n%s", fichierBackup)
+
+    // Faire la liste des sous-repertoires a filtrer
+    const pathBackup = res.pathRacineFichiers
+    const fichiers = res.listeFichiers
+
+    // Creer une archive .tar de backup avec les repertoires de fichiers
+    // horaire, archive et instantanne
+    debug("Creer archive utilisant path %s", pathBackup)
+
+    const downloadFileName = 'backup.tar'
+
+    await tar.create( // or tar.create
+      {
+        cwd: pathBackup,
+        file: fichierBackup,
+      },
+      fichiers
+    )
+
+    // Creer outputstream de reponse
+    res.set('Content-Type', 'application/tar')
+    res.set('Content-Disposition', 'attachment; filename="' + downloadFileName + '"')
+    res.status(200)
+
+    const readStream = fs.createReadStream(fichierBackup)
+
+    await new Promise((resolve, reject)=>{
+      readStream.on('close', _=>{
+        resolve()
+      })
+      readStream.on('error', err=>{
+        console.error("Erreur transfert\n%O", err)
+        reject(err)
+      })
+      readStream.pipe(res)
+    })
+
+  } catch(err) {
+    console.error("Erreur traitement TAR file\n%O", err)
+    res.sendStatus(500)
+  } finally {
+    fs.unlink(fichierBackup, err=>{
+      if(err) console.error("Erreur unlink " + fichierBackup)
+    })
+    res.end('')  // S'assurer que le stream est ferme
+  }
+}
+
 // Instances
 
 module.exports = {
   TraitementFichier, PathConsignation,
   extraireTarFile, supprimerRepertoiresVides, supprimerFichiers,
+  streamListeFichiers,
 }

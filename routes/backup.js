@@ -5,7 +5,7 @@ const fs = require('fs')
 const multer = require('multer')
 const bodyParser = require('body-parser')
 
-const {PathConsignation} = require('../util/traitementFichier')
+const {PathConsignation, streamListeFichiers} = require('../util/traitementFichier')
 const {TraitementFichierBackup} = require('../util/traitementBackup')
 const {RestaurateurBackup} = require('../util/restaurationBackup')
 
@@ -35,7 +35,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   )
 
   // Path de download des fichiers de backup horaires
-  router.get('/fichiers/backup/restaurerDomaine/:domaine', restaurerDomaine)
+  router.get('/fichiers/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
   router.get('/fichiers/backup/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup)
   router.get('/fichiers/backup/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup)
 
