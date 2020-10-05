@@ -35,7 +35,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   )
 
   // Path de download des fichiers de backup horaires
-  router.get('/fichiers/backup/liste/backups_horaire', getListeBackupHoraire)
+  router.get('/fichiers/backup/restaurerDomaine/:domaine', restaurerDomaine)
   router.get('/fichiers/backup/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup)
   router.get('/fichiers/backup/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup)
 
@@ -95,19 +95,16 @@ async function getFichierTar(req, res, next) {
   traitementFichier.getFichierTarBackupComplet(req, res)
 }
 
-async function getListeBackupHoraire(req, res, next) {
+async function restaurerDomaine(req, res, next) {
 
   // console.debug("Retourner la liste des backups horaires");
   try {
     const idmg = req.autorisationMillegrille.idmg
     const rabbitMQ = req.rabbitMQ
     const traitementFichier = new RestaurateurBackup(rabbitMQ)
-
-    const listeBackupsHoraires = await traitementFichier.genererListeBackupsHoraire(req)
-    res.end(JSON.stringify(listeBackupsHoraires))
+    await traitementFichier.restaurerDomaine(req, res, next)
   } catch(err) {
-    console.error("Erreur preparation liste backups horaire")
-    console.error(err)
+    console.error(`Erreur restauration domaine ${req.query.nomDomaine}\n%O`, err)
     res.sendStatus(500)
   }
 

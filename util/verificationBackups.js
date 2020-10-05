@@ -24,61 +24,204 @@ class RestaurateurBackup {
     // Configuration optionnelle
     this.pathBackupHoraire = opts.backupHoraire || this.pathConsignation.consignationPathBackupHoraire;
     this.pathBackupArchives = opts.archives || this.pathConsignation.consignationPathBackupArchives;
+    this.pathStaging = opts.staging || this.pathConsignation.consignationPathBackupStaging;
+
+    // // Liste des niveaux d'aggregation en ordre annuel vers horaire
+    // this.listeAggregation = [
+    //   'annuel',
+    //   'quotidien',
+    //   'horaire'
+    // ];
+    //
+    // this.pathAggregationStaging = {
+    //   horaire: opts.stagingBackupHoraire || path.join(this.pathStaging, 'horaire'),
+    //   quotidien: opts.stagingBackupQuotidien || path.join(this.pathStaging, 'quotidien'),
+    //   annuel: opts.stagingBackupAnnuel || path.join(this.pathStaging, 'annuel'),
+    // }
+
+    // Conserve la plus recente information de backup horaire par domaine/securite
+    // Cle: domaine/securite, e.g. "millegrilles.domaines.SenseursPassifs/2.prive"
+    // Valeur: Valeur de hachage de l'entete dans le catalogue, e.g. :
+    // {
+    //     "hachage_entete": "5uPgda0G9u/rxN89PT38Y6noxpX90TM7x5F30zcNHxi5AwMwrIqblqf+llmVU7tbJYQphhD/Q4UNvSUS13vybA==",
+    //     "uuid-transaction": "dccc3059-6ef5-11ea-8ed2-00155d011f09"
+    // }
+    // this.chaineBackupHoraire = {};
+    // this.validateurSignature = new ValidateurSignature();
+
   }
 
-  async restaurerDomaine(req, res, next) {
+  // // Methode qui lance une restauration complete d'une MilleGrille
+  // // Le consignateur de fichiers va extraire, valider et re-transmettre
+  // // toutes les transactions de tous les domaines.
+  // async restaurationComplete() {
+  //   debug("Debut restauration complete")
+  //
+  //   // S'assurer que les repertoires destination de base existent
+  //   await this.creerRepertoires()
+  //
+  //   // Creer hard-links pour archives existantes sous staging/
+  //   const rapportHardLinks = await this.creerHardLinksBackupStaging()
+  //
+  //   // // Extraire et verifier tous les fichiers d'archives vers staging/horaire
+  //   // const rapportTarExtraction = await this.extraireTarParNiveaux();
+  //   //
+  //   // // Verifier le contenu horaire
+  //   // const rapportVerificationHoraire = await this.parcourirCataloguesHoraire(
+  //   //   (pathCourant, fichierCatalogue, catalogue) => {
+  //   //     return this.verifierBackupHoraire(pathCourant, fichierCatalogue, catalogue);
+  //   //   }
+  //   // );
+  //   //
+  //   // // Retransmettre toutes les transactions
+  //   // const rapportRetransmissionTransactions = await this.parcourirCataloguesHoraire(
+  //   //   (pathCourant, fichierCatalogue, catalogue) => {
+  //   //     return this.resoumettreTransactions(pathCourant, fichierCatalogue, catalogue);
+  //   //   }
+  //   // );
+  //   //
+  //   // const rapports = {
+  //   //   rapportHardLinks,
+  //   //   rapportTarExtraction,
+  //   //   rapportVerificationHoraire
+  //   // }
+  //   //
+  //   // // Verifie les SHA des archives pour chaque archive a partir des catalogues
+  //   // debug("Fin restauration complete");
+  //   // return {rapports};
+  // }
+  //
+  // // S'assurer que les repertoires de base (horaire, archives) existent
+  // async creerRepertoires() {
+  //   debug("Creer repertoires backup, archives, staging")
+  //   mkdirs([this.pathBackupHoraire, this.pathBackupArchives, this.pathStaging])
+  // }
 
-    const idmg = req.autorisationMillegrille.idmg
-    const domaine = req.params.domaine
-    const pathRepertoireBackup = this.pathConsignation.consignationPathBackup
-    debug("restaurerDomaine, Path repertoire backup : %s\nparams : %O\nquery: %O",
-      this.pathConsignation.consignationPathBackup, req.params, req.query)
+  async creerHardLinksBackupStaging() {
 
-    const fichiers = await getFichiersDomaine(domaine, pathRepertoireBackup)
+    // Extraire variables du scope _this_ pour fonctions async
+    const {
+      pathStaging, pathBackupHoraire, pathBackupArchives,
+      listeAggregation,
+    } = this
 
-    // Trier les fichiers pour permettre un traitement direct du stream
-    //   1. date backup (string compare)
-    //   2. sous-domaine
-    //   3. type fichier (ordre : catalogue, transaction)
-    fichiers.sort((a,b)=>{
-      if(a===b) return 0; if(!a) return -1; if(!b) return 1;
-      const typeFichierA = a.typeFichier, typeFichierB = b.typeFichier
-      const dateFichierA = a.dateFichier, dateFichierB = b.dateFichier
-      const sousdomaineA = a.sousdomaine, sousdomaineB = b.sousdomaine
+    // Nettoyer (effacer) repertoire /staging et recreer
+    await new Promise((resolve, reject)=>{
+      fs.rmdir(pathStaging, { recursive: true }, err=>{
+        if(err) return reject(err)
+        resolve()
+      })
+    })
+    await mkdirs([
+      pathStaging + '/horaire',
+      pathStaging + '/quotidien',
+      pathStaging + '/annuel',
+    ])
 
-      var compare = 0
+    // Creer hard-link pour tous les fichiers courants sous backup/horaire
+    // vers backup/staging/horaire
+    await new Promise(async (resolve, reject) => {
+      const commandeHardLinkHoraire = spawn(
+        '/bin/sh',
+        ['-c', `cp -rl ${pathBackupHoraire}/* ${pathStaging + '/horaire' }/`]
+      )
+      commandeHardLinkHoraire.stderr.on('data', data=>{
+        console.error(`Erreur nettoyage repertoires : ${data}`)
+      })
 
-      // // Utiliser longueur date pour type aggregation
-      // // 4=annuel, 8=quotidien, 10=horaire, 21=SNAPSHOT
-      // const aggA = dateFichierA.length, aggB = dateFichierB.length
-      //
-      // var compare = aggA - aggB
-      // if(compare !== 0) return compare
-
-      compare = dateFichierA.localeCompare(dateFichierB)
-      if(compare !== 0) return compare
-
-      compare = sousdomaineA.localeCompare(sousdomaineB)
-      if(compare !== 0) return compare
-
-      compare = typeFichierA.localeCompare(typeFichierB)
-      if(compare !== 0) return compare
-
-      return compare
+      commandeHardLinkHoraire.on('close', async code =>{
+        if(code != 0) {
+          return reject(code)
+        }
+        return resolve()
+      })
     })
 
-    debug("Fichiers du backup : %O", fichiers)
-    const listeFichiersPath = fichiers.map(fichier=>{
-      return fichier.basename
-    })
-    debug("Liste fichiers\n%O", listeFichiersPath)
+  }
 
+  async restaurerDomaine(req) {
+
+    debug("genererListeBackupsHoraire, params : %O, query: %O", req.params, req.query)
+
+    const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
+
+    const domaine = req.body.domaine;
+    const pathRepertoire = path.join(pathConsignation.consignationPathBackup, 'horaire');
+    debug("Path repertoire backup : %s", pathRepertoire);
+
+    const prefixeCatalogue = domaine + "_catalogue";
+    const prefixeTransactions = domaine + "_transactions";
+
+    var settings = {
+      type: 'files',
+      fileFilter: [
+        prefixeCatalogue + '_*.json.xz',
+        prefixeTransactions + '_*.jsonl.xz',
+        prefixeTransactions + '_*.jsonl.xz.mgs1',
+      ],
+    }
+
+    const {err, backupsHoraire} = await new Promise((resolve, reject)=>{
+      // const fichiersCatalogue = [];
+      // const fichiersTransactions = [];
+
+      const backupsHoraire = {};
+
+      readdirp(
+        pathRepertoire,
+        settings,
+      )
+      .on('data', entry=>{
+        // debug(entry);
+
+        const heureBackup = entry.path.split('/').slice(0, 4).join('');
+        var entreeBackup = backupsHoraire[heureBackup];
+        if(!entreeBackup) {
+          entreeBackup = {};
+          backupsHoraire[heureBackup] = entreeBackup;
+        }
+
+        if(entry.basename.startsWith(prefixeCatalogue)) {
+          entreeBackup.catalogue = entry.path;
+        } else if(entry.basename.startsWith(prefixeTransactions)) {
+          entreeBackup.transactions = entry.path;
+        }
+      })
+      .on('error', err=>{
+        reject({err});
+      })
+      .on('end', ()=>{
+        // debug("Fini");
+        resolve({backupsHoraire});
+      });
+
+    });
+
+    if(err) throw err;
+
+    // Trier les catalgues et transactions par date (tri naturel)
     // catalogues.sort();
     // transactions.sort();
 
     // return {catalogues, transactions};
-    // return {backupsHoraire};
+    return {backupsHoraire};
 
+  }
+
+  async getStatFichierBackup(pathFichier, aggregation) {
+
+    const fullPathFichier = path.join(this.pathConsignation.consignationPathBackup, aggregation, pathFichier);
+
+    const {err, size} = await new Promise((resolve, reject)=>{
+      fs.stat(fullPathFichier, (err, stat)=>{
+        if(err) reject({err});
+        resolve({size: stat.size})
+      })
+    });
+
+    if(err) throw(err);
+
+    return {size, fullPathFichier};
   }
 
   // // Extrait tous les fichiers .tar.xz d'un repertoire vers la destination
@@ -629,93 +772,6 @@ class RestaurateurBackup {
   //   return erreurs;
   // }
 
-}
-
-async function getFichiersDomaine(domaine, pathRepertoireBackup) {
-
-  var settings = {
-    type: 'files',
-    fileFilter: [
-      `${domaine}_catalogue_*.json.xz`,
-      `${domaine}_transactions_*.jsonl.xz`,
-      `${domaine}_transactions_*.jsonl.xz.mgs1`,
-      `${domaine}.*_catalogue_*.json.xz`,
-      `${domaine}.*_transactions_*.jsonl.xz`,
-      `${domaine}.*_transactions_*.jsonl.xz.mgs1`,
-      `${domaine}_*.tar`,
-      `${domaine}.*_*.tar`,
-    ],
-  }
-
-  debug("Setings fichiers : %O", settings)
-
-  return new Promise((resolve, reject)=>{
-    // const fichiersCatalogue = [];
-    // const fichiersTransactions = [];
-
-    const fichiersBackup = []
-
-    readdirp(
-      pathRepertoireBackup,
-      settings,
-    )
-    .on('data', entry=>{
-      // debug(entry)
-
-      // Extraire le type de fichier (catalogue, transaction, fichier) et date
-      const nomFichierParts = entry.basename.split('_')
-      var sousdomaine = '', typeFichier = '', dateFichier = ''
-
-      if(nomFichierParts.length === 3) {
-        sousdomaine = nomFichierParts[0]
-        dateFichier = nomFichierParts[1]
-        if(dateFichier.length === 4) typeFichier = 'annuel'
-        if(dateFichier.length === 8) typeFichier = 'quotidien'
-      } else if(nomFichierParts.length === 4) {
-        sousdomaine = nomFichierParts[0]
-        typeFichier = nomFichierParts[1]
-        dateFichier = nomFichierParts[2]
-      }
-
-      if(typeFichier) {
-        const entreeBackup = {
-          ...entry,
-          sousdomaine, typeFichier, dateFichier
-        }
-
-        fichiersBackup.push(entreeBackup)
-      } else {
-        debug("Skip fichier %s", entry.path)
-      }
-
-    })
-    .on('error', err=>{
-      reject({err});
-    })
-    .on('end', ()=>{
-      // debug("Fini");
-      resolve(fichiersBackup);
-    });
-
-  });
-
-  if(err) throw err;
-}
-
-async function getStatFichierBackup(pathFichier, aggregation) {
-
-  const fullPathFichier = path.join(this.pathConsignation.consignationPathBackup, aggregation, pathFichier);
-
-  const {err, size} = await new Promise((resolve, reject)=>{
-    fs.stat(fullPathFichier, (err, stat)=>{
-      if(err) reject({err});
-      resolve({size: stat.size})
-    })
-  });
-
-  if(err) throw(err);
-
-  return {size, fullPathFichier};
 }
 
 async function mkdirs(repertoires) {
