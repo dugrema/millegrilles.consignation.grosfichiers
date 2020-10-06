@@ -6,8 +6,20 @@ const multer = require('multer')
 const bodyParser = require('body-parser')
 
 const {PathConsignation, streamListeFichiers} = require('../util/traitementFichier')
-const {TraitementFichierBackup} = require('../util/traitementBackup')
+const {TraitementFichierBackup, getListeDomaines} = require('../util/traitementBackup')
 const {RestaurateurBackup} = require('../util/restaurationBackup')
+
+function backupMiddleware(req, res, next) {
+  const rabbitMQ = req.rabbitMQ
+
+  const traitementBackup = new TraitementFichierBackup(rabbitMQ)
+  req.traitementBackup = traitementBackup
+
+  const pathConsignation = new PathConsignation({idmg: rabbitMQ.pki.idmg})
+  req.pathConsignation = pathConsignation
+
+  next()
+}
 
 function InitialiserBackup(fctRabbitMQParIdmg) {
 
@@ -27,16 +39,17 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     {name: 'catalogue', maxcount: 1},
   ]
 
+  router.use(backupMiddleware)
+
   // Backup interne (/backup)
+  router.get('/backup/listeDomaines', getListeDomaines)
   router.put('/backup/domaine/:nomCatalogue',
-    (req, res, next)=>{debug("Backup domaine %s", req.params.nomCatalogue); next()},
-    // (req, res, next)=>{debug("Avant upload"); next()},
     backupUpload.fields(backupFileFields),
-    // (req, res, next)=>{debug("Apres upload"); next()},
     traiterUploadHoraire
   )
 
   // Backup externe (/fichier/backup)
+  router.get('/fichiers/backup/listeDomaines', getListeDomaines)
   router.put('/fichiers/backup/domaine/*',
     // (req, res, next)=>{debug("Avant upload"); next()},
     backupUpload.fields(backupFileFields),

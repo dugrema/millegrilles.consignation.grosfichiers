@@ -160,7 +160,7 @@ async function genererBackupQuotidien(traitementFichier, pathConsignation, journ
   const jourBackup = new Date(journal.jour * 1000);
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
-  var resultat = await traitementFichier.sauvegarderJournalQuotidien(journal);
+  var resultat = await traitementFichierBackup.sauvegarderJournalQuotidien(journal);
   debug("Resultat sauvegarder journal quotidien : %O", resultat)
   const pathJournal = resultat.path;
   const nomJournal = path.basename(pathJournal);
@@ -282,7 +282,7 @@ async function genererBackupAnnuel(traitementFichier, pathConsignation, journal)
   const anneeBackup = new Date(journal.annee * 1000)
 
   // Sauvegarder journal annuel, sauvegarder en format .json.xz
-  var resultat = await traitementFichier.sauvegarderJournalAnnuel(journal)
+  var resultat = await traitementFichierBackup.sauvegarderJournalAnnuel(journal)
   debug("Resultat preparation catalogue annuel : %O", resultat)
   const pathJournal = resultat.pathJournal
   const nomJournal = path.basename(pathJournal)

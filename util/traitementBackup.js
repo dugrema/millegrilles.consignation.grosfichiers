@@ -224,4 +224,103 @@ class TraitementFichierBackup {
 
 }
 
-module.exports = {TraitementFichierBackup, formatterDateString};
+async function getListeDomaines(req, res, next) {
+  debug("Retourner la liste des domaines avec au moins un fichier de backup disponible")
+
+  try {
+    debug("Path consignation : %O", req.pathConsignation)
+    const domaines = await _identifierDomaines(req.pathConsignation.consignationPathBackup)
+    res.status(200).send({domaines})
+  } catch(err) {
+    console.error("getListeDomaines: Erreur\n%O", err)
+    res.sendStatus(500)
+  }
+
+}
+
+async function _identifierDomaines(pathRepertoireBackup) {
+  var settings = {
+    type: 'files',
+    fileFilter: [
+      '*_catalogue_*.json.xz',
+      '*_transactions_*.jsonl.xz',
+      `*_transactions_*.jsonl.xz.mgs1`,
+      `*.*_catalogue_*.json.xz`,
+      `*.*_transactions_*.jsonl.xz`,
+      `*.*_transactions_*.jsonl.xz.mgs1`,
+      `*_*.tar`,
+      `*.*_*.tar`,
+    ],
+  }
+
+  debug("Setings fichiers : %O", settings)
+
+  const fichiers = await new Promise((resolve, reject)=>{
+    // const fichiersCatalogue = [];
+    // const fichiersTransactions = [];
+
+    const fichiersBackup = []
+
+    readdirp(
+      pathRepertoireBackup,
+      settings,
+    )
+    .on('data', entry=>{
+      // debug(entry)
+
+      // Extraire le type de fichier (catalogue, transaction, fichier) et date
+      const nomFichierParts = entry.basename.split('_')
+      var sousdomaine = '', typeFichier = '', dateFichier = ''
+
+      if(nomFichierParts.length === 3) {
+        sousdomaine = nomFichierParts[0]
+        dateFichier = nomFichierParts[1]
+        if(dateFichier.length === 4) typeFichier = 'annuel'
+        if(dateFichier.length === 8) typeFichier = 'quotidien'
+      } else if(nomFichierParts.length === 4) {
+        sousdomaine = nomFichierParts[0]
+        typeFichier = nomFichierParts[1]
+        dateFichier = nomFichierParts[2]
+      }
+
+      if(typeFichier) {
+        const entreeBackup = {
+          ...entry,
+          sousdomaine, typeFichier, dateFichier
+        }
+
+        fichiersBackup.push(entreeBackup)
+      } else {
+        debug("Skip fichier %s", entry.path)
+      }
+
+    })
+    .on('error', err=>{
+      reject({err});
+    })
+    .on('end', ()=>{
+      // debug("Fini");
+      resolve(fichiersBackup);
+    });
+
+  })
+
+  var domaines = fichiers.map(item=>{
+    const nameSplit = item.basename.split('_')
+    const domaine = nameSplit[0]
+    // debug('Fichier %s = %s', item.basename, domaine)
+    return domaine
+  }).reduce((dict, item)=>{
+    // debug("Reduce, item: %s, dict : %O", item, dict)
+    dict[item] = true
+    return dict
+  }, {})
+
+  // debug("Liste fichiers de backup : %O\nDomaines : %O", fichiers, domaines)
+  domaines = Object.keys(domaines)
+  debug("Domaines de backup : %O", domaines)
+
+  return domaines
+}
+
+module.exports = {TraitementFichierBackup, formatterDateString, getListeDomaines};
