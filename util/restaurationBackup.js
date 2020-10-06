@@ -5,7 +5,7 @@ const path = require('path')
 const readdirp = require('readdirp')
 
 const { formatterDateString } = require('millegrilles.common/lib/js_formatters')
-const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers} = require('../util/traitementFichier');
+const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers, getFichiersDomaine} = require('../util/traitementFichier');
 const {pki, ValidateurSignature} = require('./pki')
 
 
@@ -596,77 +596,6 @@ class RestaurateurBackup {
   //   return erreurs;
   // }
 
-}
-
-async function getFichiersDomaine(domaine, pathRepertoireBackup) {
-
-  var settings = {
-    type: 'files',
-    fileFilter: [
-      `${domaine}_catalogue_*.json.xz`,
-      `${domaine}_transactions_*.jsonl.xz`,
-      `${domaine}_transactions_*.jsonl.xz.mgs1`,
-      `${domaine}.*_catalogue_*.json.xz`,
-      `${domaine}.*_transactions_*.jsonl.xz`,
-      `${domaine}.*_transactions_*.jsonl.xz.mgs1`,
-      `${domaine}_*.tar`,
-      `${domaine}.*_*.tar`,
-    ],
-  }
-
-  debug("Setings fichiers : %O", settings)
-
-  return new Promise((resolve, reject)=>{
-    // const fichiersCatalogue = [];
-    // const fichiersTransactions = [];
-
-    const fichiersBackup = []
-
-    readdirp(
-      pathRepertoireBackup,
-      settings,
-    )
-    .on('data', entry=>{
-      // debug(entry)
-
-      // Extraire le type de fichier (catalogue, transaction, fichier) et date
-      const nomFichierParts = entry.basename.split('_')
-      var sousdomaine = '', typeFichier = '', dateFichier = ''
-
-      if(nomFichierParts.length === 3) {
-        sousdomaine = nomFichierParts[0]
-        dateFichier = nomFichierParts[1]
-        if(dateFichier.length === 4) typeFichier = 'annuel'
-        if(dateFichier.length === 8) typeFichier = 'quotidien'
-      } else if(nomFichierParts.length === 4) {
-        sousdomaine = nomFichierParts[0]
-        typeFichier = nomFichierParts[1]
-        dateFichier = nomFichierParts[2]
-      }
-
-      if(typeFichier) {
-        const entreeBackup = {
-          ...entry,
-          sousdomaine, typeFichier, dateFichier
-        }
-
-        fichiersBackup.push(entreeBackup)
-      } else {
-        debug("Skip fichier %s", entry.path)
-      }
-
-    })
-    .on('error', err=>{
-      reject({err});
-    })
-    .on('end', ()=>{
-      // debug("Fini");
-      resolve(fichiersBackup);
-    });
-
-  });
-
-  if(err) throw err;
 }
 
 async function getStatFichierBackup(pathFichier, aggregation) {

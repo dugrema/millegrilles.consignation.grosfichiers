@@ -16,7 +16,7 @@ const {uuidToDate} = require('./UUIDUtils')
 const transformationImages = require('./transformationImages')
 const {pki, ValidateurSignature} = require('./pki')
 const { calculerHachageFichier } = require('./utilitairesHachage')
-const {PathConsignation, extraireTarFile, supprimerFichiers} = require('./traitementFichier')
+const {PathConsignation, extraireTarFile, supprimerFichiers, getFichiersDomaine} = require('./traitementFichier')
 const {traiterFichiersBackup, traiterGrosfichiers} = require('./processFichiersBackup')
 
 const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json')
@@ -229,7 +229,7 @@ async function getListeDomaines(req, res, next) {
 
   try {
     debug("Path consignation : %O", req.pathConsignation)
-    const domaines = await _identifierDomaines(req.pathConsignation.consignationPathBackup)
+    const domaines = await identifierDomaines(req.pathConsignation.consignationPathBackup)
     res.status(200).send({domaines})
   } catch(err) {
     console.error("getListeDomaines: Erreur\n%O", err)
@@ -238,80 +238,16 @@ async function getListeDomaines(req, res, next) {
 
 }
 
-async function _identifierDomaines(pathRepertoireBackup) {
-  var settings = {
-    type: 'files',
-    fileFilter: [
-      '*_catalogue_*.json.xz',
-      '*_transactions_*.jsonl.xz',
-      `*_transactions_*.jsonl.xz.mgs1`,
-      `*.*_catalogue_*.json.xz`,
-      `*.*_transactions_*.jsonl.xz`,
-      `*.*_transactions_*.jsonl.xz.mgs1`,
-      `*_*.tar`,
-      `*.*_*.tar`,
-    ],
-  }
+async function identifierDomaines(pathRepertoireBackup) {
 
-  debug("Setings fichiers : %O", settings)
+  const fichiers = await getFichiersDomaine('*', pathRepertoireBackup)
 
-  const fichiers = await new Promise((resolve, reject)=>{
-    // const fichiersCatalogue = [];
-    // const fichiersTransactions = [];
-
-    const fichiersBackup = []
-
-    readdirp(
-      pathRepertoireBackup,
-      settings,
-    )
-    .on('data', entry=>{
-      // debug(entry)
-
-      // Extraire le type de fichier (catalogue, transaction, fichier) et date
-      const nomFichierParts = entry.basename.split('_')
-      var sousdomaine = '', typeFichier = '', dateFichier = ''
-
-      if(nomFichierParts.length === 3) {
-        sousdomaine = nomFichierParts[0]
-        dateFichier = nomFichierParts[1]
-        if(dateFichier.length === 4) typeFichier = 'annuel'
-        if(dateFichier.length === 8) typeFichier = 'quotidien'
-      } else if(nomFichierParts.length === 4) {
-        sousdomaine = nomFichierParts[0]
-        typeFichier = nomFichierParts[1]
-        dateFichier = nomFichierParts[2]
-      }
-
-      if(typeFichier) {
-        const entreeBackup = {
-          ...entry,
-          sousdomaine, typeFichier, dateFichier
-        }
-
-        fichiersBackup.push(entreeBackup)
-      } else {
-        debug("Skip fichier %s", entry.path)
-      }
-
-    })
-    .on('error', err=>{
-      reject({err});
-    })
-    .on('end', ()=>{
-      // debug("Fini");
-      resolve(fichiersBackup);
-    });
-
-  })
-
+  // Extraire les sous domaines du nom des fichiers, grouper
   var domaines = fichiers.map(item=>{
     const nameSplit = item.basename.split('_')
     const domaine = nameSplit[0]
-    // debug('Fichier %s = %s', item.basename, domaine)
     return domaine
   }).reduce((dict, item)=>{
-    // debug("Reduce, item: %s, dict : %O", item, dict)
     dict[item] = true
     return dict
   }, {})
