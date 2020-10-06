@@ -27,6 +27,16 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     {name: 'catalogue', maxcount: 1},
   ]
 
+  // Backup interne (/backup)
+  router.put('/backup/domaine/:nomCatalogue',
+    (req, res, next)=>{debug("Backup domaine %s", req.params.nomCatalogue); next()},
+    // (req, res, next)=>{debug("Avant upload"); next()},
+    backupUpload.fields(backupFileFields),
+    // (req, res, next)=>{debug("Apres upload"); next()},
+    traiterUploadHoraire
+  )
+
+  // Backup externe (/fichier/backup)
   router.put('/fichiers/backup/domaine/*',
     // (req, res, next)=>{debug("Avant upload"); next()},
     backupUpload.fields(backupFileFields),

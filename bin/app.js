@@ -30,7 +30,10 @@ function initialiser() {
 
   app.use(express.static(path.join(__dirname, 'public')));
 
-  app.all('^/fichiers/backup/*', (req, res, next)=>{debug("BACKUP!"); next()}, InitialiserBackup());
+  const backup = InitialiserBackup()
+  app.all('^/backup/*', (req, res, next)=>{debug("BACKUP interne"); next()}, backup)
+
+  app.all('^/fichiers/backup/*', (req, res, next)=>{debug("BACKUP externe"); next()}, backup)
 
   app.all('^/fichiers/*', (req, res, next)=>{debug("FICHIERS!"); next()}, InitialiserGrosFichiers());
 
