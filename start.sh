@@ -17,7 +17,7 @@ export DEBUG=millegrilles.*
 
 # export SERVER_TYPE=https
 
-export IDMG=JPtGcNcFSkfSdw49YsDpQHKxqTHMitpbPZW17a2JC54T
+export IDMG=QME8SjhaCFySD9qBt1AikQ1U7WxieJY2xDg2JCMczJST
 # export DISABLE_SSL_AUTH=1
 
 npm start

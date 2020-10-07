@@ -163,50 +163,57 @@ class TraitementFichier {
   }
 
   async traiterPut(req) {
-    // Sauvegarde le fichier dans le repertoire de consignation local.
+    try {
+      // Sauvegarde le fichier dans le repertoire de consignation local.
+      const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
 
-    const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
+      // Le nom du fichier au complet, incluant path, est fourni dans fuuide.
+      const transactionFichier = JSON.parse(req.body['transaction-fichier'])
+      const transactionChiffrage = JSON.parse(req.body['transaction-chiffrage'])
 
-    // Le nom du fichier au complet, incluant path, est fourni dans fuuide.
-    const transactionFichier = JSON.parse(req.body['transaction-fichier'])
-    const transactionChiffrage = JSON.parse(req.body['transaction-chiffrage'])
+      // Valider la signature de la transaction
+      // Injecter le certificat recu pour s'assurer qu'il est distribue
+      transactionFichier['_certificat'] = req.certificat
+      transactionChiffrage['_certificat'] = req.certificat
 
-    // Valider la signature de la transaction
-    // Injecter le certificat recu pour s'assurer qu'il est distribue
-    transactionFichier['_certificat'] = req.certificat
-    transactionChiffrage['_certificat'] = req.certificat
+      const transactionValideFichier = await this.rabbitMQ.pki.verifierSignatureMessage(transactionFichier)
+      const transactionValideChiffrage = await this.rabbitMQ.pki.verifierSignatureMessage(transactionChiffrage)
+      const hachageTransactionChiffrage = await this.rabbitMQ.pki.hacherTransaction(transactionChiffrage)
+      const hachageTransactionFichier = await this.rabbitMQ.pki.hacherTransaction(transactionFichier)
 
-    const transactionValideFichier = await this.rabbitMQ.pki.verifierSignatureMessage(transactionFichier)
-    const transactionValideChiffrage = await this.rabbitMQ.pki.verifierSignatureMessage(transactionChiffrage)
-    const hachageTransactionChiffrage = await this.rabbitMQ.pki.hacherTransaction(transactionChiffrage)
-    const hachageTransactionFichier = await this.rabbitMQ.pki.hacherTransaction(transactionFichier)
+      const hachageValideChiffrage = hachageTransactionChiffrage === transactionChiffrage['en-tete']['hachage-contenu']
+      const hachageValideFichier = hachageTransactionFichier === transactionFichier['en-tete']['hachage-contenu']
 
-    const hachageValideChiffrage = hachageTransactionChiffrage === transactionChiffrage['en-tete']['hachage-contenu']
-    const hachageValideFichier = hachageTransactionFichier === transactionFichier['en-tete']['hachage-contenu']
+      if( ! (transactionValideFichier && transactionValideChiffrage && hachageValideChiffrage && hachageValideFichier) ) {
+        throw new Error(`Erreur validation transactions. Fichier signature:${transactionValideFichier}/hachage:${hachageValideFichier}. Chiffrage signature:${transactionValideChiffrage}/hachage:${hachageValideChiffrage}`)
+      }
 
-    if( ! (transactionValideFichier && transactionValideChiffrage && hachageValideChiffrage && hachageValideFichier) ) {
-      throw new Error(`Erreur validation transactions. Fichier signature:${transactionValideFichier}/hachage:${hachageValideFichier}. Chiffrage signature:${transactionValideChiffrage}/hachage:${hachageValideChiffrage}`)
+      // console.debug(headers);
+      const fuuid = transactionFichier.fuuid
+      const encrypte = transactionFichier.securite === '3.protege'
+      const extension = path.parse(transactionFichier.nom_fichier).ext.replace('.', '')
+      const mimetype = transactionFichier.mimetype
+
+      let nouveauPathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension, mimetype});
+
+      // Creer le repertoire au besoin, puis deplacer le fichier (rename)
+      const hachage = await calculHachage(req, transactionFichier.hachage)
+
+      // Transmettre les transactions et deplacer le fichier
+      await deplacerFichier(req, nouveauPathFichier)
+      debug("Transmettre transaction chiffrage")
+      await this.rabbitMQ.transmettreEnveloppeTransaction(transactionChiffrage)
+      debug("Transmettre transaction fichier")
+      await this.rabbitMQ.transmettreEnveloppeTransaction(transactionFichier)
+
+      return({hachage})
+    } finally {
+      // Cleanup fichier upload
+      const fichierPath = req.file.path
+      fs.unlink(fichierPath, err=>{
+        if(err) console.error("Erreur unlink sous multer " + fichierPath)
+      })
     }
-
-    // console.debug(headers);
-    const fuuid = transactionFichier.fuuid
-    const encrypte = transactionFichier.securite === '3.protege'
-    const extension = path.parse(transactionFichier.nom_fichier).ext.replace('.', '')
-    const mimetype = transactionFichier.mimetype
-
-    let nouveauPathFichier = pathConsignation.trouverPathLocal(fuuid, encrypte, {extension, mimetype});
-
-    // Creer le repertoire au besoin, puis deplacer le fichier (rename)
-    const hachage = await calculHachage(req, transactionFichier.hachage)
-
-    // Transmettre les transactions et deplacer le fichier
-    await deplacerFichier(req, nouveauPathFichier)
-    debug("Transmettre transaction chiffrage")
-    await this.rabbitMQ.transmettreEnveloppeTransaction(transactionChiffrage)
-    debug("Transmettre transaction fichier")
-    await this.rabbitMQ.transmettreEnveloppeTransaction(transactionFichier)
-
-    return({hachage})
   }
 
 }
@@ -336,7 +343,7 @@ async function genererListeCatalogues(repertoire) {
 }
 
 async function calculHachage(req, hachage) {
-  new Promise((resolve, reject)=>{
+  return new Promise((resolve, reject)=>{
     // Deplacer le fichier
     const fichier = req.file
 
@@ -344,6 +351,7 @@ async function calculHachage(req, hachage) {
     const digester = crypto.createHash('sha512');
 
     fichierReadStream.on('data', data=>{
+      debug("DATA ! %d", data.length)
       digester.update(data)
     })
 
@@ -356,11 +364,10 @@ async function calculHachage(req, hachage) {
 
       // Verifier que le digest calcule correspond a celui recu
       if(digest !== hachage) {
-        return reject("Hachage fichier invalide pour fuuid : " + fichier.path)
+        return reject(new Error(`Hachage fichier invalide pour fuuid : ${fichier.path}\n${digest}\n${hachage}`))
       }
       resolve(digest)
     })
-
   })
 }
 
@@ -508,10 +515,50 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup) {
   if(err) throw err;
 }
 
+async function getGrosFichiersHoraire(pathRepertoireBackup) {
+
+  var settings = {
+    type: 'files',
+  }
+
+  debug("Path backup horaire : %s\nSetings fichiers : %O", pathRepertoireBackup, settings)
+
+  return new Promise((resolve, reject)=>{
+    // const fichiersCatalogue = [];
+    // const fichiersTransactions = [];
+
+    const fichiersBackup = []
+
+    readdirp(
+      pathRepertoireBackup,
+      settings,
+    )
+    .on('data', entry=>{
+      try {
+        const splitPath = entry.path.split('/')[4]
+        if(splitPath === 'grosfichiers') {
+          fichiersBackup.push(entry)
+        }
+      } catch(err) {
+        console.error("Erreur path fichiers : %s", ''+err)
+      }
+    })
+    .on('error', err=>{
+      reject({err});
+    })
+    .on('end', ()=>{
+      resolve(fichiersBackup);
+    });
+
+  });
+
+  if(err) throw err;
+}
+
 // Instances
 
 module.exports = {
   TraitementFichier, PathConsignation,
   extraireTarFile, supprimerRepertoiresVides, supprimerFichiers,
-  streamListeFichiers, getFichiersDomaine,
+  streamListeFichiers, getFichiersDomaine, getGrosFichiersHoraire,
 }

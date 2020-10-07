@@ -50,7 +50,15 @@ class GestionnaireMessagesBackup {
       },
       ['commande.backup.preparerStagingRestauration'],
       {operationLongue: true}
-    );
+    )
+
+    this.mq.routingKeyManager.addRoutingKeyCallback(
+      (routingKey, message, opts) => {
+        return this.restaurerGrosFichiers(routingKey, message, opts)
+      },
+      ['commande.backup.restaurerGrosFichiers'],
+      {operationLongue: true}
+    )
 
   }
 
@@ -148,6 +156,12 @@ class GestionnaireMessagesBackup {
     // this.mq.transmettreReponse(rapportRestauration, replyTo, correlationId)
 
     debug("Staging restauration complete")
+  }
+
+  async restaurerGrosFichiers(routingKey, message, opts) {
+    debug("Restaurer les grosfichiers a partir du repertoire backup")
+    const restaurateur = new RestaurateurBackup(this.mq)
+    restaurateur.restaurerGrosFichiersHoraire()
   }
 
 }

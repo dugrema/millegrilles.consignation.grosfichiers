@@ -5,7 +5,8 @@ const path = require('path')
 const readdirp = require('readdirp')
 
 const { formatterDateString } = require('millegrilles.common/lib/js_formatters')
-const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers, getFichiersDomaine} = require('../util/traitementFichier');
+const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers,
+        getFichiersDomaine, getGrosFichiersHoraire } = require('../util/traitementFichier')
 const {pki, ValidateurSignature} = require('./pki')
 
 
@@ -37,14 +38,52 @@ class RestaurateurBackup {
     const fichiers = await getFichiersDomaine(domaine, pathRepertoireBackup)
     sortFichiers(fichiers)  // Trier fichiers pour traitement stream
 
-    debug("Fichiers du backup : %O", fichiers)
-
     // Conserver parametres pour middleware streamListeFichiers
     res.pathRacineFichiers = pathRepertoireBackup
     res.listeFichiers = fichiers.map(item=>{
       return item.path
     })
+
+    debug("Fichiers du backup : %O", res.listeFichiers)
+
     next()
+
+  }
+
+  async restaurerGrosFichiersHoraire() {
+    // Effectue un hard link de tous les grosfichiers sous /horaire vers /local
+    const grosFichiers = await getGrosFichiersHoraire(this.pathBackupHoraire)
+    debug("Liste grosfichiers\n%O", grosFichiers)
+
+    const pathLocal = this.pathConsignation.consignationPathLocal
+
+    // Caculer le path pour chaque fichier (avec le fuuid) puis faire un
+    // hard link ou le copier si le fichier n'existe pas deja
+    for(let idx in grosFichiers) {
+      const item = grosFichiers[idx]
+
+      const nomFichierSplit = item.basename.split('.')
+      const chiffre = nomFichierSplit[1] === 'mgs1',
+            extension = nomFichierSplit[1]
+      const pathFichier = this.pathConsignation.trouverPathLocal(nomFichierSplit[0], chiffre, {extension})
+      const basedir = path.dirname(pathFichier)
+
+      debug("Path fichier : %s", pathFichier)
+
+      // Creer hard link ou copier fichier
+      await new Promise((resolve, reject)=>{
+        fs.mkdir(basedir, { recursive: true, mode: 0o770 }, (err)=>{
+          if(err) return reject(err)
+          fs.link(item.fullPath, pathFichier, e=>{
+            if(e) return reject(e)
+            resolve()
+          })
+        })
+      })
+      .catch(err=>{
+        console.error("Erreur link grosfichier backup : %s\n%O", item.fullPath, err)
+      })
+    }
 
   }
 

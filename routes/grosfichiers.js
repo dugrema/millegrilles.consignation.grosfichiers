@@ -15,7 +15,7 @@ function InitialiserGrosFichiers() {
 
   const bodyParserInstance = bodyParser.urlencoded({ extended: false })
 
-  router.get('^/fichiers/*/:fuuid', downloadFichierLocal, pipeReponse)
+  router.get('^/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
 
   // router.post('*', bodyParserInstance, downloadFichierLocalChiffre)
 

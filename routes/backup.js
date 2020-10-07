@@ -41,28 +41,17 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
 
   router.use(backupMiddleware)
 
-  // Backup interne (/backup)
-  router.get('/backup/listeDomaines', getListeDomaines)
+  // Backup (upload)
   router.put('/backup/domaine/:nomCatalogue',
     backupUpload.fields(backupFileFields),
     traiterUploadHoraire
   )
 
-  // Backup externe (/fichier/backup)
-  router.get('/fichiers/backup/listeDomaines', getListeDomaines)
-  router.put('/fichiers/backup/domaine/*',
-    // (req, res, next)=>{debug("Avant upload"); next()},
-    backupUpload.fields(backupFileFields),
-    // (req, res, next)=>{debug("Apres upload"); next()},
-    traiterUploadHoraire
-  )
+  router.get('/backup/listeDomaines', getListeDomaines)
 
-  // Path de download des fichiers de backup horaires
-  router.get('/fichiers/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
-  router.get('/fichiers/backup/:aggregation(horaire)/:type(transactions)/:pathFichier(*)', getFichierBackup)
-  router.get('/fichiers/backup/:aggregation(horaire)/:type(catalogues)/:pathFichier(*)', getFichierBackup)
-
-  router.get('/fichiers/backup/backup.tar', getFichierTar)
+  // Path de download des fichiers de backup
+  router.get('/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
+  router.get('/backup/backup.tar', getFichierTar)
 
   return router
 }

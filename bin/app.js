@@ -24,38 +24,27 @@ function initialiser() {
     next()
   })
 
-  app.use(express.json());
+  app.use(express.json())
 
-  app.use(express.urlencoded({ extended: false }));
+  app.use(express.urlencoded({ extended: false }))
 
-  app.use(express.static(path.join(__dirname, 'public')));
+  app.use(express.static(path.join(__dirname, 'public')))
 
   const backup = InitialiserBackup()
-  app.all('^/backup/*', (req, res, next)=>{debug("BACKUP interne"); next()}, backup)
-
-  app.all('^/fichiers/backup/*', (req, res, next)=>{debug("BACKUP externe"); next()}, backup)
-
-  app.all('^/fichiers/*', (req, res, next)=>{debug("FICHIERS!"); next()}, InitialiserGrosFichiers());
+  app.all('^/backup/*', (req, res, next)=>{debug("BACKUP"); next()}, backup)
+  app.all('^/fichiers/*', (req, res, next)=>{debug("FICHIERS"); next()}, InitialiserGrosFichiers())
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {
     console.error("Ressource inconnue");
     res.sendStatus(404);
-  });
+  })
 
   // error handler
   app.use(function(err, req, res, next) {
-    // set locals, only providing error in development
-    // res.locals.message = err.message;
-    // res.locals.error = req.app.get('env') === 'development' ? err : {};
-    //
-    // // render the error page
-    // res.status(err.status || 500);
-    // res.render('error');
-    console.error("Erreur generique");
-    console.error(err);
+    console.error("Erreur generique\n%O", err);
     res.sendStatus(err.status || 500);
-  });
+  })
 
   return app;
 }
