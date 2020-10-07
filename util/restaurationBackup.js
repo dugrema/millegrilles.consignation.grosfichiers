@@ -55,36 +55,11 @@ class RestaurateurBackup {
     const grosFichiers = await getGrosFichiersHoraire(this.pathBackupHoraire)
     debug("Liste grosfichiers\n%O", grosFichiers)
 
-    const pathLocal = this.pathConsignation.consignationPathLocal
+    const listeGrosFichiers = grosFichiers.map(item=>{
+      return item.fullPath
+    })
 
-    // Caculer le path pour chaque fichier (avec le fuuid) puis faire un
-    // hard link ou le copier si le fichier n'existe pas deja
-    for(let idx in grosFichiers) {
-      const item = grosFichiers[idx]
-
-      const nomFichierSplit = item.basename.split('.')
-      const chiffre = nomFichierSplit[1] === 'mgs1',
-            extension = nomFichierSplit[1]
-      const pathFichier = this.pathConsignation.trouverPathLocal(nomFichierSplit[0], chiffre, {extension})
-      const basedir = path.dirname(pathFichier)
-
-      debug("Path fichier : %s", pathFichier)
-
-      // Creer hard link ou copier fichier
-      await new Promise((resolve, reject)=>{
-        fs.mkdir(basedir, { recursive: true, mode: 0o770 }, (err)=>{
-          if(err) return reject(err)
-          fs.link(item.fullPath, pathFichier, e=>{
-            if(e) return reject(e)
-            resolve()
-          })
-        })
-      })
-      .catch(err=>{
-        console.error("Erreur link grosfichier backup : %s\n%O", item.fullPath, err)
-      })
-    }
-
+    return restaurerListeGrosFichiers(listeGrosFichiers, this.pathConsignation)
   }
 
   // // Extrait tous les fichiers .tar.xz d'un repertoire vers la destination
@@ -696,6 +671,41 @@ function sortFichiers(fichiers) {
 
     return compare
   })
+}
+
+async function restaurerListeGrosFichiers(listeGrosFichiers, pathConsignation) {
+
+  // Caculer le path pour chaque fichier (avec le fuuid) puis faire un
+  // hard link ou le copier si le fichier n'existe pas deja
+  for(let idx in listeGrosFichiers) {
+    const fullPath = listeGrosFichiers[idx]
+
+    const basename = path.basename(fullPath),
+          extname = path.extname(fullPath)
+
+    const chiffre = extname === '.mgs1',
+          extension = extname.slice(1)
+    const nomfichierSansExtension = basename.replace(extname, '')
+    const pathFichier = pathConsignation.trouverPathLocal(nomfichierSansExtension, chiffre, {extension})
+    const basedir = path.dirname(pathFichier)
+
+    debug("Path fichier : %s", pathFichier)
+
+    // Creer hard link ou copier fichier
+    await new Promise((resolve, reject)=>{
+      fs.mkdir(basedir, { recursive: true, mode: 0o770 }, (err)=>{
+        if(err) return reject(err)
+        fs.link(fullPath, pathFichier, e=>{
+          if(e) return reject(e)
+          resolve()
+        })
+      })
+    })
+    .catch(err=>{
+      console.error("Erreur link grosfichier backup : %s\n%O", fullPath, err)
+    })
+  }
+
 }
 
 module.exports = { RestaurateurBackup };
