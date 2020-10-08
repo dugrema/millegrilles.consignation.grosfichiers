@@ -160,8 +160,35 @@ class GestionnaireMessagesBackup {
 
   async restaurerGrosFichiers(routingKey, message, opts) {
     debug("Restaurer les grosfichiers a partir du repertoire backup")
-    const restaurateur = new RestaurateurBackup(this.mq)
-    restaurateur.restaurerGrosFichiersHoraire()
+    const {correlationId, replyTo} = opts.properties
+
+    // Transmettre la reponse immediatement pour indiquer le debut du traitement
+    var reponse = {'action': 'debut_restauration', 'domaine': 'fichiers'}
+    this.mq.transmettreReponse(reponse, replyTo, correlationId)
+
+    try {
+      const restaurateur = new RestaurateurBackup(this.mq)
+
+      // Restaurer les fichiers deja extraits sous horaire
+      this.mq.emettreEvenement({action: 'debut_restauration', niveau: 'horaire', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
+      await restaurateur.restaurerGrosFichiersHoraire()
+
+      // Restaurer les fichiers dans les archives quotidiennes
+      this.mq.emettreEvenement({action: 'restauration_en_cours', niveau: 'quotidien', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
+      await restaurateur.restaurerGrosFichiersQuotidien()
+
+      // Restaurer les fichiers dans les archives annuelles
+      this.mq.emettreEvenement({action: 'restauration_en_cours', niveau: 'annuel', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
+      await restaurateur.restaurerGrosFichiersAnnuel()
+
+      this.mq.emettreEvenement({action: 'fin_restauration', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
+
+    } catch(err) {
+      console.error("restaurerGrosFichiers: Erreur\n%O", err)
+      const messageErreur = {'err': ''+err, 'domaine': 'fichiers'}
+      this.mq.emettreEvenement(messageErreur, 'evenement.backup.restaurationFichiers')
+    }
+
   }
 
 }

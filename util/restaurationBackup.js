@@ -20,7 +20,7 @@ class RestaurateurBackup {
     this.pki = mq.pki
 
     const idmg = this.pki.idmg;
-    this.pathConsignation = new PathConsignation({idmg});
+    this.pathConsignation = new PathConsignation({idmg})
 
     // Configuration optionnelle
     this.pathBackupHoraire = opts.backupHoraire || this.pathConsignation.consignationPathBackupHoraire;
@@ -60,6 +60,14 @@ class RestaurateurBackup {
     })
 
     return restaurerListeGrosFichiers(listeGrosFichiers, this.pathConsignation)
+  }
+
+  async restaurerGrosFichiersQuotidien() {
+
+  }
+
+  async restaurerGrosFichiersAnnuel() {
+
   }
 
   // // Extrait tous les fichiers .tar.xz d'un repertoire vers la destination
