@@ -180,4 +180,8 @@ function deplacerFichier(source, destination) {
   })
 }
 
-module.exports = {traiterFichiersBackup, traiterGrosfichiers}
+async function traiterFichiersApplication(transactionsCatalogue, fichierApplication, pathRepertoire) {
+  
+}
+
+module.exports = {traiterFichiersBackup, traiterGrosfichiers, traiterFichiersApplication}

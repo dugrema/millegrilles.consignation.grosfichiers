@@ -117,6 +117,12 @@ class PathConsignation {
     return pathBackup;
   }
 
+  trouverPathBackupApplication(nomApplication) {
+    const pathBackup = path.join(
+      this.consignationPathBackup, 'applications', nomApplication )
+    return pathBackup
+  }
+
   formatPathFichierTorrent(nomCollection) {
     return path.join(this.consignationPathManagedTorrents, nomCollection + '.torrent');
   }

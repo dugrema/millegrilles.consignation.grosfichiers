@@ -38,6 +38,10 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     {name: 'transactions', maxcount: 4},
     {name: 'catalogue', maxcount: 1},
   ]
+  const applicationFileFields = [
+    {name: 'transactions', maxcount: 4},
+    {name: 'archive', maxcount: 1},
+  ]
 
   router.use(backupMiddleware)
 
@@ -45,6 +49,11 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   router.put('/backup/domaine/:nomCatalogue',
     backupUpload.fields(backupFileFields),
     traiterUploadHoraire
+  )
+
+  router.put('/backup/application/:nomApplication',
+    backupUpload.fields(applicationFileFields),
+    traiterUploadApplication
   )
 
   router.get('/backup/listeDomaines', getListeDomaines)
@@ -95,6 +104,36 @@ async function traiterUploadHoraire(req, res, next) {
     }
 
   })
+
+}
+
+async function traiterUploadApplication(req, res, next) {
+  debug("Fichier application PUT : %s", req.url);
+
+  const idmg = req.autorisationMillegrille.idmg
+  const rabbitMQ = req.rabbitMQ
+  const traitementFichier = new TraitementFichierBackup(rabbitMQ);
+
+  try {
+    const msg = await traitementFichier.traiterPutApplication(req)
+    response = {...msg}
+    res.status(200).end(response)
+  } catch(err) {
+    console.error("Erreur traitement fichier %s : %O", req.url, err)
+    res.sendStatus(500)
+  } finally {
+    // Nettoyage des fichiers temporaires sous multer
+    try {
+      const fichiers = [...req.files.transactions, ...req.files.archive]
+      fichiers.forEach(file=>{
+        fs.unlink(file.path, err=>{
+          if(err) {console.warn("Erreur suppression fichier backup " + file.path)}
+        })
+      })
+    } catch(err) {
+      console.warn("Unlink fichiers non complete pour requete %s :\n%O", req.url, err)
+    }
+  }
 
 }
 

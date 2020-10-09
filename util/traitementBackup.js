@@ -17,7 +17,7 @@ const transformationImages = require('./transformationImages')
 const {pki, ValidateurSignature} = require('./pki')
 const { calculerHachageFichier } = require('./utilitairesHachage')
 const {PathConsignation, extraireTarFile, supprimerFichiers, getFichiersDomaine} = require('./traitementFichier')
-const {traiterFichiersBackup, traiterGrosfichiers} = require('./processFichiersBackup')
+const {traiterFichiersBackup, traiterGrosfichiers, traiterFichiersApplication} = require('./processFichiersBackup')
 
 const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json')
 const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json')
@@ -58,6 +58,32 @@ class TraitementFichierBackup {
     const fuuidDict = JSON.parse(req.body.fuuid_grosfichiers)
     if(fuuidDict && Object.keys(fuuidDict).length > 0) {
       await traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict)
+    }
+
+    return {fichiersDomaines}
+  }
+
+  async traiterPutApplication(req) {
+    debug("Body PUT traiterPutApplication : %O", req.body)
+
+    const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
+    const nomApplication = req.params.nomApplication
+
+    const pathRepertoire = pathConsignation.trouverPathBackupApplication(nomApplication)
+
+    const transactionsCatalogue = JSON.parse(req.body.transaction_maitredescles)
+    const transactionsMaitredescles = JSON.parse(req.body.transaction_maitredescles)
+    const fichierApplication = req.files.application[0]
+
+    // Deplacer les fichiers de backup vers le bon repertoire /backup
+    const fichiersDomaines = await traiterFichiersApplication(
+      transactionsCatalogue, fichierApplication, pathRepertoire)
+
+    // Transmettre cles du fichier de transactions
+    if(req.body.transaction_maitredescles) {
+      const transactionMaitreDesCles = JSON.parse(req.body.transaction_maitredescles)
+      debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
+      this.rabbitMQ.transmettreEnveloppeTransaction(transactionMaitreDesCles)
     }
 
     return {fichiersDomaines}
