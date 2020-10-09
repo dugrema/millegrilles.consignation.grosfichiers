@@ -71,22 +71,14 @@ class TraitementFichierBackup {
 
     const pathRepertoire = pathConsignation.trouverPathBackupApplication(nomApplication)
 
-    const transactionsCatalogue = JSON.parse(req.body.transaction_maitredescles)
+    const transactionsCatalogue = JSON.parse(req.body.catalogue)
     const transactionsMaitredescles = JSON.parse(req.body.transaction_maitredescles)
     const fichierApplication = req.files.application[0]
 
     // Deplacer les fichiers de backup vers le bon repertoire /backup
-    const fichiersDomaines = await traiterFichiersApplication(
-      transactionsCatalogue, fichierApplication, pathRepertoire)
-
-    // Transmettre cles du fichier de transactions
-    if(req.body.transaction_maitredescles) {
-      const transactionMaitreDesCles = JSON.parse(req.body.transaction_maitredescles)
-      debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
-      this.rabbitMQ.transmettreEnveloppeTransaction(transactionMaitreDesCles)
-    }
-
-    return {fichiersDomaines}
+    const amqpdao = req.rabbitMQ
+    await traiterFichiersApplication(
+      amqpdao, transactionsCatalogue, transactionsMaitredescles, fichierApplication, pathRepertoire)
   }
 
   // async sauvegarderJournalQuotidien(journal) {

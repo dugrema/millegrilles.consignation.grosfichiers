@@ -1,3 +1,4 @@
+const debug = require('debug')('millegrilles:util:processFichiersBackup')
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto');
@@ -180,8 +181,94 @@ function deplacerFichier(source, destination) {
   })
 }
 
-async function traiterFichiersApplication(transactionsCatalogue, fichierApplication, pathRepertoire) {
-  
+async function traiterFichiersApplication(
+  amqpdao, transactionCatalogue, transactionMaitreDesCles, fichierApplication, pathBackupApplication) {
+  debug("traiterFichiersApplication, fichier tmp : %s\npath destination : %s", fichierApplication, pathBackupApplication)
+
+  const baseFolder = path.dirname(pathBackupApplication)
+
+  const nomApplication = transactionCatalogue.application
+
+  // Verifier hachage de l'archive de backup
+  const hachageCalcule = await calculerHachageFichier(fichierApplication.path)
+  const hachageRecu = transactionCatalogue.archive_hachage
+  if(hachageCalcule !== hachageRecu) {
+    console.error("Hachage recu: %s\nCalcule: %s", hachageRecu, hachageCalcule)
+    throw new Error("Mismatch hachage archive")
+  }
+
+  await new Promise((resolve, reject)=>{
+    fs.mkdir(baseFolder, { recursive: true, mode: 0o770 }, (erreurMkdir)=>{
+      if(erreurMkdir) {
+        console.error("Erreur mkdir : " + pathBackupApplication)
+        return reject({erreurMkdir})
+      }
+      resolve({})
+    })
+  })
+
+  // Transmettre la transaction de maitredescles
+  debug("Transmettre cles du fichier de backup application : %O", transactionMaitreDesCles)
+  await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+
+  // Sauvegarder fichiers application
+  await sauvegarderFichiersApplication(transactionCatalogue, fichierApplication, pathBackupApplication)
+
+  debug("Transmettre catalogue backup application : %O", transactionMaitreDesCles)
+  await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+
+  await rotationArchiveApplication(transactionCatalogue, pathBackupApplication)
+}
+
+async function rotationArchiveApplication(transactionCatalogue, pathBackupApplication) {
+  debug("Effectuer rotation des archives d'application")
+
+}
+
+async function sauvegarderFichiersApplication(transactionCatalogue, fichierApplication, pathBackupApplication) {
+  const nomArchive = transactionCatalogue.archive_nomfichier
+  const pathArchive = path.join(pathBackupApplication, nomArchive)
+
+  const nomCatalogue = transactionCatalogue.catalogue_nomfichier
+  const pathCatalogue = path.join(pathBackupApplication, nomCatalogue)
+
+  debug("Sauvegarder fichiers backup application\nArchive : %s\nCatalogue :%s", nomArchive, pathCatalogue)
+
+  // Deplacer fichier archive
+  await deplacerFichier(fichierApplication.path, pathArchive)
+
+  // Sauvegarder catalogue transaction
+  const catalogueJson = JSON.stringify(transactionCatalogue)
+  const writeStream = fs.createWriteStream(pathCatalogue)
+  writeStream.write(catalogueJson)
+
+}
+
+async function deplacerFichier(src, dst) {
+  debug("Deplacer fichier de %s a %s", src, dst)
+  return new Promise((resolve, reject) => {
+    fs.rename(src, dst, err=>{
+      if(err) {
+        if(err.code === 'EXDEV') {
+          // Rename non supporte, faire un copy et supprimer le fichier
+          fs.copyFile(src, dst, errCopy=>{
+            // Supprimer ancien fichier
+            fs.unlink(src, errUnlink=>{
+              if(errUnlink) {
+                console.error("Erreur deplacement, src non supprimee " + src)
+              }
+            })
+            if(errCopy) return reject(errCopy);
+            return resolve()
+          })
+        } else {
+         // Erreur irrecuperable
+          return reject(err)
+        }
+      }
+      resolve()
+    })
+  })
 }
 
 module.exports = {traiterFichiersBackup, traiterGrosfichiers, traiterFichiersApplication}

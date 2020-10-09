@@ -39,8 +39,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     {name: 'catalogue', maxcount: 1},
   ]
   const applicationFileFields = [
-    {name: 'transactions', maxcount: 4},
-    {name: 'archive', maxcount: 1},
+    {name: 'application', maxcount: 1},
   ]
 
   router.use(backupMiddleware)
@@ -124,14 +123,14 @@ async function traiterUploadApplication(req, res, next) {
   } finally {
     // Nettoyage des fichiers temporaires sous multer
     try {
-      const fichiers = [...req.files.transactions, ...req.files.archive]
+      const fichiers = [...req.files.application]
       fichiers.forEach(file=>{
         fs.unlink(file.path, err=>{
-          if(err) {console.warn("Erreur suppression fichier backup " + file.path)}
+          // if(err) {console.warn("Erreur suppression fichier backup " + file.path)}
         })
       })
     } catch(err) {
-      console.warn("Unlink fichiers non complete pour requete %s :\n%O", req.url, err)
+      //console.warn("Unlink fichiers non complete pour requete %s :\n%O", req.url, err)
     }
   }
 
