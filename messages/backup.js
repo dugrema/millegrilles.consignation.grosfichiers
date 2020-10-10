@@ -299,7 +299,7 @@ async function genererBackupQuotidien(mq, traitementFichierBackup, pathConsignat
   const pathJournal = resultat.path
   const nomJournal = path.basename(pathJournal)
   // const pathRepertoireBackup = path.dirname(pathJournal)
-  fichiersInclure.unshit(nomJournal)  // Inserer comme premier fichier dans le .tar, permet traitement stream
+  fichiersInclure.unshift(nomJournal)  // Inserer comme premier fichier dans le .tar, permet traitement stream
 
   const pathArchive = pathConsignation.consignationPathBackupArchives
   // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
