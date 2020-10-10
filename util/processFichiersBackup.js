@@ -270,10 +270,10 @@ async function rotationArchiveApplication(transactionCatalogue, pathBackupApplic
     await new Promise((resolve, reject)=>{
       debug("Supprimer archive %s", pathBackupApplication)
       fs.unlink(path.join(pathBackupApplication, archivePath), err=>{
-        if(err) return reject(err)
+        if(err) console.error("rotationArchiveApplication: Erreur suppression fichier %s", archivePath)
         debug("Supprimer catalogue %s", pathBackupApplication)
         fs.unlink(path.join(pathBackupApplication, cataloguePath), err=>{
-          if(err) return reject(err)
+          if(err) console.error("rotationArchiveApplication: Erreur suppression fichier %s", cataloguePath)
           resolve()
         })
       })
