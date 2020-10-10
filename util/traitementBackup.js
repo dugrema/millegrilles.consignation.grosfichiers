@@ -81,41 +81,36 @@ class TraitementFichierBackup {
       amqpdao, transactionsCatalogue, transactionsMaitredescles, fichierApplication, pathRepertoire)
   }
 
-  // async sauvegarderJournalQuotidien(journal) {
-  //   const {domaine, securite, jour} = journal;
-  //
-  //   const dateJournal = new Date(jour*1000);
-  //   var repertoireBackup = this.pathConsignation.trouverPathBackupHoraire(dateJournal);
-  //   // Remonter du niveau heure a jour
-  //   repertoireBackup = path.dirname(repertoireBackup);
-  //
-  //   const dateFormattee = formatterDateString(dateJournal).slice(0, 8)  // Retirer heures
-  //
-  //   const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
-  //
-  //   const fullPathFichier = path.join(repertoireBackup, nomFichier);
-  //
-  //   // debug("Path fichier journal quotidien " + fullPathFichier);
-  //   var compressor = lzma.createCompressor();
-  //   var output = fs.createWriteStream(fullPathFichier);
-  //   compressor.pipe(output);
-  //
-  //   const promiseSauvegarde = new Promise((resolve, reject)=>{
-  //     output.on('close', ()=>{
-  //       resolve();
-  //     });
-  //     output.on('error', err=>{
-  //       reject(err);
-  //     })
-  //   });
-  //
-  //   compressor.write(JSON.stringify(journal));
-  //   compressor.end();
-  //   await promiseSauvegarde;
-  //
-  //   // debug("Fichier cree : " + fullPathFichier);
-  //   return {path: fullPathFichier, nomFichier, dateFormattee};
-  // }
+  async sauvegarderJournalQuotidien(journal) {
+    const {domaine, securite, jour} = journal
+
+    const dateJournal = new Date(jour*1000)
+    var repertoireBackup = this.pathConsignation.trouverPathBackupHoraire(dateJournal)
+
+    // Remonter du niveau heure a jour
+    repertoireBackup = path.dirname(repertoireBackup);
+
+    const dateFormattee = formatterDateString(dateJournal).slice(0, 8)  // Retirer heures
+    const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz"
+    const fullPathFichier = path.join(repertoireBackup, nomFichier)
+
+    // debug("Path fichier journal quotidien " + fullPathFichier);
+    var compressor = lzma.createCompressor()
+    var output = fs.createWriteStream(fullPathFichier)
+    compressor.pipe(output)
+
+    const promiseSauvegarde = new Promise((resolve, reject)=>{
+      output.on('close', ()=>{resolve()})
+      output.on('error', err=>{reject(err)})
+    })
+
+    compressor.write(JSON.stringify(journal))
+    compressor.end()
+    await promiseSauvegarde
+
+    // debug("Fichier cree : " + fullPathFichier);
+    return {path: fullPathFichier, nomFichier, dateFormattee}
+  }
 
   // async sauvegarderJournalAnnuel(journal) {
   //   const {domaine, securite, annee} = journal

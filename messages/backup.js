@@ -33,7 +33,7 @@ class GestionnaireMessagesBackup {
       },
       ['commande.backup.genererBackupQuotidien'],
       {operationLongue: true}
-    );
+    )
 
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
@@ -62,40 +62,33 @@ class GestionnaireMessagesBackup {
 
   }
 
-  genererBackupQuotidien(routingKey, message, opts) {
-    return new Promise( async (resolve, reject) => {
-      // console.debug("Generer backup quotidien");
-      // console.debug(message);
+  async genererBackupQuotidien(routingKey, message, opts) {
+    debug("Generer backup quotidien : %O", message);
 
-      try {
-        const informationArchive = await genererBackupQuotidien(
-          this.traitementFichierBackup, this.pathConsignation, message.catalogue)
-        const { fichiersInclure, pathRepertoireBackup } = informationArchive
-        delete informationArchive.fichiersInclure // Pas necessaire pour la transaction
-        delete informationArchive.pathRepertoireBackup // Pas necessaire pour la transaction
+    try {
+      const informationArchive = await genererBackupQuotidien(
+        this.traitementFichierBackup, this.pathConsignation, message.catalogue)
+      const { fichiersInclure, pathRepertoireBackup } = informationArchive
+      delete informationArchive.fichiersInclure // Pas necessaire pour la transaction
+      delete informationArchive.pathRepertoireBackup // Pas necessaire pour la transaction
 
-        // Finaliser le backup en retransmettant le journal comme transaction
-        // de backup quotidien
-        debug("Transmettre journal backup quotidien comme transaction de backup quotidien")
-        await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'Backup.nouvelle')
+      // Finaliser le backup en retransmettant le journal comme transaction
+      // de backup quotidien
+      debug("Transmettre journal backup quotidien comme transaction de backup quotidien")
+      await this.mq.transmettreEnveloppeTransaction(message.catalogue, 'Backup.nouvelle')
 
-        // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
-        debug("Transmettre transaction informationArchive :\n%O", informationArchive)
+      // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
+      debug("Transmettre transaction informationArchive :\n%O", informationArchive)
 
-        await this.mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo')
+      await this.mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo')
 
-        // Effacer les fichiers transferes dans l'archive quotidienne
-        await supprimerFichiers(fichiersInclure, pathRepertoireBackup)
-        await supprimerRepertoiresVides(this.pathConsignation.consignationPathBackupHoraire)
+      // Effacer les fichiers transferes dans l'archive quotidienne
+      await supprimerFichiers(fichiersInclure, pathRepertoireBackup)
+      await supprimerRepertoiresVides(this.pathConsignation.consignationPathBackupHoraire)
 
-      } catch (err) {
-        console.error("Erreur creation backup quotidien:\n%O", err)
-        return reject(err)
-      }
-
-      // console.debug("Backup quotidien termine");
-      resolve();
-    });
+    } catch (err) {
+      console.error("genererBackupQuotidien: Erreur creation backup quotidien:\n%O", err)
+    }
 
   }
 
@@ -194,7 +187,7 @@ class GestionnaireMessagesBackup {
 }
 
 // Genere un fichier de backup quotidien qui correspond au journal
-async function genererBackupQuotidien(traitementFichier, pathConsignation, journal) {
+async function genererBackupQuotidien(traitementFichierBackup, pathConsignation, journal) {
   debug("genererBackupQuotidien : journal \n%O", journal)
 
   const {domaine, securite} = journal;
@@ -213,8 +206,8 @@ async function genererBackupQuotidien(traitementFichier, pathConsignation, journ
   debug("Path repertoire archive quotidienne : %s", pathArchiveQuotidienneRepertoire)
   await new Promise((resolve, reject)=>{
     fs.mkdir(pathArchiveQuotidienneRepertoire, { recursive: true, mode: 0o770 }, err=>{
-      if(err) return reject(err);
-      resolve();
+      if(err) return reject(err)
+      resolve()
     })
   })
 
@@ -223,7 +216,7 @@ async function genererBackupQuotidien(traitementFichier, pathConsignation, journ
   debug("Path archive quotidienne : %s", pathArchiveQuotidienne)
 
   // Faire liste des fichiers de catalogue et transactions a inclure.
-  var fichiersInclure = [nomJournal];
+  var fichiersInclure = [nomJournal]
 
   for(let heureStr in journal.fichiers_horaire) {
     let infoFichier = journal.fichiers_horaire[heureStr]
