@@ -50,6 +50,58 @@ class RestaurateurBackup {
 
   }
 
+  async restaurerApplication(req, res, next) {
+    const nomApplication = req.params.nomApplication
+    const pathRepertoireApplications = this.pathConsignation.trouverPathBackupApplication(nomApplication)
+
+    debug("restaurerApplication : Recherche catalogues sous %s", pathRepertoireApplications)
+
+    // Trouver le catalogue le plus recent
+    // Charger tous les catalogues, trier par date
+    var settings = {type: 'files', fileFilter: ['*_catalogue_*.json']}
+
+    const cataloguesPromises = await new Promise((resolve, reject)=>{
+      const catalogues = []
+      readdirp(pathRepertoireApplications, settings)
+      .on('data', entry =>{
+        const promiseReadFile = new Promise((resolve, reject)=>{
+          fs.readFile(entry.fullPath, (err, data)=>{
+            if(err) return reject(err)
+            try {resolve(JSON.parse(data))}
+            catch(err) {reject(err)}
+          })
+        })
+        catalogues.push(promiseReadFile)
+      })
+      .on('error', err => reject(err))
+      .on('end', _  => resolve(catalogues))
+    })
+
+    // Verifier si on a au moins un catalogue
+    if(cataloguesPromises.length === 0) {
+      return res.sendStatus(404)
+    }
+
+    // Attendre le chargement de tous les catalogues
+    const catalogues = await Promise.all(cataloguesPromises)
+
+    // Trier les catalogues par date
+    catalogues.sort((a,b)=>{return b['en-tete'].estampille - a['en-tete'].estampille})
+
+    const catalogueApplication = catalogues[0]  // Garder le plus recent
+
+    const pathArchive = path.join(pathRepertoireApplications, catalogueApplication.archive_nomfichier)
+
+    res.set({
+      archive_hachage: catalogueApplication.archive_hachage,
+      archive_nomfichier: catalogueApplication.archive_nomfichier,
+      archive_epoch: catalogueApplication['en-tete'].estampille,
+    })
+
+    // Stream
+    res.status(200).sendFile(pathArchive)
+  }
+
   async restaurerGrosFichiersHoraire() {
     // Effectue un hard link de tous les grosfichiers sous /horaire vers /local
     const grosFichiers = await getGrosFichiersHoraire(this.pathBackupHoraire)

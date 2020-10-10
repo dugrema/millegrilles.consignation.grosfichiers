@@ -59,6 +59,8 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
 
   // Path de download des fichiers de backup
   router.get('/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
+  router.get('/backup/application/:nomApplication', restaurerApplication)
+
   router.get('/backup/backup.tar', getFichierTar)
 
   return router
@@ -148,15 +150,28 @@ async function restaurerDomaine(req, res, next) {
 
   // console.debug("Retourner la liste des backups horaires");
   try {
-    const idmg = req.autorisationMillegrille.idmg
     const rabbitMQ = req.rabbitMQ
     const traitementFichier = new RestaurateurBackup(rabbitMQ)
     await traitementFichier.restaurerDomaine(req, res, next)
   } catch(err) {
-    console.error(`Erreur restauration domaine ${req.query.nomDomaine}\n%O`, err)
+    console.error(`Erreur restauration domaine ${req.params.domaine}\n%O`, err)
     res.sendStatus(500)
   }
 
+}
+
+async function restaurerApplication(req, res, next) {
+  const nomApplication = req.params.nomApplication
+  debug("restaurerApplication : %s", nomApplication)
+
+  try {
+    const rabbitMQ = req.rabbitMQ
+    const traitementFichier = new RestaurateurBackup(rabbitMQ)
+    await traitementFichier.restaurerApplication(req, res, next)
+  } catch(err) {
+    console.error(`Erreur restauration application ${req.params.nomApplication}\n%O`, err)
+    res.sendStatus(500)
+  }
 }
 
 async function getFichierBackup(req, res, next) {
