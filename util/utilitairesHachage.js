@@ -33,4 +33,17 @@ async function calculerHachageFichier(pathFichier, opts) {
   }
 }
 
-module.exports = { calculerHachageFichier }
+function calculerHachageData(data, opts) {
+  if(!opts) opts = {}
+  let fonctionHash = opts.fonctionHash || 'sha512'
+  fonctionHash = fonctionHash.split('_')[0]  // Enlever _b64 si present
+
+  // Calculer SHA512 sur fichier de backup
+  const sha = crypto.createHash(fonctionHash);
+  sha.update(data)
+
+  const digest = sha.digest('base64')
+  return fonctionHash + '_b64:' + digest
+}
+
+module.exports = { calculerHachageFichier, calculerHachageData }

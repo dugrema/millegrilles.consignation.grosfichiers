@@ -2,12 +2,13 @@ const debug = require('debug')('millegrilles:messages:backup')
 const fs = require('fs')
 const path = require('path')
 const tar = require('tar')
+const lzma = require('lzma-native')
 
 // const { spawn } = require('child_process');
 const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers} = require('../util/traitementFichier');
 const { TraitementFichierBackup } = require('../util/traitementBackup')
 const { RestaurateurBackup } = require('../util/restaurationBackup')
-const { calculerHachageFichier } = require('../util/utilitairesHachage')
+const { calculerHachageFichier, calculerHachageData } = require('../util/utilitairesHachage')
 
 class GestionnaireMessagesBackup {
 
@@ -79,7 +80,6 @@ class GestionnaireMessagesBackup {
 
       // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
       debug("Transmettre transaction informationArchive :\n%O", informationArchive)
-
       await this.mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo')
 
       // Effacer les fichiers transferes dans l'archive quotidienne
@@ -228,8 +228,30 @@ async function genererBackupQuotidien(traitementFichierBackup, pathConsignation,
     let fichierTransactions = path.join(heureStr, infoFichier.transactions_nomfichier);
 
     // Verifier SHA512
-    const sha512Catalogue = await calculerHachageFichier(path.join(pathRepertoireBackup, fichierCatalogue));
-    if(sha512Catalogue != infoFichier.catalogue_hachage) {
+    const pathFichierCatalogue = path.join(pathRepertoireBackup, fichierCatalogue)
+    const sha512Catalogue = await calculerHachageFichier(pathFichierCatalogue)
+    if( ! infoFichier.catalogue_hachage ) {
+      console.warn("genererBackupQuotidien: Hachage manquant pour catalogue horaire %s, on cree l'entree au vol", fichierCatalogue)
+      // Il manque de l'information pour l'archive quotidienne, on insere les valeurs maintenant
+      await new Promise((resolve, reject)=>{
+        fs.readFile(pathFichierCatalogue, (err, data)=>{
+          if(err) return reject(err)
+          try {
+            var compressor = lzma.LZMA().decompress(data, (data, err)=>{
+              if(err) return reject(err)
+              const catalogueDict = JSON.parse(data)
+              infoFichier.catalogue_hachage = sha512Catalogue
+              infoFichier.hachage_entete = calculerHachageData(catalogueDict['en-tete']['hachage-contenu'])
+              infoFichier['uuid-transaction'] = catalogueDict['en-tete']['uuid-transaction']
+              debug("genererBackupQuotidien: Hachage calcule : %O", infoFichier)
+              resolve()
+            })
+          } catch(err) {
+            reject(err)
+          }
+        })
+      })
+    } else if(sha512Catalogue != infoFichier.catalogue_hachage) {
       throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au hachage`;
     }
 
