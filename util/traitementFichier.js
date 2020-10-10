@@ -230,44 +230,18 @@ class TraitementFichier {
 }
 
 async function supprimerFichiers(fichiers, repertoire) {
-  // console.debug(`Supprimer fichiers sous ${repertoire}`);
-  // console.debug(fichiers);
-
-  var resultat = await new Promise((resolve, reject)=>{
-
-    var compteur = 0;
-    function supprimer(idx) {
-      if(idx == fichiers.length) {
-        return resolve({});
-      }
-
-      let fichier = fichiers[idx];
-
-      if(repertoire) {
-        fichier = path.join(repertoire, fichier);
-      }
-
-      // console.debug(`Supprimer ${fichier}`);
-
+  var promises = fichiers.forEach(item=>{
+    return new Promise((resolve, reject)=>{
+      const fichier = path.join(repertoire, item);
       fs.unlink(fichier, err=>{
-        if(err) {
-          return reject(err);
-        }
-        else {
-          supprimer(idx+1)
-        }
-      });
-
-    }; supprimer(0);
-
+        console.error("Erreur suppression fichier : %O", err)
+        resolve()
+      })
+    })
   })
-  .catch(err=>{
-    return({err});
-  });
 
-  if(resultat.err) {
-    throw resultat.err;
-  }
+  // Attendre que tous les fichiers soient supprimes
+  return Promise.all(promises)
 }
 
 async function supprimerRepertoiresVides(repertoireBase) {
@@ -455,20 +429,33 @@ async function streamListeFichiers(req, res, next) {
   }
 }
 
-async function getFichiersDomaine(domaine, pathRepertoireBackup) {
+async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
+  if(!opts) opts = {}
+
+  // Ajuster le filtre de fichiers
+  const filterArchives = [
+    `${domaine}_*.tar`,
+    `${domaine}.*_*.tar`,
+  ]
+  const filterHoraire = [
+    `${domaine}_catalogue_*.json.xz`,
+    `${domaine}_transactions_*.jsonl.xz`,
+    `${domaine}_transactions_*.jsonl.xz.mgs1`,
+    `${domaine}.*_catalogue_*.json.xz`,
+    `${domaine}.*_transactions_*.jsonl.xz`,
+    `${domaine}.*_transactions_*.jsonl.xz.mgs1`,
+  ]
+  var fileFilter = []
+  if( ! opts.exclureHoraire ) {
+    fileFilter = [...fileFilter, ...filterHoraire]
+  }
+  if( ! opts.exclureArchives ) {
+    fileFilter = [...fileFilter, ...filterArchives]
+  }
 
   var settings = {
     type: 'files',
-    fileFilter: [
-      `${domaine}_catalogue_*.json.xz`,
-      `${domaine}_transactions_*.jsonl.xz`,
-      `${domaine}_transactions_*.jsonl.xz.mgs1`,
-      `${domaine}.*_catalogue_*.json.xz`,
-      `${domaine}.*_transactions_*.jsonl.xz`,
-      `${domaine}.*_transactions_*.jsonl.xz.mgs1`,
-      `${domaine}_*.tar`,
-      `${domaine}.*_*.tar`,
-    ],
+    fileFilter,
   }
 
   debug("Setings fichiers : %O", settings)
@@ -546,8 +533,9 @@ async function getGrosFichiersHoraire(pathRepertoireBackup) {
     )
     .on('data', entry=>{
       try {
-        const splitPath = entry.path.split('/')[4]
-        if(splitPath === 'grosfichiers') {
+        // Le fichiers doit etre sous un repertoire */grosfichiers/*
+        const splitPath = entry.path.split('/').filter(item=>item==='grosfichiers')
+        if(splitPath.length === 1) {
           fichiersBackup.push(entry)
         }
       } catch(err) {

@@ -3,6 +3,7 @@ const fs = require('fs')
 const { spawn } = require('child_process')
 const path = require('path')
 const readdirp = require('readdirp')
+const tar = require('tar')
 
 const { formatterDateString } = require('millegrilles.common/lib/js_formatters')
 const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers,
@@ -63,7 +64,33 @@ class RestaurateurBackup {
   }
 
   async restaurerGrosFichiersQuotidien() {
+    const pathConsignation = this.pathConsignation
+    const pathBackupArchives = this.pathBackupArchives
+    const pathStaging = this.pathConsignation.consignationPathBackupStaging
 
+    var fichiersArchives = await getFichiersDomaine('GrosFichiers', pathBackupArchives, {exclureHoraire: true})
+
+    // Eliminer les fichiers d'archives annuelles
+    fichiersArchives = fichiersArchives.filter(item=>item.typeFichier==='quotidien').map(item=>item.fullPath)
+
+    // Extraire les */grosfichiers/* de chaque archive .tar et refaire le lien sous /local
+    debug("Debut extraction archives quotidiens grosfichiers : %O", fichiersArchives)
+
+    for(let idx in fichiersArchives) {
+      const pathArchive = fichiersArchives[idx]
+      await extraireStagingArchive(pathArchive, pathStaging, async tmpPath => {
+        debug("Lien grosfichiers sous %O", tmpPath)
+        // Meme traitement que pour le repertoire horaire
+        const grosFichiers = await getGrosFichiersHoraire(tmpPath)
+        debug("Liste grosfichiers dans %s\n%O", pathArchive, grosFichiers)
+        const listeGrosFichiers = grosFichiers.map(item=>{
+          return item.fullPath
+        })
+        return restaurerListeGrosFichiers(listeGrosFichiers, pathConsignation)
+      })
+    }
+
+    debug("restaurerGrosFichiersQuotidien complete")
   }
 
   async restaurerGrosFichiersAnnuel() {
@@ -704,7 +731,9 @@ async function restaurerListeGrosFichiers(listeGrosFichiers, pathConsignation) {
       fs.mkdir(basedir, { recursive: true, mode: 0o770 }, (err)=>{
         if(err) return reject(err)
         fs.link(fullPath, pathFichier, e=>{
-          if(e) return reject(e)
+          if(e && e.code !== 'EEXIST') {
+            return reject(e)
+          }
           resolve()
         })
       })
@@ -714,6 +743,39 @@ async function restaurerListeGrosFichiers(listeGrosFichiers, pathConsignation) {
     })
   }
 
+}
+
+function extraireStagingArchive(pathArchive, pathStaging, cb) {
+  // Extrait une archive tar dans un repertoire, appelle le callback cb(tmpStagingDir) puis nettoie le staging
+
+  return new Promise((resolve, reject)=>{
+
+    const nomArchive = path.basename(pathArchive, '.tar')
+    const pathStagingArchive = path.join(pathStaging, nomArchive)
+
+    fs.mkdir(pathStagingArchive, {recursive: true, mode: 0o770}, async err => {
+      if(err) throw err
+      try {
+        if(err) throw err
+
+        await tar.x({
+          file: pathArchive,
+          C: pathStagingArchive,
+        })
+
+        // Appeler le callback avec repertoire temporaire, attendre traitement
+        await cb(pathStagingArchive)
+
+        resolve()
+      } catch(err) {
+        reject(err)
+      } finally {
+        fs.rmdir(pathStagingArchive, {recursive: true}, err=>{
+          if(err) console.error("extraireStagingArchive: Erreur nettoyage repertoire de staging : %O", err)
+        })
+      }
+    })
+  })
 }
 
 module.exports = { RestaurateurBackup };
