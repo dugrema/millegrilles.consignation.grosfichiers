@@ -195,28 +195,6 @@ async function genererBackupQuotidien(mq, traitementFichierBackup, pathConsignat
   const jourBackup = new Date(journal.jour * 1000)
   var repertoireBackup = pathConsignation.trouverPathBackupQuotidien(jourBackup)
 
-  // // Sauvegarder journal quotidien, sauvegarder en format .json.xz
-  // var resultat = await traitementFichierBackup.sauvegarderJournalQuotidien(journal);
-  // debug("Resultat sauvegarder journal quotidien : %O", resultat)
-  // const pathJournal = resultat.path;
-  // const nomJournal = path.basename(pathJournal);
-  // const pathRepertoireBackup = path.dirname(pathJournal);
-  //
-  // const pathArchive = pathConsignation.consignationPathBackupArchives
-  // // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
-  // const pathArchiveQuotidienneRepertoire = path.join(pathArchive, 'quotidiennes', domaine)
-  // debug("Path repertoire archive quotidienne : %s", pathArchiveQuotidienneRepertoire)
-  // await new Promise((resolve, reject)=>{
-  //   fs.mkdir(pathArchiveQuotidienneRepertoire, { recursive: true, mode: 0o770 }, err=>{
-  //     if(err) return reject(err)
-  //     resolve()
-  //   })
-  // })
-  //
-  // var nomArchive = [domaine, resultat.dateFormattee, securite + '.tar'].join('_')
-  // const pathArchiveQuotidienne = path.join(pathArchiveQuotidienneRepertoire, nomArchive)
-  // debug("Path archive quotidienne : %s", pathArchiveQuotidienne)
-
   // Faire liste des fichiers de catalogue et transactions a inclure.
   // var fichiersInclure = [nomJournal]
   var fichiersInclure = []
@@ -321,7 +299,7 @@ async function genererBackupQuotidien(mq, traitementFichierBackup, pathConsignat
   const pathJournal = resultat.path
   const nomJournal = path.basename(pathJournal)
   // const pathRepertoireBackup = path.dirname(pathJournal)
-  fichiersInclure.push(nomJournal)
+  fichiersInclure.unshit(nomJournal)  // Inserer comme premier fichier dans le .tar, permet traitement stream
 
   const pathArchive = pathConsignation.consignationPathBackupArchives
   // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
