@@ -114,9 +114,8 @@ async function traiterUploadApplication(req, res, next) {
   const traitementFichier = new TraitementFichierBackup(rabbitMQ);
 
   try {
-    const msg = await traitementFichier.traiterPutApplication(req)
-    response = {...msg}
-    res.status(200).end(response)
+    await traitementFichier.traiterPutApplication(req)
+    res.status(200).end()
   } catch(err) {
     console.error("Erreur traitement fichier %s : %O", req.url, err)
     res.sendStatus(500)

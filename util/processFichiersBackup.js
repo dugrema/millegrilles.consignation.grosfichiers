@@ -1,5 +1,6 @@
 const debug = require('debug')('millegrilles:util:processFichiersBackup')
 const fs = require('fs')
+const readdirp = require('readdirp')
 const path = require('path')
 const crypto = require('crypto');
 const { calculerHachageFichier } = require('./utilitairesHachage')
@@ -154,7 +155,7 @@ function deplacerFichier(source, destination) {
         if(err.code === 'EXDEV') {
           // Rename non supporte, faire un copy et supprimer le fichier
           fs.copyFile(source, destination, errCopy=>{
-            debug("Copie complete : %s", destination);
+            debug("Copie complete : %s", destination)
 
             // Supprimer ancien fichier
             fs.unlink(source, errUnlink=>{
@@ -214,14 +215,71 @@ async function traiterFichiersApplication(
   // Sauvegarder fichiers application
   await sauvegarderFichiersApplication(transactionCatalogue, fichierApplication, pathBackupApplication)
 
-  debug("Transmettre catalogue backup application : %O", transactionMaitreDesCles)
-  await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+  debug("Transmettre catalogue backup application : %O", transactionCatalogue)
+  await amqpdao.transmettreEnveloppeTransaction(transactionCatalogue)
 
   await rotationArchiveApplication(transactionCatalogue, pathBackupApplication)
 }
 
 async function rotationArchiveApplication(transactionCatalogue, pathBackupApplication) {
   debug("Effectuer rotation des archives d'application")
+
+  const settingsReaddirp = {
+    type: 'files',
+    fileFilter: [
+       '*.json',
+    ],
+  }
+
+  const listeCatalogues = await new Promise((resolve, reject)=>{
+    const listeCatalogues = [];
+    readdirp(pathBackupApplication, settingsReaddirp)
+    .on('data', entry=>{ listeCatalogues.push(entry.fullPath) })
+    .on('error', err=>{ reject(err) })
+    .on('end', ()=>{
+
+      const promisesCatalogue = listeCatalogues.map(async pathCatalogue => {
+        debug("Charger catalogue : %O", pathCatalogue)
+        return new Promise((resolve, reject) => {
+          const catalogue = fs.readFile(pathCatalogue, (err, data)=>{
+            if(err) return reject(err)
+            return resolve(JSON.parse(data))
+          })
+        })
+      })
+      const catalogues = Promise.all(promisesCatalogue)
+
+      resolve(catalogues)
+    })
+  })
+
+  // Faire le tri des catalogues en ordre descendant - on garde les N plus recents
+  listeCatalogues.sort((a,b)=>{
+    return b['en-tete'].estampille - a['en-tete'].estampille
+  })
+  debug("Liste catalogues trouves : %O", listeCatalogues.map(item=>item.catalogue_nomfichier))
+
+  // Supprimer les vieux fichiers
+  for(let idx in listeCatalogues) {
+    if(idx < 2) continue  // On garde 2 backups
+
+    const catalogue = listeCatalogues[idx]
+    const archivePath = catalogue.archive_nomfichier
+    const cataloguePath = catalogue.catalogue_nomfichier
+
+    await new Promise((resolve, reject)=>{
+      debug("Supprimer archive %s", pathBackupApplication)
+      fs.unlink(path.join(pathBackupApplication, archivePath), err=>{
+        if(err) return reject(err)
+        debug("Supprimer catalogue %s", pathBackupApplication)
+        fs.unlink(path.join(pathBackupApplication, cataloguePath), err=>{
+          if(err) return reject(err)
+          resolve()
+        })
+      })
+    })
+
+  }
 
 }
 
