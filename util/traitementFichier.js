@@ -31,7 +31,7 @@ class PathConsignation {
     // Sinon utilise un path generique sans IDMG
     var consignationPath = process.env.MG_CONSIGNATION_PATH || opts.consignationPath
     if(!consignationPath) {
-      consignationPath = '/var/opt/millegrilles/hebergement/consignation';
+      consignationPath = '/var/opt/millegrilles/consignation';
     }
     if(idmg) {
       consignationPath = path.join(consignationPath, idmg)
