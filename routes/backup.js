@@ -11,6 +11,10 @@ const {RestaurateurBackup} = require('../util/restaurationBackup')
 
 function backupMiddleware(req, res, next) {
   const rabbitMQ = req.rabbitMQ
+  if(!rabbitMQ) {
+    console.error('backupMiddleware: RabbitMQ non initialise')
+    return res.sendStatus(500)
+  }
 
   const traitementBackup = new TraitementFichierBackup(rabbitMQ)
   req.traitementBackup = traitementBackup

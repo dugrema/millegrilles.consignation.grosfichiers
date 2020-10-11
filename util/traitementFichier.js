@@ -29,15 +29,14 @@ class PathConsignation {
     // Les overrides sont via env MG_CONSIGNATION_PATH ou parametre direct opts.consignationPath
     // Si IDMG fournit, formatte path avec /var/opt/millegrilles/IDMG
     // Sinon utilise un path generique sans IDMG
-    var consignationPath = process.env.MG_CONSIGNATION_PATH || opts.consignationPath;
+    var consignationPath = process.env.MG_CONSIGNATION_PATH || opts.consignationPath
     if(!consignationPath) {
-      if(idmg) {
-        consignationPath = path.join('/var/opt/millegrilles/consignation', idmg);
-      } else {
-        consignationPath = '/var/opt/millegrilles/hebergement/consignation';
-      }
+      consignationPath = '/var/opt/millegrilles/hebergement/consignation';
     }
-    console.info("Path fichiers : %s", consignationPath)
+    if(idmg) {
+      consignationPath = path.join(consignationPath, idmg)
+    }
+    debug("PathConsignation: Path fichiers : %s", consignationPath)
 
     // var consignationPath = opts.consignationPath || '/var/opt/millegrilles/mounts/consignation';
 
@@ -388,7 +387,7 @@ async function streamListeFichiers(req, res, next) {
 
     // Creer une archive .tar de backup avec les repertoires de fichiers
     // horaire, archive et instantanne
-    debug("Creer archive utilisant path %s", pathBackup)
+    debug("streamListeFichiers: Creer archive utilisant path %s", pathBackup)
 
     const downloadFileName = 'backup.tar'
 

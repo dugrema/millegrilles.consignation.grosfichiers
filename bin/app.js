@@ -21,6 +21,7 @@ function initialiser() {
     const idmg = req.autorisationMillegrille.idmg
     const rabbitMQ = req.fctRabbitMQParIdmg(idmg)
     req.rabbitMQ = rabbitMQ
+    req.amqpdao = rabbitMQ  // Nouvelle approche
     next()
   })
 
