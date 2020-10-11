@@ -96,6 +96,8 @@ class RestaurateurBackup {
       archive_hachage: catalogueApplication.archive_hachage,
       archive_nomfichier: catalogueApplication.archive_nomfichier,
       archive_epoch: catalogueApplication['en-tete'].estampille,
+      cle: catalogueApplication.cle,
+      iv: catalogueApplication.iv,
     })
 
     // Stream
