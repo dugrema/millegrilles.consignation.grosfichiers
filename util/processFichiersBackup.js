@@ -199,12 +199,13 @@ async function traiterFichiersApplication(
   }
 
   await new Promise((resolve, reject)=>{
-    fs.mkdir(baseFolder, { recursive: true, mode: 0o770 }, (erreurMkdir)=>{
+    fs.mkdir(pathBackupApplication, { recursive: true, mode: 0o770 }, (erreurMkdir)=>{
       if(erreurMkdir) {
         console.error("Erreur mkdir : " + pathBackupApplication)
         return reject({erreurMkdir})
       }
-      resolve({})
+      debug("Repertoire archive application cree : %s", pathBackupApplication)
+      resolve()
     })
   })
 
