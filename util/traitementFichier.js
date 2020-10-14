@@ -237,15 +237,17 @@ class TraitementFichier {
 }
 
 async function supprimerFichiers(fichiers, repertoire) {
-  var promises = fichiers.forEach(item=>{
+  var promises = fichiers.map(item=>{
     return new Promise((resolve, reject)=>{
       const fichier = path.join(repertoire, item);
       fs.unlink(fichier, err=>{
-        console.error("Erreur suppression fichier : %O", err)
+        console.error("traitementFichiers.supprimerFichiers: Erreur suppression fichier : %O", err)
         resolve()
       })
     })
   })
+
+  debug("%d fichiers a supprimer", promises.length)
 
   // Attendre que tous les fichiers soient supprimes
   return Promise.all(promises)
