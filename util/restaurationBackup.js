@@ -116,7 +116,7 @@ class RestaurateurBackup {
     return restaurerListeGrosFichiers(listeGrosFichiers, this.pathConsignation)
   }
 
-  async restaurerGrosFichiersQuotidien() {
+  async restaurerGrosFichiersArchives() {
     const pathConsignation = this.pathConsignation
     const pathBackupArchives = this.pathBackupArchives
     const pathStaging = this.pathConsignation.consignationPathBackupStaging
@@ -124,32 +124,61 @@ class RestaurateurBackup {
     var fichiersArchives = await getFichiersDomaine('GrosFichiers', pathBackupArchives, {exclureHoraire: true})
 
     // Eliminer les fichiers d'archives annuelles
-    fichiersArchives = fichiersArchives.filter(item=>item.typeFichier==='quotidien').map(item=>item.fullPath)
+    // fichiersArchives = fichiersArchives.filter(item=>item.typeFichier==='quotidien').map(item=>item.fullPath)
+    fichiersArchives = fichiersArchives.map(item=>item.fullPath)
 
     // Extraire les */grosfichiers/* de chaque archive .tar et refaire le lien sous /local
     debug("Debut extraction archives quotidiens grosfichiers : %O", fichiersArchives)
 
     for(let idx in fichiersArchives) {
       const pathArchive = fichiersArchives[idx]
-      await extraireStagingArchive(pathArchive, pathStaging, async tmpPath => {
-        debug("Lien grosfichiers sous %O", tmpPath)
-        // Meme traitement que pour le repertoire horaire
-        const grosFichiers = await getGrosFichiersHoraire(tmpPath)
-        debug("Liste grosfichiers dans %s\n%O", pathArchive, grosFichiers)
-        const listeGrosFichiers = grosFichiers.map(item=>{
-          return item.fullPath
-        })
-        return restaurerListeGrosFichiers(listeGrosFichiers, pathConsignation)
-      })
+      await extraireStagingArchive(pathArchive, this.pathConsignation, _traiterArchiveStaging)
     }
 
-    debug("restaurerGrosFichiersQuotidien complete")
+    debug("restaurerGrosFichiersArchives complete")
   }
 
-  async restaurerGrosFichiersAnnuel() {
+}
 
+async function _traiterArchiveStaging(nomArchive, pathConsignation, pathExtraction) {
+  debug("Lien grosfichiers %s sous %O", nomArchive, pathExtraction)
+
+  // Verifier si l'archive est niveau annuel ou quotidien
+  var splitNomArchive = nomArchive.split('_')
+  var dateArchive = splitNomArchive[1]
+  var niveauArchive = null
+
+  if(dateArchive.length === 8) {
+    debug("Traiter archive quotidienne extraite sous %s", pathExtraction)
+
+    // Meme traitement que pour le repertoire horaire
+    const grosFichiers = await getGrosFichiersHoraire(pathExtraction)
+    debug("Liste grosfichiers dans %s\n%O", pathExtraction, grosFichiers)
+    const listeGrosFichiers = grosFichiers.map(item=>{
+      return item.fullPath
+    })
+
+    return restaurerListeGrosFichiers(listeGrosFichiers, pathConsignation)
+
+  } else if(dateArchive.length === 4) {
+    debug("Traiter archive annuelle extraite sous %s", pathExtraction)
+
+    var fichiersArchives = await getFichiersDomaine('GrosFichiers', pathExtraction, {exclureHoraire: true})
+
+    // Eliminer les fichiers d'archives annuelles
+    fichiersArchives = fichiersArchives.map(item=>item.fullPath)
+
+    // Extraire les */grosfichiers/* de chaque archive .tar et refaire le lien sous /local
+    debug("Debut extraction archives quotidiens grosfichiers : %O", fichiersArchives)
+
+    for(let idx in fichiersArchives) {
+      const pathArchive = fichiersArchives[idx]
+      await extraireStagingArchive(pathArchive, pathConsignation, _traiterArchiveStaging)
+    }
+
+  } else {
+    throw new Error(`Niveau archive inconnu : ${nomArchive}`)
   }
-
 }
 
 async function getStatFichierBackup(pathFichier, aggregation) {
@@ -250,8 +279,9 @@ async function restaurerListeGrosFichiers(listeGrosFichiers, pathConsignation) {
 
 }
 
-function extraireStagingArchive(pathArchive, pathStaging, cb) {
+function extraireStagingArchive(pathArchive, pathConsignation, cb) {
   // Extrait une archive tar dans un repertoire, appelle le callback cb(tmpStagingDir) puis nettoie le staging
+  const pathStaging = pathConsignation.consignationPathBackupStaging
 
   return new Promise((resolve, reject)=>{
 
@@ -269,7 +299,7 @@ function extraireStagingArchive(pathArchive, pathStaging, cb) {
         })
 
         // Appeler le callback avec repertoire temporaire, attendre traitement
-        await cb(pathStagingArchive)
+        await cb(nomArchive, pathConsignation, pathStagingArchive)
 
         resolve()
       } catch(err) {

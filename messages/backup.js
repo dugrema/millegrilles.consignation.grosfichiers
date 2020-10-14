@@ -166,17 +166,13 @@ class GestionnaireMessagesBackup {
     try {
       const restaurateur = new RestaurateurBackup(this.mq)
 
-      // Restaurer les fichiers deja extraits sous horaire
-      this.mq.emettreEvenement({action: 'debut_restauration', niveau: 'horaire', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
-      await restaurateur.restaurerGrosFichiersHoraire()
-
-      // Restaurer les fichiers dans les archives quotidiennes
-      this.mq.emettreEvenement({action: 'restauration_en_cours', niveau: 'quotidien', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
-      await restaurateur.restaurerGrosFichiersQuotidien()
-
       // Restaurer les fichiers dans les archives annuelles
-      this.mq.emettreEvenement({action: 'restauration_en_cours', niveau: 'annuel', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
-      await restaurateur.restaurerGrosFichiersAnnuel()
+      this.mq.emettreEvenement({action: 'debut_restauration', niveau: 'archives', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
+      await restaurateur.restaurerGrosFichiersArchives()
+
+      // Restaurer les fichiers deja extraits sous horaire
+      this.mq.emettreEvenement({action: 'restauration_en_cours', niveau: 'horaire', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
+      await restaurateur.restaurerGrosFichiersHoraire()
 
       this.mq.emettreEvenement({action: 'fin_restauration', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
 
