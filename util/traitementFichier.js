@@ -121,6 +121,14 @@ class PathConsignation {
     return path.dirname(pathHoraire)
   }
 
+  trouverPathDomaineQuotidien(domaine) {
+    return path.join(this.consignationPathBackupArchives, 'quotidiennes', domaine)
+  }
+
+  trouverPathDomaineAnnuel(domaine) {
+    return path.join(this.consignationPathBackupArchives, 'annuelles', domaine)
+  }
+
   trouverPathBackupApplication(nomApplication) {
     const pathBackup = path.join(
       this.consignationPathBackup, 'applications', nomApplication )

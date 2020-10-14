@@ -112,42 +112,35 @@ class TraitementFichierBackup {
     return {path: fullPathFichier, nomFichier, dateFormattee}
   }
 
-  // async sauvegarderJournalAnnuel(journal) {
-  //   const {domaine, securite, annee} = journal
-  //
-  //   const dateJournal = new Date(annee*1000)
-  //   var repertoireBackup = this.pathConsignation.consignationPathBackupArchives
-  //
-  //   let year = dateJournal.getUTCFullYear();
-  //   const dateFormattee = "" + year;
-  //
-  //   const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
-  //
-  //   const fullPathFichier = path.join(repertoireBackup, 'quotidiennes', domaine, nomFichier);
-  //
-  //   // debug("Path fichier journal mensuel " + fullPathFichier);
-  //   var compressor = lzma.createCompressor();
-  //   var output = fs.createWriteStream(fullPathFichier);
-  //   compressor.pipe(output);
-  //
-  //   const promiseSauvegarde = new Promise((resolve, reject)=>{
-  //     output.on('close', ()=>{
-  //       resolve();
-  //     });
-  //     output.on('error', err=>{
-  //       reject(err);
-  //     })
-  //   });
-  //
-  //   compressor.write(JSON.stringify(journal));
-  //   compressor.end();
-  //   await promiseSauvegarde;
-  //
-  //   const sha512Journal = await calculerHachageFichier(fullPathFichier);
-  //
-  //   // debug("Fichier cree : " + fullPathFichier);
-  //   return {pathJournal: fullPathFichier, hachage: sha512Journal, dateFormattee};
-  // }
+  async sauvegarderJournalAnnuel(journal) {
+    const {domaine, securite, annee} = journal
+
+    const dateJournal = new Date(annee*1000)
+    var repertoireBackup = this.pathConsignation.trouverPathDomaineQuotidien(domaine)
+
+    let year = dateJournal.getUTCFullYear();
+    const dateFormattee = "" + year
+
+    const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
+
+    const fullPathFichier = path.join(repertoireBackup, nomFichier)
+
+    // debug("Path fichier journal mensuel " + fullPathFichier);
+    var compressor = lzma.createCompressor();
+    var output = fs.createWriteStream(fullPathFichier);
+    compressor.pipe(output);
+
+    const promiseSauvegarde = new Promise((resolve, reject)=>{
+      output.on('close', ()=>{resolve()});
+      output.on('error', err=>{reject(err)})
+    });
+
+    compressor.write(JSON.stringify(journal))
+    compressor.end()
+    await promiseSauvegarde
+
+    return {path: fullPathFichier, nomFichier, dateFormattee}
+  }
 
   // async getStatFichierBackup(pathFichier, aggregation) {
   //
