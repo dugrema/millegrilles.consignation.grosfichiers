@@ -191,8 +191,16 @@ class TraitementFichier {
       const hachageTransactionChiffrage = await this.rabbitMQ.pki.hacherTransaction(transactionChiffrage)
       const hachageTransactionFichier = await this.rabbitMQ.pki.hacherTransaction(transactionFichier)
 
-      const hachageValideChiffrage = hachageTransactionChiffrage === transactionChiffrage['en-tete']['hachage-contenu']
-      const hachageValideFichier = hachageTransactionFichier === transactionFichier['en-tete']['hachage-contenu']
+      const hachageTransactionChiffrageEntete = transactionChiffrage['en-tete']['hachage_contenu']
+      const hachageTransactionFichierEntete = transactionFichier['en-tete']['hachage_contenu']
+
+      debug("Hachage transaction chiffrage calcule : %O\nHachage chiffrage fichier entete : %O",
+        hachageTransactionChiffrage, hachageTransactionChiffrageEntete)
+      debug("Hachage transaction fichier calcule : %O\nHachage transaction fichier entete : %O",
+        hachageTransactionFichier, hachageTransactionFichierEntete)
+
+      const hachageValideChiffrage = hachageTransactionChiffrage === hachageTransactionChiffrageEntete
+      const hachageValideFichier = hachageTransactionFichier === hachageTransactionFichierEntete
 
       if( ! (transactionValideFichier && transactionValideChiffrage && hachageValideChiffrage && hachageValideFichier) ) {
         throw new Error(`Erreur validation transactions. Fichier signature:${transactionValideFichier}/hachage:${hachageValideFichier}. Chiffrage signature:${transactionValideChiffrage}/hachage:${hachageValideChiffrage}`)

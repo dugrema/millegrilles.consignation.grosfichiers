@@ -224,7 +224,7 @@ async function genererBackupQuotidien(mq, traitementFichierBackup, pathConsignat
               if(err) return reject(err)
               const catalogueDict = JSON.parse(data)
               infoFichier.catalogue_hachage = sha512Catalogue
-              infoFichier.hachage_entete = calculerHachageData(catalogueDict['en-tete']['hachage-contenu'])
+              infoFichier.hachage_entete = calculerHachageData(catalogueDict['en-tete']['hachage_contenu'])
               infoFichier['uuid-transaction'] = catalogueDict['en-tete']['uuid-transaction']
               debug("genererBackupQuotidien: Hachage calcule : %O", infoFichier)
               resolve()
