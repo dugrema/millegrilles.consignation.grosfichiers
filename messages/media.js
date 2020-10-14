@@ -58,9 +58,12 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
   const permission = message.permission
   var opts = {}
+  var securite = '2.prive'
   if(permission) {
     // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
     debug("Recu permission de dechiffrage, on transmet vers le maitre des cles")
+
+    securite = permission.securite || '3.protege'
 
     // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
     const chainePem = mq.pki.getChainePems()
@@ -98,6 +101,7 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
       cles: resultatPreview.clesChiffrees,
       iv: resultatPreview.iv,
       sujet: 'cles.grosFichiers',
+      securite,
     }
     mq.transmettreTransactionFormattee(transactionCles, domaineActionCles)
   }
@@ -107,9 +111,11 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
   const transactionAssocierPreview = {
     uuid: message.uuid,
     fuuid: message.fuuid,
+    securite,
     mimetype_preview: resultatPreview.mimetype,
     fuuid_preview: resultatPreview.fuuid,
     extension_preview: resultatPreview.extension,
+    hachage:resultatPreview.hachage,
   }
 
   if(resultatPreview.dataVideo) {

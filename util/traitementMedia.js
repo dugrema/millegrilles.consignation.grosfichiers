@@ -7,6 +7,8 @@ const uuidv1 = require('uuid/v1')
 const path = require('path')
 const fs = require('fs')
 
+const {calculerHachageFichier} = require('./utilitairesHachage')
+
 const decrypteur = new Decrypteur()
 
 // const crypto = require('crypto');
@@ -83,6 +85,10 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
       extension = resultatConversion.extension
     }
 
+    // Calculer hachage fichier
+    const hachage = await calculerHachageFichier(pathPreviewImage)
+    debug("Hachage nouveau preview/thumbnail : %s", hachage)
+
     // Changer extension fichier destination
     const fichierDestAvecExtension = pathPreviewImage + '.' + extension
     await new Promise((resolve, reject)=>{
@@ -96,6 +102,7 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     return {
       fuuid: fuuidPreviewImage,
       extension,
+      hachage,
       ...resultatConversion,
       ...resultatChiffrage
     }
