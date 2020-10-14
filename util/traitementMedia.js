@@ -102,7 +102,7 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     return {
       fuuid: fuuidPreviewImage,
       extension,
-      hachage,
+      hachage_preview: hachage,
       ...resultatConversion,
       ...resultatChiffrage
     }

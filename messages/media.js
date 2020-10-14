@@ -115,7 +115,7 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
     mimetype_preview: resultatPreview.mimetype,
     fuuid_preview: resultatPreview.fuuid,
     extension_preview: resultatPreview.extension,
-    hachage:resultatPreview.hachage,
+    hachage_preview: resultatPreview.hachage_preview,
   }
 
   if(resultatPreview.dataVideo) {
