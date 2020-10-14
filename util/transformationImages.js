@@ -1,8 +1,10 @@
-const fs = require('fs');
-const tmp = require('tmp-promise');
-const im = require('imagemagick');
-const FFmpeg = require('fluent-ffmpeg');
-const crypto = require('crypto');
+const debug = require('debug')('millegrilles:fichiers:transformationImages')
+const fs = require('fs')
+const path = require('path')
+const tmp = require('tmp-promise')
+const im = require('imagemagick')
+const crypto = require('crypto')
+const FFmpeg = require('fluent-ffmpeg')
 
 async function genererThumbnail(sourcePath, opts) {
   // Preparer fichier destination decrypte
@@ -93,7 +95,19 @@ function _imConvertPromise(params) {
 
 async function genererPreviewVideo(sourcePath, previewPath) {
   var dataVideo;
-  return await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
+    debug("Extraire preview du video %s vers %s", sourcePath, previewPath)
+
+    // S'assurer d'avoir un .jpg, c'est ce qui indique au convertisseur le format de sortie
+    var nomFichierDemande = path.basename(previewPath)
+    var nomFichierPreview = nomFichierDemande
+    if( ! nomFichierPreview.endsWith('.jpg') ) {
+      nomFichierPreview += '.jpg'
+    }
+    var folderPreview = path.dirname(previewPath)
+
+    debug("Fichier preview demande %s, temporaire : %s", nomFichierDemande, nomFichierPreview)
+
     new FFmpeg({ source: sourcePath })
       .on('error', function(err) {
           console.error('An error occurred: ' + err.message);
@@ -102,15 +116,27 @@ async function genererPreviewVideo(sourcePath, previewPath) {
       .on('codecData', data => {
         dataVideo = data;
       })
-      .on('end', function(filenames) {
-        // console.debug('Successfully generated thumbnail ' + previewPath);
-        // console.debug(dataVideo);
-        resolve({data_video: dataVideo});
+      .on('end', filenames => {
+        debug('Successfully generated thumbnail %s, filenames : %O ', previewPath, filenames);
+
+        debug("Copie de %s", nomFichierPreview)
+        if(nomFichierPreview !== nomFichierDemande) {
+          // Rename
+          fs.rename(path.join(folderPreview, nomFichierPreview), previewPath, err=>{
+            if(err) return reject(err)
+            resolve({data_video: dataVideo})
+          })
+        } else {
+          resolve({data_video: dataVideo})
+        }
       })
       .takeScreenshots(
         {
           count: 1,
-          filename: previewPath
+          timestamps: ['2%'],   // Prendre snapshot a 2% du debut du video
+          filename: nomFichierPreview,
+          folder: folderPreview,
+          size: '640x?',
         },
         '/'
       );

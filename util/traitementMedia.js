@@ -307,11 +307,25 @@ async function traiterImage(pathImageSrc, pathImageDst) {
 async function traiterVideo(pathImageSrc, pathImageDst) {
   const dataVideo = await transformationImages.genererPreviewVideo(pathImageSrc, pathImageDst)
   //var thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
+
+  // return new Promise((resolve, reject)=>{
+  //   debug("Copie de %s", pathImageDst)
+  //     fs.copyFile(pathImageDst, '/tmp/preview.jpg', err=>{
+  //       debug("Copy file result : %O", err)
+  //       resolve({
+  //         mimetype: 'image/jpeg',
+  //         extension: 'jpg',
+  //         dataVideo,
+  //       })
+  //     })
+  // })
+
   return {
     mimetype: 'image/jpeg',
     extension: 'jpg',
     dataVideo,
   }
+
 }
 
 module.exports = {
