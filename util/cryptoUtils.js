@@ -1,3 +1,4 @@
+const debug = require('debug')('millegrilles:fichiers:cryptoUtils')
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -67,6 +68,7 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
       decryptedSecretKey = cleSecrete
     }
 
+    // debug("**** DECRYPTED SECRET KEY **** : %O", decryptedSecretKey)
     var typedArray = new Uint8Array(decryptedSecretKey.match(/[\da-f]{2}/gi).map(function (h) {
      return parseInt(h, 16)
     }));

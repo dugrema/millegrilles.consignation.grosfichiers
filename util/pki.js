@@ -473,7 +473,7 @@ function verificationCertificatSSL(req, res, next) {
     // DEV
     if ( process.env.DISABLE_SSL_AUTH && process.env.IDMG ) {
       req.autorisationMillegrille = {
-        idmg:process.env.IDMG, protege: true, prive: true,
+        idmg:process.env.IDMG, protege: true, prive: true, public: true, securite: '3.protege'
       }
       debug("Fake autorisation %s:\n%O", req.url, req.autorisationMillegrille)
       return next()
@@ -499,9 +499,35 @@ function verificationCertificatSSL(req, res, next) {
       // le contenu des headers et valider la signature avant de proceder
       const certificatsHeader = req.headers.certificat
       if(!certificatsHeader) {
-        console.error("Requete url:%s refuse, aucun certificat SSL fourni", req.url)
-        res.sendStatus(403);  // Access denied
-        return;
+        debug("Requete url:%s aucun certificat SSL fourni, verifier si acces prive ou public", req.url)
+
+        if(req.headers['user-prive']) {
+          // Acces prive aux fichiers
+          req.autorisationMillegrille = {
+            idmg: req.headers['idmg-compte'],
+            protege: false,
+            prive: true,
+            public: true,
+            securite: '2.prive'
+          }
+        } else {
+          // Acces public aux fichiers de la MilleGrille qui correspond a NGINX
+          const idmg = peerCertificate.subject.O
+
+          req.autorisationMillegrille = {
+            idmg: '',
+            protege: false,
+            prive: false,
+            public: true,
+            securite: '1.public'
+          }
+        }
+
+        // Acces limite (prive ou public) est autorise
+        debug("Acces limite pour url %s\n%O", req.url, req.autorisationMillegrille)
+        return next()
+
+        // res.sendStatus(403);  // Access denied
       }
 
       const chaineCerts = certificatsHeader.split(';').join('\n')
@@ -546,11 +572,11 @@ function verificationCertificatSSL(req, res, next) {
   const idmg = peerCertificate.issuer.O;
 
   const protege = typeCertificat === 'coupdoeil'; // TODO: verifier si exchange protege
-  const prive = true;   // Cert valide donne toujours access a prive
+  const securite = protege?'3.protege':'2.prive'
 
   // Sauvegarder l'information d'autorisation de MilleGrille sur objet req.
   req.autorisationMillegrille = {
-    idmg, protege, prive
+    idmg, protege: true, prive: true, public: true, securite: '3.protege'
   }
 
   next();

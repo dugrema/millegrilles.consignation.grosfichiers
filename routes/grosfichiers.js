@@ -6,6 +6,7 @@ const multer = require('multer')
 const bodyParser = require('body-parser')
 
 const {PathConsignation, TraitementFichier} = require('../util/traitementFichier')
+const {getDecipherPipe4fuuid} = require('../util/cryptoUtils')
 
 // const throttle = require('@sitespeed.io/throttle');
 
@@ -49,12 +50,12 @@ function InitialiserGrosFichiers() {
   return router
 }
 
-function downloadFichierLocal(req, res, next) {
+async function downloadFichierLocal(req, res, next) {
   debug("downloadFichierLocalChiffre methode:" + req.method + ": " + req.url);
   debug(req.headers);
   debug(req.autorisationMillegrille)
 
-  const securite = req.headers.securite || '2.prive'
+  const securite = req.headers.securite || '3.protege'
   var encrypted = false
   if(securite === '3.protege') encrypted = true
 
@@ -62,7 +63,30 @@ function downloadFichierLocal(req, res, next) {
 
   console.debug("Fuuid : %s", fuuid)
 
+  // Verifier si l'acces est en mode chiffre (protege) ou dechiffre (public, prive)
+  const niveauAcces = req.autorisationMillegrille.securite
   var contentType = req.headers.mimetype || 'application/octet-stream'
+
+  if(encrypted && ['1.public', '2.prive'].includes(niveauAcces)) {
+    // Le fichier est chiffre mais le niveau d'acces de l'usager ne supporte
+    debug("Verifier si permission d'acces en mode %s pour %s", niveauAcces, req.url)
+    // pas le mode chiffre. Demander une permission de dechiffrage au domaine
+    // et dechiffrer le fichier au vol si permis.
+    try {
+      const {permission, decipherStream} = await creerStreamDechiffrage(req.amqpdao, fuuid)
+
+      // Ajouter information de dechiffrage pour la reponse
+      res.decipherStream = decipherStream
+      res.permission = permission
+
+    } catch(err) {
+      console.error("Erreur traitement dechiffrage stream pour %s:\n%O", req.url, err)
+      debug("Permission d'acces refuse en mode %s pour %s", niveauAcces, req.url)
+      return res.sendStatus(403)  // Acces refuse
+    }
+
+  }
+
   const idmg = req.autorisationMillegrille.idmg;
   const pathConsignation = new PathConsignation({idmg})
 
@@ -71,7 +95,7 @@ function downloadFichierLocal(req, res, next) {
   res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
   res.setHeader('Content-Type', contentType)
   res.setHeader('fuuid', fuuid)
-  res.setHeader('securite', securite)
+  res.setHeader('securite', niveauAcces)
 
   // Note : ajouter extension fichier pour mode non-chiffre
 
@@ -96,13 +120,52 @@ function pipeReponse(req, res) {
     }
 
     debug("Stats fichier : %O", stats)
-    res.setHeader('Content-Length', stats.size)
     res.setHeader('Last-Modified', stats.mtime)
+    if(res.permission) {
+      // Ajouter nom fichier
+      const nomFichier = res.permission['nom_fichier']
+      res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
+      res.setHeader('Content-Length', res.permission['taille'])
+    }
 
     res.writeHead(200)
     var readStream = fs.createReadStream(filePath);
-    readStream.pipe(res);
+
+    if(res.decipherStream) {
+      debug("Dechiffrer le fichier %s au vol", req.url)
+      res.decipherStream.pipe(res)
+      readStream.pipe(res.decipherStream)
+    } else {
+      readStream.pipe(res)
+    }
   });
+}
+
+async function creerStreamDechiffrage(mq, fuuid) {
+  // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
+  const chainePem = mq.pki.getChainePems()
+  const domaineActionDemandePermission = 'GrosFichiers.demandePermissionDechiffragePublic',
+        requetePermission = {fuuid}
+  const reponsePermission = await mq.transmettreRequete(domaineActionDemandePermission, requetePermission)
+
+  debug("Reponse permission access a %s:\n%O", fuuid, reponsePermission)
+
+  // permission['_certificat_tiers'] = chainePem
+  const domaineActionDemandeCle = 'MaitreDesCles.decryptageGrosFichier'
+  const reponseCle = await mq.transmettreRequete(
+    domaineActionDemandeCle, reponsePermission, {noformat: true, attacherCertificat: true})
+  debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
+
+  // Dechiffrer cle recue
+  const cleChiffree = reponseCle.cle,
+        iv = reponseCle.iv
+  const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
+
+  debug("Cle dechiffree prete : %O", cleDechiffree)
+
+  const decipherStream = getDecipherPipe4fuuid(cleDechiffree, iv, {cleFormat: 'hex'})
+
+  return {permission: reponsePermission, decipherStream}
 }
 
 module.exports = {InitialiserGrosFichiers};
