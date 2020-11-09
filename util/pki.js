@@ -515,7 +515,7 @@ function verificationCertificatSSL(req, res, next) {
           const idmg = peerCertificate.subject.O
 
           req.autorisationMillegrille = {
-            idmg: '',
+            idmg,
             protege: false,
             prive: false,
             public: true,

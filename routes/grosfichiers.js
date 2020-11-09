@@ -73,10 +73,12 @@ async function downloadFichierLocal(req, res, next) {
   if(encrypted && ['1.public', '2.prive'].includes(niveauAcces)) {
     // Le fichier est chiffre mais le niveau d'acces de l'usager ne supporte
     debug("Verifier si permission d'acces en mode %s pour %s", niveauAcces, req.url)
+    var amqpdao = req.amqpdao
+
     // pas le mode chiffre. Demander une permission de dechiffrage au domaine
     // et dechiffrer le fichier au vol si permis.
     try {
-      const {permission, decipherStream, fuuidEffectif} = await creerStreamDechiffrage(req.amqpdao, fuuid, utiliserPreview)
+      const {permission, decipherStream, fuuidEffectif} = await creerStreamDechiffrage(amqpdao, fuuid, utiliserPreview)
 
       // Ajouter information de dechiffrage pour la reponse
       res.decipherStream = decipherStream
@@ -108,7 +110,8 @@ async function downloadFichierLocal(req, res, next) {
 
   debug("Info idmg: %s, paths: %s", idmg, pathConsignation);
 
-  res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
+  // Cache control public, permet de faire un cache via proxy (nginx)
+  res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
   res.setHeader('fuuid', res.fuuid)
   res.setHeader('securite', niveauAcces)
 
