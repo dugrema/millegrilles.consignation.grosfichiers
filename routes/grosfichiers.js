@@ -67,6 +67,28 @@ async function downloadFichierLocal(req, res, next) {
 
   console.debug("Fuuid : %s", fuuid)
 
+  // Verifier si le fichier existe
+  const idmg = req.autorisationMillegrille.idmg;
+  const pathConsignation = new PathConsignation({idmg})
+  res.filePath = pathConsignation.trouverPathLocal(res.fuuid, encrypted);
+
+  try {
+    const stat = await new Promise((resolve, reject)=>{
+      fs.stat(res.filePath, (err, stat)=>{
+        if(err) {
+          if(err.errno == -2) return reject(404)
+          console.error(err);
+          return reject(500)
+        }
+        resolve(stat)
+      })
+    })
+    res.stat = stat
+  } catch(statusCode) {
+    // console.error("Erreur acces fichier %s", statusCode)
+    return res.sendStatus(statusCode)
+  }
+
   // Verifier si l'acces est en mode chiffre (protege) ou dechiffre (public, prive)
   const niveauAcces = req.autorisationMillegrille.securite
 
@@ -88,6 +110,26 @@ async function downloadFichierLocal(req, res, next) {
       if(fuuidEffectif !== fuuid) {
         // Preview
         res.setHeader('Content-Type', res.permission['mimetype_preview'])
+
+        // S'assurer que le fichier de preview existe avant de changer le filePath
+        var previewPath = pathConsignation.trouverPathLocal(fuuidEffectif, encrypted)
+        try {
+          const statPreview = await new Promise((resolve, reject)=>{
+            fs.stat(previewPath, (err, stat)=>{
+              if(err) return reject(err)
+              return resolve(stat)
+            })
+          })
+
+          // Changer information de fichier - on transmet preview
+          res.stat = statPreview
+          res.fuuid = fuuidEffectif
+          res.filePath = previewPath
+
+        } catch(err) {
+          console.error("Preview non disponible : %O", err)
+        }
+
         // Override du filepath par celui du preview
       } else {
         // Ajouter nom fichier
@@ -103,10 +145,12 @@ async function downloadFichierLocal(req, res, next) {
       return res.sendStatus(403)  // Acces refuse
     }
 
+  } else {
+    // Transfert du fichier chiffre directement, on met les stats du filesystem
+    var contentType = req.headers.mimetype || 'application/octet-stream'
+    res.setHeader('Content-Length', res.stat.size)
+    res.setHeader('Content-Type', contentType)
   }
-
-  const idmg = req.autorisationMillegrille.idmg;
-  const pathConsignation = new PathConsignation({idmg})
 
   debug("Info idmg: %s, paths: %s", idmg, pathConsignation);
 
@@ -114,8 +158,7 @@ async function downloadFichierLocal(req, res, next) {
   res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
   res.setHeader('fuuid', res.fuuid)
   res.setHeader('securite', niveauAcces)
-
-  res.filePath = pathConsignation.trouverPathLocal(res.fuuid, encrypted);
+  res.setHeader('Last-Modified', res.stat.mtime)
 
   next()
 }
@@ -124,38 +167,20 @@ function pipeReponse(req, res) {
   const filePath = res.filePath
   const header = res.responseHeader
 
-  fs.stat(filePath, (err, stats)=>{
-    if(err) {
-      console.error(err);
-      if(err.errno == -2) {
-        res.sendStatus(404);
-      } else {
-        res.sendStatus(500);
-      }
-      return;
-    }
+  res.writeHead(200)
 
-    debug("Stats fichier : %O", stats)
-    res.setHeader('Last-Modified', stats.mtime)
+  // Ouvrir un stream de lecture sur le fichier chiffre
+  var readStream = fs.createReadStream(filePath);
 
-    if(!res.decipherStream) {
-      // Transfert du fichier chiffre directement, on met les stats du filesystem
-      var contentType = req.headers.mimetype || 'application/octet-stream'
-      res.setHeader('Content-Length', stats.size)
-      res.setHeader('Content-Type', contentType)
-    }
+  // Transmettre les bytes a res
+  if(res.decipherStream) {
+    debug("Dechiffrer le fichier %s au vol", req.url)
+    res.decipherStream.pipe(res)
+    readStream.pipe(res.decipherStream)
+  } else {
+    readStream.pipe(res)
+  }
 
-    res.writeHead(200)
-    var readStream = fs.createReadStream(filePath);
-
-    if(res.decipherStream) {
-      debug("Dechiffrer le fichier %s au vol", req.url)
-      res.decipherStream.pipe(res)
-      readStream.pipe(res.decipherStream)
-    } else {
-      readStream.pipe(res)
-    }
-  });
 }
 
 async function creerStreamDechiffrage(mq, fuuid, utiliserPreview) {
