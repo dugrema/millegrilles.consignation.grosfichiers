@@ -54,10 +54,13 @@ async function downloadFichierLocal(req, res, next) {
   debug("downloadFichierLocalChiffre methode:" + req.method + ": " + req.url);
   debug(req.headers);
   debug(req.autorisationMillegrille)
+  // debug("PARAMS\n%O", req.params)
+  // debug("QUERY\n%O", req.query)
 
   const securite = req.headers.securite || '3.protege'
   var encrypted = false
   if(securite === '3.protege') encrypted = true
+  var utiliserPreview = req.query.preview?true:false
 
   const fuuid = req.params.fuuid
   res.fuuid = fuuid
@@ -73,7 +76,7 @@ async function downloadFichierLocal(req, res, next) {
     // pas le mode chiffre. Demander une permission de dechiffrage au domaine
     // et dechiffrer le fichier au vol si permis.
     try {
-      const {permission, decipherStream, fuuidEffectif} = await creerStreamDechiffrage(req.amqpdao, fuuid, true)
+      const {permission, decipherStream, fuuidEffectif} = await creerStreamDechiffrage(req.amqpdao, fuuid, utiliserPreview)
 
       // Ajouter information de dechiffrage pour la reponse
       res.decipherStream = decipherStream
