@@ -60,12 +60,12 @@ async function downloadFichierLocal(req, res, next) {
   if(securite === '3.protege') encrypted = true
 
   const fuuid = req.params.fuuid
+  res.fuuid = fuuid
 
   console.debug("Fuuid : %s", fuuid)
 
   // Verifier si l'acces est en mode chiffre (protege) ou dechiffre (public, prive)
   const niveauAcces = req.autorisationMillegrille.securite
-  var contentType = req.headers.mimetype || 'application/octet-stream'
 
   if(encrypted && ['1.public', '2.prive'].includes(niveauAcces)) {
     // Le fichier est chiffre mais le niveau d'acces de l'usager ne supporte
@@ -73,11 +73,24 @@ async function downloadFichierLocal(req, res, next) {
     // pas le mode chiffre. Demander une permission de dechiffrage au domaine
     // et dechiffrer le fichier au vol si permis.
     try {
-      const {permission, decipherStream} = await creerStreamDechiffrage(req.amqpdao, fuuid)
+      const {permission, decipherStream, fuuidEffectif} = await creerStreamDechiffrage(req.amqpdao, fuuid, true)
 
       // Ajouter information de dechiffrage pour la reponse
       res.decipherStream = decipherStream
       res.permission = permission
+      res.fuuid = fuuidEffectif
+
+      if(fuuidEffectif !== fuuid) {
+        // Preview
+        res.setHeader('Content-Type', res.permission['mimetype_preview'])
+        // Override du filepath par celui du preview
+      } else {
+        // Ajouter nom fichier
+        const nomFichier = res.permission['nom_fichier']
+        res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
+        res.setHeader('Content-Length', res.permission['taille'])
+        res.setHeader('Content-Type', res.permission['mimetype'])
+      }
 
     } catch(err) {
       console.error("Erreur traitement dechiffrage stream pour %s:\n%O", req.url, err)
@@ -93,13 +106,10 @@ async function downloadFichierLocal(req, res, next) {
   debug("Info idmg: %s, paths: %s", idmg, pathConsignation);
 
   res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
-  res.setHeader('Content-Type', contentType)
-  res.setHeader('fuuid', fuuid)
+  res.setHeader('fuuid', res.fuuid)
   res.setHeader('securite', niveauAcces)
 
-  // Note : ajouter extension fichier pour mode non-chiffre
-
-  res.filePath = pathConsignation.trouverPathLocal(fuuid, encrypted);
+  res.filePath = pathConsignation.trouverPathLocal(res.fuuid, encrypted);
 
   next()
 }
@@ -121,11 +131,12 @@ function pipeReponse(req, res) {
 
     debug("Stats fichier : %O", stats)
     res.setHeader('Last-Modified', stats.mtime)
-    if(res.permission) {
-      // Ajouter nom fichier
-      const nomFichier = res.permission['nom_fichier']
-      res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
-      res.setHeader('Content-Length', res.permission['taille'])
+
+    if(!res.decipherStream) {
+      // Transfert du fichier chiffre directement, on met les stats du filesystem
+      var contentType = req.headers.mimetype || 'application/octet-stream'
+      res.setHeader('Content-Length', stats.size)
+      res.setHeader('Content-Type', contentType)
     }
 
     res.writeHead(200)
@@ -141,7 +152,7 @@ function pipeReponse(req, res) {
   });
 }
 
-async function creerStreamDechiffrage(mq, fuuid) {
+async function creerStreamDechiffrage(mq, fuuid, utiliserPreview) {
   // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
   const chainePem = mq.pki.getChainePems()
   const domaineActionDemandePermission = 'GrosFichiers.demandePermissionDechiffragePublic',
@@ -156,16 +167,27 @@ async function creerStreamDechiffrage(mq, fuuid) {
     domaineActionDemandeCle, reponsePermission, {noformat: true, attacherCertificat: true})
   debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
 
+  var cleChiffree, iv, fuuidEffectif
+  if(utiliserPreview && reponsePermission['fuuid_preview']) {
+    debug("Utiliser le preview pour extraction")
+    fuuidEffectif = reponsePermission['fuuid_preview']
+    var infoClePreview = reponseCle.cles_par_fuuid[fuuidEffectif]
+    cleChiffree = infoClePreview.cle
+    iv = infoClePreview.iv
+  } else {
+    cleChiffree = reponseCle.cle
+    iv = reponseCle.iv
+    fuuidEffectif = fuuid
+  }
+
   // Dechiffrer cle recue
-  const cleChiffree = reponseCle.cle,
-        iv = reponseCle.iv
   const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
 
-  debug("Cle dechiffree prete : %O", cleDechiffree)
+  // debug("Cle dechiffree prete : %O", cleDechiffree)
 
   const decipherStream = getDecipherPipe4fuuid(cleDechiffree, iv, {cleFormat: 'hex'})
 
-  return {permission: reponsePermission, decipherStream}
+  return {permission: reponsePermission, fuuidEffectif, decipherStream}
 }
 
 module.exports = {InitialiserGrosFichiers};
