@@ -1,6 +1,6 @@
 const debug = require('debug')('millegrilles:fichiers:amqpdao')
 const fs = require('fs')
-const {MilleGrillesPKI, MilleGrillesAmqpDAO} = require('millegrilles.common')
+const {MilleGrillesPKI, MilleGrillesAmqpDAO} = require('@dugrema/millegrilles.common')
 
 async function init() {
 

@@ -5,7 +5,7 @@ const path = require('path')
 const readdirp = require('readdirp')
 const tar = require('tar')
 
-const { formatterDateString } = require('millegrilles.common/lib/js_formatters')
+const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers,
         getFichiersDomaine, getGrosFichiersHoraire } = require('../util/traitementFichier')
 const {pki, ValidateurSignature} = require('./pki')

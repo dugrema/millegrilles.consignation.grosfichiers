@@ -11,7 +11,7 @@ const tar = require('tar')
 const moment = require('moment')
 const tmp = require('tmp-promise')
 
-const { formatterDateString } = require('millegrilles.common/lib/js_formatters')
+const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 const {uuidToDate} = require('./UUIDUtils')
 const transformationImages = require('./transformationImages')
 const {pki, ValidateurSignature} = require('./pki')

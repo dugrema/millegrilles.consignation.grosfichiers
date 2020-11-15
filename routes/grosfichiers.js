@@ -61,6 +61,7 @@ async function downloadFichierLocal(req, res, next) {
   var encrypted = false
   if(securite === '3.protege') encrypted = true
   var utiliserPreview = req.query.preview?true:false
+  var nofile = req.query.nofile?true:false
 
   const fuuid = req.params.fuuid
   res.fuuid = fuuid
@@ -134,7 +135,9 @@ async function downloadFichierLocal(req, res, next) {
       } else {
         // Ajouter nom fichier
         const nomFichier = res.permission['nom_fichier']
-        res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
+        if(!nofile) {
+          res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
+        }
         res.setHeader('Content-Length', res.permission['taille'])
         res.setHeader('Content-Type', res.permission['mimetype'])
       }
