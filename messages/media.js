@@ -2,17 +2,6 @@ const debug = require('debug')('millegrilles:fichiers:media')
 const {PathConsignation} = require('../util/traitementFichier');
 const traitementMedia = require('../util/traitementMedia.js')
 
-// const path = require('path');
-// const fs = require('fs');
-// const tmp = require('tmp-promise');
-// const crypto = require('crypto');
-// const im = require('imagemagick');
-// const uuidv1 = require('uuid/v1');
-// const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
-// const { Decrypteur } = require('../util/cryptoUtils.js');
-// const transformationImages = require('../util/transformationImages');
-// const decrypteur = new Decrypteur();
-
 // Traitement d'images pour creer des thumbnails et preview
 class GenerateurMedia {
 
@@ -32,14 +21,78 @@ class GenerateurMedia {
 
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      return genererPreviewImage(this.mq, this.pathConsignation, message)}, ['commande.fichiers.genererPreviewImage'], {operationLongue: true});
+      return genererPreviewImage(this.mq, this.pathConsignation, message)}, ['commande.fichiers.genererPreviewImage'], {operationLongue: true})
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-      return genererPreviewVideo(this.mq, this.pathConsignation, message)}, ['commande.fichiers.genererPreviewVideo'], {operationLongue: true});
-    // this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
-    //   return this.transcoderVideoDecrypte(routingKey, message)}, ['commande.grosfichiers.transcoderVideo'], {operationLongue: true});
+      return genererPreviewVideo(this.mq, this.pathConsignation, message)}, ['commande.fichiers.genererPreviewVideo'], {operationLongue: true})
+    this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message)=>{
+      return transcoderVideo(this.mq, this.pathConsignation, message)}, ['commande.fichiers.transcoderVideo'], {operationLongue: true})
   }
 
 
+}
+
+async function transcoderVideo(mq, pathConsignation, message) {
+  debug("Commande genererPreviewImage recue : %O", message)
+
+  // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
+  const permission = message.permission
+  var opts = {}
+  var securite = '2.prive'
+  if(message.fuuid && permission) {
+    debug("Recu permission de dechiffrage, on transmet vers le maitre des cles")
+
+    // Transmettre evenement debut de transcodage
+    mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageDebut')
+
+    securite = permission.securite || '3.protege'
+
+    // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
+    const chainePem = mq.pki.getChainePems()
+    permission['_certificat_tiers'] = chainePem
+    debug("Nouvelle requete permission a transmettre : %O", permission)
+    const domaineAction = permission['en-tete'].domaine
+    const reponseCle = await mq.transmettreRequete(domaineAction, permission, {noformat: true})
+    debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
+
+    // Dechiffrer cle recue
+    const cleChiffree = reponseCle.cle
+    const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
+
+    // Demander cles publiques pour chiffrer video transcode
+    const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
+    const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
+    const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
+
+    opts = {cleSymmetrique: cleDechiffree, iv: reponseCle.iv, clesPubliques}
+
+  } else {
+    // Transmettre message erreur transcodage
+    const err = "Fuuid/Permission dechiffrage absente"
+    mq.emettreEvenement({fuuid: message.fuuid, err}, 'evenement.fichiers.erreurTranscodage')
+    throw new Error(err)
+  }
+
+  debug("Debut dechiffrage fichier video")
+  const resultatTranscodage = {'err': "DA DA daa"} // traitementMedia.AAA()
+
+  // Transmettre transaction associer video transcode
+  const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
+  const transactionAssocierPreview = {
+    uuid: message.uuid,
+    fuuid: message.fuuid,
+    securite,
+    mimetype_preview: resultatTranscodage.mimetype,
+    fuuid_preview: resultatTranscodage.fuuid,
+    extension_preview: resultatTranscodage.extension,
+    hachage_preview: resultatTranscodage.hachage_preview,
+  }
+
+  if(resultatTranscodage.dataVideo) {
+    transactionAssocierPreview.data_video = resultatTranscodage.dataVideo['data_video']
+  }
+  debug("Transaction transcoder video : %O", transactionAssocierPreview)
+
+  // mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
 }
 
 async function genererPreviewImage(mq, pathConsignation, message) {

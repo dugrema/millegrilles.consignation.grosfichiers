@@ -170,75 +170,27 @@ async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques) {
 
 }
 
-// async function genererThumbnail(routingKey, message) {
-//
-//   const fuuid = message.fuuid;
-//   const cleSecreteChiffree = message.cleSecreteChiffree;
-//   const iv = message.iv;
-//
-//   // console.debug("Message pour generer thumbnail protege " + message.fuuid);
-//
-//   // Decrypter la cle secrete
-//   const cleSecreteDechiffree = decrypterCleSecrete(cleSecreteChiffree);
-//
-//   // Trouver fichier original crypte
-//   const pathFichierCrypte = this.pathConsignation.trouverPathLocal(fuuid, true);
-//
-//   // Preparer fichier destination decrypte
-//   // Aussi preparer un fichier tmp pour le thumbnail
-//   var thumbnailBase64Content, metadata;
-//   return await tmp.file({ mode: 0o600, postfix: '.'+message.extension }).then(async tmpDecrypted => {
-//     const decryptedPath = tmpDecrypted.path;
-//     // Decrypter
-//     try {
-//       var resultatsDecryptage = await decrypteur.decrypter(
-//         pathFichierCrypte, decryptedPath, cleSecreteDechiffree, iv);
-//       // console.debug("Fichier decrypte pour thumbnail sous " + pathTemp +
-//       //               ", taille " + resultatsDecryptage.tailleFichier +
-//       //               ", sha256 " + resultatsDecryptage.sha256Hash);
-//
-//       let mimetype = message.mimetype.split('/')[0];
-//       if(mimetype === 'image') {
-//         thumbnailBase64Content = await transformationImages.genererThumbnail(decryptedPath);
-//       } else if(mimetype === 'video') {
-//         var dataVideo = await transformationImages.genererThumbnailVideo(decryptedPath);
-//         thumbnailBase64Content = dataVideo.base64Content;
-//         metadata = dataVideo.metadata;
-//       }
-//
-//       // _imConvertPromise([decryptedPath, '-resize', '128', '-format', 'jpg', thumbnailPath]);
-//       this._transmettreTransactionThumbnailProtege(fuuid, thumbnailBase64Content, metadata)
-//     } finally {
-//       // Effacer le fichier temporaire
-//       tmpDecrypted.cleanup();
-//     }
-//   })
-//   .catch(err=>{
-//     console.error("Erreur dechiffrage fichier multimedia pour thumbnail");
-//     console.error(err);
-//   })
-//
-// }
+async function transcoderVideo(routingKey, message) {
 
-// async function transcoderVideoDecrypte(routingKey, message) {
-//
-//   const fuuid = message.fuuid;
-//   const extension = message.extension;
-//   const securite = message.securite;
-//   // console.debug("Message transcoder video")
-//   // console.debug(message);
-//
-//   // console.debug("Message pour generer thumbnail protege " + message.fuuid);
-//
-//   const pathFichier = this.pathConsignation.trouverPathLocal(fuuid, false, {extension: extension});
-//
+  const fuuid = message.fuuid;
+  const extension = message.extension;
+  // const securite = message.securite;
+  console.debug("Message transcoder video")
+  console.debug(message)
+
+  // console.debug("Message pour generer thumbnail protege " + message.fuuid);
+
+  const pathFichier = this.pathConsignation.trouverPathLocal(
+    fuuid, false, {extension: extension}
+  )
+
 //   var thumbnailBase64Content, metadata;
-//
-//   let mimetype = message.mimetype.split('/')[0];
-//   if(mimetype !== 'video') {
-//     throw new Error("Erreur, type n'est pas video: " + mimetype)
-//   }
-//
+
+  let mimetype = message.mimetype.split('/')[0];
+  if(mimetype !== 'video') {
+    throw new Error("Erreur, type n'est pas video: " + mimetype)
+  }
+
 //   const fuuidVideo480p = uuidv1(), fuuidPreviewImage = uuidv1();
 //   const pathVideo480p = this.pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
 //   const pathPreviewImage = this.pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
@@ -277,20 +229,20 @@ async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques) {
 //     console.error("Erreur conversion video");
 //     console.error(err);
 //   })
-//
-// }
+
+}
 
 function _transmettreTransactionPreview(mq, transaction) {
   const domaineTransaction = 'GrosFichiers.associerThumbnail';
   mq.transmettreTransactionFormattee(transaction, domaineTransaction);
 }
 
-function _transmettreTransactionVideoTranscode(fuuid, resultat) {
-  const domaineTransaction = 'millegrilles.domaines.GrosFichiers.associerVideo';
-
-  const transaction = {fuuid, ...resultat}
-
-  this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
+function _transmettreTransactionVideoTranscode(mq, transaction) {
+  //function _transmettreTransactionVideoTranscode(fuuid, resultat) {
+  const domaineTransaction = 'GrosFichiers.associerVideo';
+  mq.transmettreTransactionFormattee(transaction, domaineTransaction);
+  // const transaction = {fuuid, ...resultat}
+  // this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
 }
 
 // Extraction de thumbnail et preview pour images
@@ -306,26 +258,11 @@ async function traiterImage(pathImageSrc, pathImageDst) {
 // Extraction de thumbnail, preview et recodage des videos pour le web
 async function traiterVideo(pathImageSrc, pathImageDst) {
   const dataVideo = await transformationImages.genererPreviewVideo(pathImageSrc, pathImageDst)
-  //var thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
-
-  // return new Promise((resolve, reject)=>{
-  //   debug("Copie de %s", pathImageDst)
-  //     fs.copyFile(pathImageDst, '/tmp/preview.jpg', err=>{
-  //       debug("Copy file result : %O", err)
-  //       resolve({
-  //         mimetype: 'image/jpeg',
-  //         extension: 'jpg',
-  //         dataVideo,
-  //       })
-  //     })
-  // })
-
   return {
     mimetype: 'image/jpeg',
     extension: 'jpg',
     dataVideo,
   }
-
 }
 
 module.exports = {
