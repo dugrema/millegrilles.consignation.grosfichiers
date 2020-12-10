@@ -28,7 +28,6 @@ class GenerateurMedia {
       return transcoderVideo(this.mq, this.pathConsignation, message)}, ['commande.fichiers.transcoderVideo'], {operationLongue: true})
   }
 
-
 }
 
 async function transcoderVideo(mq, pathConsignation, message) {
@@ -37,7 +36,7 @@ async function transcoderVideo(mq, pathConsignation, message) {
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
   const permission = message.permission
   var opts = {}
-  var securite = '2.prive'
+  var securite = '3.protege'
   if(message.fuuid && permission) {
     debug("Recu permission de dechiffrage, on transmet vers le maitre des cles")
 
@@ -73,27 +72,37 @@ async function transcoderVideo(mq, pathConsignation, message) {
   }
 
   debug("Debut dechiffrage fichier video")
-  const resultatTranscodage = traitementMedia.transcoderVideo(
+  const resultatTranscodage = await traitementMedia.transcoderVideo(
     mq, pathConsignation, opts.clesPubliques, opts.cleSymmetrique, opts.iv, message)
 
-  // Transmettre transaction associer video transcode
-  const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
-  const transactionAssocierPreview = {
-    uuid: message.uuid,
-    fuuid: message.fuuid,
+  // Transmettre transaction info chiffrage
+  const domaineActionCles = 'MaitreDesCles.cleGrosFichier'
+  const transactionCles = {
+    domaine: 'GrosFichiers',
+    identificateurs_document: { fuuid: resultatTranscodage.fuuidVideo },
+    cles: resultatTranscodage.clesChiffrees,
+    iv: resultatTranscodage.iv,
+    sujet: 'cles.grosFichiers',
     securite,
-    mimetype_preview: resultatTranscodage.mimetype,
-    fuuid_preview: resultatTranscodage.fuuid,
-    extension_preview: resultatTranscodage.extension,
-    hachage_preview: resultatTranscodage.hachage_preview,
+  }
+  await mq.transmettreTransactionFormattee(transactionCles, domaineActionCles)
+
+  // Transmettre transaction associer video transcode
+  const transactionAssocierPreview = {
+    uuid: resultatTranscodage.uuid,
+    fuuid: message.fuuid,
+
+    height: resultatTranscodage.height,
+    fuuidVideo: resultatTranscodage.fuuidVideo,
+    mimetypeVideo: resultatTranscodage.mimetypeVideo,
+    hachage: resultatTranscodage.hachage,
+    tailleFichier: resultatTranscodage.tailleFichier,
   }
 
-  if(resultatTranscodage.dataVideo) {
-    transactionAssocierPreview.data_video = resultatTranscodage.dataVideo['data_video']
-  }
   debug("Transaction transcoder video : %O", transactionAssocierPreview)
 
-  // mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
+  const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
+  mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
 }
 
 async function genererPreviewImage(mq, pathConsignation, message) {

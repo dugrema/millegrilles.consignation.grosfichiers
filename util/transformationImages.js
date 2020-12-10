@@ -143,29 +143,33 @@ async function genererPreviewVideo(sourcePath, previewPath) {
   });
 }
 
-async function genererVideoMp4_480p(sourcePath, destinationPath) {
+async function genererVideoMp4_480p(sourcePath, destinationPath, opts) {
+  if(!opts) opts = {}
+  const bitrate = opts.bitrate || '1800k'
+        height = opts.height || '480'
   return await new Promise((resolve, reject) => {
     new FFmpeg({source: sourcePath})
       .withVideoBitrate('2500k')
-      .withSize('?x480')
+      .withSize('?x' + height)
       .on('error', function(err) {
           console.error('An error occurred: ' + err.message);
           reject(err);
       })
       .on('end', function(filenames) {
 
-        let shasum = crypto.createHash('sha256');
+        // let shasum = crypto.createHash('sha256');
         try {
           let s = fs.ReadStream(destinationPath)
           let tailleFichier = 0;
           s.on('data', data => {
-            shasum.update(data)
+            // shasum.update(data)
             tailleFichier += data.length;
           })
           s.on('end', function () {
-            const sha256 = shasum.digest('hex')
+            // const sha256 = shasum.digest('hex')
             // console.debug('Successfully generated 480p mp4 ' + destinationPath + ", taille " + tailleFichier + ", sha256 " + sha256);
-            return resolve({tailleFichier, sha256});
+            // return resolve({tailleFichier, sha256});
+            return resolve({tailleFichier, bitrate, height})
           })
         } catch (error) {
           return reject(error);

@@ -215,17 +215,26 @@ async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetriq
     })
 
     debug("Chiffrer le fichier transcode (%s) vers %s", fichierDstTmp.path, pathVideo480p)
-    await chiffrerTemporaire(mq, fichierDstTmp.path, pathVideo480p, clesPubliques)
+    const resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathVideo480p, clesPubliques)
 
     // Calculer hachage
     const hachage = await calculerHachageFichier(pathVideo480p)
     debug("Hachage nouveau fichier transcode : %s", hachage)
 
-    var resultat = {};
-    resultat.fuuidVideo480p = fuuidVideo480p
-    resultat.mimetypeVideo480p = 'video/mp4'
-    resultat.tailleVideo480p = resultatMp4.tailleFichier
-    resultat.sha256Video480p = resultatMp4.sha256
+    const resultat = {
+      uuid: infoFichier.uuid,
+      height: resultatMp4.height,
+      bitrate: resultatMp4.bitrate,
+      fuuidVideo: fuuidVideo480p,
+      mimetypeVideo: 'video/mp4',
+      hachage,
+      ...resultatChiffrage,
+    }
+    // resultat.fuuidVideo480p = fuuidVideo480p
+    // resultat.mimetypeVideo480p = 'video/mp4'
+    // resultat.tailleVideo480p = resultatMp4.tailleFichier
+    // resultat.sha256Video480p = resultatMp4.sha256
+    // resultat.hachage = hachage
 
     console.debug("Fichier converti : %O", resultat);
     // console.debug(convertedFile);
@@ -243,7 +252,7 @@ async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetriq
     }
     if(fichierDstTmp) {
       fs.unlink(fichierDstTmp.path, err=>{
-        if(err) console.error("Erreur suppression fichier tmp dechiffre : %O", err)
+        if(err) console.error("Erreur suppression fichier tmp transcode (dechiffre) : %O", err)
       })
     }
   }
