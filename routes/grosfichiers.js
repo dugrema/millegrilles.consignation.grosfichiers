@@ -178,6 +178,7 @@ async function downloadFichierPublic(req, res, next) {
   var encrypted = true
   // if(securite === '3.protege') encrypted = true
   var utiliserPreview = req.query.preview?true:false
+  var videoResolution = req.query.resolution
   var nofile = req.query.nofile?true:false
 
   const fuuid = req.params.fuuid
@@ -219,16 +220,23 @@ async function downloadFichierPublic(req, res, next) {
   // pas le mode chiffre. Demander une permission de dechiffrage au domaine
   // et dechiffrer le fichier au vol si permis.
   try {
-    const {permission, decipherStream, fuuidEffectif} = await creerStreamDechiffrage(amqpdao, fuuid, utiliserPreview)
+    const infoStream = await creerStreamDechiffrage(amqpdao, req)
 
     // Ajouter information de dechiffrage pour la reponse
-    res.decipherStream = decipherStream
-    res.permission = permission
-    res.fuuid = fuuidEffectif
+    res.decipherStream = infoStream.decipherStream
+    res.permission = infoStream.permission
+    res.fuuid = infoStream.fuuidEffectif
+
+    const fuuidEffectif = infoStream.fuuidEffectif
 
     if(fuuidEffectif !== fuuid) {
       // Preview
-      res.setHeader('Content-Type', res.permission['mimetype_preview'])
+      if(infoStream.infoVideo) {
+        res.setHeader('Content-Type', infoStream.infoVideo.mimetype)
+        // res.setHeader('Content-Length', infoStream.infoVideo.taille)
+      } else {
+        res.setHeader('Content-Type', res.permission['mimetype_preview'])
+      }
 
       // S'assurer que le fichier de preview existe avant de changer le filePath
       var previewPath = pathConsignation.trouverPathLocal(fuuidEffectif, encrypted)
@@ -307,14 +315,16 @@ function pipeReponse(req, res) {
 
 }
 
-async function creerStreamDechiffrage(mq, fuuid, utiliserPreview) {
+async function creerStreamDechiffrage(mq, req) {
+  const fuuidFichier = req.params.fuuid
+
   // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
   const chainePem = mq.pki.getChainePems()
   const domaineActionDemandePermission = 'GrosFichiers.demandePermissionDechiffragePublic',
-        requetePermission = {fuuid}
+        requetePermission = {fuuid: fuuidFichier}
   const reponsePermission = await mq.transmettreRequete(domaineActionDemandePermission, requetePermission)
 
-  debug("Reponse permission access a %s:\n%O", fuuid, reponsePermission)
+  debug("Reponse permission access a %s:\n%O", fuuidFichier, reponsePermission)
 
   // permission['_certificat_tiers'] = chainePem
   const domaineActionDemandeCle = 'MaitreDesCles.decryptageGrosFichier'
@@ -322,18 +332,32 @@ async function creerStreamDechiffrage(mq, fuuid, utiliserPreview) {
     domaineActionDemandeCle, reponsePermission, {noformat: true, attacherCertificat: true})
   debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
 
-  var cleChiffree, iv, fuuidEffectif
-  if(utiliserPreview && reponsePermission['fuuid_preview']) {
-    debug("Utiliser le preview pour extraction")
-    fuuidEffectif = reponsePermission['fuuid_preview']
+  var cleChiffree, iv, fuuidEffectif = fuuidFichier, infoVideo = ''
+  //if(utiliserPreview && reponsePermission['fuuid_preview']) {
+    if(req.query.preview) {
+      debug("Utiliser le preview pour extraction")
+      fuuidEffectif = reponsePermission['fuuid_preview']
+    } else if(req.query.video) {
+      const resolution = req.query.video
+      debug("Utiliser le video resolution %s pour extraction", resolution)
+      // Faire une requete pour trouver le video associe a la resolution
+      const domaineRequeteFichier = 'GrosFichiers.documentsParFuuid'
+      const infoFichier = await mq.transmettreRequete(domaineRequeteFichier, {fuuid: fuuidFichier})
+      debug("Information fichier video : %O", infoFichier)
+      infoVideo = infoFichier.versions[fuuidFichier].video[resolution]
+      fuuidEffectif = infoVideo.fuuid
+      debug("Fuuid effectif pour video %s : %s", resolution, fuuidEffectif)
+    }
+
     var infoClePreview = reponseCle.cles_par_fuuid[fuuidEffectif]
     cleChiffree = infoClePreview.cle
     iv = infoClePreview.iv
-  } else {
-    cleChiffree = reponseCle.cle
-    iv = reponseCle.iv
-    fuuidEffectif = fuuid
-  }
+
+  // } else {
+  //   cleChiffree = reponseCle.cle
+  //   iv = reponseCle.iv
+  //   fuuidEffectif = fuuid
+  // }
 
   // Dechiffrer cle recue
   const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
@@ -342,7 +366,7 @@ async function creerStreamDechiffrage(mq, fuuid, utiliserPreview) {
 
   const decipherStream = getDecipherPipe4fuuid(cleDechiffree, iv, {cleFormat: 'hex'})
 
-  return {permission: reponsePermission, fuuidEffectif, decipherStream}
+  return {permission: reponsePermission, fuuidEffectif, decipherStream, infoVideo}
 }
 
 module.exports = {InitialiserGrosFichiers};
