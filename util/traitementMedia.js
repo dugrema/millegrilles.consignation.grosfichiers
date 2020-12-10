@@ -170,7 +170,7 @@ async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques) {
 
 }
 
-async function transcoderVideo(routingKey, message) {
+async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetrique, iv, message) {
 
   const fuuid = message.fuuid;
   const extension = message.extension;
@@ -178,57 +178,75 @@ async function transcoderVideo(routingKey, message) {
   console.debug("Message transcoder video")
   console.debug(message)
 
-  // console.debug("Message pour generer thumbnail protege " + message.fuuid);
+  // Requete info fichier
+  const infoFichier = await mq.transmettreRequete('GrosFichiers.documentsParFuuid', {fuuid})
+  debug("Recue detail fichiers pour transcodage : %O", infoFichier)
+  const infoVersion = infoFichier.versions[fuuid]
 
-  const pathFichier = this.pathConsignation.trouverPathLocal(
-    fuuid, false, {extension: extension}
-  )
-
-//   var thumbnailBase64Content, metadata;
-
-  let mimetype = message.mimetype.split('/')[0];
+  let mimetype = infoVersion.mimetype.split('/')[0];
   if(mimetype !== 'video') {
     throw new Error("Erreur, type n'est pas video: " + mimetype)
   }
 
-//   const fuuidVideo480p = uuidv1(), fuuidPreviewImage = uuidv1();
-//   const pathVideo480p = this.pathConsignation.trouverPathLocal(fuuidVideo480p, false, {extension: 'mp4'});
-//   const pathPreviewImage = this.pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {extension: 'jpg'});
-//   return await new Promise((resolve, reject)=>{
-//     fs.mkdir(path.dirname(pathVideo480p), {recursive: true}, e=>{
-//       if(e) reject(e);
-//       fs.mkdir(path.dirname(pathPreviewImage), {recursive: true}, e=>{
-//         if(e) reject(e);
-//         resolve();
-//       })
-//     })
-//   }).then( async () => {
-//     // console.debug("Decryptage video, generer un preview pour " + fuuid + " sous " + fuuidPreviewImage);
-//     var resultatPreview = await transformationImages.genererPreviewVideoPromise(pathFichier, pathPreviewImage);
-//
-//     // console.debug("Decryptage video, re-encoder en MP4, source " + fuuid + " sous " + fuuidVideo480p);
-//     var resultatMp4 = await transformationImages.genererVideoMp4_480p(pathFichier, pathVideo480p);
-//
-//     var base64Thumbnail = await transformationImages.genererThumbnail(pathPreviewImage);
-//
-//     var resultat = {};
-//     resultat.fuuidPreview = fuuidPreviewImage;
-//     resultat.thumbnail = base64Thumbnail;
-//     resultat.fuuidVideo480p = fuuidVideo480p;
-//     resultat.mimetypeVideo480p = 'video/mp4';
-//     resultat.tailleVideo480p = resultatMp4.tailleFichier;
-//     resultat.sha256Video480p = resultatMp4.sha256;
-//     resultat.data_video = resultatPreview.data_video;
-//     resultat.securite = securite;
-//
-//     // console.debug("Fichier converti");
-//     // console.debug(convertedFile);
-//     this._transmettreTransactionVideoTranscode(fuuid, resultat)
-//   })
-//   .catch(err=>{
-//     console.error("Erreur conversion video");
-//     console.error(err);
-//   })
+  mq.emettreEvenement({fuuid, progres: 1}, 'evenement.fichiers.transcodageEnCours')
+  var fichierSrcTmp = '', fichierDstTmp = ''
+  try {
+    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, 'vid', cleSymmetrique, iv)
+    fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.mp4'})
+    var fichierSource = fichierSrcTmp.path
+    debug("Fichier transcodage video, source dechiffree : %s", fichierSource)
+    mq.emettreEvenement({fuuid, progres: 5}, 'evenement.fichiers.transcodageEnCours')
+
+    debug("Decryptage video, re-encoder en MP4, source %s sous %s", fuuid, fichierDstTmp.path);
+
+    mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageVideo')
+    var resultatMp4 = await transformationImages.genererVideoMp4_480p(fichierSource, fichierDstTmp.path);
+    mq.emettreEvenement({fuuid: message.fuuid, progres: 95}, 'evenement.fichiers.transcodageEnCours')
+
+    // Chiffrer le video transcode
+    const fuuidVideo480p = uuidv1()
+    const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, true)
+
+    await new Promise((resolve, reject)=>{
+      fs.mkdir(path.dirname(pathVideo480p), {recursive: true}, e => {
+        if(e) return reject(e)
+        resolve()
+      })
+    })
+
+    debug("Chiffrer le fichier transcode (%s) vers %s", fichierDstTmp.path, pathVideo480p)
+    await chiffrerTemporaire(mq, fichierDstTmp.path, pathVideo480p, clesPubliques)
+
+    // Calculer hachage
+    const hachage = await calculerHachageFichier(pathVideo480p)
+    debug("Hachage nouveau fichier transcode : %s", hachage)
+
+    var resultat = {};
+    resultat.fuuidVideo480p = fuuidVideo480p
+    resultat.mimetypeVideo480p = 'video/mp4'
+    resultat.tailleVideo480p = resultatMp4.tailleFichier
+    resultat.sha256Video480p = resultatMp4.sha256
+
+    console.debug("Fichier converti : %O", resultat);
+    // console.debug(convertedFile);
+    // this._transmettreTransactionVideoTranscode(fuuid, resultat)
+    return resultat
+  } catch(err) {
+    console.error("Erreur conversion video");
+    console.error(err);
+  } finally {
+    // S'assurer que les fichiers temporaires sont supprimes
+    if(fichierSrcTmp) {
+      fs.unlink(fichierSrcTmp.path, err=>{
+        if(err) console.error("Erreur suppression fichier tmp dechiffre : %O", err)
+      })
+    }
+    if(fichierDstTmp) {
+      fs.unlink(fichierDstTmp.path, err=>{
+        if(err) console.error("Erreur suppression fichier tmp dechiffre : %O", err)
+      })
+    }
+  }
 
 }
 
@@ -266,5 +284,5 @@ async function traiterVideo(pathImageSrc, pathImageDst) {
 }
 
 module.exports = {
-  genererPreviewImage, genererPreviewVideo,
+  genererPreviewImage, genererPreviewVideo, transcoderVideo,
 }

@@ -68,12 +68,13 @@ async function transcoderVideo(mq, pathConsignation, message) {
   } else {
     // Transmettre message erreur transcodage
     const err = "Fuuid/Permission dechiffrage absente"
-    mq.emettreEvenement({fuuid: message.fuuid, err}, 'evenement.fichiers.erreurTranscodage')
+    mq.emettreEvenement({fuuid: message.fuuid, err}, 'evenement.fichiers.transcodageErreur')
     throw new Error(err)
   }
 
   debug("Debut dechiffrage fichier video")
-  const resultatTranscodage = {'err': "DA DA daa"} // traitementMedia.AAA()
+  const resultatTranscodage = traitementMedia.transcoderVideo(
+    mq, pathConsignation, opts.clesPubliques, opts.cleSymmetrique, opts.iv, message)
 
   // Transmettre transaction associer video transcode
   const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
