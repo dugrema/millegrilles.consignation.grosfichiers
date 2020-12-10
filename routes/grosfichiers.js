@@ -16,6 +16,7 @@ function InitialiserGrosFichiers() {
 
   const bodyParserInstance = bodyParser.urlencoded({ extended: false })
 
+  router.get('^/fichiers/public/:fuuid', downloadFichierPublic, pipeReponse)
   router.get('^/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
 
   // router.post('*', bodyParserInstance, downloadFichierLocalChiffre)
@@ -93,67 +94,67 @@ async function downloadFichierLocal(req, res, next) {
   // Verifier si l'acces est en mode chiffre (protege) ou dechiffre (public, prive)
   const niveauAcces = req.autorisationMillegrille.securite
 
-  if(encrypted && ['1.public', '2.prive'].includes(niveauAcces)) {
-    // Le fichier est chiffre mais le niveau d'acces de l'usager ne supporte
-    debug("Verifier si permission d'acces en mode %s pour %s", niveauAcces, req.url)
-    var amqpdao = req.amqpdao
-
-    // pas le mode chiffre. Demander une permission de dechiffrage au domaine
-    // et dechiffrer le fichier au vol si permis.
-    try {
-      const {permission, decipherStream, fuuidEffectif} = await creerStreamDechiffrage(amqpdao, fuuid, utiliserPreview)
-
-      // Ajouter information de dechiffrage pour la reponse
-      res.decipherStream = decipherStream
-      res.permission = permission
-      res.fuuid = fuuidEffectif
-
-      if(fuuidEffectif !== fuuid) {
-        // Preview
-        res.setHeader('Content-Type', res.permission['mimetype_preview'])
-
-        // S'assurer que le fichier de preview existe avant de changer le filePath
-        var previewPath = pathConsignation.trouverPathLocal(fuuidEffectif, encrypted)
-        try {
-          const statPreview = await new Promise((resolve, reject)=>{
-            fs.stat(previewPath, (err, stat)=>{
-              if(err) return reject(err)
-              return resolve(stat)
-            })
-          })
-
-          // Changer information de fichier - on transmet preview
-          res.stat = statPreview
-          res.fuuid = fuuidEffectif
-          res.filePath = previewPath
-
-        } catch(err) {
-          console.error("Preview non disponible : %O", err)
-        }
-
-        // Override du filepath par celui du preview
-      } else {
-        // Ajouter nom fichier
-        const nomFichier = res.permission['nom_fichier']
-        if(!nofile) {
-          res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
-        }
-        res.setHeader('Content-Length', res.permission['taille'])
-        res.setHeader('Content-Type', res.permission['mimetype'])
-      }
-
-    } catch(err) {
-      console.error("Erreur traitement dechiffrage stream pour %s:\n%O", req.url, err)
-      debug("Permission d'acces refuse en mode %s pour %s", niveauAcces, req.url)
-      return res.sendStatus(403)  // Acces refuse
-    }
-
-  } else {
+  // if(encrypted && ['1.public', '2.prive'].includes(niveauAcces)) {
+  //   // Le fichier est chiffre mais le niveau d'acces de l'usager ne supporte
+  //   debug("Verifier si permission d'acces en mode %s pour %s", niveauAcces, req.url)
+  //   var amqpdao = req.amqpdao
+  //
+  //   // pas le mode chiffre. Demander une permission de dechiffrage au domaine
+  //   // et dechiffrer le fichier au vol si permis.
+  //   try {
+  //     const {permission, decipherStream, fuuidEffectif} = await creerStreamDechiffrage(amqpdao, fuuid, utiliserPreview)
+  //
+  //     // Ajouter information de dechiffrage pour la reponse
+  //     res.decipherStream = decipherStream
+  //     res.permission = permission
+  //     res.fuuid = fuuidEffectif
+  //
+  //     if(fuuidEffectif !== fuuid) {
+  //       // Preview
+  //       res.setHeader('Content-Type', res.permission['mimetype_preview'])
+  //
+  //       // S'assurer que le fichier de preview existe avant de changer le filePath
+  //       var previewPath = pathConsignation.trouverPathLocal(fuuidEffectif, encrypted)
+  //       try {
+  //         const statPreview = await new Promise((resolve, reject)=>{
+  //           fs.stat(previewPath, (err, stat)=>{
+  //             if(err) return reject(err)
+  //             return resolve(stat)
+  //           })
+  //         })
+  //
+  //         // Changer information de fichier - on transmet preview
+  //         res.stat = statPreview
+  //         res.fuuid = fuuidEffectif
+  //         res.filePath = previewPath
+  //
+  //       } catch(err) {
+  //         console.error("Preview non disponible : %O", err)
+  //       }
+  //
+  //       // Override du filepath par celui du preview
+  //     } else {
+  //       // Ajouter nom fichier
+  //       const nomFichier = res.permission['nom_fichier']
+  //       if(!nofile) {
+  //         res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
+  //       }
+  //       res.setHeader('Content-Length', res.permission['taille'])
+  //       res.setHeader('Content-Type', res.permission['mimetype'])
+  //     }
+  //
+  //   } catch(err) {
+  //     console.error("Erreur traitement dechiffrage stream pour %s:\n%O", req.url, err)
+  //     debug("Permission d'acces refuse en mode %s pour %s", niveauAcces, req.url)
+  //     return res.sendStatus(403)  // Acces refuse
+  //   }
+  //
+  // } else {
     // Transfert du fichier chiffre directement, on met les stats du filesystem
     var contentType = req.headers.mimetype || 'application/octet-stream'
     res.setHeader('Content-Length', res.stat.size)
     res.setHeader('Content-Type', contentType)
-  }
+  // }
 
   debug("Info idmg: %s, paths: %s", idmg, pathConsignation);
 
@@ -161,6 +162,126 @@ async function downloadFichierLocal(req, res, next) {
   res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
   res.setHeader('fuuid', res.fuuid)
   res.setHeader('securite', niveauAcces)
+  res.setHeader('Last-Modified', res.stat.mtime)
+
+  next()
+}
+
+async function downloadFichierPublic(req, res, next) {
+  debug("downloadFichierLocalChiffre methode:" + req.method + ": " + req.url);
+  debug(req.headers);
+  debug(req.autorisationMillegrille)
+  // debug("PARAMS\n%O", req.params)
+  // debug("QUERY\n%O", req.query)
+
+  const securite = req.headers.securite || '3.protege'
+  var encrypted = true
+  // if(securite === '3.protege') encrypted = true
+  var utiliserPreview = req.query.preview?true:false
+  var nofile = req.query.nofile?true:false
+
+  const fuuid = req.params.fuuid
+  res.fuuid = fuuid
+
+  console.debug("Fuuid : %s", fuuid)
+
+  // Verifier si le fichier existe
+  const idmg = req.autorisationMillegrille.idmg;
+  const pathConsignation = new PathConsignation({idmg})
+  res.filePath = pathConsignation.trouverPathLocal(res.fuuid, encrypted);
+
+  try {
+    const stat = await new Promise((resolve, reject)=>{
+      fs.stat(res.filePath, (err, stat)=>{
+        if(err) {
+          if(err.errno == -2) return reject(404)
+          console.error(err);
+          return reject(500)
+        }
+        resolve(stat)
+      })
+    })
+    res.stat = stat
+  } catch(statusCode) {
+    // console.error("Erreur acces fichier %s", statusCode)
+    return res.sendStatus(statusCode)
+  }
+
+  // Verifier si l'acces est en mode chiffre (protege) ou dechiffre (public, prive)
+  const niveauAcces = '1.public'  // req.autorisationMillegrille.securite
+
+  // if(encrypted && ['1.public', '2.prive'].includes(niveauAcces)) {
+
+  // Le fichier est chiffre mais le niveau d'acces de l'usager ne supporte
+  debug("Verifier si permission d'acces en mode %s pour %s", niveauAcces, req.url)
+  var amqpdao = req.amqpdao
+
+  // pas le mode chiffre. Demander une permission de dechiffrage au domaine
+  // et dechiffrer le fichier au vol si permis.
+  try {
+    const {permission, decipherStream, fuuidEffectif} = await creerStreamDechiffrage(amqpdao, fuuid, utiliserPreview)
+
+    // Ajouter information de dechiffrage pour la reponse
+    res.decipherStream = decipherStream
+    res.permission = permission
+    res.fuuid = fuuidEffectif
+
+    if(fuuidEffectif !== fuuid) {
+      // Preview
+      res.setHeader('Content-Type', res.permission['mimetype_preview'])
+
+      // S'assurer que le fichier de preview existe avant de changer le filePath
+      var previewPath = pathConsignation.trouverPathLocal(fuuidEffectif, encrypted)
+      try {
+        const statPreview = await new Promise((resolve, reject)=>{
+          fs.stat(previewPath, (err, stat)=>{
+            if(err) return reject(err)
+            return resolve(stat)
+          })
+        })
+
+        // Changer information de fichier - on transmet preview
+        res.stat = statPreview
+        res.fuuid = fuuidEffectif
+        res.filePath = previewPath
+
+      } catch(err) {
+        console.error("Preview non disponible : %O", err)
+      }
+
+      // Override du filepath par celui du preview
+    } else {
+      // Ajouter nom fichier
+      const nomFichier = res.permission['nom_fichier']
+      if(!nofile) {
+        res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
+      }
+      res.setHeader('Content-Length', res.permission['taille'])
+      res.setHeader('Content-Type', res.permission['mimetype'])
+    }
+
+  } catch(err) {
+    console.error("Erreur traitement dechiffrage stream pour %s:\n%O", req.url, err)
+    debug("Permission d'acces refuse en mode %s pour %s", niveauAcces, req.url)
+    return res.sendStatus(403)  // Acces refuse
+  }
+
+  // } else {
+  //   // Transfert du fichier chiffre directement, on met les stats du filesystem
+  //   // var contentType = req.headers.mimetype || 'application/octet-stream'
+  //   // res.setHeader('Content-Length', res.stat.size)
+  //   // res.setHeader('Content-Type', contentType)
+  //
+  //   // Le fichier n'est pas public
+  //   return res.sendStatus(403)  // Acces refuse
+  // }
+
+  debug("Info idmg: %s, paths: %s", idmg, pathConsignation);
+
+  // Cache control public, permet de faire un cache via proxy (nginx)
+  res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
+  res.setHeader('fuuid', res.fuuid)
+  res.setHeader('securite', '1.public')
   res.setHeader('Last-Modified', res.stat.mtime)
 
   next()
