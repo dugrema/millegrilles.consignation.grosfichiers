@@ -108,13 +108,16 @@ async function genererPreviewVideo(sourcePath, previewPath) {
 
     debug("Fichier preview demande %s, temporaire : %s", nomFichierDemande, nomFichierPreview)
 
-    new FFmpeg({ source: sourcePath })
+    new FFmpeg({ source: sourcePath, priority: 10, })
       .on('error', function(err) {
           console.error('An error occurred: ' + err.message);
           reject(err);
       })
       .on('codecData', data => {
         dataVideo = data;
+      })
+      .on('progress', progress=>{
+        debug("Progress : %O", progress)
       })
       .on('end', filenames => {
         debug('Successfully generated thumbnail %s, filenames : %O ', previewPath, filenames);
@@ -149,7 +152,7 @@ async function genererVideoMp4_480p(sourcePath, destinationPath, opts) {
         height = opts.height || '480'
   return await new Promise((resolve, reject) => {
     new FFmpeg({source: sourcePath})
-      .withVideoBitrate('2500k')
+      .withVideoBitrate(bitrate)
       .withSize('?x' + height)
       .on('error', function(err) {
           console.error('An error occurred: ' + err.message);

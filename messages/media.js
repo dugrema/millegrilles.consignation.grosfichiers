@@ -101,6 +101,8 @@ async function transcoderVideo(mq, pathConsignation, message) {
 
   debug("Transaction transcoder video : %O", transactionAssocierPreview)
 
+  mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageTermine')
+
   const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
   mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
 }

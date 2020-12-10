@@ -195,13 +195,11 @@ async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetriq
     fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.mp4'})
     var fichierSource = fichierSrcTmp.path
     debug("Fichier transcodage video, source dechiffree : %s", fichierSource)
-    mq.emettreEvenement({fuuid, progres: 5}, 'evenement.fichiers.transcodageEnCours')
 
     debug("Decryptage video, re-encoder en MP4, source %s sous %s", fuuid, fichierDstTmp.path);
-
-    mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageVideo')
+    mq.emettreEvenement({fuuid, progres: 5}, 'evenement.fichiers.transcodageEnCours')
     var resultatMp4 = await transformationImages.genererVideoMp4_480p(fichierSource, fichierDstTmp.path);
-    mq.emettreEvenement({fuuid: message.fuuid, progres: 95}, 'evenement.fichiers.transcodageEnCours')
+    mq.emettreEvenement({fuuid, progres: 95}, 'evenement.fichiers.transcodageEnCours')
 
     // Chiffrer le video transcode
     const fuuidVideo480p = uuidv1()
