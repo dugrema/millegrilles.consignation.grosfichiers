@@ -221,6 +221,10 @@ async function downloadFichierPublic(req, res, next) {
   // et dechiffrer le fichier au vol si permis.
   try {
     const infoStream = await creerStreamDechiffrage(amqpdao, req)
+    if(infoStream.acces === '0.refuse') {
+      debug("Permission d'acces refuse en mode %s pour %s", niveauAcces, req.url)
+      return res.sendStatus(403)  // Acces refuse
+    }
 
     // Ajouter information de dechiffrage pour la reponse
     res.decipherStream = infoStream.decipherStream
@@ -331,6 +335,9 @@ async function creerStreamDechiffrage(mq, req) {
   const reponseCle = await mq.transmettreRequete(
     domaineActionDemandeCle, reponsePermission, {noformat: true, attacherCertificat: true})
   debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
+  if(reponseCle.acces === '0.refuse') {
+    return {acces: responseCle.acces, 'err': 'Acces refuse'}
+  }
 
   var cleChiffree, iv, fuuidEffectif = fuuidFichier, infoVideo = ''
   //if(utiliserPreview && reponsePermission['fuuid_preview']) {
@@ -366,7 +373,7 @@ async function creerStreamDechiffrage(mq, req) {
 
   const decipherStream = getDecipherPipe4fuuid(cleDechiffree, iv, {cleFormat: 'hex'})
 
-  return {permission: reponsePermission, fuuidEffectif, decipherStream, infoVideo}
+  return {acces: responseCle.acces, permission: reponsePermission, fuuidEffectif, decipherStream, infoVideo}
 }
 
 module.exports = {InitialiserGrosFichiers};
