@@ -373,7 +373,7 @@ async function creerStreamDechiffrage(mq, req) {
 
   const decipherStream = getDecipherPipe4fuuid(cleDechiffree, iv, {cleFormat: 'hex'})
 
-  return {acces: responseCle.acces, permission: reponsePermission, fuuidEffectif, decipherStream, infoVideo}
+  return {acces: reponseCle.acces, permission: reponsePermission, fuuidEffectif, decipherStream, infoVideo}
 }
 
 module.exports = {InitialiserGrosFichiers};
