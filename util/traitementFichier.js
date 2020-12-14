@@ -47,6 +47,7 @@ class PathConsignation {
     this.consignationPathSeeding = path.join(this.consignationPath, '/torrents/seeding');
     this.consignationPathManagedTorrents = path.join(this.consignationPath, '/torrents/torrentfiles');
     this.consignationPathBackup = path.join(this.consignationPath, '/backup');
+    this.consignationPathDownloadStaging = path.join(this.consignationPath, '/downloadStaging');
     this.consignationPathBackupHoraire = path.join(this.consignationPathBackup, '/horaire');
     this.consignationPathBackupArchives = path.join(this.consignationPathBackup, '/archives');
     this.consignationPathBackupStaging = path.join(this.consignationPathBackup, '/staging');

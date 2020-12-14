@@ -169,14 +169,11 @@ async function downloadFichierLocal(req, res, next) {
 
 async function downloadFichierPublic(req, res, next) {
   debug("downloadFichierLocalChiffre methode:" + req.method + ": " + req.url);
-  debug(req.headers);
-  debug(req.autorisationMillegrille)
-  // debug("PARAMS\n%O", req.params)
-  // debug("QUERY\n%O", req.query)
+  debug("Headers : %O\nAutorisation: %o", req.headers, req.autorisationMillegrille);
 
   const securite = req.headers.securite || '3.protege'
   var encrypted = true
-  // if(securite === '3.protege') encrypted = true
+
   var utiliserPreview = req.query.preview?true:false
   var videoResolution = req.query.resolution
   var nofile = req.query.nofile?true:false
@@ -233,6 +230,15 @@ async function downloadFichierPublic(req, res, next) {
 
     const fuuidEffectif = infoStream.fuuidEffectif
 
+    // Preparer le fichier dechiffre dans repertoire de staging
+    const infoFichierEffectif = await stagingFichier(pathConsignation, fuuidEffectif, infoStream)
+    res.stat = infoFichierEffectif.stat
+    res.filePath = infoFichierEffectif.filePath
+
+    // Ajouter information de header pour slicing (HTTP 206)
+    res.setHeader('Content-Length', res.stat.size)
+    res.setHeader('Accept-Ranges', 'bytes')
+
     if(fuuidEffectif !== fuuid) {
       // Preview
       if(infoStream.infoVideo) {
@@ -245,17 +251,17 @@ async function downloadFichierPublic(req, res, next) {
       // S'assurer que le fichier de preview existe avant de changer le filePath
       var previewPath = pathConsignation.trouverPathLocal(fuuidEffectif, encrypted)
       try {
-        const statPreview = await new Promise((resolve, reject)=>{
-          fs.stat(previewPath, (err, stat)=>{
-            if(err) return reject(err)
-            return resolve(stat)
-          })
-        })
+        // const statPreview = await new Promise((resolve, reject)=>{
+        //   fs.stat(previewPath, (err, stat)=>{
+        //     if(err) return reject(err)
+        //     return resolve(stat)
+        //   })
+        // })
 
         // Changer information de fichier - on transmet preview
-        res.stat = statPreview
+        //res.stat = statPreview
         res.fuuid = fuuidEffectif
-        res.filePath = previewPath
+        //res.filePath = previewPath
 
       } catch(err) {
         console.error("Preview non disponible : %O", err)
@@ -268,7 +274,7 @@ async function downloadFichierPublic(req, res, next) {
       if(!nofile) {
         res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
       }
-      res.setHeader('Content-Length', res.permission['taille'])
+      // res.setHeader('Content-Length', res.tailleFichier)
       res.setHeader('Content-Type', res.permission['mimetype'])
     }
 
@@ -288,7 +294,7 @@ async function downloadFichierPublic(req, res, next) {
   //   return res.sendStatus(403)  // Acces refuse
   // }
 
-  debug("Info idmg: %s, paths: %s", idmg, pathConsignation);
+  debug("Info idmg: %s, stat fichier: %s", idmg, pathConsignation);
 
   // Cache control public, permet de faire un cache via proxy (nginx)
   res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
@@ -296,26 +302,61 @@ async function downloadFichierPublic(req, res, next) {
   res.setHeader('securite', '1.public')
   res.setHeader('Last-Modified', res.stat.mtime)
 
+  const range = req.headers.range
+  if(range) {
+    console.debug("Range request : %s, taille fichier %s", range, res.stat.size)
+    const infoRange = readRangeHeader(range, res.stat.size)
+    res.range = infoRange
+  }
+
   next()
 }
 
+// Sert a preparer un fichier temporaire local pour determiner la taille, supporter slicing
 function pipeReponse(req, res) {
-  const filePath = res.filePath
   const header = res.responseHeader
+  const filePath = res.filePath
 
-  res.writeHead(200)
+  if(res.range) {
+    // Implicitement un fichier 1.public, staging local
+    var start = res.range.Start,
+        end = res.range.End,
+        stat = res.stat
 
-  // Ouvrir un stream de lecture sur le fichier chiffre
-  var readStream = fs.createReadStream(filePath);
+    // If the range can't be fulfilled.
+    if (start >= stat.size) { // || end >= stat.size) {
+      // Indicate the acceptable range.
+      res.setHeader('Content-Range', 'bytes */' + stat.size)  // File size.
 
-  // Transmettre les bytes a res
-  if(res.decipherStream) {
-    debug("Dechiffrer le fichier %s au vol", req.url)
-    res.decipherStream.pipe(res)
-    readStream.pipe(res.decipherStream)
+      // Return the 416 'Requested Range Not Satisfiable'.
+      res.writeHead(416)
+      return res.end()
+    }
+
+    res.setHeader('Content-Range', 'bytes ' + start + '-' + end + '/' + stat.size)
+
+    debug("Transmission range fichier %d a %d bytes (taille :%d) : %s", start, end, stat.size, filePath)
+    const readStream = fs.createReadStream(filePath, { start: start, end: end })
+    res.status(206)
+    readStream.pipe(res)
   } else {
+    // Transmission directe du fichier
+    const readStream = fs.createReadStream(filePath)
+    res.writeHead(200)
     readStream.pipe(res)
   }
+
+  // // Ouvrir un stream de lecture sur le fichier chiffre
+  // var readStream = fs.createReadStream(filePath);
+  //
+  // // Transmettre les bytes a res
+  // if(res.decipherStream) {
+  //   debug("Dechiffrer le fichier %s au vol", req.url)
+  //   res.decipherStream.pipe(res)
+  //   readStream.pipe(res.decipherStream)
+  // } else {
+  //   readStream.pipe(res)
+  // }
 
 }
 
@@ -374,6 +415,109 @@ async function creerStreamDechiffrage(mq, req) {
   const decipherStream = getDecipherPipe4fuuid(cleDechiffree, iv, {cleFormat: 'hex'})
 
   return {acces: reponseCle.acces, permission: reponsePermission, fuuidEffectif, decipherStream, infoVideo}
+}
+
+function readRangeHeader(range, totalLength) {
+        /* src : https://www.codeproject.com/articles/813480/http-partial-content-in-node-js
+         * Example of the method 'split' with regular expression.
+         *
+         * Input: bytes=100-200
+         * Output: [null, 100, 200, null]
+         *
+         * Input: bytes=-200
+         * Output: [null, null, 200, null]
+         */
+
+    if (range == null || range.length == 0)
+        return null;
+
+    var array = range.split(/bytes=([0-9]*)-([0-9]*)/);
+    var start = parseInt(array[1]);
+    var end = parseInt(array[2]);
+    var result = {
+        Start: isNaN(start) ? 0 : start,
+        End: isNaN(end) ? (totalLength - 1) : end
+    };
+
+    // var result = {
+    //     Start: isNaN(start) ? 0 : start,
+    //     End: isNaN(end) ? (totalLength - 1) : end
+    // };
+    //
+    // if (!isNaN(start) && isNaN(end)) {
+    //     result.Start = start;
+    //     result.End = totalLength - 1;
+    // }
+    //
+    // if (isNaN(start) && !isNaN(end)) {
+    //     result.Start = totalLength - end;
+    //     result.End = totalLength - 1;
+    // }
+    //
+    // return result;
+}
+
+async function stagingFichier(pathConsignation, fuuidEffectif, infoStream) {
+  // Staging de fichier public
+
+  // Verifier si le fichier existe deja
+  const pathFuuidLocal = pathConsignation.trouverPathLocal(fuuidEffectif, true)
+  const pathFuuidEffectif = path.join(pathConsignation.consignationPathDownloadStaging, fuuidEffectif)
+  var statFichier = await new Promise((resolve, reject) => {
+    // S'assurer que le path de staging existe
+    fs.mkdir(pathConsignation.consignationPathDownloadStaging, {recursive: true}, err=>{
+      if(err) return reject(err)
+      // Verifier si le fichier existe
+      fs.stat(pathFuuidEffectif, (err, stat)=>{
+        if(err) {
+          if(err.errno == -2) {
+            resolve(null)  // Le fichier n'existe pas, on va le creer
+          } else {
+            reject(err)
+          }
+        } else {
+          // Touch et retourner stat
+          const time = new Date()
+          fs.utimes(pathFuuidEffectif, time, time, err=>{
+            if(err) {
+              debug("Erreur touch %s : %o", pathFuuidEffectif, err)
+              return
+            }
+            resolve({pathFuuidLocal, filePath: pathFuuidEffectif, stat})
+          })
+        }
+      })
+    })
+  })
+
+  // Verifier si on a toute l'information
+  if(statFichier) return statFichier
+
+  // Le fichier n'existe pas, on le dechiffre dans staging
+  const outStream = fs.createWriteStream(pathFuuidEffectif, {flags: 'wx'})
+  return new Promise((resolve, reject)=>{
+    outStream.on('close', _=>{
+      fs.stat(pathFuuidEffectif, (err, stat)=>{
+        if(err) {
+          reject(err)
+        } else {
+          debug("Fin staging fichier %O", stat)
+          resolve({pathFuuidLocal, filePath: pathFuuidEffectif, stat})
+        }
+      })
+
+    })
+    outStream.on('error', err=>{
+      debug("Erreur staging fichier %s : %O", pathFuuidEffectif, err)
+      reject(err)
+    })
+
+    debug("Staging fichier %s", pathFuuidEffectif)
+    infoStream.decipherStream.pipe(outStream)
+    var readStream = fs.createReadStream(pathFuuidLocal);
+    readStream.pipe(infoStream.decipherStream)
+  })
+
 }
 
 module.exports = {InitialiserGrosFichiers};
