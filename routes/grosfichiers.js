@@ -10,7 +10,7 @@ const {getDecipherPipe4fuuid} = require('../util/cryptoUtils')
 
 // const throttle = require('@sitespeed.io/throttle');
 
-const STAGING_FILE_TIMEOUT_MSEC = 15000
+const STAGING_FILE_TIMEOUT_MSEC = 300000
 
 function InitialiserGrosFichiers() {
 
@@ -50,7 +50,7 @@ function InitialiserGrosFichiers() {
 
   })
 
-  setInterval(cleanupStagingDownload, 15000)
+  setInterval(cleanupStagingDownload, 120000)
 
   return router
 }
