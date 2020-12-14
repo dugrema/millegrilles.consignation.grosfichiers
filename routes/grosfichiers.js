@@ -10,6 +10,8 @@ const {getDecipherPipe4fuuid} = require('../util/cryptoUtils')
 
 // const throttle = require('@sitespeed.io/throttle');
 
+const STAGING_FILE_TIMEOUT_MSEC = 15000
+
 function InitialiserGrosFichiers() {
 
   const router = express.Router();
@@ -47,6 +49,8 @@ function InitialiserGrosFichiers() {
     }
 
   })
+
+  setInterval(cleanupStagingDownload, 15000)
 
   return router
 }
@@ -518,6 +522,42 @@ async function stagingFichier(pathConsignation, fuuidEffectif, infoStream) {
     readStream.pipe(infoStream.decipherStream)
   })
 
+}
+
+function cleanupStagingDownload() {
+  // Supprime les fichiers de staging en fonction de la derniere modification (touch)
+  const pathConsignation = new PathConsignation()
+  const pathDownloadStaging = pathConsignation.consignationPathDownloadStaging
+
+  // debug("Appel cleanupStagingDownload " + pathDownloadStaging)
+
+  fs.readdir(pathDownloadStaging, (err, files)=>{
+    if(err) {
+      if(err.code === 'ENOENT') return  // Repertoire n'existe pas
+      return console.error("cleanupStagingDownload ERROR: %O", err)
+    }
+
+    const expirationMs = new Date().getTime() - STAGING_FILE_TIMEOUT_MSEC
+
+    files.forEach(file=>{
+      const filePath = path.join(pathDownloadStaging, file)
+      fs.stat(filePath, (err, stat)=>{
+        if(err) {
+          if(err.code === 'ENOENT') return  // Repertoire n'existe pas
+          return console.error("cleanupStagingDownload ERROR: %O", err)
+        }
+
+        // debug("Info fichier %s: %O", filePath, stat)
+        if(stat.mtimeMs < expirationMs) {
+          debug("Cleanup fichier download staging %s", filePath)
+          fs.unlink(filePath, err=>{
+            if(err) debug("Erreur unlink fichier %O", err)
+          })
+        }
+      })
+    })
+
+  })
 }
 
 module.exports = {InitialiserGrosFichiers};
