@@ -1,39 +1,39 @@
-const fs = require('fs');
-const path = require('path');
-const S3 = require('aws-sdk/clients/s3');
+const fs = require('fs')
+const path = require('path')
+const S3 = require('aws-sdk/clients/s3')
 const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
 const { decrypterSymmetrique } = require('../util/cryptoUtils')
-const { PathConsignation } = require('../util/traitementFichier');
+const { PathConsignation } = require('../util/traitementFichier')
 
-const AWS_API_VERSION = '2006-03-01';
+const AWS_API_VERSION = '2006-03-01'
 
 class PublicateurAWS {
 
   constructor(mq) {
-    this.mq = mq;
-    this.publierCollection.bind(this);
+    this.mq = mq
+    this.publierCollection.bind(this)
 
-    const idmg = mq.pki.idmg;
-    this.pathConsignation = new PathConsignation({idmg});
+    const idmg = mq.pki.idmg
+    this.pathConsignation = new PathConsignation({idmg})
   }
 
   // Appele lors d'une reconnexion MQ
   on_connecter() {
-    this.enregistrerChannel();
+    this.enregistrerChannel()
   }
 
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
-      this.publierCollection(routingKey, message, opts)}, ['commande.grosfichiers.publierCollection'], {operationLongue: true});
+      this.publierCollection(routingKey, message, opts)}, ['commande.grosfichiers.publierCollection'], {operationLongue: true})
   }
 
   publierCollection(routingKey, message, opts) {
     // console.debug("AWS publicCollection Properties");
     // console.debug(opts.properties);
 
-    var messageConfiguration = Object.assign({}, message);  // Copie message
+    var messageConfiguration = Object.assign({}, message)  // Copie message
 
-    let promise = Promise.resolve();
+    let promise = Promise.resolve()
 
     // console.debug("AWS message");
     // console.debug(message);
