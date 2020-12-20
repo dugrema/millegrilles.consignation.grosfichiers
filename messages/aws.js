@@ -5,6 +5,7 @@ const S3 = require('aws-sdk/clients/s3')
 const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
 const { decrypterSymmetrique } = require('../util/cryptoUtils')
 const { PathConsignation } = require('../util/traitementFichier')
+const { dechiffrerTemporaire } = require('../util/traitementMedia')
 
 const AWS_API_VERSION = '2006-03-01'
 
@@ -220,7 +221,7 @@ async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
 
   // Recuperer information noeud, info dechiffrage mot de passe AWS S3
   const noeudId = message.noeud_id
-  var infoConsignationWebNoeud = null, motDePasseAWSS3 = null
+  var infoConsignationWebNoeud = null
   try {
     const domaineActionInfoNoeud = 'Topologie.infoNoeud'
     const reponseNoeud = await mq.transmettreRequete(domaineActionInfoNoeud, {noeud_id: noeudId})
@@ -232,13 +233,20 @@ async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
     return
   }
 
+  var motDePasseAWSS3 = null
   try {
     // Dechiffrer mot de passe AWS S3
     const domaineActionMotdepasse = 'Topologie.permissionDechiffrage'
-    const identificateurs_document = infoConsignationWebNoeud.credentialsSecretAccessKey.identificateurs_document
+    const credentialsSecretAccessKey = infoConsignationWebNoeud.credentialsSecretAccessKey
+    const identificateurs_document = credentialsSecretAccessKey.identificateurs_document
     const reponseCleSecrete = await mq.transmettreRequete(
       domaineActionMotdepasse, {identificateurs_document}, {attacherCertificat: true})
-    debug("publierAwsS3: Cle dechiffrage mot de passe : %O", reponseCleSecrete)
+    debug("publierAwsS3: Cle secrete chiffree pour secret access key : %O", reponseCleSecrete)
+
+    const secretChiffre = credentialsSecretAccessKey.secret_chiffre
+    const motDePasseAWSS3 = await mq.pki.dechiffrerContenuAsymetric(reponseCleSecrete.cle, reponseCleSecrete.iv, secretChiffre)
+
+    debug("publierAwsS3: Mot de passe (secret access key) : %s", motDePasseAWSS3)
   } catch(err) {
     console.error("publierAwsS3 ERROR: Information dechiffrage mot de passe AWSS3 non disponible %O", err)
     mq.emettreEvenement({fuuid: message.fuuid, etat: 'echec', progres: -1, err: ''+err}, 'evenement.fichiers.publicAwsS3')
@@ -246,17 +254,27 @@ async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
   }
 
   // Dechiffrer fichier (tmp) pour upload
-  var reponseDechiffrageFichier = null
+  var reponseDechiffrageFichier = null, cleFichier = null
   try {
     const domaineActionPermission = message.permission['en-tete'].domaine
     reponseDechiffrageFichier = await mq.transmettreRequete(
       domaineActionPermission, message.permission, {noformat: true, attacherCertificat: true})
     debug("Reponse cle dechiffrage fichier : %O", reponseDechiffrageFichier)
+
+    const cleChiffree = reponseDechiffrageFichier.cle
+    cleFichier = await mq.pki.decrypterAsymetrique(cleChiffree)
+
   } catch(err) {
     console.error("publierAwsS3 ERROR: Cle dechiffrage fichier refusee %O", err)
     mq.emettreEvenement({fuuid: message.fuuid, etat: 'echec', progres: -1, err: ''+err}, 'evenement.fichiers.publicAwsS3')
     return
   }
+  mq.emettreEvenement({fuuid: message.fuuid, etat: 'enCours', progres: 2}, 'evenement.fichiers.publicAwsS3')
+
+  const fuuid = message.fuuid
+  const fichierTemporaire = await dechiffrerTemporaire(pathConsignation, fuuid, 'dat', cleFichier, reponseDechiffrageFichier.iv)
+  debug("Fichier dechiffre sous : %O", fichierTemporaire)
+  mq.emettreEvenement({fuuid: message.fuuid, etat: 'enCours', progres: 5}, 'evenement.fichiers.publicAwsS3')
 
   mq.emettreEvenement({fuuid: message.fuuid, etat: 'succes', progres: 100}, 'evenement.fichiers.publicAwsS3')
 

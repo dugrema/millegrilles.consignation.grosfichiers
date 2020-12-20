@@ -291,5 +291,5 @@ async function traiterVideo(pathImageSrc, pathImageDst) {
 }
 
 module.exports = {
-  genererPreviewImage, genererPreviewVideo, transcoderVideo,
+  genererPreviewImage, genererPreviewVideo, transcoderVideo, dechiffrerTemporaire
 }
