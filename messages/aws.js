@@ -1,3 +1,4 @@
+const debug = require('debug')('millegrilles:fichiers:aws')
 const fs = require('fs')
 const path = require('path')
 const S3 = require('aws-sdk/clients/s3')
@@ -11,7 +12,6 @@ class PublicateurAWS {
 
   constructor(mq) {
     this.mq = mq
-    this.publierCollection.bind(this)
 
     const idmg = mq.pki.idmg
     this.pathConsignation = new PathConsignation({idmg})
@@ -24,7 +24,7 @@ class PublicateurAWS {
 
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
-      this.publierCollection(routingKey, message, opts)}, ['commande.grosfichiers.publierCollection'], {operationLongue: true})
+      publierAwsS3(this.mq, this.pathConsignation, routingKey, message, opts)}, ['commande.fichiers.publierAwsS3'], {operationLongue: true})
   }
 
   publierCollection(routingKey, message, opts) {
@@ -212,5 +212,11 @@ function uploaderFichier(s3, fichiers, msg) {
 
   }
 }
+
+async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
+  if(!opts) opts = {}
+  debug("Commande publicAwsS3 : %O", message)
+}
+
 
 module.exports = {AWS_API_VERSION, PublicateurAWS}

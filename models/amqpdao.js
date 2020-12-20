@@ -51,8 +51,8 @@ async function initialiserRabbitMQ(rabbitMQ) {
   const {GenerateurMedia} = require('../messages/media');
   rabbitMQ.enregistrerListenerConnexion(new GenerateurMedia(rabbitMQ));
 
-  // const {PublicateurAWS} = require('../messages/aws');
-  // rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
+  const {PublicateurAWS} = require('../messages/aws');
+  rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
 
   const {GestionnaireMessagesBackup} = require('../messages/backup')
   rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ))
