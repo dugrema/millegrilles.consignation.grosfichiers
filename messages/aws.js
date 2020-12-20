@@ -216,6 +216,50 @@ function uploaderFichier(s3, fichiers, msg) {
 async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
   if(!opts) opts = {}
   debug("Commande publicAwsS3 : %O", message)
+  mq.emettreEvenement({fuuid: message.fuuid, etat: 'debut', progres: 1}, 'evenement.fichiers.publicAwsS3')
+
+  // Recuperer information noeud, info dechiffrage mot de passe AWS S3
+  const noeudId = message.noeud_id
+  var infoConsignationWebNoeud = null, motDePasseAWSS3 = null
+  try {
+    const domaineActionInfoNoeud = 'Topologie.infoNoeud'
+    const reponseNoeud = await mq.transmettreRequete(domaineActionInfoNoeud, {noeud_id: noeudId})
+    infoConsignationWebNoeud = reponseNoeud.consignation_web
+    debug("publierAwsS3: Information noeud : %O", reponseNoeud)
+  } catch(err) {
+    console.error("publierAwsS3 ERROR: Information noeud (topologie) non disponible %O", err)
+    mq.emettreEvenement({fuuid: message.fuuid, etat: 'echec', progres: -1, err: ''+err}, 'evenement.fichiers.publicAwsS3')
+    return
+  }
+
+  try {
+    // Dechiffrer mot de passe AWS S3
+    const domaineActionMotdepasse = 'Topologie.permissionDechiffrage'
+    const identificateurs_document = infoConsignationWebNoeud.credentialsSecretAccessKey.identificateurs_document
+    const reponseCleSecrete = await mq.transmettreRequete(
+      domaineActionMotdepasse, {identificateurs_document}, {attacherCertificat: true})
+    debug("publierAwsS3: Cle dechiffrage mot de passe : %O", reponseCleSecrete)
+  } catch(err) {
+    console.error("publierAwsS3 ERROR: Information dechiffrage mot de passe AWSS3 non disponible %O", err)
+    mq.emettreEvenement({fuuid: message.fuuid, etat: 'echec', progres: -1, err: ''+err}, 'evenement.fichiers.publicAwsS3')
+    return
+  }
+
+  // Dechiffrer fichier (tmp) pour upload
+  var reponseDechiffrageFichier = null
+  try {
+    const domaineActionPermission = message.permission['en-tete'].domaine
+    reponseDechiffrageFichier = await mq.transmettreRequete(
+      domaineActionPermission, message.permission, {noformat: true, attacherCertificat: true})
+    debug("Reponse cle dechiffrage fichier : %O", reponseDechiffrageFichier)
+  } catch(err) {
+    console.error("publierAwsS3 ERROR: Cle dechiffrage fichier refusee %O", err)
+    mq.emettreEvenement({fuuid: message.fuuid, etat: 'echec', progres: -1, err: ''+err}, 'evenement.fichiers.publicAwsS3')
+    return
+  }
+
+  mq.emettreEvenement({fuuid: message.fuuid, etat: 'succes', progres: 100}, 'evenement.fichiers.publicAwsS3')
+
 }
 
 
