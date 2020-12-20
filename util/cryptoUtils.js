@@ -14,22 +14,37 @@ class Decrypteur {
     return new Promise((resolve, reject)=>{
       let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv, opts);
 
+      // console.log("Decryptage fichier " + sourceCryptee + " vers " + destination);
+      let writeStream = fs.createWriteStream(destination);
+
       // Calculer taille et sha256 du fichier decrypte. Necessaire pour transaction.
       const sha256 = crypto.createHash('sha256');
       var sha256Hash = null;
       var tailleFichier = 0;
+      var ivLu = false
       cryptoStream.on('data', chunk=>{
+        if(!ivLu) {
+          ivLu = true
+          chunk = chunk.slice(16)
+        }
+
         sha256.update(chunk);
         tailleFichier = tailleFichier + chunk.length;
+        writeStream.write(chunk)
       });
       cryptoStream.on('end', ()=>{
         // Comparer hash a celui du header
         sha256Hash = sha256.digest('hex');
         // console.debug("Hash fichier " + sha256Hash);
+        writeStream.close()
       });
 
-      // console.log("Decryptage fichier " + sourceCryptee + " vers " + destination);
-      let writeStream = fs.createWriteStream(destination);
+      // , {
+      //   transform: (chunk, encoding, cb)=>{
+      //     console.debug("Chunk! len: " + chunk.length)
+      //     cb(null, chunk)
+      //   }
+      // }
 
       writeStream.on('close', ()=>{
         // console.debug("Fermeture fichier decrypte");
@@ -40,11 +55,13 @@ class Decrypteur {
         reject();
       });
 
-      cryptoStream.pipe(writeStream);
-
       // Ouvrir et traiter fichier
       let readStream = fs.createReadStream(sourceCryptee);
       readStream.pipe(cryptoStream);
+
+      // cryptoStream.pipe(writeStream);
+      readStream.read()
+
     });
   }
 

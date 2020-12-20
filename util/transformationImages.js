@@ -83,8 +83,8 @@ async function genererPreviewImage(sourcePath, destinationPath, opts) {
 
 function _imConvertPromise(params) {
   return new Promise((resolve, reject) => {
-    // console.debug("Conversion")
-    // console.debug(params)
+    console.debug("Conversion")
+    console.debug(params)
     im.convert(params,
       function(err, stdout){
         if (err) reject(err);

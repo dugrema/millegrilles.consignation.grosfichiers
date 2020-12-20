@@ -152,7 +152,17 @@ async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques) {
   return await new Promise((resolve, reject)=>{
     const s = fs.ReadStream(fichierSrc)
     var tailleFichier = 0
+    var ivInsere = false
     s.on('data', data => {
+      if(!ivInsere) {
+        // Inserer le IV au debut du fichier
+        ivInsere = true
+        debug("Inserer IV : %O", iv)
+        const ivBuffer = new Buffer(iv, 'base64')
+        const contenuCrypte = cipher.update(ivBuffer);
+        tailleFichier += contenuCrypte.length
+        writeStream.write(contenuCrypte)
+      }
       const contenuCrypte = cipher.update(data);
       tailleFichier += contenuCrypte.length
       writeStream.write(contenuCrypte)
@@ -244,14 +254,16 @@ async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetriq
   } finally {
     // S'assurer que les fichiers temporaires sont supprimes
     if(fichierSrcTmp) {
-      fs.unlink(fichierSrcTmp.path, err=>{
-        if(err) console.error("Erreur suppression fichier tmp dechiffre : %O", err)
-      })
+      fichierSrcTmp.cleanup()
+      // fs.unlink(fichierSrcTmp.path, err=>{
+      //   if(err) console.error("Erreur suppression fichier tmp dechiffre : %O", err)
+      // })
     }
     if(fichierDstTmp) {
-      fs.unlink(fichierDstTmp.path, err=>{
-        if(err) console.error("Erreur suppression fichier tmp transcode (dechiffre) : %O", err)
-      })
+      fichierDstTmp.cleanup()
+      // fs.unlink(fichierDstTmp.path, err=>{
+      //   if(err) console.error("Erreur suppression fichier tmp transcode (dechiffre) : %O", err)
+      // })
     }
   }
 
