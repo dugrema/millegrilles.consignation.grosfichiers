@@ -25,7 +25,7 @@ class PublicateurAWS {
 
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback((routingKey, message, opts)=>{
-      publierAwsS3(this.mq, this.pathConsignation, routingKey, message, opts)}, ['commande.fichiers.publierAwsS3'], {operationLongue: true})
+      return publierAwsS3(this.mq, this.pathConsignation, routingKey, message, opts)}, ['commande.fichiers.publierAwsS3'], {operationLongue: true})
   }
 
   publierCollection(routingKey, message, opts) {
@@ -164,23 +164,22 @@ function uploaderFichier(s3, noeudConfig, message, pathFichier) {
   let dirFichier = noeudConfig.bucketDirfichier || ''
 
   var pathSurServeur = path.format({
-//    dir: dirFichier,
+    dir: dirFichier,
     name: fuuidFichier,
-    ext: '.'+extension
+    // ext: '.'+extension
   })
 
   var uploadParams = {
     Bucket: noeudConfig.bucketName,
     Key: pathSurServeur,
     Body: fileStream,
-    //ACL: 'public-read',
+    ACL: 'public-read',
     ContentType: mimetype,
     CacheControl: 'public, max-age=604800, immutable',
     ContentDisposition: 'attachment; filename="' + message.nom_fichier + '"',
     Metadata: {
       'uuid': message.uuid,
       'fuuid': message.fuuid,
-      // 'hachage': message.hachage,
       'nom_fichier': message.nom_fichier,
     }
   }
@@ -228,13 +227,13 @@ async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
     const identificateurs_document = credentialsSecretAccessKey.identificateurs_document
     const reponseCleSecrete = await mq.transmettreRequete(
       domaineActionMotdepasse, {identificateurs_document}, {attacherCertificat: true})
-    debug("publierAwsS3: Cle secrete chiffree pour secret access key : %O", reponseCleSecrete)
+    // debug("publierAwsS3: Cle secrete chiffree pour secret access key : %O", reponseCleSecrete)
 
     const secretChiffre = credentialsSecretAccessKey.secret_chiffre
     motDePasseAWSS3 = await mq.pki.dechiffrerContenuAsymetric(reponseCleSecrete.cle, reponseCleSecrete.iv, secretChiffre)
     motDePasseAWSS3 = JSON.parse(motDePasseAWSS3)  // Enlever wrapping (")
 
-    debug("publierAwsS3: Mot de passe (secret access key) : %s", motDePasseAWSS3)
+    // debug("publierAwsS3: Mot de passe (secret access key) : %s", motDePasseAWSS3)
   } catch(err) {
     console.error("publierAwsS3 ERROR: Information dechiffrage mot de passe AWSS3 non disponible %O", err)
     mq.emettreEvenement({fuuid: message.fuuid, etat: 'echec', progres: -1, err: ''+err}, 'evenement.fichiers.publicAwsS3')
@@ -296,10 +295,9 @@ function preparerConnexionS3(noeudConfiguration, secretAccessKey) {
       secretAccessKey: secretAccessKey,
     },
   }
-  debug("Configuration credentials AWS S3 : %O", configurationAws)
+  // debug("Configuration credentials AWS S3 : %O", configurationAws)
 
   const s3 = new S3(configurationAws)
-
   return s3
 }
 
