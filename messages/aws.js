@@ -113,105 +113,92 @@ class PublicateurAWS {
 
 }
 
-function listerFichiers(s3, paramsListing, fichiers, promiseRR) {
-  s3.listObjectsV2(paramsListing, (err, data)=>{
-    if(err) {
-      console.error("Erreur demande liste fichiers");
-      promiseRR.reject(err);
-    } else {
-      // console.log("Listing fichiers bucket " + paramsListing.Bucket);
-      for(let idx in data.Contents) {
-        let contents = data.Contents[idx];
+function listerFichiers(s3, paramsListing, fichiers) {
+  return new Promise( (resolve, reject)=>{
+    s3.listObjectsV2(paramsListing, async (err, data)=>{
+      if(err) {
+        console.error("aws.listerFichiers: Erreur demande liste fichiers");
+        return reject(err)
+      } else {
+        // console.log("Listing fichiers bucket " + paramsListing.Bucket);
+        for(let idx in data.Contents) {
+          let contents = data.Contents[idx];
 
-        let keyInfo = contents.Key.split('/');
-        let nomFichier = keyInfo[keyInfo.length-1];
-        let fuuid = nomFichier.split('.')[0];
+          let keyInfo = contents.Key.split('/');
+          let nomFichier = keyInfo[keyInfo.length-1];
+          let fuuid = nomFichier.split('.')[0];
 
-        if(fuuid && fuuid !== '') {
-          // console.log(contents);
-          // console.log('fuuid: ' + fuuid);
+          if(fuuid && fuuid !== '') {
+            // console.log(contents);
+            // console.log('fuuid: ' + fuuid);
 
-          if(fichiers[fuuid]) {
-            // console.log("Fichier " + fuuid + " existe deja");
-            delete fichiers[fuuid];
+            if(fichiers[fuuid]) {
+              // console.log("Fichier " + fuuid + " existe deja");
+              delete fichiers[fuuid];
+            }
           }
         }
-      }
 
-      if(data.IsTruncated) {
-        // console.debug("Continuer listing");
-        paramsListing.ContinuationToken = data.NextContinuationToken;
-        listerFichiers(s3, paramsListing, fichiers, promiseRR);
-      } else {
-        promiseRR.resolve();  // Listing termine
+        if(data.IsTruncated) {
+          // console.debug("Continuer listing");
+          paramsListing.ContinuationToken = data.NextContinuationToken;
+          await listerFichiers(s3, paramsListing, fichiers);
+        } else {
+          promiseRR.resolve();  // Listing termine
+        }
       }
-    }
-  });
+    })
+  })
 }
 
-function uploaderFichier(s3, fichiers, msg) {
-  if(fichiers.length === 0) {
-    console.debug("Batch upload AWS termine");
+function uploaderFichier(s3, noeudConfig, message, pathFichier) {
+  let fuuidFichier = message.fuuid
+  let extension = message.extension
+  let mimetype = message.mimetype
 
-    // Transmettre reponse a la commande d'upload
-    if(msg.properties && msg.properties.replyTo && msg.properties.correlationId) {
-      console.debug("Transmettre message de reponse pour transfert AWS");
-      let reponseUpload = {
-        uuid_source_figee: msg.message.uuid_source_figee,
-        uuid_collection_figee: msg.message.uuid_collection_figee,
-      }
-      msg.mq.transmettreReponse(
-        reponseUpload,
-        msg.properties.replyTo,
-        msg.properties.correlationId
-      );
+  var fileStream = fs.createReadStream(pathFichier)
+  fileStream.on('error', function(err) {
+    console.log('File Error', err);
+  });
 
+  let dirFichier = noeudConfig.bucketDirfichier || ''
+
+  var pathSurServeur = path.format({
+//    dir: dirFichier,
+    name: fuuidFichier,
+    ext: '.'+extension
+  })
+
+  var uploadParams = {
+    Bucket: noeudConfig.bucketName,
+    Key: pathSurServeur,
+    Body: fileStream,
+    //ACL: 'public-read',
+    ContentType: mimetype,
+    CacheControl: 'public, max-age=604800, immutable',
+    ContentDisposition: 'attachment; filename="' + message.nom_fichier + '"',
+    Metadata: {
+      'uuid': message.uuid,
+      'fuuid': message.fuuid,
+      // 'hachage': message.hachage,
+      'nom_fichier': message.nom_fichier,
     }
-
-  } else {
-    let fichier = fichiers.pop();
-    let fuuidFichier = fichier.fuuid;
-    let extension = fichier.extension;
-    let mimetype = fichier.mimetype;
-    let file = this.pathConsignation.trouverPathLocal(fuuidFichier, false, {extension});
-
-    var fileStream = fs.createReadStream(file);
-    fileStream.on('error', function(err) {
-      console.log('File Error', err);
-    });
-
-    let dirFichier = msg.message.dirfichier || '';
-
-    var pathSurServeur = path.format({
-      dir: dirFichier,
-      name: fuuidFichier,
-      ext: '.'+extension
-    })
-
-    var uploadParams = {
-      Bucket: msg.message.bucket,
-      Key: pathSurServeur,
-      Body: fileStream,
-      ACL: 'public-read',
-      ContentType: mimetype,
-    };
-
-    // call S3 to retrieve upload file to specified bucket
-    s3.upload (uploadParams, function (err, data) {
-      if (err) {
-        console.log("Error", err);
-        return;
-      }
-
-      if (data) {
-        console.log("Upload Success", data.Location);
-        console.debug(data);
-      }
-
-      uploaderFichier(s3, fichiers, msg);  // Continuer
-    });
-
   }
+
+  // call S3 to upload file to specified bucket
+  var options = {partSize: 10 * 1024 * 1024, queueSize: 1}
+  debug("AWS S3 upload params : %O", uploadParams)
+  return new Promise((resolve, reject)=>{
+    s3.upload(uploadParams, options, function (err, data) {
+      if (err) {
+        console.error("aws.uploaderFichier: Error %O", err);
+        return reject(err)
+      }
+      debug("Upload Success : %O", data);
+      resolve(data)
+    })
+  })
+
 }
 
 async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
@@ -244,7 +231,8 @@ async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
     debug("publierAwsS3: Cle secrete chiffree pour secret access key : %O", reponseCleSecrete)
 
     const secretChiffre = credentialsSecretAccessKey.secret_chiffre
-    const motDePasseAWSS3 = await mq.pki.dechiffrerContenuAsymetric(reponseCleSecrete.cle, reponseCleSecrete.iv, secretChiffre)
+    motDePasseAWSS3 = await mq.pki.dechiffrerContenuAsymetric(reponseCleSecrete.cle, reponseCleSecrete.iv, secretChiffre)
+    motDePasseAWSS3 = JSON.parse(motDePasseAWSS3)  // Enlever wrapping (")
 
     debug("publierAwsS3: Mot de passe (secret access key) : %s", motDePasseAWSS3)
   } catch(err) {
@@ -271,14 +259,74 @@ async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
   }
   mq.emettreEvenement({fuuid: message.fuuid, etat: 'enCours', progres: 2}, 'evenement.fichiers.publicAwsS3')
 
-  const fuuid = message.fuuid
-  const fichierTemporaire = await dechiffrerTemporaire(pathConsignation, fuuid, 'dat', cleFichier, reponseDechiffrageFichier.iv)
-  debug("Fichier dechiffre sous : %O", fichierTemporaire)
-  mq.emettreEvenement({fuuid: message.fuuid, etat: 'enCours', progres: 5}, 'evenement.fichiers.publicAwsS3')
+  var fichierTemporaire = null
+  try {
+    const fuuid = message.fuuid
+    fichierTemporaire = await dechiffrerTemporaire(pathConsignation, fuuid, 'dat', cleFichier, reponseDechiffrageFichier.iv)
+    debug("Fichier dechiffre sous : %O", fichierTemporaire)
+    mq.emettreEvenement({fuuid: message.fuuid, etat: 'enCours', progres: 5}, 'evenement.fichiers.publicAwsS3')
+
+    const s3 = preparerConnexionS3(infoConsignationWebNoeud, motDePasseAWSS3)
+    await uploaderFichier(s3, infoConsignationWebNoeud, message, fichierTemporaire.path)
+  } catch(err) {
+    console.error("aws.publierAwsS3 Erreur upload fichier : %O", err)
+    mq.emettreEvenement(
+      {
+        fuuid: message.fuuid, etat: 'echec', progres: -1,
+        err: 'aws.publierAwsS3 Erreur upload fichier : '+err
+      },
+      'evenement.fichiers.publicAwsS3'
+    )
+    return
+  } finally {
+    // Cleanup fichiers temporaires
+    if(fichierTemporaire) fichierTemporaire.cleanup()
+  }
 
   mq.emettreEvenement({fuuid: message.fuuid, etat: 'succes', progres: 100}, 'evenement.fichiers.publicAwsS3')
-
 }
+
+function preparerConnexionS3(noeudConfiguration, secretAccessKey) {
+  /** Prepare connexion avec Amazon Web Services S3 **/
+  let configurationAws = {
+    apiVersion: AWS_API_VERSION,
+    region: noeudConfiguration.bucketRegion,
+    credentials: {
+      accessKeyId: noeudConfiguration.credentialsAccessKeyId,
+      secretAccessKey: secretAccessKey,
+    },
+  }
+  debug("Configuration credentials AWS S3 : %O", configurationAws)
+
+  const s3 = new S3(configurationAws)
+
+  return s3
+}
+
+// async function uploadFichierAWSS3(params, secretAccessKey, pathFichier) {
+//   const credentials = new Credentials({
+//     accessKeyId: messageConfiguration.credentials.accessKeyId,
+//     secretAccessKey,
+//   })
+//   let configurationAws = {
+//     apiVersion: AWS_API_VERSION,
+//     region: messageConfiguration.region,
+//     credentials,
+//   }
+//
+//   // Connecter a Amazon S3
+//   const s3 = new S3(configurationAws);
+//
+//   uploaderFichier(
+//     s3, listeFichiers,
+//     {
+//         mq: this.mq,
+//         message: messageConfiguration,
+//         properties: opts.properties,
+//     }
+//   )
+//
+// }
 
 
 module.exports = {AWS_API_VERSION, PublicateurAWS}
