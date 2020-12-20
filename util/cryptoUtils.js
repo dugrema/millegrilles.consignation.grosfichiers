@@ -46,13 +46,6 @@ class Decrypteur {
         writeStream.close()
       });
 
-      // , {
-      //   transform: (chunk, encoding, cb)=>{
-      //     console.debug("Chunk! len: " + chunk.length)
-      //     cb(null, chunk)
-      //   }
-      // }
-
       writeStream.on('close', ()=>{
         // console.debug("Fermeture fichier decrypte");
         resolve({tailleFichier, sha512Hash});
