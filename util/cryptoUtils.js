@@ -18,23 +18,30 @@ class Decrypteur {
       let writeStream = fs.createWriteStream(destination);
 
       // Calculer taille et sha256 du fichier decrypte. Necessaire pour transaction.
-      const sha256 = crypto.createHash('sha256');
-      var sha256Hash = null;
+      const sha512 = crypto.createHash('sha512');
+      var sha512Hash = null;
       var tailleFichier = 0;
       var ivLu = false
       cryptoStream.on('data', chunk=>{
         if(!ivLu) {
           ivLu = true
+
+          // Verifier le iv
+          const ivExtrait = chunk.slice(0, 16).toString('base64')
+          if(ivExtrait !== iv) {
+            throw new Error('IV ne correspond pas')
+          }
+
           chunk = chunk.slice(16)
         }
 
-        sha256.update(chunk);
+        sha512.update(chunk);
         tailleFichier = tailleFichier + chunk.length;
         writeStream.write(chunk)
       });
       cryptoStream.on('end', ()=>{
         // Comparer hash a celui du header
-        sha256Hash = sha256.digest('hex');
+        sha512Hash = 'sha512_b64:' + sha512.digest('base64')
         // console.debug("Hash fichier " + sha256Hash);
         writeStream.close()
       });
@@ -48,7 +55,7 @@ class Decrypteur {
 
       writeStream.on('close', ()=>{
         // console.debug("Fermeture fichier decrypte");
-        resolve({tailleFichier, sha256Hash});
+        resolve({tailleFichier, sha512Hash});
       });
       writeStream.on('error', ()=>{
         console.error("Erreur decryptage fichier");
