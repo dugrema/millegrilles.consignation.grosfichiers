@@ -29,7 +29,10 @@ class Decrypteur {
           // Verifier le iv
           const ivExtrait = chunk.slice(0, 16).toString('base64')
           if(ivExtrait !== iv) {
-            throw new Error('IV ne correspond pas')
+            console.error('cryptoUtils.decrypter: IV ne correspond pas')
+            readStream.close()
+            writeStream.close()
+            return reject('cryptoUtils.decrypter: IV ne correspond pas')
           }
 
           chunk = chunk.slice(16)

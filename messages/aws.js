@@ -151,11 +151,63 @@ class PublicateurAWS {
 //   })
 // }
 
-function uploaderFichier(s3, mq, noeudConfig, message, pathFichier) {
-  let fuuidFichier = message.fuuid
-  let extension = message.extension
-  let mimetype = message.mimetype
+async function executerUploadFichier(
+  mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
+  fuuid, mimetype, opts
+) {
+  // Dechiffrer fichier (tmp) pour upload
+  if(!opts) opts = {}
 
+  var cleFichier = null, iv = null
+  try {
+    var infoClePreview = reponseDechiffrageFichier.cles_par_fuuid[fuuid]
+    iv = reponseDechiffrageFichier.iv
+    var cleChiffree = infoClePreview.cle
+    cleFichier = await mq.pki.decrypterAsymetrique(cleChiffree)
+
+  } catch(err) {
+    console.error("publierAwsS3 ERROR: Cle dechiffrage fichier refusee %O", err)
+    mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'echec', progres: -1, err: ''+err}, 'evenement.fichiers.publicAwsS3')
+    return
+  }
+  mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'dechiffrage', progres: 2}, 'evenement.fichiers.publicAwsS3')
+
+  var fichierTemporaire = null
+  try {
+    fichierTemporaire = await dechiffrerTemporaire(pathConsignation, fuuid, 'dat', cleFichier, iv)
+    debug("Fichier dechiffre sous : %O", fichierTemporaire)
+    mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'upload', progres: 5}, 'evenement.fichiers.publicAwsS3')
+
+    const metadata = {
+      uuid: message.uuid,
+      fuuid,
+      mimetype,
+    }
+    if(opts.nom_fichier) {
+      metadata.nom_fichier = opts.nom_fichier
+    }
+
+    await uploaderFichier(s3, mq, infoConsignationWebNoeud, metadata, fichierTemporaire.path)
+  } catch(err) {
+    console.error("aws.publierAwsS3 Erreur upload fichier : %O", err)
+    mq.emettreEvenement(
+      {
+        noeud_id: message.noeud_id,
+        fuuid,
+        etat: 'echec',
+        progres: -1,
+        err: 'aws.publierAwsS3 Erreur upload fichier : '+err
+      },
+      'evenement.fichiers.publicAwsS3'
+    )
+    return
+  } finally {
+    // Cleanup fichiers temporaires
+    if(fichierTemporaire) fichierTemporaire.cleanup()
+  }
+}
+
+function uploaderFichier(s3, mq, noeudConfig, metadata, pathFichier) {
   var fileStream = fs.createReadStream(pathFichier)
   fileStream.on('error', function(err) {
     console.log('File Error', err);
@@ -165,8 +217,7 @@ function uploaderFichier(s3, mq, noeudConfig, message, pathFichier) {
 
   var pathSurServeur = path.format({
     dir: dirFichier,
-    name: fuuidFichier,
-    // ext: '.'+extension
+    name: metadata.fuuid,
   })
 
   var uploadParams = {
@@ -174,14 +225,18 @@ function uploaderFichier(s3, mq, noeudConfig, message, pathFichier) {
     Key: pathSurServeur,
     Body: fileStream,
     ACL: 'public-read',
-    ContentType: mimetype,
+    ContentType: metadata.mimetype,
     CacheControl: 'public, max-age=604800, immutable',
-    ContentDisposition: 'attachment; filename="' + message.nom_fichier + '"',
-    Metadata: {
-      'uuid': message.uuid,
-      'fuuid': message.fuuid,
-      'nom_fichier': message.nom_fichier,
-    }
+    Metadata: metadata,
+    // Metadata: {
+    //   'uuid': message.uuid,
+    //   'fuuid': message.fuuid,
+    //   'nom_fichier': message.nom_fichier,
+    // }
+  }
+
+  if(metadata.nom_fichier) {
+    uploadParams.ContentDisposition = 'attachment; filename="' + metadata.nom_fichier + '"'
   }
 
   // call S3 to upload file to specified bucket
@@ -192,7 +247,7 @@ function uploaderFichier(s3, mq, noeudConfig, message, pathFichier) {
   return new Promise((resolve, reject)=>{
     // DUMMY UPLOAD
     // setTimeout(_=>{
-    //   debug("DUMMY upload termine")
+    //   debug("DUMMY upload termine : %s", metadata.fuuid)
     //   resolve()
     // }, 4000)  // Simuler upload de 4 secondes
 
@@ -261,47 +316,45 @@ async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
     return
   }
 
-  // Dechiffrer fichier (tmp) pour upload
-  var reponseDechiffrageFichier = null, cleFichier = null
+  var reponseDechiffrageFichier = null
   try {
     const domaineActionPermission = message.permission['en-tete'].domaine
     reponseDechiffrageFichier = await mq.transmettreRequete(
       domaineActionPermission, message.permission, {noformat: true, attacherCertificat: true})
     debug("Reponse cle dechiffrage fichier : %O", reponseDechiffrageFichier)
-
-    const cleChiffree = reponseDechiffrageFichier.cle
-    cleFichier = await mq.pki.decrypterAsymetrique(cleChiffree)
-
   } catch(err) {
-    console.error("publierAwsS3 ERROR: Cle dechiffrage fichier refusee %O", err)
+    console.error("publierAwsS3 ERROR: Information dechiffrage fichiers non disponible %O", err)
     mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'echec', progres: -1, err: ''+err}, 'evenement.fichiers.publicAwsS3')
     return
   }
-  mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'dechiffrage', progres: 2}, 'evenement.fichiers.publicAwsS3')
 
-  var fichierTemporaire = null
-  try {
-    const fuuid = message.fuuid
-    fichierTemporaire = await dechiffrerTemporaire(pathConsignation, fuuid, 'dat', cleFichier, reponseDechiffrageFichier.iv)
-    debug("Fichier dechiffre sous : %O", fichierTemporaire)
-    mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'upload', progres: 5}, 'evenement.fichiers.publicAwsS3')
+  const s3 = preparerConnexionS3(infoConsignationWebNoeud, motDePasseAWSS3)
 
-    const s3 = preparerConnexionS3(infoConsignationWebNoeud, motDePasseAWSS3)
-    await uploaderFichier(s3, mq, infoConsignationWebNoeud, message, fichierTemporaire.path)
-  } catch(err) {
-    console.error("aws.publierAwsS3 Erreur upload fichier : %O", err)
-    mq.emettreEvenement(
-      {
-        noeud_id: message.noeud_id,
-        fuuid: message.fuuid, etat: 'echec', progres: -1,
-        err: 'aws.publierAwsS3 Erreur upload fichier : '+err
-      },
-      'evenement.fichiers.publicAwsS3'
+  // Determiner les fichiers a uploader
+  await executerUploadFichier(
+    mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
+    message.fuuid, message.mimetype, {nom_fichier: message.nom_fichier}
+  )
+
+  // Uploader preview si present
+  if(message.fuuid_preview && message.mimetype_preview) {
+    debug("Uploader preview du fichier")
+    await executerUploadFichier(
+      mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
+      message.fuuid_preview, message.mimetype_preview
     )
-    return
-  } finally {
-    // Cleanup fichiers temporaires
-    if(fichierTemporaire) fichierTemporaire.cleanup()
+  }
+
+  // Uploader videos re-encodes si presents
+  if(message.video) {
+    for(const resolution in message.video) {
+      const {mimetype, fuuid} = message.video[resolution]
+      debug("Uploader video re-encode %s = %s", resolution, fuuid)
+      await executerUploadFichier(
+        mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
+        fuuid, mimetype
+      )
+    }
   }
 
   mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'succes', progres: 100}, 'evenement.fichiers.publicAwsS3')
