@@ -246,10 +246,18 @@ function uploaderFichier(s3, mq, message, noeudConfig, metadata, pathFichier) {
 
   return new Promise((resolve, reject)=>{
     // DUMMY UPLOAD
-    // setTimeout(_=>{
-    //   debug("DUMMY upload termine : %s", metadata.fuuid)
-    //   resolve()
-    // }, 4000)  // Simuler upload de 4 secondes
+    setTimeout(_=>{
+      mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: metadata.fuuid, etat: 'upload', progres: 33}, 'evenement.fichiers.publicAwsS3')
+    }, 1000)  // Simuler upload de 4 secondes
+    setTimeout(_=>{
+      mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: metadata.fuuid, etat: 'upload', progres: 87}, 'evenement.fichiers.publicAwsS3')
+    }, 2500)  // Simuler upload de 4 secondes
+    setTimeout(_=>{
+      debug("DUMMY upload termine : %s", metadata.fuuid)
+      resolve()
+    }, 4000)  // Simuler upload de 4 secondes
+    return
+    // DUMMY UPLOAD
 
     const managedUpload = s3.upload(uploadParams, options, function (err, data) {
       if (err) {
