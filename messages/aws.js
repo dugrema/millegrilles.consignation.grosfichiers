@@ -186,6 +186,9 @@ async function executerUploadFichier(
     if(opts.nom_fichier) {
       metadata.nom_fichier = opts.nom_fichier
     }
+    if(opts.key_fichier) {
+      metadata.key_fichier = opts.key_fichier
+    }
 
     await uploaderFichier(s3, mq, message, infoConsignationWebNoeud, metadata, fichierTemporaire.path)
   } catch(err) {
@@ -217,7 +220,7 @@ function uploaderFichier(s3, mq, message, noeudConfig, metadata, pathFichier) {
 
   var pathSurServeur = path.format({
     dir: dirFichier,
-    name: metadata.fuuid,
+    name: metadata.key_fichier || metadata.fuuid,
   })
 
   var uploadParams = {
@@ -347,20 +350,22 @@ async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
   // Uploader preview si present
   if(message.fuuid_preview && message.mimetype_preview) {
     debug("Uploader preview du fichier")
+    const key_fichier = message.fuuid + '_preview_1'
     await executerUploadFichier(
       mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
-      message.fuuid_preview, message.mimetype_preview
+      message.fuuid_preview, message.mimetype_preview, {key_fichier}
     )
   }
 
   // Uploader videos re-encodes si presents
   if(message.video) {
     for(const resolution in message.video) {
+      const key_fichier = message.fuuid + '_video_' + resolution
       const {mimetype, fuuid} = message.video[resolution]
       debug("Uploader video re-encode %s = %s", resolution, fuuid)
       await executerUploadFichier(
         mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
-        fuuid, mimetype
+        fuuid, mimetype, {key_fichier}
       )
     }
   }
@@ -383,31 +388,6 @@ function preparerConnexionS3(noeudConfiguration, secretAccessKey) {
   const s3 = new S3(configurationAws)
   return s3
 }
-
-// async function uploadFichierAWSS3(params, secretAccessKey, pathFichier) {
-//   const credentials = new Credentials({
-//     accessKeyId: messageConfiguration.credentials.accessKeyId,
-//     secretAccessKey,
-//   })
-//   let configurationAws = {
-//     apiVersion: AWS_API_VERSION,
-//     region: messageConfiguration.region,
-//     credentials,
-//   }
-//
-//   // Connecter a Amazon S3
-//   const s3 = new S3(configurationAws);
-//
-//   uploaderFichier(
-//     s3, listeFichiers,
-//     {
-//         mq: this.mq,
-//         message: messageConfiguration,
-//         properties: opts.properties,
-//     }
-//   )
-//
-// }
 
 
 module.exports = {AWS_API_VERSION, PublicateurAWS}
