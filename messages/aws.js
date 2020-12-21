@@ -187,7 +187,7 @@ async function executerUploadFichier(
       metadata.nom_fichier = opts.nom_fichier
     }
 
-    await uploaderFichier(s3, mq, infoConsignationWebNoeud, metadata, fichierTemporaire.path)
+    await uploaderFichier(s3, mq, message, infoConsignationWebNoeud, metadata, fichierTemporaire.path)
   } catch(err) {
     console.error("aws.publierAwsS3 Erreur upload fichier : %O", err)
     mq.emettreEvenement(
@@ -207,7 +207,7 @@ async function executerUploadFichier(
   }
 }
 
-function uploaderFichier(s3, mq, noeudConfig, metadata, pathFichier) {
+function uploaderFichier(s3, mq, message, noeudConfig, metadata, pathFichier) {
   var fileStream = fs.createReadStream(pathFichier)
   fileStream.on('error', function(err) {
     console.log('File Error', err);
@@ -268,9 +268,9 @@ function uploaderFichier(s3, mq, noeudConfig, metadata, pathFichier) {
       //   part: 1,
       //   key: 'QME8SjhaCFySD9qBt1AikQ1U7WxieJY2xDg2JCMczJST/public/89122e80-4227-11eb-a00c-0bb29e75acbf'
       // }
-      debug("Upload progress : %O", progress)
       const pctProgres = Math.round(progress.loaded / progress.total * 94.0) + 5 // (94% alloue au transfert)
-      mq.emettreEvenement({fuuid: message.fuuid, etat: 'upload', progres: pctProgres}, 'evenement.fichiers.publicAwsS3')
+      debug("Upload progress (%s) : %O", pctProgres, progress)
+      mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: metadata.fuuid, etat: 'upload', progres: pctProgres}, 'evenement.fichiers.publicAwsS3')
     })
   })
 
