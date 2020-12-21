@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const forge = require('node-forge');
+const {Transform} = require('stream')
 
 const AES_ALGORITHM = 'aes-256-cbc';  // Meme algorithme utilise sur MG en Python
 const RSA_ALGORITHM = 'RSA-OAEP';
@@ -21,32 +22,32 @@ class Decrypteur {
       const sha512 = crypto.createHash('sha512');
       var sha512Hash = null;
       var tailleFichier = 0;
-      var ivLu = false
-      cryptoStream.on('data', chunk=>{
-        if(!ivLu) {
-          ivLu = true
-
-          // Verifier le iv
-          const ivExtrait = chunk.slice(0, 16).toString('base64')
-          if(ivExtrait !== iv) {
-            console.error('cryptoUtils.decrypter: IV ne correspond pas')
-            readStream.close()
-            writeStream.close()
-            return reject('cryptoUtils.decrypter: IV ne correspond pas')
-          }
-
-          chunk = chunk.slice(16)
-        }
+      // var ivLu = false
+      cryptoStream.writer.on('data', chunk=>{
+        // if(!ivLu) {
+        //   ivLu = true
+        //
+        //   // Verifier le iv
+        //   const ivExtrait = chunk.slice(0, 16).toString('base64')
+        //   if(ivExtrait !== iv) {
+        //     console.error('cryptoUtils.decrypter: IV ne correspond pas, chunk length : %s', chunk.length)
+        //     readStream.close()
+        //     writeStream.close()
+        //     return reject('cryptoUtils.decrypter: IV ne correspond pas')
+        //   }
+        //
+        //   chunk = chunk.slice(16)
+        // }
 
         sha512.update(chunk);
         tailleFichier = tailleFichier + chunk.length;
-        writeStream.write(chunk)
+        // writeStream.write(chunk)
       });
-      cryptoStream.on('end', ()=>{
+      cryptoStream.writer.on('end', ()=>{
         // Comparer hash a celui du header
         sha512Hash = 'sha512_b64:' + sha512.digest('base64')
         // console.debug("Hash fichier " + sha256Hash);
-        writeStream.close()
+        // writeStream.close()
       });
 
       writeStream.on('close', ()=>{
@@ -60,10 +61,10 @@ class Decrypteur {
 
       // Ouvrir et traiter fichier
       let readStream = fs.createReadStream(sourceCryptee);
-      readStream.pipe(cryptoStream);
+      readStream.pipe(cryptoStream.reader);
 
-      // cryptoStream.pipe(writeStream);
-      readStream.read()
+      cryptoStream.writer.pipe(writeStream);
+      // readStream.read()
 
     });
   }
@@ -101,9 +102,33 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
   // console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
 
   // Creer un decipher stream
-  var decipher = crypto.createDecipheriv('aes256', decryptedSecretKey, ivBuffer);
+  const transformStream = new Transform()
+  var ivLu = false
+  transformStream._transform = (chunk, encoding, next) => {
+    debug("Chunk taille : %s, encoding : %s", chunk.length, encoding)
 
-  return decipher;
+    if(!ivLu) {
+      ivLu = true
+
+      // Verifier le iv
+      const ivExtrait = chunk.slice(0, 16).toString('base64')
+      if(ivExtrait !== iv) {
+        console.error('cryptoUtils.decrypter: IV ne correspond pas, chunk length : %s, IV lu : %s, IV attendu : %s', chunk.length, ivExtrait, iv)
+        return next('cryptoUtils.decrypter: IV ne correspond pas')  // err
+      }
+
+      chunk = chunk.slice(16)
+    }
+
+    transformStream.push(chunk)
+
+    next()
+  }
+
+  var decipher = crypto.createDecipheriv('aes256', decryptedSecretKey, ivBuffer);
+  decipher.pipe(transformStream)
+
+  return {reader: decipher, writer: transformStream}
 
 }
 

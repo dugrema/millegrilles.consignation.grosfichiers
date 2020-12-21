@@ -517,9 +517,9 @@ async function stagingFichier(pathConsignation, fuuidEffectif, infoStream) {
     })
 
     debug("Staging fichier %s", pathFuuidEffectif)
-    infoStream.decipherStream.pipe(outStream)
+    infoStream.decipherStream.writer.pipe(outStream)
     var readStream = fs.createReadStream(pathFuuidLocal);
-    readStream.pipe(infoStream.decipherStream)
+    readStream.pipe(infoStream.decipherStream.reader)
   })
 
 }
