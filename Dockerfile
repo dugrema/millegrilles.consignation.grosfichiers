@@ -16,5 +16,5 @@ COPY ./package*.json ./
 # Api est l'application node back-end et front-end est l'application react
 COPY ./ ./
 
-RUN rm -rf node_modules/millegrilles.common && \
+RUN rm -rf node_modules/@dugrema/millegrilles.common && \
     npm i --production
