@@ -105,7 +105,7 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
   const transformStream = new Transform()
   var ivLu = false
   transformStream._transform = (chunk, encoding, next) => {
-    debug("Chunk taille : %s, encoding : %s", chunk.length, encoding)
+    // debug("Chunk taille : %s, encoding : %s", chunk.length, encoding)
 
     if(!ivLu) {
       ivLu = true
@@ -116,12 +116,10 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
         console.error('cryptoUtils.decrypter: IV ne correspond pas, chunk length : %s, IV lu : %s, IV attendu : %s', chunk.length, ivExtrait, iv)
         return next('cryptoUtils.decrypter: IV ne correspond pas')  // err
       }
-
+      // Retirer les 16 premiers bytes (IV) du fichier dechiffre
       chunk = chunk.slice(16)
     }
-
     transformStream.push(chunk)
-
     next()
   }
 
@@ -129,7 +127,6 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
   decipher.pipe(transformStream)
 
   return {reader: decipher, writer: transformStream}
-
 }
 
 function decrypterSymmetrique(contenuCrypte, cleSecrete, iv) {
