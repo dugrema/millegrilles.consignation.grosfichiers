@@ -1,6 +1,7 @@
 const debug = require('debug')('millegrilles:fichiers:aws')
 const fs = require('fs')
 const path = require('path')
+// const {PassThrough} = require('stream')
 const S3 = require('aws-sdk/clients/s3')
 const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
 const { decrypterSymmetrique } = require('../util/cryptoUtils')
@@ -168,7 +169,7 @@ async function executerUploadFichier(
   } catch(err) {
     console.error("publierAwsS3 ERROR: Cle dechiffrage fichier refusee %O", err)
     mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'echec', progres: -1, err: ''+err}, 'evenement.fichiers.publicAwsS3')
-    return
+    throw err
   }
   mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'dechiffrage', progres: 2}, 'evenement.fichiers.publicAwsS3')
 
@@ -203,7 +204,7 @@ async function executerUploadFichier(
       },
       'evenement.fichiers.publicAwsS3'
     )
-    return
+    throw err
   } finally {
     // Cleanup fichiers temporaires
     if(fichierTemporaire) fichierTemporaire.cleanup()
@@ -212,6 +213,36 @@ async function executerUploadFichier(
 
 function uploaderFichier(s3, mq, message, noeudConfig, metadata, pathFichier) {
   var fileStream = fs.createReadStream(pathFichier)
+
+  // Creer un stream intermedaire pour calculer le progres
+  // var calculProgresStream = new PassThrough()
+  // var bytesLoaded = 0, bytesTotal = -1  // Total pour tracking
+  var timerUpdate = null
+
+  // Recuprer taille fichier
+  fs.stat(pathFichier, (err, stat)=>{
+    if(err) return console.error('aws.uploaderFichier: Erreur sur stat fichier %s : %O', pathFichier, err);
+    debug("Taille fichier a uploader : %s", stat.size)
+    bytesTotal = stat.size
+  })
+
+  // calculProgresStream.on('data', chunk=>{
+  //   debug("Chunk size : %s", chunk.length)
+  //   bytesLoaded += chunk.length
+  //   if(!timerUpdate && bytesTotal > 0) {
+  //     timerUpdate = setTimeout(_=>{
+  //       timerUpdate = null
+  //       const pctProgres = Math.round(bytesLoaded / bytesTotal * 94.0) + 5 // (94% alloue au transfert)
+  //       debug("Progres %s", pctProgres)
+  //       mq.emettreEvenement(
+  //         {noeud_id: message.noeud_id, fuuid: metadata.fuuid, etat: 'upload', progres: pctProgres},
+  //         'evenement.fichiers.publicAwsS3'
+  //       )
+  //     }, 5000)
+  //   }
+  // })
+  // fileStream.pipe(calculProgresStream)
+
   fileStream.on('error', function(err) {
     console.log('File Error', err);
   });
@@ -269,6 +300,9 @@ function uploaderFichier(s3, mq, message, noeudConfig, metadata, pathFichier) {
       }
       debug("Upload Success : %O", data);
       resolve(data)
+      if(timerUpdate) {
+        clearTimeout(timerUpdate)
+      }
     })
 
     // Attacher listener d'evenements
@@ -279,9 +313,12 @@ function uploaderFichier(s3, mq, message, noeudConfig, metadata, pathFichier) {
       //   part: 1,
       //   key: 'QME8SjhaCFySD9qBt1AikQ1U7WxieJY2xDg2JCMczJST/public/89122e80-4227-11eb-a00c-0bb29e75acbf'
       // }
-      const pctProgres = Math.round(progress.loaded / progress.total * 94.0) + 5 // (94% alloue au transfert)
-      debug("Upload progress (%s) : %O", pctProgres, progress)
-      mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: metadata.fuuid, etat: 'upload', progres: pctProgres}, 'evenement.fichiers.publicAwsS3')
+      var total = progress.total || bytesTotal
+      if(total) {
+        const pctProgres = Math.round(progress.loaded / total * 94.0) + 5 // (94% alloue au transfert)
+        debug("Upload progress (%s) : %O", pctProgres, progress)
+        mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: metadata.fuuid, etat: 'upload', progres: pctProgres}, 'evenement.fichiers.publicAwsS3')
+      }
     })
   })
 
@@ -342,35 +379,41 @@ async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
   const s3 = preparerConnexionS3(infoConsignationWebNoeud, motDePasseAWSS3)
 
   // Determiner les fichiers a uploader
-  await executerUploadFichier(
-    mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
-    message.fuuid, message.mimetype, {nom_fichier: message.nom_fichier}
-  )
-
-  // Uploader preview si present
-  if(message.fuuid_preview && message.mimetype_preview) {
-    debug("Uploader preview du fichier")
-    const key_fichier = message.fuuid + '_preview_1'
+  try {
     await executerUploadFichier(
       mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
-      message.fuuid_preview, message.mimetype_preview, {key_fichier}
+      message.fuuid, message.mimetype, {nom_fichier: message.nom_fichier}
     )
-  }
 
-  // Uploader videos re-encodes si presents
-  if(message.video) {
-    for(const resolution in message.video) {
-      const key_fichier = message.fuuid + '_video_' + resolution
-      const {mimetype, fuuid} = message.video[resolution]
-      debug("Uploader video re-encode %s = %s", resolution, fuuid)
+    // Uploader preview si present
+    if(message.fuuid_preview && message.mimetype_preview) {
+      debug("Uploader preview du fichier")
+      const key_fichier = message.fuuid + '_preview_1'
       await executerUploadFichier(
         mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
-        fuuid, mimetype, {key_fichier}
+        message.fuuid_preview, message.mimetype_preview, {key_fichier}
       )
     }
-  }
 
-  mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'succes', progres: 100}, 'evenement.fichiers.publicAwsS3')
+    // Uploader videos re-encodes si presents
+    if(message.video) {
+      for(const resolution in message.video) {
+        const key_fichier = message.fuuid + '_video_' + resolution
+        const {mimetype, fuuid} = message.video[resolution]
+        debug("Uploader video re-encode %s = %s", resolution, fuuid)
+        await executerUploadFichier(
+          mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
+          fuuid, mimetype, {key_fichier}
+        )
+      }
+    }
+
+    mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'succes', progres: 100}, 'evenement.fichiers.publicAwsS3')
+  } catch(err) {
+    const msg = "publierAwsS3 ERROR: Erreur upload fichier uuid: " + message.uuid + "\n"
+    console.error(msg + ": %O", err)
+    mq.emettreEvenement({noeud_id: message.noeud_id, fuuid: message.fuuid, etat: 'echec', progres: -1, err: msg+err}, 'evenement.fichiers.publicAwsS3')
+  }
 }
 
 function preparerConnexionS3(noeudConfiguration, secretAccessKey) {
