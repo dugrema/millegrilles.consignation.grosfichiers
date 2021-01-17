@@ -1,13 +1,13 @@
 {
   "name": "millegrilles.consignation.grosfichiers",
-  "version": "1.37.1",
+  "version": "1.38.0",
   "private": true,
   "scripts": {
     "start": "node ./bin/www",
     "hebergement": "node ./bin/hebergement"
   },
   "dependencies": {
-    "@dugrema/millegrilles.common": "git+https://github.com/dugrema/millegrilles.common.nodejs.git#1.37",
+    "@dugrema/millegrilles.common": "git+https://github.com/dugrema/millegrilles.common.nodejs.git#1.38",
     "aws-sdk": "^2.812.0",
     "constantinople": "^4.0.1",
     "cookie-parser": "~1.4.5",
