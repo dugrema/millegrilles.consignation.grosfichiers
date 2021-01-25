@@ -25,71 +25,27 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
     });
   })
 
-  await new Promise((resolve, reject) => {
-
-    // Deplacer le fichier de catalogue du backup
-
-    const nomFichier = fichierCatalogue.originalname;
-    const nouveauPath = path.join(pathCatalogues, nomFichier);
-
-    // Tenter de faire un move via rename
-    fs.rename(fichierCatalogue.path, nouveauPath, err=>{
-      if(err) {
-        if(err.code === 'EXDEV') {
-          // Rename non supporte, faire un copy et supprimer le fichier
-          fs.copyFile(fichierCatalogue.path, nouveauPath, errCopy=>{
-            // Supprimer ancien fichier
-            fs.unlink(fichierCatalogue.path, errUnlink=>{
-              if(errUnlink) {
-                console.error("Erreur suppression calalogue uploade " + fichierCatalogue.path);
-              }
-            });
-
-            if(errCopy) return reject(errCopy);
-
-            return resolve();
-          })
-        } else {
-         // Erreur irrecuperable
-          return reject(err);
-        }
-      }
-      resolve();
-    });
-
-  })
+  // Deplacer le fichier de catalogue du backup
+  const nomFichier = fichierCatalogue.originalname
+  const nouveauPath = path.join(pathCatalogues, nomFichier)
+  debug("Copier catalogue %s -> %s", fichierCatalogue.path, nouveauPath)
+  await deplacerFichier(fichierCatalogue.path, nouveauPath)
 
   // Lancer appel recursif pour deplacer et calculer hachage des fichiers
-  const resultatHachage = await _fctDeplacerFichier(pathTransactions, fichiersTransactions)
+  const resultatHachage = {}
+  for(let i in fichiersTransactions) {
+    const fichierTransaction = fichiersTransactions[i]
+    //const hachage = await _fctDeplacerFichier(pathTransactions, fichierTransaction)
+
+    const nouveauPath = path.join(pathTransactions, fichierTransaction.originalname)
+    const hachage = await calculerHachageFichier(fichierTransaction.path)
+    await deplacerFichier(fichierTransaction.path, nouveauPath)
+
+    resultatHachage[fichierTransaction.originalname] = hachage
+  }
 
   return resultatHachage
 }
-
-async function _fctDeplacerFichier(pathTransactions, fichiersTransactions, pos) {
-  // Fonction recursive qui deplace les fichiers
-  if(!pos) pos = 0
-
-  if(pos === fichiersTransactions.length) {
-    // Fin de recursion
-    return {}
-  }
-
-  const fichierDict = fichiersTransactions[pos]
-  const nomFichier = fichierDict.originalname
-  const nouveauPath = path.join(pathTransactions, nomFichier)
-
-  const hachage = await calculerHachageFichier(fichierDict.path)
-
-  // console.debug("Sauvegarde " + nouveauPath);
-  await deplacerFichier(fichierDict.path, nouveauPath)
-
-  // Appel recursif
-  const hachageDict = await _fctDeplacerFichier(pathTransactions, fichiersTransactions, pos+1) // Loop
-
-  // Combiner dict produits recursivement
-  return {[nomFichier]: hachage, ...hachageDict}
-
-};
 
 async function traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict) {
   // debug("Traitement grosfichiers");
@@ -143,43 +99,6 @@ async function traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict) 
     }
 
   }
-}
-
-function deplacerFichier(source, destination) {
-  // Deplace un fichier - tente un rename (meme filesystem), sinon deplace via stream
-
-  return new Promise((resolve, reject)=>{
-    fs.rename(source, destination, err=>{
-      // console.debug("Copie fichier " + fichierCatalogue.path);
-      if(err) {
-        if(err.code === 'EXDEV') {
-          // Rename non supporte, faire un copy et supprimer le fichier
-          fs.copyFile(source, destination, errCopy=>{
-            debug("Copie complete : %s", destination)
-
-            // Supprimer ancien fichier
-            fs.unlink(source, errUnlink=>{
-              if(errUnlink) {
-                console.error("deplacerFichier: Erreur suppression transactions uploade " + source);
-                return reject(errUnlink)
-              }
-            });
-
-            if(errCopy) {
-              console.error("deplacerFichier: Erreur copie fichier " + source);
-              return reject(errCopy)
-            }
-
-            return resolve()
-          })
-        } else {
-          return reject(err)
-        }
-      } else {
-        return resolve()
-      }
-    })
-  })
 }
 
 async function traiterFichiersApplication(
