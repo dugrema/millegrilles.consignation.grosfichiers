@@ -11,7 +11,7 @@ describe('processFichiersBackup', ()=>{
   beforeEach(()=>{
     // Creer repertoire temporaire
     tmpdir = tmp.dirSync()
-    console.info("TMP dir : %s", tmpdir.name)
+    // console.info("TMP dir : %s", tmpdir.name)
   })
 
   afterEach(()=>{
@@ -58,7 +58,7 @@ describe('processFichiersBackup', ()=>{
       const infoTransaction = fs.statSync(path.join(tmpdir.name, 'fichier2.txt'))
       expect(infoTransaction).toBeDefined()
 
-      console.info("Resultat hachage : %O", resultat)
+      // console.info("Resultat hachage : %O", resultat)
       expect(resultat['fichier2.txt']).toBe('sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==')
     })
   })
@@ -251,12 +251,13 @@ describe('processFichiersBackup', ()=>{
   it('traiterFichiersApplication', async () => {
     var appels_transmettreEnveloppeTransaction = []
     const amqpdao = {
-            transmettreEnveloppeTransaction: (transaction)=>{
-              appels_transmettreEnveloppeTransaction.push(transaction)
-              return ''
-            }
-          },
-          transactionCatalogue = {
+      transmettreEnveloppeTransaction: (transaction)=>{
+        appels_transmettreEnveloppeTransaction.push(transaction)
+        return ''
+      }
+    }
+
+    const transactionCatalogue = {
             archive_hachage: 'sha512_b64:m9+VOgb9/QzOb/myd745kqAk2XFl308AgjUTBpS4NpTJeELbY39FfPxsZsECbGX/cyIeaVrISi2v4Z7XsMAGQg==',
             archive_nomfichier: 'application.txt',
             catalogue_nomfichier: 'catalogue.json',
@@ -274,8 +275,75 @@ describe('processFichiersBackup', ()=>{
       })
   })
 
-  it('genererBackupQuotidien2', async () => {
 
+  it('sauvegarderCatalogueQuotidien', async () => {
+
+    const catalogue = {
+      domaine: 'test',
+      securite: '1.public',
+      jour: new Date("2020-01-01 12:00").getTime()/1000,
+    }
+    const pathConsignation = {
+      trouverPathBackupHoraire: ()=>{
+        return path.join(tmpdir.name, 'jour_01')
+      }
+    }
+
+    const resultat = await processFichiersBackup.sauvegarderCatalogueQuotidien(
+      pathConsignation, catalogue)
+
+    // console.debug("Resultat : %O", resultat)
+    expect(resultat.path).toBe(`${tmpdir.name}/test_catalogue_20200101_1.public.json.xz`)
+    expect(resultat.nomFichier).toBe('test_catalogue_20200101_1.public.json.xz')
+    expect(resultat.dateFormattee).toBe('20200101')
+
+    expect(fs.statSync(`${tmpdir.name}/test_catalogue_20200101_1.public.json.xz`)).toBeDefined()
+
+  })
+
+  it('sauvegarderCatalogueAnnuel', async () => {
+
+    const catalogue = {
+      domaine: 'test',
+      securite: '1.public',
+      annee: new Date("2020-01-01 12:00").getTime()/1000,
+    }
+    const pathConsignation = {
+      trouverPathDomaineQuotidien: ()=>{
+        return tmpdir.name
+      }
+    }
+
+    const resultat = await processFichiersBackup.sauvegarderCatalogueAnnuel(
+      pathConsignation, catalogue)
+
+    console.debug("Resultat : %O", resultat)
+    expect(resultat.path).toBe(`${tmpdir.name}/test_catalogue_2020_1.public.json.xz`)
+    expect(resultat.nomFichier).toBe('test_catalogue_2020_1.public.json.xz')
+    expect(resultat.dateFormattee).toBe('2020')
+
+    expect(fs.statSync(`${tmpdir.name}/test_catalogue_2020_1.public.json.xz`)).toBeDefined()
+
+  })
+
+  it('genererBackupQuotidien2', async () => {
+    var appels_transmettreEnveloppeTransaction = []
+    const amqpdao = {
+      transmettreEnveloppeTransaction: (transaction)=>{
+        appels_transmettreEnveloppeTransaction.push(transaction)
+        return ''
+      }
+    }
+
+    const pathConsignation = {
+
+    }
+
+    const catalogue = {
+
+    }
+
+    // return processFichiersBackup.traiterBackupQuotidien(mq, pathConsignation, catalogue)
   })
 
   it('genererBackupQuotidien', async () => {

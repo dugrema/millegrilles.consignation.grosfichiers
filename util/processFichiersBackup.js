@@ -3,7 +3,9 @@ const fs = require('fs')
 const readdirp = require('readdirp')
 const path = require('path')
 const crypto = require('crypto');
+const lzma = require('lzma-native')
 const { calculerHachageFichier } = require('./utilitairesHachage')
+const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 
 async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire) {
 
@@ -234,8 +236,7 @@ async function genererBackupQuotidien(mq, routingKey, message, opts) {
 
   try {
     const catalogue = message.catalogue
-    const informationArchive = await genererBackupQuotidien2(
-      mq, this.traitementFichierBackup, this.pathConsignation, catalogue)
+    const informationArchive = await traiterBackupQuotidien(mq, this.pathConsignation, catalogue)
     const { fichiersInclure, pathRepertoireBackup } = informationArchive
     delete informationArchive.fichiersInclure // Pas necessaire pour la transaction
     delete informationArchive.pathRepertoireBackup // Pas necessaire pour la transaction
@@ -265,8 +266,7 @@ async function genererBackupAnnuel(mq, routingKey, message, opts) {
   return new Promise( async (resolve, reject) => {
 
     try {
-      const informationArchive = await genererBackupAnnuel2(
-        mq, this.traitementFichierBackup, this.pathConsignation, message.catalogue)
+      const informationArchive = await traiterBackupAnnuel(mq, this.pathConsignation, message.catalogue)
 
       debug("Journal annuel sauvegarde : %O", informationArchive)
 
@@ -299,23 +299,22 @@ async function genererBackupAnnuel(mq, routingKey, message, opts) {
 
 }
 
-// Genere un fichier de backup quotidien qui correspond au journal
-async function genererBackupQuotidien2(mq, traitementFichierBackup, pathConsignation, journal) {
-  debug("genererBackupQuotidien : journal \n%O", journal)
+// Genere un fichier de backup quotidien qui correspond au catalogue
+async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
+  debug("genererBackupQuotidien : catalogue \n%O", catalogue)
 
-  const {domaine, securite} = journal
-  const jourBackup = new Date(journal.jour * 1000)
+  const {domaine, securite} = catalogue
+  const jourBackup = new Date(catalogue.jour * 1000)
   var repertoireBackup = pathConsignation.trouverPathBackupQuotidien(jourBackup)
 
   // Faire liste des fichiers de catalogue et transactions a inclure.
-  // var fichiersInclure = [nomJournal]
   var fichiersInclure = []
 
-  for(let heureStr in journal.fichiers_horaire) {
-    let infoFichier = journal.fichiers_horaire[heureStr]
-    debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
-
+  for(let heureStr in catalogue.fichiers_horaire) {
     if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
+
+    let infoFichier = catalogue.fichiers_horaire[heureStr]
+    debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
 
     let fichierCatalogue = path.join(heureStr, infoFichier.catalogue_nomfichier);
     let fichierTransactions = path.join(heureStr, infoFichier.transactions_nomfichier);
@@ -459,7 +458,7 @@ async function genererBackupQuotidien2(mq, traitementFichierBackup, pathConsigna
 }
 
 // Genere un fichier de backup mensuel qui correspond au journal
-async function genererBackupAnnuel2(mq, traitementFichierBackup, pathConsignation, journal) {
+async function traiterBackupAnnuel2(mq, traitementFichierBackup, pathConsignation, journal) {
 
   const {domaine, securite} = journal
   const anneeBackup = new Date(journal.annee * 1000)
@@ -542,6 +541,68 @@ async function genererBackupAnnuel2(mq, traitementFichierBackup, pathConsignatio
 
 }
 
+async function sauvegarderCatalogueQuotidien(pathConsignation, catalogue) {
+  const {domaine, securite, jour} = catalogue
+
+  const dateJournal = new Date(jour*1000)
+  var repertoireBackup = pathConsignation.trouverPathBackupHoraire(dateJournal)
+
+  // Remonter du niveau heure a jour
+  repertoireBackup = path.dirname(repertoireBackup);
+
+  const dateFormattee = formatterDateString(dateJournal).slice(0, 8)  // Retirer heures
+  const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz"
+  const fullPathFichier = path.join(repertoireBackup, nomFichier)
+
+  // debug("Path fichier journal quotidien " + fullPathFichier);
+  var compressor = lzma.createCompressor()
+  var output = fs.createWriteStream(fullPathFichier)
+  compressor.pipe(output)
+
+  const promiseSauvegarde = new Promise((resolve, reject)=>{
+    output.on('close', ()=>{resolve()})
+    output.on('error', err=>{reject(err)})
+  })
+
+  compressor.write(JSON.stringify(catalogue))
+  compressor.end()
+  await promiseSauvegarde
+
+  // debug("Fichier cree : " + fullPathFichier);
+  return {path: fullPathFichier, nomFichier, dateFormattee}
+}
+
+async function sauvegarderCatalogueAnnuel(pathConsignation, catalogue) {
+  const {domaine, securite, annee} = catalogue
+
+  const dateJournal = new Date(annee*1000)
+  var repertoireBackup = pathConsignation.trouverPathDomaineQuotidien(domaine)
+
+  let year = dateJournal.getUTCFullYear();
+  const dateFormattee = "" + year
+
+  const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
+
+  const fullPathFichier = path.join(repertoireBackup, nomFichier)
+
+  // debug("Path fichier journal mensuel " + fullPathFichier);
+  var compressor = lzma.createCompressor();
+  var output = fs.createWriteStream(fullPathFichier);
+  compressor.pipe(output);
+
+  const promiseSauvegarde = new Promise((resolve, reject)=>{
+    output.on('close', ()=>{resolve()});
+    output.on('error', err=>{reject(err)})
+  });
+
+  compressor.write(JSON.stringify(catalogue))
+  compressor.end()
+  await promiseSauvegarde
+
+  return {path: fullPathFichier, nomFichier, dateFormattee}
+}
+
+
 async function deplacerFichier(src, dst) {
   debug("Deplacer fichier de %s a %s", src, dst)
   return new Promise((resolve, reject) => {
@@ -573,5 +634,6 @@ module.exports = {
   traiterFichiersBackup, traiterGrosfichiers, traiterFichiersApplication,
   genererBackupQuotidien, genererBackupAnnuel,
 
-  sauvegarderFichiersApplication, rotationArchiveApplication
+  sauvegarderFichiersApplication, rotationArchiveApplication,
+  sauvegarderCatalogueQuotidien, sauvegarderCatalogueAnnuel,
 }
