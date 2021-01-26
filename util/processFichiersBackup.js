@@ -144,7 +144,7 @@ async function traiterFichiersApplication(
   debug("Transmettre catalogue backup application : %O", transactionCatalogue)
   await amqpdao.transmettreEnveloppeTransaction(transactionCatalogue)
 
-  await rotationArchiveApplication(transactionCatalogue, pathBackupApplication)
+  await rotationArchiveApplication(pathBackupApplication)
 }
 
 async function rotationArchiveApplication(pathBackupApplication) {

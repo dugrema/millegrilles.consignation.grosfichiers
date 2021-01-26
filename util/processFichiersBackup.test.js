@@ -215,6 +215,8 @@ describe('processFichiersBackup', ()=>{
   })
 
   it('rotationArchiveApplication 3 archives', async () => {
+    // La premiere (plus vieille archive va etre supprimee)
+
     const pathCatalogues = [], pathApplications = []
     for(let i=0; i<3; i++) {
       pathCatalogues.push(path.join(tmpdir.name, `catalogue.${i}.json`))
@@ -239,6 +241,7 @@ describe('processFichiersBackup', ()=>{
         expect(fs.statSync(pathApplication)).toBeDefined()
       }
 
+      // S'assurer que la premiere (plus vieille) archive et catalogue sont supprimes
       expect(()=>fs.statSync(pathCatalogues[0])).toThrow()
       expect(()=>fs.statSync(pathApplications[0])).toThrow()
 
@@ -246,7 +249,29 @@ describe('processFichiersBackup', ()=>{
   })
 
   it('traiterFichiersApplication', async () => {
+    var appels_transmettreEnveloppeTransaction = []
+    const amqpdao = {
+            transmettreEnveloppeTransaction: (transaction)=>{
+              appels_transmettreEnveloppeTransaction.push(transaction)
+              return ''
+            }
+          },
+          transactionCatalogue = {
+            archive_hachage: 'sha512_b64:m9+VOgb9/QzOb/myd745kqAk2XFl308AgjUTBpS4NpTJeELbY39FfPxsZsECbGX/cyIeaVrISi2v4Z7XsMAGQg==',
+            archive_nomfichier: 'application.txt',
+            catalogue_nomfichier: 'catalogue.json',
+          },
+          transactionMaitreDesCles = {},
+          fichierApplication = path.join(tmpdir.name, 'application.txt')
 
+    creerFichierDummy(fichierApplication, 'dadido')
+
+    expect.assertions(1)
+    return processFichiersBackup.traiterFichiersApplication(
+      amqpdao, transactionCatalogue, transactionMaitreDesCles, {path: fichierApplication}, tmpdir.name)
+      .then(()=>{
+        expect(appels_transmettreEnveloppeTransaction.length).toBe(2)
+      })
   })
 
   it('genererBackupQuotidien2', async () => {
