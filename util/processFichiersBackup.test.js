@@ -20,7 +20,11 @@ describe('processFichiersBackup', ()=>{
       const file = fichiersTmp[i]
       try { fs.unlinkSync(file) } catch (err) {}
     }
-    tmpdir.removeCallback()
+
+    fs.rmdir(tmpdir.name, {recursive: true}, err=>{
+      if(err) console.error("Erreur suppression %s", tmpdir.name)
+    })
+    //tmpdir.removeCallback()
   })
 
   test('devrait etre importe', ()=>{
@@ -57,7 +61,42 @@ describe('processFichiersBackup', ()=>{
     })
   })
 
+  it('traiterGrosfichiers grosfichier introuvable', async () => {
+
+    const pathConsignation = {
+      trouverPathFuuidExistant: function() {return 'folder_dummy'}
+    }
+    const fuuidDict = {
+      'abcd-1234-efgh-5678': {'securite': '3.protege', 'hachage': 'hachage_1', 'extension': 'txt', 'heure': '21'}
+    }
+
+    expect.assertions(1)
+    return processFichiersBackup.traiterGrosfichiers(pathConsignation, tmpdir.name, fuuidDict)
+    .then(resultat=>{
+      // console.debug("Resultat : %O", resultat)
+      expect(resultat.err).toBeDefined()
+    })
+
+  })
+
   it('traiterGrosfichiers 1 grosfichier', async () => {
+
+    const pathConsignation = {
+      trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
+    }
+    const fuuidDict = {
+      'abcd-1234-efgh-5678': {'securite': '3.protege', 'hachage': 'hachage_1', 'extension': 'txt', 'heure': '21'}
+    }
+
+    fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
+    creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
+
+    expect.assertions(1)
+    return processFichiersBackup.traiterGrosfichiers(pathConsignation, tmpdir.name, fuuidDict)
+    .then(resultat=>{
+      // console.debug("Resultat process fichiers : %O", resultat)
+      expect(resultat.fichier.indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
+    })
 
   })
 

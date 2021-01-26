@@ -82,10 +82,10 @@ async function traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict) 
         const nomFichier = path.basename(fichier);
         const pathFichierBackup = path.join(pathBackupGrosFichiers, nomFichier);
 
-        await new Promise((resolve, reject)=>{
+        return await new Promise((resolve, reject)=>{
           fs.link(fichier, pathFichierBackup, e=>{
             if(e) return reject(e);
-            resolve();
+            resolve({fichier: pathFichierBackup});
           });
         })
         .catch(err=>{
@@ -94,7 +94,8 @@ async function traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict) 
         });
 
       } else {
-        console.warn("Fichier " + fuuid + "  non trouve");
+        // console.warn("Fichier " + fuuid + "  non trouve");
+        return({err: "Fichier " + fuuid + "  non trouve"})
       }
     }
 
