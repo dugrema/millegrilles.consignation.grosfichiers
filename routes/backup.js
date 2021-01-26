@@ -65,7 +65,12 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   router.get('/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
   router.get('/backup/application/:nomApplication', restaurerApplication)
 
-  router.get('/backup/backup.tar', getFichierTar)
+  router.get('/backup/backup.tar', getFichierTar)  // TODO - existe encore?
+
+  // Ajouter une methode GET suivante :
+  // - retourner la liste des domaines presents dans backup (repertoires de backup)
+  // - retourner la liste des applications presentes dans backup (fichiers sous app)
+  // - extraire tous les catalogues d'un domaine
 
   return router
 }

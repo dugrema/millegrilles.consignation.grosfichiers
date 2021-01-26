@@ -23,7 +23,7 @@ describe('processFichiersBackup', ()=>{
     tmpdir.removeCallback()
   })
 
-  it('devrait etre importe', ()=>{
+  test('devrait etre importe', ()=>{
     expect(processFichiersBackup).toBeInstanceOf(Object);
   });
 
@@ -55,6 +55,38 @@ describe('processFichiersBackup', ()=>{
       console.info("Resultat hachage : %O", resultat)
       expect(resultat['fichier2.txt']).toBe('sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==')
     })
+  })
+
+  it('traiterGrosfichiers 1 grosfichier', async () => {
+
+  })
+
+  it('rotationArchiveApplication', async () => {
+
+  })
+
+  it('sauvegarderFichiersApplication', async () => {
+
+  })
+
+  it('traiterFichiersApplication', async () => {
+
+  })
+
+  it('genererBackupQuotidien2', async () => {
+
+  })
+
+  it('genererBackupQuotidien', async () => {
+
+  })
+
+  it('genererBackupAnnuel2', async () => {
+
+  })
+
+  it('genererBackupAnnuel', async () => {
+
   })
 
 })
