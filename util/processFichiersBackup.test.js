@@ -32,6 +32,8 @@ describe('processFichiersBackup', ()=>{
   });
 
   it('traiterFichiersBackup 1 catalogue 1 fichier transaction', async ()=>{
+    // Traiter un fichier de backup horaire avec catalogue et transactions
+
     // Creer fichier pour catalogue, hook supprimer tmp
     fichiersTmp.push(path.join(tmpdir.name, 'fichier1.txt'))
     creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), 'Catalogue')
@@ -62,6 +64,7 @@ describe('processFichiersBackup', ()=>{
   })
 
   it('traiterGrosfichiers grosfichier introuvable', async () => {
+    // Creation de backup, hard link grosfichier impossible (fichier introuvable)
 
     const pathConsignation = {
       trouverPathFuuidExistant: function() {return 'folder_dummy'}
@@ -80,12 +83,13 @@ describe('processFichiersBackup', ()=>{
   })
 
   it('traiterGrosfichiers 1 grosfichier', async () => {
+    // Creation de backup, hard link 1 grosfichier vers sous-repertoire de backup horaire
 
     const pathConsignation = {
       trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
     }
     const fuuidDict = {
-      'abcd-1234-efgh-5678': {'securite': '3.protege', 'hachage': 'hachage_1', 'extension': 'txt', 'heure': '21'}
+      'abcd-1234-efgh-5678': ''
     }
 
     fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
@@ -95,17 +99,150 @@ describe('processFichiersBackup', ()=>{
     return processFichiersBackup.traiterGrosfichiers(pathConsignation, tmpdir.name, fuuidDict)
     .then(resultat=>{
       // console.debug("Resultat process fichiers : %O", resultat)
-      expect(resultat.fichier.indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
+      expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
     })
 
   })
 
-  it('rotationArchiveApplication', async () => {
+  it('traiterGrosfichiers 2 grosfichiers', async () => {
+    // Creation de backup, hard link 2 grosfichier vers sous-repertoire de backup horaire
+
+    const pathConsignation = {
+      trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
+    }
+    const fuuidDict = {
+      'abcd-1234-efgh-5678': '',
+      'abcd-1234-efgh-5679': ''
+    }
+
+    fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
+    creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
+    creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5679').fichier), 'dadada')
+
+    expect.assertions(2)
+    return processFichiersBackup.traiterGrosfichiers(pathConsignation, tmpdir.name, fuuidDict)
+    .then(resultat=>{
+      // console.debug("Resultat process fichiers : %O", resultat)
+      expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
+      expect(resultat.fichiers[1].indexOf('/grosfichiers/abcd-1234-efgh-5679.mgs1')).toBeGreaterThan(0)
+    })
 
   })
 
   it('sauvegarderFichiersApplication', async () => {
+    // Tester la sauvegarde du catalogue (dict) et transfere le fichier
+    // d'archive vers le repertoire de backup d'application
 
+    const pathApplication = path.join(tmpdir.name, 'application.txt'),
+          pathBackupApplication = path.join(tmpdir.name, 'backup')
+
+    fs.mkdirSync(pathBackupApplication)
+
+    creerFichierDummy(pathApplication, 'dadido')
+
+    catalogue = {
+      archive_nomfichier: 'application.txt',
+      catalogue_nomfichier: 'catalogue',
+    }
+
+    expect.assertions(2)
+    return processFichiersBackup.sauvegarderFichiersApplication(catalogue, {path: pathApplication}, pathBackupApplication)
+    .then(()=>{
+      // Verifier que le catalogue et archive application sont crees
+      const pathApplication = path.join(tmpdir.name, 'backup', 'application.txt')
+      expect(fs.statSync(pathApplication)).toBeDefined()
+
+      const pathCatalogue = path.join(tmpdir.name, 'backup', 'catalogue')
+      expect(fs.statSync(pathCatalogue)).toBeDefined()
+    })
+  })
+
+  it('rotationArchiveApplication aucunes archives', async () => {
+    const pathBackupApplication = path.join(tmpdir.name, 'backup')
+
+    expect.assertions(1)
+    return processFichiersBackup.rotationArchiveApplication(pathBackupApplication)
+    .then(result=>{
+      expect(true).toBeDefined()  // On veut juste une invocation sans erreurs
+    })
+  })
+
+  it('rotationArchiveApplication 1 archive', async () => {
+    const pathCatalogue = path.join(tmpdir.name, 'catalogue.1.json')
+    const pathApplication = path.join(tmpdir.name, 'application.1.tar.xz')
+
+    creerFichierDummy(pathApplication, 'dadido')
+    creerFichierDummy(pathCatalogue, JSON.stringify({
+      archive_nomfichier: 'application.1.tar.xz',
+      catalogue_nomfichier: 'catalogue.1.json',
+      'en-tete': {estampille: 1}
+    }))
+
+    expect.assertions(2)
+    // 1 archive existante, rien ne devrait changer
+    return processFichiersBackup.rotationArchiveApplication(tmpdir.name)
+    .then(result=>{
+      expect(fs.statSync(pathCatalogue)).toBeDefined()
+      expect(fs.statSync(pathApplication)).toBeDefined()
+    })
+  })
+
+  it('rotationArchiveApplication 2 archives', async () => {
+    const pathCatalogues = [], pathApplications = []
+    for(let i=0; i<2; i++) {
+      pathCatalogues.push(path.join(tmpdir.name, `catalogue.${i}.json`))
+      pathApplications.push(path.join(tmpdir.name, `application.${i}.tar.xz`))
+
+      creerFichierDummy(pathApplications[i], 'dadido')
+      creerFichierDummy(pathCatalogues[i], JSON.stringify({
+        archive_nomfichier: `application.${i}.tar.xz`,
+        catalogue_nomfichier: `catalogue.${i}.json`,
+        'en-tete': {estampille: i}
+      }))
+    }
+
+    expect.assertions(4)
+    // 1 archive existante, rien ne devrait changer
+    return processFichiersBackup.rotationArchiveApplication(tmpdir.name)
+    .then(result=>{
+      for(let i=0; i<2; i++) {
+        var pathCatalogue = pathCatalogues[i]
+        var pathApplication = pathApplications[i]
+        expect(fs.statSync(pathCatalogue)).toBeDefined()
+        expect(fs.statSync(pathApplication)).toBeDefined()
+      }
+    })
+  })
+
+  it('rotationArchiveApplication 3 archives', async () => {
+    const pathCatalogues = [], pathApplications = []
+    for(let i=0; i<3; i++) {
+      pathCatalogues.push(path.join(tmpdir.name, `catalogue.${i}.json`))
+      pathApplications.push(path.join(tmpdir.name, `application.${i}.tar.xz`))
+
+      creerFichierDummy(pathApplications[i], 'dadido')
+      creerFichierDummy(pathCatalogues[i], JSON.stringify({
+        archive_nomfichier: `application.${i}.tar.xz`,
+        catalogue_nomfichier: `catalogue.${i}.json`,
+        'en-tete': {estampille: i}
+      }))
+    }
+
+    expect.assertions(6)
+    // 1 archive existante, rien ne devrait changer
+    return processFichiersBackup.rotationArchiveApplication(tmpdir.name)
+    .then(result=>{
+      for(let i=1; i<3; i++) {
+        var pathCatalogue = pathCatalogues[i]
+        var pathApplication = pathApplications[i]
+        expect(fs.statSync(pathCatalogue)).toBeDefined()
+        expect(fs.statSync(pathApplication)).toBeDefined()
+      }
+
+      expect(()=>fs.statSync(pathCatalogues[0])).toThrow()
+      expect(()=>fs.statSync(pathApplications[0])).toThrow()
+
+    })
   })
 
   it('traiterFichiersApplication', async () => {

@@ -48,8 +48,7 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
 }
 
 async function traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict) {
-  // debug("Traitement grosfichiers");
-  // debug(fuuidDict);
+  // Effectue un hard-link d'un grosfichier sous le repertoire de backup horaire
 
   const pathBackupGrosFichiers = path.join(pathRepertoire, 'grosfichiers');
   const {erreurMkdir} = await new Promise((resolve, reject)=>{
@@ -65,6 +64,8 @@ async function traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict) 
     return {erreurMkdir: err};
   });
   if(erreurMkdir) return reject(erreurMkdir);
+
+  const fichiers = []
 
   for(const fuuid in fuuidDict) {
     const paramFichier = fuuidDict[fuuid];
@@ -82,16 +83,18 @@ async function traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict) 
         const nomFichier = path.basename(fichier);
         const pathFichierBackup = path.join(pathBackupGrosFichiers, nomFichier);
 
-        return await new Promise((resolve, reject)=>{
+        await new Promise((resolve, reject)=>{
           fs.link(fichier, pathFichierBackup, e=>{
             if(e) return reject(e);
-            resolve({fichier: pathFichierBackup});
+            resolve();
           });
         })
         .catch(err=>{
           console.error("Erreur link grosfichier backup : " + fichier);
           console.error(err);
-        });
+        })
+
+        fichiers.push(pathFichierBackup)
 
       } else {
         // console.warn("Fichier " + fuuid + "  non trouve");
@@ -100,6 +103,8 @@ async function traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict) 
     }
 
   }
+
+  return {fichiers}
 }
 
 async function traiterFichiersApplication(
@@ -142,7 +147,8 @@ async function traiterFichiersApplication(
   await rotationArchiveApplication(transactionCatalogue, pathBackupApplication)
 }
 
-async function rotationArchiveApplication(transactionCatalogue, pathBackupApplication) {
+async function rotationArchiveApplication(pathBackupApplication) {
+  // Fait la rotation des archives dans un repertoire d'application
   debug("Effectuer rotation des archives d'application")
 
   const settingsReaddirp = {
@@ -565,5 +571,7 @@ async function deplacerFichier(src, dst) {
 
 module.exports = {
   traiterFichiersBackup, traiterGrosfichiers, traiterFichiersApplication,
-  genererBackupQuotidien, genererBackupAnnuel
+  genererBackupQuotidien, genererBackupAnnuel,
+
+  sauvegarderFichiersApplication, rotationArchiveApplication
 }
