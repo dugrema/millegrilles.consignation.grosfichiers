@@ -69,12 +69,10 @@ describe('processFichiersBackup', ()=>{
     const pathConsignation = {
       trouverPathFuuidExistant: function() {return 'folder_dummy'}
     }
-    const fuuidDict = {
-      'abcd-1234-efgh-5678': {'securite': '3.protege', 'hachage': 'hachage_1', 'extension': 'txt', 'heure': '21'}
-    }
+    const fuuidList = ['abcd-1234-efgh-5678']
 
     expect.assertions(1)
-    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidDict)
+    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
     .then(resultat=>{
       // console.debug("Resultat : %O", resultat)
       expect(resultat.err).toBeDefined()
@@ -88,15 +86,13 @@ describe('processFichiersBackup', ()=>{
     const pathConsignation = {
       trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
     }
-    const fuuidDict = {
-      'abcd-1234-efgh-5678': ''
-    }
+    const fuuidList = ['abcd-1234-efgh-5678']
 
     fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
     creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
 
     expect.assertions(1)
-    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidDict)
+    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
     .then(resultat=>{
       // console.debug("Resultat process fichiers : %O", resultat)
       expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
@@ -110,17 +106,14 @@ describe('processFichiersBackup', ()=>{
     const pathConsignation = {
       trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
     }
-    const fuuidDict = {
-      'abcd-1234-efgh-5678': '',
-      'abcd-1234-efgh-5679': ''
-    }
+    const fuuidList = ['abcd-1234-efgh-5678', 'abcd-1234-efgh-5679']
 
     fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
     creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
     creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5679').fichier), 'dadada')
 
     expect.assertions(2)
-    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidDict)
+    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
     .then(resultat=>{
       // console.debug("Resultat process fichiers : %O", resultat)
       expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)

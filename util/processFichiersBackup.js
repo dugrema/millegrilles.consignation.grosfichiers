@@ -50,7 +50,7 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
   return resultatHachage
 }
 
-async function linkGrosfichiersSousBackup(pathConsignation, pathRepertoire, fuuidDict) {
+async function linkGrosfichiersSousBackup(pathConsignation, pathRepertoire, fuuidList) {
   // Effectue un hard-link d'un grosfichier sous le repertoire de backup horaire
 
   const pathBackupGrosFichiers = path.join(pathRepertoire, 'grosfichiers');
@@ -70,8 +70,9 @@ async function linkGrosfichiersSousBackup(pathConsignation, pathRepertoire, fuui
 
   const fichiers = []
 
-  for(const fuuid in fuuidDict) {
-    const paramFichier = fuuidDict[fuuid];
+  for(const idx in fuuidList) {
+    const fuuid = fuuidList[idx]
+    // const paramFichier = fuuidDict[fuuid];
     // debug("Creer hard link pour fichier " + fuuid);
 
     const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid);
