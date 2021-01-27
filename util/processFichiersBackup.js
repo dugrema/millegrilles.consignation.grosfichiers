@@ -311,52 +311,33 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   // Faire liste des fichiers de catalogue et transactions a inclure.
   var fichiersInclure = []
 
+  // Charger l'information de tous les catalogues horaire correspondants au
+  // backup quotidien. Valide le hachage des fichiers de catalogue et de
+  // transaction.
   for(let heureStr in catalogue.fichiers_horaire) {
+    const heureBackup = new Date(jourBackup.getTime())
+    heureBackup.setUTCHours(heureStr)
+    // console.info("Heure backup %s = %s", heureStr, heureBackup)
     if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
 
     let infoFichier = catalogue.fichiers_horaire[heureStr]
     debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
 
-    let fichierCatalogue = path.join(heureStr, infoFichier.catalogue_nomfichier);
-    let fichierTransactions = path.join(heureStr, infoFichier.transactions_nomfichier);
+    // Charger backup horaire. Valide le hachage des transactions
+    const infoHoraire = await chargerBackupHoraire(pathConsignation, heureBackup, infoFichier.catalogue_nomfichier)
+    //console.info("Info catalogue horaire charge : %O", infoHoraire)
 
-    // Verifier SHA512
-    const pathFichierCatalogue = path.join(repertoireBackup, fichierCatalogue)
-    const sha512Catalogue = await calculerHachageFichier(pathFichierCatalogue)
-    if( ! infoFichier.catalogue_hachage ) {
-      delete catalogue['_signature']  // Signale qu'on doit regenerer entete et signature du catalogue (dirty)
-
-      console.warn("genererBackupQuotidien: Hachage manquant pour catalogue horaire %s, on cree l'entree au vol", fichierCatalogue)
-      // Il manque de l'information pour l'archive quotidienne, on insere les valeurs maintenant
-      await new Promise((resolve, reject)=>{
-        fs.readFile(pathFichierCatalogue, (err, data)=>{
-          if(err) return reject(err)
-          try {
-            lzma.LZMA().decompress(data, (data, err)=>{
-              if(err) return reject(err)
-              const catalogueDict = JSON.parse(data)
-              infoFichier.catalogue_hachage = sha512Catalogue
-              infoFichier.hachage_entete = calculerHachageData(catalogueDict['en-tete']['hachage_contenu'])
-              infoFichier['uuid-transaction'] = catalogueDict['en-tete']['uuid-transaction']
-              debug("genererBackupQuotidien: Hachage calcule : %O", infoFichier)
-              resolve()
-            })
-          } catch(err) {
-            reject(err)
-          }
-        })
-      })
-    } else if(sha512Catalogue != infoFichier.catalogue_hachage) {
-      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au hachage : ${sha512Catalogue}`
+    if(infoFichier.catalogue_hachage && infoFichier.catalogue_hachage !== infoHoraire.hachageCatalogue) {
+      throw new Error(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}`)
     }
+    infoFichier.catalogue_hachage = infoHoraire.hachageCatalogue
+    infoFichier.hachage_entete = calculerHachageData(infoHoraire.catalogue['en-tete'].hachage_contenu)
+    infoFichier['uuid-transaction'] = infoHoraire.catalogue['en-tete']['uuid-transaction']
 
-    const sha512Transactions = await calculerHachageFichier(path.join(repertoireBackup, fichierTransactions));
-    if(sha512Transactions !== infoFichier.transactions_hachage) {
-      throw `Fichier transaction ${fichierTransactions} ne correspond pas au hachage : ${sha512Transactions}`;
-    }
-
-    fichiersInclure.push(fichierCatalogue);
-    fichiersInclure.push(fichierTransactions);
+    // Conserver path des fichiers relatif au path horaire
+    // Utilise pour l'archive tar
+    fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathCatalogue))
+    fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathTransactions));
   }
 
   // Faire liste des grosfichiers au besoin
@@ -455,6 +436,61 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
   return informationArchive
 
+}
+
+async function chargerBackupHoraire(pathConsignation, dateHeure, nomFichierCatalogue) {
+  // Charger et verifier un backup horaire pour un domaine
+  // - dateHeure: objet Date
+  // - nomFichierCatalogue: str, nom du fichier de catalogue
+  // - nomFichierTransactions: str, nom du fichier de transactions (e.g. DOMAINE_transactions_DATE_SECURITE.jsonl.xz)
+
+  var repertoireBackup = pathConsignation.trouverPathBackupQuotidien(dateHeure)
+
+  var heureStr = `${dateHeure.getUTCHours()}`
+  // console.debug("HEURESTR init : %O", heureStr)
+  if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
+  let fichierCatalogue = path.join(heureStr, nomFichierCatalogue);
+
+  // Verifier SHA512
+  const pathCatalogue = path.join(repertoireBackup, fichierCatalogue)
+  const hachageCatalogue = await calculerHachageFichier(pathCatalogue)
+  // if( ! infoFichier.catalogue_hachage ) {
+  //   delete catalogue['_signature']  // Signale qu'on doit regenerer entete et signature du catalogue (dirty)
+  //
+  //   console.warn("genererBackupQuotidien: Hachage manquant pour catalogue horaire %s, on cree l'entree au vol", fichierCatalogue)
+  // Il manque de l'information pour l'archive quotidienne, on insere les valeurs maintenant
+  const catalogue = await new Promise((resolve, reject)=>{
+    fs.readFile(pathCatalogue, (err, data)=>{
+      if(err) return reject(err)
+      try {
+        lzma.LZMA().decompress(data, (data, err)=>{
+          if(err) return reject(err)
+          const catalogue = JSON.parse(data)
+          // console.info("Catalogue horaire %s charge : %O", pathCatalogue, catalogue)
+          resolve(catalogue)
+        })
+      } catch(err) {
+        reject(err)
+      }
+    })
+  })
+  // } else if(sha512Catalogue != infoFichier.catalogue_hachage) {
+  //   throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au hachage : ${sha512Catalogue}`
+  // }
+
+  let pathTransactions = path.join(repertoireBackup, heureStr, catalogue.transactions_nomfichier);
+  const hachageTransactions = await calculerHachageFichier(pathTransactions);
+  if(hachageTransactions !== catalogue.transactions_hachage) {
+    throw `Fichier transaction ${pathTransactions} hachage ${hachageTransactions}
+    ne correspond pas au hachage du catalogue : ${catalogue.transactions_hachage}`;
+  }
+
+  return {
+    catalogue,
+    hachageCatalogue,
+    pathCatalogue,
+    pathTransactions,
+  }
 }
 
 // Genere un fichier de backup mensuel qui correspond au journal

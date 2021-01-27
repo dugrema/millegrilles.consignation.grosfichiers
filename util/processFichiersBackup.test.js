@@ -347,7 +347,8 @@ describe('processFichiersBackup', ()=>{
 
     fs.mkdirSync(path.join(tmpdir.name, '00'))
     await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, '00', 'catalogue_horaire.json.xz'), {
-      dummy: 1,
+      transactions_nomfichier: 'transactions_00.jsonl.xz',
+      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
