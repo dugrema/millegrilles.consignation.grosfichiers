@@ -63,70 +63,70 @@ describe('processFichiersBackup', ()=>{
     })
   })
 
-  it('linkGrosfichiersSousBackup grosfichier introuvable', async () => {
-    // Creation de backup, hard link grosfichier impossible (fichier introuvable)
-
-    const pathConsignation = {
-      trouverPathFuuidExistant: function() {return 'folder_dummy'}
-    }
-    const fuuidList = ['abcd-1234-efgh-5678']
-
-    expect.assertions(1)
-    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
-    .then(resultat=>{
-      // console.debug("Resultat : %O", resultat)
-      expect(resultat.err).toBeDefined()
-    })
-
-  })
-
-  it('linkGrosfichiersSousBackup 1 grosfichier', async () => {
-    // Creation de backup, hard link 1 grosfichier vers sous-repertoire de backup horaire
-
-    const pathConsignation = {
-      trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
-    }
-    const fuuidList = ['abcd-1234-efgh-5678']
-
-    fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
-    creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
-
-    expect.assertions(1)
-    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
-    .then(resultat=>{
-      // console.debug("Resultat process fichiers : %O", resultat)
-      expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
-    })
-
-  })
-
-  it('linkGrosfichiersSousBackup 2 grosfichiers', async () => {
-    // Creation de backup, hard link 2 grosfichier vers sous-repertoire de backup horaire
-
-    const pathConsignation = {
-      trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
-    }
-    const fuuidList = ['abcd-1234-efgh-5678', 'abcd-1234-efgh-5679']
-
-    fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
-    creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
-    creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5679').fichier), 'dadada')
-
-    expect.assertions(2)
-    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
-    .then(resultat=>{
-      // console.debug("Resultat process fichiers : %O", resultat)
-      expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
-      expect(resultat.fichiers[1].indexOf('/grosfichiers/abcd-1234-efgh-5679.mgs1')).toBeGreaterThan(0)
-    })
-
-  })
+  // it('linkGrosfichiersSousBackup grosfichier introuvable', async () => {
+  //   // Creation de backup, hard link grosfichier impossible (fichier introuvable)
+  //
+  //   const pathConsignation = {
+  //     trouverPathFuuidExistant: function() {return 'folder_dummy'}
+  //   }
+  //   const fuuidList = ['abcd-1234-efgh-5678']
+  //
+  //   expect.assertions(1)
+  //   return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
+  //   .then(resultat=>{
+  //     // console.debug("Resultat : %O", resultat)
+  //     expect(resultat.err).toBeDefined()
+  //   })
+  //
+  // })
+  //
+  // it('linkGrosfichiersSousBackup 1 grosfichier', async () => {
+  //   // Creation de backup, hard link 1 grosfichier vers sous-repertoire de backup horaire
+  //
+  //   const pathConsignation = {
+  //     trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
+  //   }
+  //   const fuuidList = ['abcd-1234-efgh-5678']
+  //
+  //   fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
+  //   creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
+  //
+  //   expect.assertions(1)
+  //   return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
+  //   .then(resultat=>{
+  //     // console.debug("Resultat process fichiers : %O", resultat)
+  //     expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
+  //   })
+  //
+  // })
+  //
+  // it('linkGrosfichiersSousBackup 2 grosfichiers', async () => {
+  //   // Creation de backup, hard link 2 grosfichier vers sous-repertoire de backup horaire
+  //
+  //   const pathConsignation = {
+  //     trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
+  //   }
+  //   const fuuidList = ['abcd-1234-efgh-5678', 'abcd-1234-efgh-5679']
+  //
+  //   fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
+  //   creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
+  //   creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5679').fichier), 'dadada')
+  //
+  //   expect.assertions(2)
+  //   return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
+  //   .then(resultat=>{
+  //     // console.debug("Resultat process fichiers : %O", resultat)
+  //     expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
+  //     expect(resultat.fichiers[1].indexOf('/grosfichiers/abcd-1234-efgh-5679.mgs1')).toBeGreaterThan(0)
+  //   })
+  //
+  // })
 
   it('sauvegarderFichiersApplication', async () => {
     // Tester la sauvegarde du catalogue (dict) et transfere le fichier
     // d'archive vers le repertoire de backup d'application
 
-    const pathApplication = path.join(tmpdir.name, 'application.txt'),
+    const pathApplication = path.join(tmpdir.name, 'backup', 'application.txt'),
           pathBackupApplication = path.join(tmpdir.name, 'backup')
 
     fs.mkdirSync(pathBackupApplication)
@@ -319,7 +319,7 @@ describe('processFichiersBackup', ()=>{
 
   })
 
-  it('traiterBackupQuotidien', async () => {
+  it('traiterBackupQuotidien sans fichiers', async () => {
     var appels_transmettreEnveloppeTransaction = []
     const amqpdao = {
       transmettreEnveloppeTransaction: (transaction)=>{
@@ -395,6 +395,57 @@ describe('processFichiersBackup', ()=>{
 
   it('genererBackupAnnuel', async () => {
 
+  })
+
+  it('verifierGrosfichiersBackup 1 fichier OK', async () => {
+    const pathConsignation = {
+      trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid + '.mgs1')}
+    }
+    const infoGrosfichiers = {
+      'abcd-1234': {hachage: 'sha512_b64:m9+VOgb9/QzOb/myd745kqAk2XFl308AgjUTBpS4NpTJeELbY39FfPxsZsECbGX/cyIeaVrISi2v4Z7XsMAGQg=='},
+    }
+
+    creerFichierDummy(path.join(tmpdir.name, 'abcd-1234.mgs1'), 'dadido')
+
+    expect.assertions(3)
+    return processFichiersBackup.verifierGrosfichiersBackup(pathConsignation, infoGrosfichiers)
+    .then(resultat=>{
+      // console.info("Resultat : %O", resultat[0])
+      if(resultat[0].err) console.error("Erreur : %O", resultat[0].err)
+      expect(resultat[0].err).toBeUndefined()
+      expect(resultat[0].fuuid).toBe('abcd-1234')
+      expect(resultat[0].nomFichier).toBe('abcd-1234.mgs1')
+    })
+  })
+
+  it('verifierGrosfichiersBackup 1 fichier manquant', async () => {
+    const pathConsignation = {
+      trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid)}
+    }
+    const infoGrosfichiers = {
+      'abcd-1234': {hachage: 'sha512_b64:m9+VOgb9/QzOb/myd745kqAk2XFl308AgjUTBpS4NpTJeELbY39FfPxsZsECbGX/cyIeaVrISi2v4Z7XsMAGQg=='},
+    }
+    expect.assertions(1)
+    return processFichiersBackup.verifierGrosfichiersBackup(pathConsignation, infoGrosfichiers)
+    .then(resultat=>{
+      // console.info("Resultat : %O", resultat[0])
+      expect(resultat[0].err).toBeDefined()
+    })
+  })
+
+  it('verifierGrosfichiersBackup 1 fichier mauvais hachage', async () => {
+    const pathConsignation = {
+      trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid)}
+    }
+    const infoGrosfichiers = {
+      'abcd-1234': {hachage: 'sha512_b64:DUMMY'},
+    }
+    expect.assertions(1)
+    return processFichiersBackup.verifierGrosfichiersBackup(pathConsignation, infoGrosfichiers)
+    .then(resultat=>{
+      // console.info("Resultat : %O", resultat[0])
+      expect(resultat[0].err).toBeDefined()
+    })
   })
 
 })

@@ -55,7 +55,7 @@ class PathConsignation {
     let pathRepertoire = path.join(this.consignationPathLocal, path.dirname(pathFichier));
     // console.debug("Aller chercher fichiers du repertoire " + pathRepertoire);
 
-    var {err, fichier} = await new Promise((resolve, reject)=>{
+    const fichier = await new Promise((resolve, reject)=>{
       fs.readdir(pathRepertoire, (err, files)=>{
         if(err) return reject(err);
 
@@ -84,11 +84,8 @@ class PathConsignation {
 
       });
     })
-    .catch(err=>{
-      return({err});
-    });
 
-    return {fichier};
+    return fichier;
   }
 
   trouverPathBackupHoraire(domaine) {

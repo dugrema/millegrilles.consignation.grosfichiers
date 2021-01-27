@@ -50,66 +50,66 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
   return resultatHachage
 }
 
-async function linkGrosfichiersSousBackup(pathConsignation, pathRepertoire, fuuidList) {
-  // Effectue un hard-link d'un grosfichier sous le repertoire de backup horaire
-
-  const pathBackupGrosFichiers = path.join(pathRepertoire, 'grosfichiers');
-  const {erreurMkdir} = await new Promise((resolve, reject)=>{
-    fs.mkdir(pathBackupGrosFichiers, { recursive: true, mode: 0o770 }, (erreurMkdir)=>{
-      if(erreurMkdir) {
-        console.error("Erreur mkdir grosfichiers : " + pathBackupGrosFichiers);
-        return reject({erreurMkdir});
-      }
-      resolve({});
-    });
-  })
-  .catch(err=>{
-    return {erreurMkdir: err};
-  });
-  if(erreurMkdir) return reject(erreurMkdir);
-
-  const fichiers = []
-
-  for(const idx in fuuidList) {
-    const fuuid = fuuidList[idx]
-    // const paramFichier = fuuidDict[fuuid];
-    // debug("Creer hard link pour fichier " + fuuid);
-
-    const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid);
-    if(err) {
-      console.error("Erreur extraction fichier " + fuuid + " pour backup");
-      console.error(err);
-    } else {
-      if(fichier) {
-        // debug("Fichier " + fuuid + " trouve");
-        // debug(fichier);
-
-        const nomFichier = path.basename(fichier);
-        const pathFichierBackup = path.join(pathBackupGrosFichiers, nomFichier);
-
-        await new Promise((resolve, reject)=>{
-          fs.link(fichier, pathFichierBackup, e=>{
-            if(e) return reject(e);
-            resolve();
-          });
-        })
-        .catch(err=>{
-          console.error("Erreur link grosfichier backup : " + fichier);
-          console.error(err);
-        })
-
-        fichiers.push(pathFichierBackup)
-
-      } else {
-        // console.warn("Fichier " + fuuid + "  non trouve");
-        return({err: "Fichier " + fuuid + "  non trouve"})
-      }
-    }
-
-  }
-
-  return {fichiers}
-}
+// async function linkGrosfichiersSousBackup(pathConsignation, pathRepertoire, fuuidList) {
+//   // Effectue un hard-link d'un grosfichier sous le repertoire de backup horaire
+//
+//   const pathBackupGrosFichiers = path.join(pathRepertoire, 'grosfichiers');
+//   const {erreurMkdir} = await new Promise((resolve, reject)=>{
+//     fs.mkdir(pathBackupGrosFichiers, { recursive: true, mode: 0o770 }, (erreurMkdir)=>{
+//       if(erreurMkdir) {
+//         console.error("Erreur mkdir grosfichiers : " + pathBackupGrosFichiers);
+//         return reject({erreurMkdir});
+//       }
+//       resolve({});
+//     });
+//   })
+//   .catch(err=>{
+//     return {erreurMkdir: err};
+//   });
+//   if(erreurMkdir) return reject(erreurMkdir);
+//
+//   const fichiers = []
+//
+//   for(const idx in fuuidList) {
+//     const fuuid = fuuidList[idx]
+//     // const paramFichier = fuuidDict[fuuid];
+//     // debug("Creer hard link pour fichier " + fuuid);
+//
+//     const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid);
+//     if(err) {
+//       console.error("Erreur extraction fichier " + fuuid + " pour backup");
+//       console.error(err);
+//     } else {
+//       if(fichier) {
+//         // debug("Fichier " + fuuid + " trouve");
+//         // debug(fichier);
+//
+//         const nomFichier = path.basename(fichier);
+//         const pathFichierBackup = path.join(pathBackupGrosFichiers, nomFichier);
+//
+//         await new Promise((resolve, reject)=>{
+//           fs.link(fichier, pathFichierBackup, e=>{
+//             if(e) return reject(e);
+//             resolve();
+//           });
+//         })
+//         .catch(err=>{
+//           console.error("Erreur link grosfichier backup : " + fichier);
+//           console.error(err);
+//         })
+//
+//         fichiers.push(pathFichierBackup)
+//
+//       } else {
+//         // console.warn("Fichier " + fuuid + "  non trouve");
+//         return({err: "Fichier " + fuuid + "  non trouve"})
+//       }
+//     }
+//
+//   }
+//
+//   return {fichiers}
+// }
 
 async function traiterFichiersApplication(
   amqpdao, transactionCatalogue, transactionMaitreDesCles, fichierApplication, pathBackupApplication) {
@@ -417,49 +417,41 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
 }
 
-async function preparerGrosfichiresBackupQuotidien(pathConsignation, pathRepertoireHoraire, infoGrosfichiers) {
-
-  // Preparer sous-repertoire grosfichiers/ sous le backup horaire
-  const pathBackupGrosFichiers = path.join(pathRepertoireHoraire, 'grosfichiers');
-  await new Promise((resolve, reject)=>{
-    fs.mkdir(pathBackupGrosFichiers, { recursive: true, mode: 0o770 }, err => {
-      if(err) return reject(err)
-      resolve()
-    })
-  })
+async function verifierGrosfichiersBackup(pathConsignation, infoGrosfichiers) {
 
   // Verifier presence et hachage de chaque grosfichier
-  var pathGrosfichiers = []
+  var resultat = []
   for(let fuuid in infoGrosfichiers) {
-    const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid)
-    if(err) throw new Error("Erreur grosfichier: " + err)
+    var nomFichier = null
+    try {
+      const fichier = await pathConsignation.trouverPathFuuidExistant(fuuid)
+      nomFichier = path.basename(fichier)
 
-    let infoFichier = infoGrosfichiers[fuuid]
-    // let heureStr = infoFichier.heure
-    // if(heureStr.length == 1) heureStr = '0' + heureStr
-    //
-    // const extension = 'mgs1'
-    // let pathGrosfichier = path.join(repertoireBackup, heureStr, 'grosfichiers', `${fuuid}.${extension}`)
+      let infoFichier = infoGrosfichiers[fuuid]
 
-    debug("Ajout grosfichier %s", fichier)
+      debug("Verification grosfichier %s", fichier)
 
-    // Verifier le hachage des fichiers a inclure
-    if(infoFichier.hachage) {
+      // Verifier le hachage des fichiers a inclure
       const fonctionHash = infoFichier.hachage.split(':')[0]
       const hachageCalcule = await calculerHachageFichier(fichier, {fonctionHash});
-
-      if(hachageCalcule !== infoFichier.hachage) {
-        debug("Erreur verification hachage grosfichier\nCatalogue : %s\nCalcule : %s", infoFichier.hachage, hachageCalcule)
-        throw `Erreur Hachage sur fichier : ${nomFichier}`
+      if(infoFichier.hachage) {
+        if(hachageCalcule !== infoFichier.hachage) {
+          debug("Erreur verification hachage grosfichier\nCatalogue : %s\nCalcule : %s", infoFichier.hachage, hachageCalcule)
+          resultat.push({fuuid, nomFichier, err: 'Hachage mismatch', hachage: hachageCalcule});
+        } else {
+          debug("Hachage grosfichier OK : %s => %s ", hachageCalcule, nomFichier)
+          resultat.push({fuuid, nomFichier, hachage: hachageCalcule});
+        }
       } else {
-        debug("Hachage grosfichier OK : %s => %s ", hachageCalcule, nomFichier)
+        resultat.push({fuuid, nomFichier, err: 'Hachage absent du catalogue', hachage: hachageCalcule});
       }
-    } else {
-      throw `Erreur Hachage absent sur fichier : ${nomFichier}`;
-    }
 
-    pathGrosfichiers.push(nomFichier);
+    } catch (err) {
+      resultat.push({fuuid, nomFichier, ok: false, err});
+    }
   }
+
+  return resultat
 }
 
 async function genererTarArchiveQuotidienne(pathConsignation, domaine, dateJour, fichiersInclure) {
@@ -729,5 +721,7 @@ module.exports = {
 
   sauvegarderFichiersApplication, rotationArchiveApplication,
   sauvegarderCatalogueQuotidien, sauvegarderCatalogueAnnuel,
-  traiterBackupQuotidien, sauvegarderLzma, linkGrosfichiersSousBackup,
+  traiterBackupQuotidien, sauvegarderLzma, verifierGrosfichiersBackup,
+
+  // linkGrosfichiersSousBackup,
 }
