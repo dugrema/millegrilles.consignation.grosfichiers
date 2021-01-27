@@ -63,7 +63,7 @@ describe('processFichiersBackup', ()=>{
     })
   })
 
-  it('traiterGrosfichiers grosfichier introuvable', async () => {
+  it('linkGrosfichiersSousBackup grosfichier introuvable', async () => {
     // Creation de backup, hard link grosfichier impossible (fichier introuvable)
 
     const pathConsignation = {
@@ -74,7 +74,7 @@ describe('processFichiersBackup', ()=>{
     }
 
     expect.assertions(1)
-    return processFichiersBackup.traiterGrosfichiers(pathConsignation, tmpdir.name, fuuidDict)
+    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidDict)
     .then(resultat=>{
       // console.debug("Resultat : %O", resultat)
       expect(resultat.err).toBeDefined()
@@ -82,7 +82,7 @@ describe('processFichiersBackup', ()=>{
 
   })
 
-  it('traiterGrosfichiers 1 grosfichier', async () => {
+  it('linkGrosfichiersSousBackup 1 grosfichier', async () => {
     // Creation de backup, hard link 1 grosfichier vers sous-repertoire de backup horaire
 
     const pathConsignation = {
@@ -96,7 +96,7 @@ describe('processFichiersBackup', ()=>{
     creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
 
     expect.assertions(1)
-    return processFichiersBackup.traiterGrosfichiers(pathConsignation, tmpdir.name, fuuidDict)
+    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidDict)
     .then(resultat=>{
       // console.debug("Resultat process fichiers : %O", resultat)
       expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
@@ -104,7 +104,7 @@ describe('processFichiersBackup', ()=>{
 
   })
 
-  it('traiterGrosfichiers 2 grosfichiers', async () => {
+  it('linkGrosfichiersSousBackup 2 grosfichiers', async () => {
     // Creation de backup, hard link 2 grosfichier vers sous-repertoire de backup horaire
 
     const pathConsignation = {
@@ -120,7 +120,7 @@ describe('processFichiersBackup', ()=>{
     creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5679').fichier), 'dadada')
 
     expect.assertions(2)
-    return processFichiersBackup.traiterGrosfichiers(pathConsignation, tmpdir.name, fuuidDict)
+    return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidDict)
     .then(resultat=>{
       // console.debug("Resultat process fichiers : %O", resultat)
       expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)

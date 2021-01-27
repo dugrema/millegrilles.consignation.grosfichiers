@@ -50,7 +50,7 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
   return resultatHachage
 }
 
-async function traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict) {
+async function linkGrosfichiersSousBackup(pathConsignation, pathRepertoire, fuuidDict) {
   // Effectue un hard-link d'un grosfichier sous le repertoire de backup horaire
 
   const pathBackupGrosFichiers = path.join(pathRepertoire, 'grosfichiers');
@@ -671,10 +671,10 @@ async function deplacerFichier(src, dst) {
 }
 
 module.exports = {
-  traiterFichiersBackup, traiterGrosfichiers, traiterFichiersApplication,
+  traiterFichiersBackup, traiterFichiersApplication,
   genererBackupQuotidien, genererBackupAnnuel,
 
   sauvegarderFichiersApplication, rotationArchiveApplication,
   sauvegarderCatalogueQuotidien, sauvegarderCatalogueAnnuel,
-  traiterBackupQuotidien, sauvegarderLzma,
+  traiterBackupQuotidien, sauvegarderLzma, linkGrosfichiersSousBackup,
 }
