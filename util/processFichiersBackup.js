@@ -4,7 +4,8 @@ const readdirp = require('readdirp')
 const path = require('path')
 const crypto = require('crypto');
 const lzma = require('lzma-native')
-const { calculerHachageFichier } = require('./utilitairesHachage')
+const tar = require('tar')
+const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHachage')
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 
 async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire) {
@@ -323,7 +324,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     const pathFichierCatalogue = path.join(repertoireBackup, fichierCatalogue)
     const sha512Catalogue = await calculerHachageFichier(pathFichierCatalogue)
     if( ! infoFichier.catalogue_hachage ) {
-      delete journal['_signature']  // Signale qu'on doit regenerer entete et signature du catalogue (dirty)
+      delete catalogue['_signature']  // Signale qu'on doit regenerer entete et signature du catalogue (dirty)
 
       console.warn("genererBackupQuotidien: Hachage manquant pour catalogue horaire %s, on cree l'entree au vol", fichierCatalogue)
       // Il manque de l'information pour l'archive quotidienne, on insere les valeurs maintenant
@@ -331,7 +332,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
         fs.readFile(pathFichierCatalogue, (err, data)=>{
           if(err) return reject(err)
           try {
-            var compressor = lzma.LZMA().decompress(data, (data, err)=>{
+            lzma.LZMA().decompress(data, (data, err)=>{
               if(err) return reject(err)
               const catalogueDict = JSON.parse(data)
               infoFichier.catalogue_hachage = sha512Catalogue
@@ -346,12 +347,12 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
         })
       })
     } else if(sha512Catalogue != infoFichier.catalogue_hachage) {
-      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au hachage`;
+      throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au hachage : ${sha512Catalogue}`
     }
 
     const sha512Transactions = await calculerHachageFichier(path.join(repertoireBackup, fichierTransactions));
     if(sha512Transactions !== infoFichier.transactions_hachage) {
-      throw `Fichier transaction ${fichierCatalogue} ne correspond pas au hachage`;
+      throw `Fichier transaction ${fichierTransactions} ne correspond pas au hachage : ${sha512Transactions}`;
     }
 
     fichiersInclure.push(fichierCatalogue);
@@ -359,12 +360,12 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   }
 
   // Faire liste des grosfichiers au besoin
-  if(journal.fuuid_grosfichiers) {
+  if(catalogue.fuuid_grosfichiers) {
     // Aussi inclure le repertoire des grosfichiers
     // fichiersInclureStr = `${fichiersInclureStr} */grosfichiers/*`
 
-    for(let fuuid in journal.fuuid_grosfichiers) {
-      let infoFichier = journal.fuuid_grosfichiers[fuuid]
+    for(let fuuid in catalogue.fuuid_grosfichiers) {
+      let infoFichier = catalogue.fuuid_grosfichiers[fuuid]
       let heureStr = infoFichier.heure
       if(heureStr.length == 1) heureStr = '0' + heureStr
 
@@ -397,20 +398,19 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   }
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
-  if( ! journal['_signature'] ) {
-    debug("Regenerer signature du catalogue horaire, entete precedente : %O", journal['en-tete'])
+  if( ! catalogue['_signature'] ) {
+    debug("Regenerer signature du catalogue horaire, entete precedente : %O", catalogue['en-tete'])
     // Journal est dirty, on doit le re-signer
-    const domaine = journal['en-tete'].domaine
-    delete journal['en-tete']
-    mq.formatterTransaction(domaine, journal)
+    const domaine = catalogue['en-tete'].domaine
+    delete catalogue['en-tete']
+    mq.formatterTransaction(domaine, catalogue)
   }
 
-  var resultat = await traitementFichierBackup.sauvegarderJournalQuotidien(journal)
-  debug("Resultat sauvegarder journal quotidien : %O", resultat)
-  const pathJournal = resultat.path
-  const nomJournal = path.basename(pathJournal)
-  // const pathRepertoireBackup = path.dirname(pathJournal)
-  fichiersInclure.unshift(nomJournal)  // Inserer comme premier fichier dans le .tar, permet traitement stream
+  var resultat = await sauvegarderCatalogueQuotidien(pathConsignation, catalogue)
+  debug("Resultat sauvegarder catalogue quotidien : %O", resultat)
+  const pathCatalogue = resultat.path
+  const nomCatalogue = path.basename(pathCatalogue)
+  fichiersInclure.unshift(nomCatalogue)  // Inserer comme premier fichier dans le .tar, permet traitement stream
 
   const pathArchive = pathConsignation.consignationPathBackupArchives
   // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
@@ -445,9 +445,9 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   const informationArchive = {
     archive_hachage: hachageArchive,
     archive_nomfichier: nomArchive,
-    jour: journal.jour,
-    domaine: journal.domaine,
-    securite: journal.securite,
+    jour: catalogue.jour,
+    domaine: catalogue.domaine,
+    securite: catalogue.securite,
 
     fichiersInclure,
     pathRepertoireBackup: repertoireBackup,
@@ -554,19 +554,7 @@ async function sauvegarderCatalogueQuotidien(pathConsignation, catalogue) {
   const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz"
   const fullPathFichier = path.join(repertoireBackup, nomFichier)
 
-  // debug("Path fichier journal quotidien " + fullPathFichier);
-  var compressor = lzma.createCompressor()
-  var output = fs.createWriteStream(fullPathFichier)
-  compressor.pipe(output)
-
-  const promiseSauvegarde = new Promise((resolve, reject)=>{
-    output.on('close', ()=>{resolve()})
-    output.on('error', err=>{reject(err)})
-  })
-
-  compressor.write(JSON.stringify(catalogue))
-  compressor.end()
-  await promiseSauvegarde
+  await sauvegarderLzma(fullPathFichier, catalogue)
 
   // debug("Fichier cree : " + fullPathFichier);
   return {path: fullPathFichier, nomFichier, dateFormattee}
@@ -586,22 +574,25 @@ async function sauvegarderCatalogueAnnuel(pathConsignation, catalogue) {
   const fullPathFichier = path.join(repertoireBackup, nomFichier)
 
   // debug("Path fichier journal mensuel " + fullPathFichier);
-  var compressor = lzma.createCompressor();
-  var output = fs.createWriteStream(fullPathFichier);
-  compressor.pipe(output);
-
-  const promiseSauvegarde = new Promise((resolve, reject)=>{
-    output.on('close', ()=>{resolve()});
-    output.on('error', err=>{reject(err)})
-  });
-
-  compressor.write(JSON.stringify(catalogue))
-  compressor.end()
-  await promiseSauvegarde
+  await sauvegarderLzma(fullPathFichier, catalogue)
 
   return {path: fullPathFichier, nomFichier, dateFormattee}
 }
 
+async function sauvegarderLzma(fichier, contenu) {
+  var compressor = lzma.createCompressor()
+  var output = fs.createWriteStream(fichier)
+  compressor.pipe(output)
+
+  const promiseSauvegarde = new Promise((resolve, reject)=>{
+    output.on('close', ()=>{resolve()})
+    output.on('error', err=>{reject(err)})
+  })
+
+  compressor.write(JSON.stringify(contenu))
+  compressor.end()
+  return promiseSauvegarde
+}
 
 async function deplacerFichier(src, dst) {
   debug("Deplacer fichier de %s a %s", src, dst)
@@ -636,4 +627,5 @@ module.exports = {
 
   sauvegarderFichiersApplication, rotationArchiveApplication,
   sauvegarderCatalogueQuotidien, sauvegarderCatalogueAnnuel,
+  traiterBackupQuotidien, sauvegarderLzma,
 }

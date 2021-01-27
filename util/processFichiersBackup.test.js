@@ -326,24 +326,67 @@ describe('processFichiersBackup', ()=>{
 
   })
 
-  it('genererBackupQuotidien2', async () => {
+  it('traiterBackupQuotidien', async () => {
     var appels_transmettreEnveloppeTransaction = []
     const amqpdao = {
       transmettreEnveloppeTransaction: (transaction)=>{
         appels_transmettreEnveloppeTransaction.push(transaction)
         return ''
+      },
+      formatterTransaction: (domaine, transaction) => {
+        transaction['en-tete'] = {domaine}
+        return transaction
       }
     }
 
     const pathConsignation = {
-
+      trouverPathBackupQuotidien: () => {return tmpdir.name},
+      trouverPathBackupHoraire: dateJournal => {return path.join(tmpdir.name, '00')},
+      consignationPathBackupArchives: tmpdir.name,
     }
+
+    fs.mkdirSync(path.join(tmpdir.name, '00'))
+    await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, '00', 'catalogue_horaire.json.xz'), {
+      dummy: 1,
+      'en-tete': {
+        hachage_contenu: 'dummy',
+      },
+    })
+    creerFichierDummy(path.join(tmpdir.name, '00', 'transactions_00.jsonl.xz'), 'dadadon')
 
     const catalogue = {
-
+      fichiers_horaire: {
+        '00': {
+          catalogue_nomfichier: 'catalogue_horaire.json.xz',
+          transactions_nomfichier: 'transactions_00.jsonl.xz',
+          catalogue_hachage: '',
+          transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+        }
+      },
+      'en-tete': {
+        domaine: 'domaine.test'
+      },
+      '_signature': 'DADADA',
+      domaine: 'domaine.test',
+      securite: '1.public',
+      jour: new Date("2020-01-01").getTime()/1000,
     }
 
-    // return processFichiersBackup.traiterBackupQuotidien(mq, pathConsignation, catalogue)
+    expect.assertions(6)
+    return processFichiersBackup.traiterBackupQuotidien(amqpdao, pathConsignation, catalogue)
+    .then(resultat=>{
+      // console.debug("Resultat : %O", resultat)
+      expect(resultat.archive_hachage).toBeDefined()
+      expect(resultat.archive_nomfichier).toBe('domaine.test_20200101_1.public.tar')
+      expect(resultat.fichiersInclure[0]).toBe('domaine.test_catalogue_20200101_1.public.json.xz')
+      expect(resultat.fichiersInclure[1]).toBe('00/catalogue_horaire.json.xz')
+      expect(resultat.fichiersInclure[2]).toBe('00/transactions_00.jsonl.xz')
+
+      const fichierTar = fs.statSync(path.join(tmpdir.name, 'quotidiennes/domaine.test', 'domaine.test_20200101_1.public.tar'))
+      // console.info("Fichier tar: %O", fichierTar)
+      expect(fichierTar.size).toBe(4096)
+
+    })
   })
 
   it('genererBackupQuotidien', async () => {
