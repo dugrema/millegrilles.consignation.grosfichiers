@@ -317,7 +317,7 @@ describe('processFichiersBackup', ()=>{
     const resultat = await processFichiersBackup.sauvegarderCatalogueAnnuel(
       pathConsignation, catalogue)
 
-    console.debug("Resultat : %O", resultat)
+    // console.debug("Resultat : %O", resultat)
     expect(resultat.path).toBe(`${tmpdir.name}/test_catalogue_2020_1.public.json.xz`)
     expect(resultat.nomFichier).toBe('test_catalogue_2020_1.public.json.xz')
     expect(resultat.dateFormattee).toBe('2020')
@@ -335,6 +335,7 @@ describe('processFichiersBackup', ()=>{
       },
       formatterTransaction: (domaine, transaction) => {
         transaction['en-tete'] = {domaine}
+        transaction['_signature'] = 'dummy'
         return transaction
       }
     }
@@ -377,6 +378,7 @@ describe('processFichiersBackup', ()=>{
     return processFichiersBackup.traiterBackupQuotidien(amqpdao, pathConsignation, catalogue)
     .then(resultat=>{
       // console.debug("Resultat : %O", resultat)
+
       expect(resultat.archive_hachage).toBeDefined()
       expect(resultat.archive_nomfichier).toBe('domaine.test_20200101_1.public.tar')
       expect(resultat.fichiersInclure[0]).toBe('domaine.test_catalogue_20200101_1.public.json.xz')

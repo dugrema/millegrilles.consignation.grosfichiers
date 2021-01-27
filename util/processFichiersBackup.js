@@ -306,10 +306,10 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
   const {domaine, securite} = catalogue
   const jourBackup = new Date(catalogue.jour * 1000)
-  var repertoireBackup = pathConsignation.trouverPathBackupQuotidien(jourBackup)
+  const repertoireBackup = pathConsignation.trouverPathBackupQuotidien(jourBackup)
 
-  // Faire liste des fichiers de catalogue et transactions a inclure.
-  var fichiersInclure = []
+  // Faire liste des fichiers de catalogue et transactions a inclure dans le tar quotidien
+  const fichiersInclure = []
 
   // Charger l'information de tous les catalogues horaire correspondants au
   // backup quotidien. Valide le hachage des fichiers de catalogue et de
@@ -317,7 +317,6 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   for(let heureStr in catalogue.fichiers_horaire) {
     const heureBackup = new Date(jourBackup.getTime())
     heureBackup.setUTCHours(heureStr)
-    // console.info("Heure backup %s = %s", heureStr, heureBackup)
     if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
 
     let infoFichier = catalogue.fichiers_horaire[heureStr]
@@ -325,17 +324,18 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
     // Charger backup horaire. Valide le hachage des transactions
     const infoHoraire = await chargerBackupHoraire(pathConsignation, heureBackup, infoFichier.catalogue_nomfichier)
-    //console.info("Info catalogue horaire charge : %O", infoHoraire)
 
+    // Verifier hachage du catalogue horaire (si present dans le catalogue quotidien)
     if(infoFichier.catalogue_hachage && infoFichier.catalogue_hachage !== infoHoraire.hachageCatalogue) {
       throw new Error(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}`)
     }
+
+    // Conserver information manquante dans le catalogue quotidien
     infoFichier.catalogue_hachage = infoHoraire.hachageCatalogue
     infoFichier.hachage_entete = calculerHachageData(infoHoraire.catalogue['en-tete'].hachage_contenu)
     infoFichier['uuid-transaction'] = infoHoraire.catalogue['en-tete']['uuid-transaction']
 
-    // Conserver path des fichiers relatif au path horaire
-    // Utilise pour l'archive tar
+    // Conserver path des fichiers relatif au path horaire Utilise pour l'archive tar.
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathCatalogue))
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathTransactions));
   }
@@ -350,10 +350,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
       let heureStr = infoFichier.heure
       if(heureStr.length == 1) heureStr = '0' + heureStr
 
-      let extension = infoFichier.extension
-      if(infoFichier.securite == '3.protege' || infoFichier.securite == '4.secure') {
-        extension = 'mgs1'
-      }
+      const extension = 'mgs1'
       let nomFichier = path.join(heureStr, 'grosfichiers', `${fuuid}.${extension}`)
 
       debug("Ajout grosfichier %s", nomFichier)
@@ -382,7 +379,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   if( ! catalogue['_signature'] ) {
     debug("Regenerer signature du catalogue horaire, entete precedente : %O", catalogue['en-tete'])
     // Journal est dirty, on doit le re-signer
-    const domaine = catalogue['en-tete'].domaine
+    // const domaine = catalogue['en-tete'].domaine
     delete catalogue['en-tete']
     mq.formatterTransaction(domaine, catalogue)
   }
@@ -393,39 +390,13 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   const nomCatalogue = path.basename(pathCatalogue)
   fichiersInclure.unshift(nomCatalogue)  // Inserer comme premier fichier dans le .tar, permet traitement stream
 
-  const pathArchive = pathConsignation.consignationPathBackupArchives
-  // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
-  const pathArchiveQuotidienneRepertoire = path.join(pathArchive, 'quotidiennes', domaine)
-  debug("Path repertoire archive quotidienne : %s", pathArchiveQuotidienneRepertoire)
-  await new Promise((resolve, reject)=>{
-    fs.mkdir(pathArchiveQuotidienneRepertoire, { recursive: true, mode: 0o770 }, err=>{
-      if(err) return reject(err)
-      resolve()
-    })
-  })
-
-  var nomArchive = [domaine, resultat.dateFormattee, securite + '.tar'].join('_')
-  const pathArchiveQuotidienne = path.join(pathArchiveQuotidienneRepertoire, nomArchive)
-  debug("Path archive quotidienne : %s", pathArchiveQuotidienne)
-
-  var fichiersInclureStr = fichiersInclure.join('\n');
-  debug(`Fichiers quotidien inclure relatif a ${pathArchive} : \n${fichiersInclure}`);
-
-  // Creer nouvelle archive quotidienne
-  await tar.c(
-    {
-      file: pathArchiveQuotidienne,
-      cwd: repertoireBackup,
-    },
-    fichiersInclure
-  )
-
-  // Calculer le SHA512 du fichier d'archive
-  const hachageArchive = await calculerHachageFichier(pathArchiveQuotidienne)
+  // Creer nom du fichier d'archive
+  const infoArchiveQuotidienne = await genererTarArchiveQuotidienne(
+    pathConsignation, domaine, jourBackup, securite, fichiersInclure)
 
   const informationArchive = {
-    archive_hachage: hachageArchive,
-    archive_nomfichier: nomArchive,
+    archive_hachage: infoArchiveQuotidienne.hachageArchive,
+    archive_nomfichier: infoArchiveQuotidienne.nomArchive,
     jour: catalogue.jour,
     domaine: catalogue.domaine,
     securite: catalogue.securite,
@@ -436,6 +407,48 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
   return informationArchive
 
+}
+
+async function genererTarArchiveQuotidienne(pathConsignation, domaine, dateJour, securite, fichiersInclure) {
+  // Genere un fichier .tar d'une archive quotidienne avec tous les catalogues et transactions
+  // - pathRepertoireArchive: str path du repertoire output de l'archive
+  // - domaine: str sous-domaine du backup
+  // - dateJour: Date() du contenu de fichier de backup
+  // - securite: str '3.protege'
+  // - fichiersInclure: list Path des fichiers a inclure en ordre
+
+  const pathArchiveQuotidienneRepertoire = path.join(
+    pathConsignation.consignationPathBackupArchives, 'quotidiennes', domaine)
+  debug("Path repertoire archive quotidienne : %s", pathArchiveQuotidienneRepertoire)
+  await new Promise((resolve, reject)=>{
+    fs.mkdir(pathArchiveQuotidienneRepertoire, { recursive: true, mode: 0o770 }, err=>{
+      if(err) return reject(err)
+      resolve()
+    })
+  })
+
+  const dateFormattee = formatterDateString(dateJour).slice(0, 8)  // Retirer heures
+  var nomArchive = [domaine, dateFormattee, securite + '.tar'].join('_')
+  const pathArchiveQuotidienne = path.join(pathArchiveQuotidienneRepertoire, nomArchive)
+  debug("Path archive quotidienne : %s", pathArchiveQuotidienne)
+
+  const repertoireBackupQuotidien = pathConsignation.trouverPathBackupQuotidien(dateJour)
+  var fichiersInclureStr = fichiersInclure.join('\n');
+  debug(`Fichiers quotidien inclure relatif a ${repertoireBackupQuotidien} : \n${fichiersInclure}`);
+
+  // Creer nouvelle archive quotidienne
+  await tar.c(
+    {
+      file: pathArchiveQuotidienne,
+      cwd: repertoireBackupQuotidien,
+    },
+    fichiersInclure
+  )
+
+  // Calculer le SHA512 du fichier d'archive
+  const hachageArchive = await calculerHachageFichier(pathArchiveQuotidienne)
+
+  return {hachageArchive, pathArchiveQuotidienne, nomArchive}
 }
 
 async function chargerBackupHoraire(pathConsignation, dateHeure, nomFichierCatalogue) {
