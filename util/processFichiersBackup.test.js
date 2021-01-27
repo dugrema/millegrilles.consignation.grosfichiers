@@ -286,11 +286,11 @@ describe('processFichiersBackup', ()=>{
       pathConsignation, catalogue)
 
     // console.debug("Resultat : %O", resultat)
-    expect(resultat.path).toBe(`${tmpdir.name}/test_catalogue_20200101_1.public.json.xz`)
-    expect(resultat.nomFichier).toBe('test_catalogue_20200101_1.public.json.xz')
+    expect(resultat.path).toBe(`${tmpdir.name}/test_catalogue_20200101.json.xz`)
+    expect(resultat.nomFichier).toBe('test_catalogue_20200101.json.xz')
     expect(resultat.dateFormattee).toBe('20200101')
 
-    expect(fs.statSync(`${tmpdir.name}/test_catalogue_20200101_1.public.json.xz`)).toBeDefined()
+    expect(fs.statSync(`${tmpdir.name}/test_catalogue_20200101.json.xz`)).toBeDefined()
 
   })
 
@@ -311,11 +311,11 @@ describe('processFichiersBackup', ()=>{
       pathConsignation, catalogue)
 
     // console.debug("Resultat : %O", resultat)
-    expect(resultat.path).toBe(`${tmpdir.name}/test_catalogue_2020_1.public.json.xz`)
-    expect(resultat.nomFichier).toBe('test_catalogue_2020_1.public.json.xz')
+    expect(resultat.path).toBe(`${tmpdir.name}/test_catalogue_2020.json.xz`)
+    expect(resultat.nomFichier).toBe('test_catalogue_2020.json.xz')
     expect(resultat.dateFormattee).toBe('2020')
 
-    expect(fs.statSync(`${tmpdir.name}/test_catalogue_2020_1.public.json.xz`)).toBeDefined()
+    expect(fs.statSync(`${tmpdir.name}/test_catalogue_2020.json.xz`)).toBeDefined()
 
   })
 
@@ -373,12 +373,12 @@ describe('processFichiersBackup', ()=>{
       // console.debug("Resultat : %O", resultat)
 
       expect(resultat.archive_hachage).toBeDefined()
-      expect(resultat.archive_nomfichier).toBe('domaine.test_20200101_1.public.tar')
-      expect(resultat.fichiersInclure[0]).toBe('domaine.test_catalogue_20200101_1.public.json.xz')
+      expect(resultat.archive_nomfichier).toBe('domaine.test_20200101.tar')
+      expect(resultat.fichiersInclure[0]).toBe('domaine.test_catalogue_20200101.json.xz')
       expect(resultat.fichiersInclure[1]).toBe('00/catalogue_horaire.json.xz')
       expect(resultat.fichiersInclure[2]).toBe('00/transactions_00.jsonl.xz')
 
-      const fichierTar = fs.statSync(path.join(tmpdir.name, 'quotidiennes/domaine.test', 'domaine.test_20200101_1.public.tar'))
+      const fichierTar = fs.statSync(path.join(tmpdir.name, 'quotidiennes/domaine.test', 'domaine.test_20200101.tar'))
       // console.info("Fichier tar: %O", fichierTar)
       expect(fichierTar.size).toBe(4096)
 

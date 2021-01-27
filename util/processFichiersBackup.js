@@ -346,34 +346,41 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     // Aussi inclure le repertoire des grosfichiers
     // fichiersInclureStr = `${fichiersInclureStr} */grosfichiers/*`
 
-    for(let fuuid in catalogue.fuuid_grosfichiers) {
-      let infoFichier = catalogue.fuuid_grosfichiers[fuuid]
-      let heureStr = infoFichier.heure
-      if(heureStr.length == 1) heureStr = '0' + heureStr
+    // await linkGrosfichiersSousBackup(pathConsignation, pathRepertoire, fuuidList)
 
-      const extension = 'mgs1'
-      let nomFichier = path.join(heureStr, 'grosfichiers', `${fuuid}.${extension}`)
+    preparerGrosfichiresBackupQuotidien()
 
-      debug("Ajout grosfichier %s", nomFichier)
-
-      // Verifier le hachage des fichiers a inclure
-      if(infoFichier.hachage) {
-        const fonctionHash = infoFichier.hachage.split(':')[0]
-        const hachageCalcule = await calculerHachageFichier(
-          path.join(repertoireBackup, nomFichier), {fonctionHash});
-
-        if(hachageCalcule !== infoFichier.hachage) {
-          debug("Erreur verification hachage grosfichier\nCatalogue : %s\nCalcule : %s", infoFichier.hachage, hachageCalcule)
-          throw `Erreur Hachage sur fichier : ${nomFichier}`
-        } else {
-          debug("Hachage grosfichier OK : %s => %s ", hachageCalcule, nomFichier)
-        }
-      } else {
-        throw `Erreur Hachage absent sur fichier : ${nomFichier}`;
-      }
-
-      fichiersInclure.push(nomFichier);
-    }
+    // for(let fuuid in catalogue.fuuid_grosfichiers) {
+    //   const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid)
+    //   if(err) throw new Error("Erreur grosfichier: " + err)
+    //
+    //   let infoFichier = catalogue.fuuid_grosfichiers[fuuid]
+    //   let heureStr = infoFichier.heure
+    //   if(heureStr.length == 1) heureStr = '0' + heureStr
+    //
+    //   const extension = 'mgs1'
+    //   let nomFichier = path.join(heureStr, 'grosfichiers', `${fuuid}.${extension}`)
+    //
+    //   debug("Ajout grosfichier %s", nomFichier)
+    //
+    //   // Verifier le hachage des fichiers a inclure
+    //   if(infoFichier.hachage) {
+    //     const fonctionHash = infoFichier.hachage.split(':')[0]
+    //     const hachageCalcule = await calculerHachageFichier(
+    //       path.join(repertoireBackup, nomFichier), {fonctionHash});
+    //
+    //     if(hachageCalcule !== infoFichier.hachage) {
+    //       debug("Erreur verification hachage grosfichier\nCatalogue : %s\nCalcule : %s", infoFichier.hachage, hachageCalcule)
+    //       throw `Erreur Hachage sur fichier : ${nomFichier}`
+    //     } else {
+    //       debug("Hachage grosfichier OK : %s => %s ", hachageCalcule, nomFichier)
+    //     }
+    //   } else {
+    //     throw `Erreur Hachage absent sur fichier : ${nomFichier}`;
+    //   }
+    //
+    //   fichiersInclure.push(nomFichier);
+    // }
   }
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
@@ -393,7 +400,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
   // Creer nom du fichier d'archive
   const infoArchiveQuotidienne = await genererTarArchiveQuotidienne(
-    pathConsignation, domaine, jourBackup, securite, fichiersInclure)
+    pathConsignation, domaine, jourBackup, fichiersInclure)
 
   const informationArchive = {
     archive_hachage: infoArchiveQuotidienne.hachageArchive,
@@ -410,7 +417,52 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
 }
 
-async function genererTarArchiveQuotidienne(pathConsignation, domaine, dateJour, securite, fichiersInclure) {
+async function preparerGrosfichiresBackupQuotidien(pathConsignation, pathRepertoireHoraire, infoGrosfichiers) {
+
+  // Preparer sous-repertoire grosfichiers/ sous le backup horaire
+  const pathBackupGrosFichiers = path.join(pathRepertoireHoraire, 'grosfichiers');
+  await new Promise((resolve, reject)=>{
+    fs.mkdir(pathBackupGrosFichiers, { recursive: true, mode: 0o770 }, err => {
+      if(err) return reject(err)
+      resolve()
+    })
+  })
+
+  // Verifier presence et hachage de chaque grosfichier
+  var pathGrosfichiers = []
+  for(let fuuid in infoGrosfichiers) {
+    const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid)
+    if(err) throw new Error("Erreur grosfichier: " + err)
+
+    let infoFichier = infoGrosfichiers[fuuid]
+    // let heureStr = infoFichier.heure
+    // if(heureStr.length == 1) heureStr = '0' + heureStr
+    //
+    // const extension = 'mgs1'
+    // let pathGrosfichier = path.join(repertoireBackup, heureStr, 'grosfichiers', `${fuuid}.${extension}`)
+
+    debug("Ajout grosfichier %s", fichier)
+
+    // Verifier le hachage des fichiers a inclure
+    if(infoFichier.hachage) {
+      const fonctionHash = infoFichier.hachage.split(':')[0]
+      const hachageCalcule = await calculerHachageFichier(fichier, {fonctionHash});
+
+      if(hachageCalcule !== infoFichier.hachage) {
+        debug("Erreur verification hachage grosfichier\nCatalogue : %s\nCalcule : %s", infoFichier.hachage, hachageCalcule)
+        throw `Erreur Hachage sur fichier : ${nomFichier}`
+      } else {
+        debug("Hachage grosfichier OK : %s => %s ", hachageCalcule, nomFichier)
+      }
+    } else {
+      throw `Erreur Hachage absent sur fichier : ${nomFichier}`;
+    }
+
+    pathGrosfichiers.push(nomFichier);
+  }
+}
+
+async function genererTarArchiveQuotidienne(pathConsignation, domaine, dateJour, fichiersInclure) {
   // Genere un fichier .tar d'une archive quotidienne avec tous les catalogues et transactions
   // - pathRepertoireArchive: str path du repertoire output de l'archive
   // - domaine: str sous-domaine du backup
@@ -429,7 +481,7 @@ async function genererTarArchiveQuotidienne(pathConsignation, domaine, dateJour,
   })
 
   const dateFormattee = formatterDateString(dateJour).slice(0, 8)  // Retirer heures
-  var nomArchive = [domaine, dateFormattee, securite + '.tar'].join('_')
+  var nomArchive = [domaine, dateFormattee + '.tar'].join('_')
   const pathArchiveQuotidienne = path.join(pathArchiveQuotidienneRepertoire, nomArchive)
   debug("Path archive quotidienne : %s", pathArchiveQuotidienne)
 
@@ -558,7 +610,7 @@ async function traiterBackupAnnuel2(mq, traitementFichierBackup, pathConsignatio
   })
 
   // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
-  var nomArchive = [domaine, resultat.dateFormattee, securite + '.tar'].join('_')
+  var nomArchive = [domaine, resultat.dateFormattee + '.tar'].join('_')
   const pathArchiveAnnuelle = path.join(pathRepertoireAnnuel, nomArchive)
   debug("Path archive annuelle : %s", pathArchiveAnnuelle)
 
@@ -601,7 +653,7 @@ async function sauvegarderCatalogueQuotidien(pathConsignation, catalogue) {
   repertoireBackup = path.dirname(repertoireBackup);
 
   const dateFormattee = formatterDateString(dateJournal).slice(0, 8)  // Retirer heures
-  const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz"
+  const nomFichier = domaine + "_catalogue_" + dateFormattee  + ".json.xz"
   const fullPathFichier = path.join(repertoireBackup, nomFichier)
 
   await sauvegarderLzma(fullPathFichier, catalogue)
@@ -619,7 +671,7 @@ async function sauvegarderCatalogueAnnuel(pathConsignation, catalogue) {
   let year = dateJournal.getUTCFullYear();
   const dateFormattee = "" + year
 
-  const nomFichier = domaine + "_catalogue_" + dateFormattee + "_" + securite + ".json.xz";
+  const nomFichier = domaine + "_catalogue_" + dateFormattee + ".json.xz";
 
   const fullPathFichier = path.join(repertoireBackup, nomFichier)
 

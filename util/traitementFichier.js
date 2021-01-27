@@ -23,8 +23,6 @@ class PathConsignation {
   constructor(opts) {
     if(!opts) opts = {};
 
-    const idmg = opts.idmg || process.env.MG_IDMG;
-
     // Methode de selection du path
     // Les overrides sont via env MG_CONSIGNATION_PATH ou parametre direct opts.consignationPath
     // Si IDMG fournit, formatte path avec /var/opt/millegrilles/IDMG
@@ -34,37 +32,26 @@ class PathConsignation {
       consignationPath = '/var/opt/millegrilles/consignation';
     }
 
-    this.consignationPathDownloadStaging = path.join(consignationPath, '/downloadStaging');
-
-    if(idmg) {
-      consignationPath = path.join(consignationPath, idmg)
-    }
-    debug("PathConsignation: Path fichiers : %s", consignationPath)
-
-    // var consignationPath = opts.consignationPath || '/var/opt/millegrilles/mounts/consignation';
+    this.consignationPathDownloadStaging = path.join(consignationPath, 'downloadStaging');
 
     this.consignationPath = consignationPath;
 
     // Path utilisable localement
-    this.consignationPathLocal = path.join(this.consignationPath, '/local');
-    this.consignationPathSeeding = path.join(this.consignationPath, '/torrents/seeding');
-    this.consignationPathManagedTorrents = path.join(this.consignationPath, '/torrents/torrentfiles');
-    this.consignationPathBackup = path.join(this.consignationPath, '/backup');
-    this.consignationPathBackupHoraire = path.join(this.consignationPathBackup, '/horaire');
-    this.consignationPathBackupArchives = path.join(this.consignationPathBackup, '/archives');
-    this.consignationPathBackupStaging = path.join(this.consignationPathBackup, '/staging');
+    this.consignationPathLocal = path.join(this.consignationPath, 'grosfichiers');
+    this.consignationPathBackup = path.join(this.consignationPath, 'backup');
+    this.consignationPathBackupStaging = path.join(this.consignationPathBackup, 'staging');
   }
 
   // Retourne le path du fichier
   // Type est un dict {mimetype, extension} ou une des deux valeurs doit etre fournie
-  trouverPathLocal(fichierUuid, encrypte, type) {
-    let pathFichier = this._formatterPath(fichierUuid, encrypte, type);
+  trouverPathLocal(fichierUuid) {
+    let pathFichier = this._formatterPath(fichierUuid)
     return path.join(this.consignationPathLocal, pathFichier);
   }
 
   // Trouve un fichier existant lorsque l'extension n'est pas connue
-  async trouverPathFuuidExistant(fichierUuid, encrypte) {
-    let pathFichier = this._formatterPath(fichierUuid, encrypte, {});
+  async trouverPathFuuidExistant(fichierUuid) {
+    let pathFichier = this._formatterPath(fichierUuid, {});
     let pathRepertoire = path.join(this.consignationPathLocal, path.dirname(pathFichier));
     // console.debug("Aller chercher fichiers du repertoire " + pathRepertoire);
 
@@ -104,32 +91,12 @@ class PathConsignation {
     return {fichier};
   }
 
-  trouverPathBackupHoraire(heureBackup) {
-    let year = heureBackup.getUTCFullYear();
-    let month = heureBackup.getUTCMonth() + 1; if(month < 10) month = '0'+month;
-    let day = heureBackup.getUTCDate(); if(day < 10) day = '0'+day;
-    let hour = heureBackup.getUTCHours(); if(hour < 10) hour = '0'+hour;
-
-    let pathBackup =
-      path.join(
-        this.consignationPathBackup,
-        'horaire',
-        ""+year, ""+month, ""+day, ""+hour);
-
-    return pathBackup;
+  trouverPathBackupHoraire(domaine) {
+    return path.join(this.consignationPathBackup, 'domaines', domaine, 'horaire')
   }
 
-  trouverPathBackupQuotidien(jourBackup) {
-    const pathHoraire = this.trouverPathBackupHoraire(jourBackup)
-    return path.dirname(pathHoraire)
-  }
-
-  trouverPathDomaineQuotidien(domaine) {
-    return path.join(this.consignationPathBackupArchives, 'quotidiennes', domaine)
-  }
-
-  trouverPathDomaineAnnuel(domaine) {
-    return path.join(this.consignationPathBackupArchives, 'annuelles', domaine)
+  trouverPathBackupDomaine(domaine) {
+    return path.join(this.consignationPathBackup, 'domaines', domaine)
   }
 
   trouverPathBackupApplication(nomApplication) {
@@ -138,37 +105,15 @@ class PathConsignation {
     return pathBackup
   }
 
-  formatPathFichierTorrent(nomCollection) {
-    return path.join(this.consignationPathManagedTorrents, nomCollection + '.torrent');
-  }
-
-  formatPathTorrentStagingCollection(nomCollection) {
-    return path.join(this.consignationPathTorrentStaging, nomCollection);
-  }
-
-  _formatterPath(fichierUuid, encrypte, type) {
+  _formatterPath(fichierUuid) {
     // Extrait la date du fileUuid, formatte le path en fonction de cette date.
-    let timestamp = uuidToDate.extract(fichierUuid.replace('/', ''));
+    // let timestamp = uuidToDate.extract(fichierUuid.replace('/', ''));
     // console.debug("uuid: " + fichierUuid + ". Timestamp " + timestamp);
 
-    let extension = encrypte?'mgs1':type.extension;
-    let nomFichier;
-    if(extension) {
-      extension = extension.toLowerCase() // Troujours lowercase
-      nomFichier = fichierUuid + '.' + extension;
-    } else {
-      nomFichier = fichierUuid;
-    }
+    const extension = 'mgs1'
+    let nomFichier = fichierUuid + '.' + extension;
 
-    let year = timestamp.getUTCFullYear();
-    let month = timestamp.getUTCMonth() + 1; if(month < 10) month = '0'+month;
-    let day = timestamp.getUTCDate(); if(day < 10) day = '0'+day;
-    let hour = timestamp.getUTCHours(); if(hour < 10) hour = '0'+hour;
-    let minute = timestamp.getUTCMinutes(); if(minute < 10) minute = '0'+minute;
-    let fuuide =
-      path.join(""+year, ""+month, ""+day, ""+hour, ""+minute, nomFichier);
-
-    return fuuide;
+    return nomFichier;
   }
 
 }
