@@ -368,18 +368,21 @@ describe('processFichiersBackup', ()=>{
     })
     creerFichierDummy(path.join(tmpdir.name, 'horaire', 'transactions_00.jsonl.xz'), 'dadadon')
 
-    expect.assertions(6)
+    expect.assertions(7)
     return processFichiersBackup.genererBackupQuotidien(mq, pathConsignation, catalogue)
     .then(result=>{
-      console.debug("Resultat : %O", result)
+      // console.debug("Resultat : %O", result)
       expect(result).toBeDefined()
       expect(result.archive_hachage).toBeDefined()
       expect(result.archive_nomfichier).toBe('domaine.test_20200101.tar')
 
-      console.debug("Messages emis : %O", appels_transmettreEnveloppeTransaction)
+      // console.debug("Messages emis : %O", appels_transmettreEnveloppeTransaction)
       expect(appels_transmettreEnveloppeTransaction.length).toBe(2)
       expect(appels_transmettreEnveloppeTransaction[0].fichiers_horaire['12']).toBeDefined()
       expect(appels_transmettreEnveloppeTransaction[1].archive_nomfichier).toBe('domaine.test_20200101.tar')
+
+      // S'assurer que le repertoire horaire/ a ete supprime (tous les fichiers sont archives)
+      expect(()=>fs.statSync(path.join(tmpdir.name, 'horaire'))).toThrow()
     })
   })
 

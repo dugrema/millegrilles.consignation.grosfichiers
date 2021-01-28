@@ -277,6 +277,7 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
     await new Promise((resolve, reject)=>{
       fs.rmdir(repertoireBackupHoraire, err=>{
         if(err) return reject(err)
+        debug("Repertoire horaire supprime : %s", repertoireBackupHoraire)
         resolve()
       })
     })
