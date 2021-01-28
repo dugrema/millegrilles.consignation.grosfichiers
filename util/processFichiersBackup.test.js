@@ -46,9 +46,9 @@ describe('processFichiersBackup', ()=>{
     // Traiter un fichier de backup horaire avec catalogue et transactions
 
     // Creer fichier pour catalogue, hook supprimer tmp
-    fichiersTmp.push(path.join(tmpdir.name, 'fichier1.txt'))
-    creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), 'Catalogue')
-    fichiersTmp.push(path.join(tmpdir.name, 'fichier2.txt'))
+    creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), JSON.stringify({
+      domaine: 'domaine.test'
+    }))
     creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
 
     const fichiersTransactions = [{
@@ -58,15 +58,14 @@ describe('processFichiersBackup', ()=>{
       fichierCatalogue = {
         originalname: 'fichier1.txt',
         path: path.join(tmpdir.name, 'fichier1.txt.init'),
-      },
-      pathRepertoire = tmpdir.name
+      }
 
     expect.assertions(3)
-    return processFichiersBackup.traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire)
+    return processFichiersBackup.traiterFichiersBackup(pathConsignation, fichiersTransactions, fichierCatalogue)
     .then(resultat=>{
-      const infoCatalogue = fs.statSync(path.join(tmpdir.name, 'fichier1.txt'))
+      const infoCatalogue = fs.statSync(path.join(tmpdir.name, 'horaire/fichier1.txt'))
       expect(infoCatalogue).toBeDefined()
-      const infoTransaction = fs.statSync(path.join(tmpdir.name, 'fichier2.txt'))
+      const infoTransaction = fs.statSync(path.join(tmpdir.name, 'horaire/fichier2.txt'))
       expect(infoTransaction).toBeDefined()
 
       // console.info("Resultat hachage : %O", resultat)

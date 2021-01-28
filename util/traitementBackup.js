@@ -37,30 +37,24 @@ class TraitementFichierBackup {
 
     const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
 
-    const timestampBackup = new Date(req.body.timestamp_backup * 1000);
-    if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
+    //const timestampBackup = new Date(req.body.timestamp_backup * 1000);
+    //if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
 
-    let pathRepertoire = pathConsignation.trouverPathBackupHoraire(timestampBackup)
+    //let pathRepertoire = pathConsignation.trouverPathBackupHoraire(timestampBackup)
     let fichiersTransactions = req.files.transactions;
     let fichierCatalogue = req.files.catalogue[0];
 
     // Deplacer les fichiers de backup vers le bon repertoire /backup
-    const fichiersDomaines = await traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire)
+    const fichiersDomaines = await traiterFichiersBackup(pathConsignation, fichiersTransactions, fichierCatalogue)
 
     // Transmettre cles du fichier de transactions
     if(req.body.transaction_maitredescles) {
       const transactionMaitreDesCles = JSON.parse(req.body.transaction_maitredescles)
       debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
-      this.rabbitMQ.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+      await this.rabbitMQ.transmettreEnveloppeTransaction(transactionMaitreDesCles)
     }
 
-    // Creer les hard links pour les grosfichiers
-    const fuuidDict = JSON.parse(req.body.fuuid_grosfichiers)
-    if(fuuidDict && Object.keys(fuuidDict).length > 0) {
-      await traiterGrosfichiers(pathConsignation, pathRepertoire, fuuidDict)
-    }
-
-    return {fichiersDomaines}
+    return fichiersDomaines
   }
 
   async traiterPutApplication(req) {

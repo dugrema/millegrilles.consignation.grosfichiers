@@ -9,29 +9,30 @@ const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHa
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 const { supprimerFichiers, supprimerRepertoiresVides } = require('./traitementFichier')
 
-async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire) {
-
+async function traiterFichiersBackup(pathConsignation, fichiersTransactions, fichierCatalogue) {
   // Meme repertoire pour toutes les transactions et catalogues horaire
-  const pathTransactions = pathRepertoire
-  const pathCatalogues = pathRepertoire
+
+  // Charger le fichier de catalogue pour obtenir information de domaine, heure
+  const catalogue = await new Promise((resolve, reject) => {
+    fs.readFile(fichierCatalogue.path, (err, data)=>{
+      if(err) return reject(err)
+      return resolve(JSON.parse(data))
+    })
+  })
+
+  const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
 
   await new Promise((resolve, reject)=>{
-
     // Creer tous les repertoires requis pour le backup
-    fs.mkdir(pathTransactions, { recursive: true, mode: 0o770 }, (err)=>{
+    fs.mkdir(repertoireBackupHoraire, { recursive: true, mode: 0o770 }, (err)=>{
       if(err) return reject(err);
-
-      fs.mkdir(pathCatalogues, { recursive: true, mode: 0o770 }, (err)=>{
-        if(err) return reject(err);
-        resolve();
-      })
-
-    });
+      resolve();
+    })
   })
 
   // Deplacer le fichier de catalogue du backup
   const nomFichier = fichierCatalogue.originalname
-  const nouveauPath = path.join(pathCatalogues, nomFichier)
+  const nouveauPath = path.join(repertoireBackupHoraire, nomFichier)
   debug("Copier catalogue %s -> %s", fichierCatalogue.path, nouveauPath)
   await deplacerFichier(fichierCatalogue.path, nouveauPath)
 
@@ -41,7 +42,7 @@ async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pat
     const fichierTransaction = fichiersTransactions[i]
     //const hachage = await _fctDeplacerFichier(pathTransactions, fichierTransaction)
 
-    const nouveauPath = path.join(pathTransactions, fichierTransaction.originalname)
+    const nouveauPath = path.join(repertoireBackupHoraire, fichierTransaction.originalname)
     const hachage = await calculerHachageFichier(fichierTransaction.path)
     await deplacerFichier(fichierTransaction.path, nouveauPath)
 
