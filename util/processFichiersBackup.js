@@ -386,28 +386,28 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathTransactions));
 
     // Faire liste des grosfichiers au besoin, va etre inclue dans le rapport de backup
-    const fuuid_grosfichiers = infoHoraire.catalogue.fuuid_grosfichiers
-    if(fuuid_grosfichiers) {
-      debug("GrosFichiers du catalogue : %O", fuuid_grosfichiers)
-      const grosfichiers = {}
-      catalogue.grosfichiers = grosfichiers
-
-      // Verifier que tous les grosfichiers sont presents et valides
-      var infoGrosfichiers = await verifierGrosfichiersBackup(pathConsignation, fuuid_grosfichiers)
-      debug("InfoGrosFichiers : %O", infoGrosfichiers)
-      for(let idx in infoGrosfichiers) {
-        const fichier = infoGrosfichiers[idx]
-        debug("Traitement fichier %O", fichier)
-        if(fichier.err) {
-          console.error("Erreur traitement grosfichier %s pour backup quotidien : %O", fichier.nomFichier, fichier.err)
-          delete fichier.err
-        }
-        if(fichier.hachage) {
-          grosfichiers[fichier.fuuid] = fichier
-          delete grosfichiers[fichier.fuuid].fuuid
-        }
-      }
-    }
+    // const fuuid_grosfichiers = infoHoraire.catalogue.fuuid_grosfichiers
+    // if(fuuid_grosfichiers) {
+    //   debug("GrosFichiers du catalogue : %O", fuuid_grosfichiers)
+    //   const grosfichiers = {}
+    //   catalogue.grosfichiers = grosfichiers
+    //
+    //   // Verifier que tous les grosfichiers sont presents et valides
+    //   var infoGrosfichiers = await verifierGrosfichiersBackup(pathConsignation, fuuid_grosfichiers)
+    //   debug("InfoGrosFichiers : %O", infoGrosfichiers)
+    //   for(let idx in infoGrosfichiers) {
+    //     const fichier = infoGrosfichiers[idx]
+    //     debug("Traitement fichier %O", fichier)
+    //     if(fichier.err) {
+    //       console.error("Erreur traitement grosfichier %s pour backup quotidien : %O", fichier.nomFichier, fichier.err)
+    //       delete fichier.err
+    //     }
+    //     if(fichier.hachage) {
+    //       grosfichiers[fichier.fuuid] = fichier
+    //       delete grosfichiers[fichier.fuuid].fuuid
+    //     }
+    //   }
+    // }
   }
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
