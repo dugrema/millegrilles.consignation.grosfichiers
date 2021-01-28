@@ -312,18 +312,93 @@ describe('processFichiersBackup', ()=>{
       jour: new Date("2020-01-01").getTime()/1000,
     }
 
-    expect.assertions(8)
+    expect.assertions(9)
     return processFichiersBackup.traiterBackupQuotidien(amqpdao, pathConsignation, catalogue)
     .then(resultat=>{
       // console.debug("Resultat : %O", resultat)
 
       expect(resultat.archive_hachage).toBeDefined()
+      expect(resultat.grosfichiers).toBeUndefined()
       expect(resultat.archive_nomfichier).toBe('domaine.test_20200101.tar')
       expect(resultat.fichiersInclure[0]).toBe('domaine.test_catalogue_20200101.json.xz')
       expect(resultat.fichiersInclure[1]).toBe('horaire/catalogue_horaire_00.json.xz')
       expect(resultat.fichiersInclure[2]).toBe('horaire/transactions_00.jsonl.xz')
       expect(resultat.fichiersInclure[3]).toBe('horaire/catalogue_horaire_01.json.xz')
       expect(resultat.fichiersInclure[4]).toBe('horaire/transactions_01.jsonl.xz')
+
+      const fichierTar = fs.statSync(path.join(tmpdir.name, 'domaine.test_20200101.tar'))
+      // console.info("Fichier tar: %O", fichierTar)
+      expect(fichierTar.size).toBeGreaterThan(2048)
+
+    })
+  })
+
+  it('traiterBackupQuotidien avec 2 grosfichiers', async () => {
+    var appels_transmettreEnveloppeTransaction = []
+    const amqpdao = {
+      transmettreEnveloppeTransaction: (transaction)=>{
+        appels_transmettreEnveloppeTransaction.push(transaction)
+        return ''
+      },
+      formatterTransaction: (domaine, transaction) => {
+        transaction['en-tete'] = {domaine, 'uuid-transaction': 'uuid-dummy'}
+        transaction['_signature'] = 'dummy'
+        return transaction
+      }
+    }
+
+    fs.mkdirSync(path.join(tmpdir.name, 'horaire'))
+    await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire_02.json.xz'), {
+      transactions_nomfichier: 'transactions_02.jsonl.xz',
+      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      'en-tete': {
+        hachage_contenu: 'dummy',
+        'uuid-transaction': 'uuid-catalogue-02'
+      },
+      heure: new Date('2020-01-01 02:00').getTime()/1000,
+      fuuid_grosfichiers: {
+        'abcd-1234': {hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g=='},
+        'abcd-1235': {hachage: 'sha512_b64:ssgOVrjt8LGsh5PS/qorlWooxKsrNPqaYCGbEnJsSC2u3wIaxiluAZbBrVI/g1dLNF3qV5NDgA5VTJdkuyKNbg=='}
+      }
+    })
+    creerFichierDummy(path.join(tmpdir.name, 'horaire', 'transactions_02.jsonl.xz'), 'dadadon')
+
+    // Grosfichiers
+    creerFichierDummy(path.join(tmpdir.name, 'abcd-1234.mgs1'), 'dadadon')
+    creerFichierDummy(path.join(tmpdir.name, 'abcd-1235.mgs1'), 'dadada')
+
+    const catalogue = {
+      fichiers_horaire: {
+        '02': {
+          catalogue_nomfichier: 'catalogue_horaire_02.json.xz',
+          transactions_nomfichier: 'transactions_02.jsonl.xz',
+          catalogue_hachage: '',
+          transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+        }
+      },
+      'en-tete': {
+        domaine: 'domaine.test'
+      },
+      '_signature': 'DADADA',
+      domaine: 'domaine.test',
+      securite: '1.public',
+      jour: new Date("2020-01-01").getTime()/1000,
+    }
+
+    expect.assertions(9)
+    return processFichiersBackup.traiterBackupQuotidien(amqpdao, pathConsignation, catalogue)
+    .then(resultat=>{
+      console.debug("Resultat : %O\nCatalogue: %O", resultat, catalogue)
+
+      expect(resultat.archive_hachage).toBeDefined()
+      expect(resultat.archive_nomfichier).toBe('domaine.test_20200101.tar')
+      expect(resultat.fichiersInclure[0]).toBe('domaine.test_catalogue_20200101.json.xz')
+      expect(resultat.fichiersInclure[1]).toBe('horaire/catalogue_horaire_02.json.xz')
+      expect(resultat.fichiersInclure[2]).toBe('horaire/transactions_02.jsonl.xz')
+
+      expect(catalogue.grosfichiers).toBeDefined()
+      expect(catalogue.grosfichiers['abcd-1234'].nomFichier).toBe('abcd-1234.mgs1')
+      expect(catalogue.grosfichiers['abcd-1235'].nomFichier).toBe('abcd-1235.mgs1')
 
       const fichierTar = fs.statSync(path.join(tmpdir.name, 'domaine.test_20200101.tar'))
       // console.info("Fichier tar: %O", fichierTar)
@@ -371,7 +446,7 @@ describe('processFichiersBackup', ()=>{
     expect.assertions(7)
     return processFichiersBackup.genererBackupQuotidien(mq, pathConsignation, catalogue)
     .then(result=>{
-      // console.debug("Resultat : %O", result)
+      console.debug("Resultat : %O", result)
       expect(result).toBeDefined()
       expect(result.archive_hachage).toBeDefined()
       expect(result.archive_nomfichier).toBe('domaine.test_20200101.tar')

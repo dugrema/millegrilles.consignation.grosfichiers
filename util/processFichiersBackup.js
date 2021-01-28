@@ -382,19 +382,32 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     // Conserver path des fichiers relatif au path horaire Utilise pour l'archive tar.
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathCatalogue))
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathTransactions));
-  }
 
-  // Faire liste des grosfichiers au besoin, va etre inclue dans le rapport de backup
-  var infoGrosfichiers = null
-  if(catalogue.fuuid_grosfichiers) {
-    // Verifier que tous les grosfichiers sont presents et valides
-    infoGrosfichiers = await verifierGrosfichiersBackup(pathConsignation, catalogue.fuuid_grosfichiers)
-    for(let fichier in rapport) {
-      if(fichier.err) {
-        console.error("Erreur traitement grosfichier %s pour backup quotidien : %O", fichier.nomFichier, fichier.err)
+    // Faire liste des grosfichiers au besoin, va etre inclue dans le rapport de backup
+    const fuuid_grosfichiers = infoHoraire.catalogue.fuuid_grosfichiers
+    if(fuuid_grosfichiers) {
+      debug("GrosFichiers du catalogue : %O", fuuid_grosfichiers)
+      const grosfichiers = {}
+      catalogue.grosfichiers = grosfichiers
+
+      // Verifier que tous les grosfichiers sont presents et valides
+      var infoGrosfichiers = await verifierGrosfichiersBackup(pathConsignation, fuuid_grosfichiers)
+      debug("InfoGrosFichiers : %O", infoGrosfichiers)
+      for(let idx in infoGrosfichiers) {
+        const fichier = infoGrosfichiers[idx]
+        debug("Traitement fichier %O", fichier)
+        if(fichier.err) {
+          console.error("Erreur traitement grosfichier %s pour backup quotidien : %O", fichier.nomFichier, fichier.err)
+          delete fichier.err
+        }
+        if(fichier.hachage) {
+          grosfichiers[fichier.fuuid] = fichier
+          delete grosfichiers[fichier.fuuid].fuuid
+        }
       }
     }
   }
+
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
   if( ! catalogue['_signature'] ) {
@@ -426,8 +439,6 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     pathRepertoireBackup: repertoireBackup,
   }
 
-  if(infoGrosfichiers) informationArchive.infoGrosfichiers = infoGrosfichiers
-
   return informationArchive
 
 }
@@ -437,17 +448,16 @@ async function verifierGrosfichiersBackup(pathConsignation, infoGrosfichiers) {
   // Verifier presence et hachage de chaque grosfichier
   var resultat = []
   for(let fuuid in infoGrosfichiers) {
+    const infoFichier = infoGrosfichiers[fuuid]
     var nomFichier = null
     try {
       const fichier = await pathConsignation.trouverPathFuuidExistant(fuuid)
       nomFichier = path.basename(fichier)
 
-      let infoFichier = infoGrosfichiers[fuuid]
-
-      debug("Verification grosfichier %s", fichier)
+      debug("Verification grosfichier %s\n%O", fichier, infoFichier)
 
       // Verifier le hachage des fichiers a inclure
-      const fonctionHash = infoFichier.hachage.split(':')[0]
+      const fonctionHash = infoFichier.hachage.split(':')[0] || 'sha512_b64'
       const hachageCalcule = await calculerHachageFichier(fichier, {fonctionHash});
       if(infoFichier.hachage) {
         if(hachageCalcule !== infoFichier.hachage) {
@@ -462,7 +472,10 @@ async function verifierGrosfichiersBackup(pathConsignation, infoGrosfichiers) {
       }
 
     } catch (err) {
-      resultat.push({fuuid, nomFichier, ok: false, err});
+      if(err.err) err = err.err
+      const reponseFichier = {fuuid, nomFichier, err}
+      if(infoFichier.hachage) reponseFichier.hachage = infoFichier.hachage
+      resultat.push(reponseFichier);
     }
   }
 
