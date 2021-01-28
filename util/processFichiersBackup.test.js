@@ -2,6 +2,8 @@ const processFichiersBackup = require('./processFichiersBackup')
 const tmp = require('tmp')
 const path = require('path')
 const fs = require('fs')
+const tar = require('tar')
+const { calculerHachageFichier } = require('./utilitairesHachage')
 
 var fichiersTmp = []
 
@@ -388,7 +390,7 @@ describe('processFichiersBackup', ()=>{
     expect.assertions(9)
     return processFichiersBackup.traiterBackupQuotidien(amqpdao, pathConsignation, catalogue)
     .then(resultat=>{
-      console.debug("Resultat : %O\nCatalogue: %O", resultat, catalogue)
+      // console.debug("Resultat : %O\nCatalogue: %O", resultat, catalogue)
 
       expect(resultat.archive_hachage).toBeDefined()
       expect(resultat.archive_nomfichier).toBe('domaine.test_20200101.tar')
@@ -446,7 +448,7 @@ describe('processFichiersBackup', ()=>{
     expect.assertions(7)
     return processFichiersBackup.genererBackupQuotidien(mq, pathConsignation, catalogue)
     .then(result=>{
-      console.debug("Resultat : %O", result)
+      // console.debug("Resultat : %O", result)
       expect(result).toBeDefined()
       expect(result.archive_hachage).toBeDefined()
       expect(result.archive_nomfichier).toBe('domaine.test_20200101.tar')
@@ -461,8 +463,67 @@ describe('processFichiersBackup', ()=>{
     })
   })
 
-  it('genererBackupAnnuel2', async () => {
+  it('traiterBackupAnnuel', async () => {
+    var appels_transmettreEnveloppeTransaction = []
+    const amqpdao = {
+      transmettreEnveloppeTransaction: (transaction)=>{
+        appels_transmettreEnveloppeTransaction.push(transaction)
+        return ''
+      },
+      formatterTransaction: (domaine, transaction) => {
+        transaction['en-tete'] = {domaine, 'uuid-transaction': 'uuid-dummy'}
+        transaction['_signature'] = 'dummy'
+        return transaction
+      }
+    }
 
+    // Creer fichier de catalogue quotidien
+    const pathCatalogueQuotidien = path.join(tmpdir.name, 'catalogue_quotidien_20200101.json.xz')
+    await processFichiersBackup.sauvegarderLzma(pathCatalogueQuotidien, {
+      transactions_nomfichier: 'transactions_00.jsonl.xz',
+      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      'en-tete': {
+        hachage_contenu: 'dummy',
+      },
+      heure: new Date('2020-01-01 00:00').getTime()/1000,
+    })
+
+    // Preparer une archive quotidienne .tar avec le fichier de catalogue
+    // Creer nouvelle archive quotidienne
+    await tar.c(
+      {
+        file: path.join(tmpdir.name, 'quotidien_20200101.tar'),
+        cwd: tmpdir.name,
+      },
+      ['catalogue_quotidien_20200101.json.xz']
+    )
+
+    const hachageArchive = await calculerHachageFichier(path.join(tmpdir.name, 'quotidien_20200101.tar'),)
+    const catalogue = {
+      fichiers_quotidien: {
+        '20200101': {
+          archive_nomfichier: 'quotidien_20200101.tar',
+          archive_hachage: hachageArchive,
+        }
+      },
+      domaine: 'domaine.test',
+      securite: '1.public',
+      annee: new Date("2020-01-01").getTime()/1000,
+    }
+
+    // Supprimer archive quotidienne
+    fs.unlinkSync(pathCatalogueQuotidien)
+
+    expect.assertions(4)
+    return processFichiersBackup.traiterBackupAnnuel(amqpdao, pathConsignation, catalogue)
+    .then(resultat=>{
+      console.debug("Resultat traiterBackupAnnuel : %O", resultat)
+
+      expect(fs.statSync(path.join(tmpdir.name, resultat.archive_nomfichier))).toBeDefined()
+      expect(resultat.archive_nomfichier).toBe('domaine.test_2020.tar')
+      expect(resultat.fichiersInclure[0]).toBe('domaine.test_catalogue_2020.json.xz')
+      expect(resultat.fichiersInclure[1]).toBe('quotidien_20200101.tar')
+    })
   })
 
   it('genererBackupAnnuel', async () => {

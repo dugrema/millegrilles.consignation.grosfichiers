@@ -408,7 +408,6 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     }
   }
 
-
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
   if( ! catalogue['_signature'] ) {
     debug("Regenerer signature du catalogue horaire, entete precedente : %O", catalogue['en-tete'])
@@ -566,51 +565,50 @@ async function chargerBackupHoraire(pathConsignation, domaine, nomFichierCatalog
   }
 }
 
-// Genere un fichier de backup mensuel qui correspond au journal
-async function traiterBackupAnnuel2(mq, traitementFichierBackup, pathConsignation, journal) {
+// Genere un fichier tar de backup annuel avec toutes les archives quotidiennes
+// du domaine pour l'annee
+async function traiterBackupAnnuel(mq, pathConsignation, catalogue) {
 
-  const {domaine, securite} = journal
-  const anneeBackup = new Date(journal.annee * 1000)
+  const {domaine, securite} = catalogue
+  const anneeBackup = new Date(catalogue.annee * 1000)
 
-  const pathRepertoireQuotidien = pathConsignation.trouverPathDomaineQuotidien(domaine)
+  const pathRepertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
 
   const fichiersInclure = []
 
   // Trier la liste des jours pour ajout dans le fichier .tar
-  const listeJoursTriee = Object.keys(journal.fichiers_quotidien)
+  const listeJoursTriee = Object.keys(catalogue.fichiers_quotidien)
   listeJoursTriee.sort()
   debug("Liste jours tries : %O", listeJoursTriee)
 
   for(const idx in listeJoursTriee) {
     const jourStr = listeJoursTriee[idx]
     debug("Traitement jour %s", jourStr)
-    let infoFichier = journal.fichiers_quotidien[jourStr]
+    let infoFichier = catalogue.fichiers_quotidien[jourStr]
     debug("Verifier fichier backup quotidien %s :\n%O", jourStr, infoFichier)
 
     let fichierArchive = infoFichier.archive_nomfichier
 
     // Verifier SHA512
-    const pathFichierArchive = path.join(pathRepertoireQuotidien, fichierArchive)
+    const pathFichierArchive = path.join(pathRepertoireBackup, fichierArchive)
     const hachageArchive = await calculerHachageFichier(pathFichierArchive)
     if(hachageArchive != infoFichier.archive_hachage) {
-      throw new Error(`Fichier archive ${fichierArchive} ne correspond pas au hachage`)
+      throw new Error(`Fichier archive ${fichierArchive} ne correspond pas au hachage : ${hachageArchive}`)
     }
 
     fichiersInclure.push(fichierArchive)
   }
 
   // Sauvegarder journal annuel, sauvegarder en format .json.xz
-  var resultat = await traitementFichierBackup.sauvegarderJournalAnnuel(journal)
+  var resultat = await sauvegarderCatalogueAnnuel(pathConsignation, catalogue)
   debug("Resultat preparation catalogue annuel : %O", resultat)
-  const pathJournal = resultat.path
-  const nomJournal = path.basename(pathJournal)
-  fichiersInclure.unshift(nomJournal)  // Ajouter le journal comme premiere entree du .tar
+  const pathCatalogue = resultat.path
+  const nomCatalogue = path.basename(pathCatalogue)
+  fichiersInclure.unshift(nomCatalogue)  // Ajouter le catalogue comme premiere entree du .tar
 
-  const pathRepertoireAnnuel = pathConsignation.trouverPathDomaineAnnuel(domaine)
-
-  debug("Path repertoire archives \nannuelles : %s", pathRepertoireAnnuel)
+  debug("Path repertoire archives \nannuelles : %s", pathRepertoireBackup)
   await new Promise((resolve, reject)=>{
-    fs.mkdir(pathRepertoireAnnuel, { recursive: true, mode: 0o770 }, err=>{
+    fs.mkdir(pathRepertoireBackup, { recursive: true, mode: 0o770 }, err=>{
       if(err) return reject(err);
       resolve();
     })
@@ -618,16 +616,16 @@ async function traiterBackupAnnuel2(mq, traitementFichierBackup, pathConsignatio
 
   // Creer nom du fichier d'archive - se baser sur le nom du catalogue quotidien
   var nomArchive = [domaine, resultat.dateFormattee + '.tar'].join('_')
-  const pathArchiveAnnuelle = path.join(pathRepertoireAnnuel, nomArchive)
+  const pathArchiveAnnuelle = path.join(pathRepertoireBackup, nomArchive)
   debug("Path archive annuelle : %s", pathArchiveAnnuelle)
 
   debug('Archive annuelle inclure : %O', fichiersInclure)
 
-  // Creer nouvelle archive quotidienne
+  // Creer nouvelle archive annuelle
   await tar.c(
     {
       file: pathArchiveAnnuelle,
-      cwd: pathRepertoireQuotidien,
+      cwd: pathRepertoireBackup,
     },
     fichiersInclure
   )
@@ -638,12 +636,12 @@ async function traiterBackupAnnuel2(mq, traitementFichierBackup, pathConsignatio
   const informationArchive = {
     archive_hachage: hachageArchive,
     archive_nomfichier: nomArchive,
-    annee: journal.annee,
-    domaine: journal.domaine,
-    securite: journal.securite,
+    annee: catalogue.annee,
+    domaine,
+    securite,
 
     fichiersInclure,
-    pathRepertoireBackup: pathRepertoireQuotidien,
+    pathRepertoireBackup,
   }
 
   return informationArchive
@@ -778,6 +776,7 @@ module.exports = {
   sauvegarderFichiersApplication, rotationArchiveApplication,
   sauvegarderCatalogueQuotidien, sauvegarderCatalogueAnnuel,
   traiterBackupQuotidien, sauvegarderLzma, verifierGrosfichiersBackup,
+  traiterBackupAnnuel,
 
   // linkGrosfichiersSousBackup,
 }
