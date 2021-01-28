@@ -286,19 +286,19 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
   }
 }
 
-async function genererBackupAnnuel(mq, routingKey, message, opts) {
-  debug("Generer backup annuel : %O", message);
+async function genererBackupAnnuel(mq, pathConsignation, catalogue) {
+  debug("Generer backup annuel : %O", catalogue);
 
   return new Promise( async (resolve, reject) => {
 
     try {
-      const informationArchive = await traiterBackupAnnuel(mq, this.pathConsignation, message.catalogue)
+      const informationArchive = await traiterBackupAnnuel(mq, pathConsignation, catalogue)
 
       debug("Journal annuel sauvegarde : %O", informationArchive)
 
       // Finaliser le backup en retransmettant le journal comme transaction
       // de backup quotidien
-      await mq.transmettreEnveloppeTransaction(message.catalogue)
+      await mq.transmettreEnveloppeTransaction(catalogue)
 
       // Generer transaction pour journal annuel. Inclue SHA512 et nom de l'archive mensuelle
       const {fichiersInclure} = informationArchive
@@ -309,18 +309,20 @@ async function genererBackupAnnuel(mq, routingKey, message, opts) {
       debug("Transmettre transaction avec information \n%O", informationArchive)
       await mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveAnnuelleInfo')
 
-      const domaine = message.catalogue.domaine
-      const pathArchivesQuotidiennes = this.pathConsignation.trouverPathDomaineQuotidien(domaine) // path.join(this.pathConsignation.consignationPathBackupArchives, 'quotidiennes', domaine)
+      const domaine = catalogue.domaine
+      const pathArchivesQuotidiennes = pathConsignation.trouverPathBackupDomaine(domaine)
 
-      //await supprimerFichiers(fichiersInclure, pathArchivesQuotidiennes)
-      //await supprimerRepertoiresVides(path.join(this.pathConsignation.consignationPathBackupArchives, 'quotidiennes'))
+      const fichiersSupprimer = fichiersInclure.filter((item, idx)=>idx>0)
+      await supprimerFichiers(fichiersSupprimer, pathArchivesQuotidiennes)
+
+      return resolve(informationArchive)
 
     } catch (err) {
       console.error("Erreur creation backup annuel")
       console.error(err)
+      reject(err)
     }
 
-    resolve()
   })
 
 }
