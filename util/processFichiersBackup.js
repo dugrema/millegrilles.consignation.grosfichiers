@@ -7,6 +7,7 @@ const lzma = require('lzma-native')
 const tar = require('tar')
 const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHachage')
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
+const { supprimerFichiers, supprimerRepertoiresVides } = require('./traitementFichier')
 
 async function traiterFichiersBackup(fichiersTransactions, fichierCatalogue, pathRepertoire) {
 
@@ -233,12 +234,13 @@ async function sauvegarderFichiersApplication(transactionCatalogue, fichierAppli
 
 }
 
-async function genererBackupQuotidien(mq, routingKey, message, opts) {
-  debug("Generer backup quotidien : %O", message);
+async function genererBackupQuotidien(mq, pathConsignation, catalogue) {
+  debug("Generer backup quotidien : %O", catalogue);
+
+  const repertoireBackup = pathConsignation.trouverPathBackupDomaine(catalogue.domaine)
 
   try {
-    const catalogue = message.catalogue
-    const informationArchive = await traiterBackupQuotidien(mq, this.pathConsignation, catalogue)
+    const informationArchive = await traiterBackupQuotidien(mq, pathConsignation, catalogue)
     const { fichiersInclure, pathRepertoireBackup } = informationArchive
     delete informationArchive.fichiersInclure // Pas necessaire pour la transaction
     delete informationArchive.pathRepertoireBackup // Pas necessaire pour la transaction
@@ -253,13 +255,34 @@ async function genererBackupQuotidien(mq, routingKey, message, opts) {
     await mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo')
 
     // Effacer les fichiers transferes dans l'archive quotidienne
-    await supprimerFichiers(fichiersInclure, pathRepertoireBackup)
-    await supprimerRepertoiresVides(this.pathConsignation.consignationPathBackupHoraire)
+    const fichiersASupprimer = fichiersInclure.filter(item=>item.startsWith('horaire/'))
+    await nettoyerRepertoireBackupHoraire(pathConsignation, catalogue.domaine, fichiersASupprimer)
+
+    return informationArchive
 
   } catch (err) {
     console.error("genererBackupQuotidien: Erreur creation backup quotidien:\n%O", err)
   }
 
+}
+
+async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichiersASupprimer) {
+  debug("Supprimer fichiers backup %O", fichiersASupprimer)
+
+  const repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
+  await supprimerFichiers(fichiersASupprimer, repertoireBackup)
+
+  try {
+    const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(domaine)
+    await new Promise((resolve, reject)=>{
+      fs.rmdir(repertoireBackupHoraire, err=>{
+        if(err) return reject(err)
+        resolve()
+      })
+    })
+  } catch(err) {
+    console.error("Erreur suppression repertoire de backup horaire: %O", err)
+  }
 }
 
 async function genererBackupAnnuel(mq, routingKey, message, opts) {
@@ -288,8 +311,8 @@ async function genererBackupAnnuel(mq, routingKey, message, opts) {
       const domaine = message.catalogue.domaine
       const pathArchivesQuotidiennes = this.pathConsignation.trouverPathDomaineQuotidien(domaine) // path.join(this.pathConsignation.consignationPathBackupArchives, 'quotidiennes', domaine)
 
-      await supprimerFichiers(fichiersInclure, pathArchivesQuotidiennes)
-      await supprimerRepertoiresVides(path.join(this.pathConsignation.consignationPathBackupArchives, 'quotidiennes'))
+      //await supprimerFichiers(fichiersInclure, pathArchivesQuotidiennes)
+      //await supprimerRepertoiresVides(path.join(this.pathConsignation.consignationPathBackupArchives, 'quotidiennes'))
 
     } catch (err) {
       console.error("Erreur creation backup annuel")
@@ -307,7 +330,11 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
   const {domaine, securite} = catalogue
   const jourBackup = new Date(catalogue.jour * 1000)
-  const repertoireBackup = pathConsignation.trouverPathBackupQuotidien(jourBackup)
+  const repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
+  const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(domaine)
+
+  const listeCataloguesHoraires = await genererListeCatalogues(repertoireBackupHoraire)
+  debug("Liste de catalogues sous %s : %O", repertoireBackupHoraire, listeCataloguesHoraires)
 
   // Faire liste des fichiers de catalogue et transactions a inclure dans le tar quotidien
   const fichiersInclure = []
@@ -315,20 +342,35 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   // Charger l'information de tous les catalogues horaire correspondants au
   // backup quotidien. Valide le hachage des fichiers de catalogue et de
   // transaction.
-  for(let heureStr in catalogue.fichiers_horaire) {
-    const heureBackup = new Date(jourBackup.getTime())
-    heureBackup.setUTCHours(heureStr)
+  // for(let heureStr in catalogue.fichiers_horaire) {
+  for(let idx in listeCataloguesHoraires) {
+    const catalogueNomFichier = listeCataloguesHoraires[idx]
+
+    // Charger backup horaire. Valide le hachage des transactions
+    const infoHoraire = await chargerBackupHoraire(pathConsignation, domaine, catalogueNomFichier)
+    debug("Preparer backup horaire : %O", infoHoraire)
+
+    const heureBackup = new Date(infoHoraire.catalogue.heure*1000)
+    var heureStr = ''+heureBackup.getUTCHours()
     if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
 
     let infoFichier = catalogue.fichiers_horaire[heureStr]
-    debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
+    if(infoFichier) {
+      // debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
 
-    // Charger backup horaire. Valide le hachage des transactions
-    const infoHoraire = await chargerBackupHoraire(pathConsignation, heureBackup, infoFichier.catalogue_nomfichier)
-
-    // Verifier hachage du catalogue horaire (si present dans le catalogue quotidien)
-    if(infoFichier.catalogue_hachage && infoFichier.catalogue_hachage !== infoHoraire.hachageCatalogue) {
-      throw new Error(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}`)
+      // Verifier hachage du catalogue horaire (si present dans le catalogue quotidien)
+      if(infoFichier.catalogue_hachage && infoFichier.catalogue_hachage !== infoHoraire.hachageCatalogue) {
+        // throw new Error(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}`)
+        console.warning(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}. On regenere valeurs avec fichiers locaux.`)
+      }
+    } else {
+      debug("Catalogue quotidien recu n'a pas backup horaire %s, information generee a partir des fichiers locaux", heureStr)
+      infoFichier = {
+        catalogue_nomfichier: catalogueNomFichier,
+        transactions_nomfichier: infoHoraire.catalogue.transactions_nomfichier,
+        transactions_hachage: infoHoraire.catalogue.transactions_hachage,
+      }
+      catalogue.fichiers_horaire[heureStr] = infoFichier
     }
 
     // Conserver information manquante dans le catalogue quotidien
@@ -341,46 +383,16 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathTransactions));
   }
 
-  // Faire liste des grosfichiers au besoin
+  // Faire liste des grosfichiers au besoin, va etre inclue dans le rapport de backup
+  var infoGrosfichiers = null
   if(catalogue.fuuid_grosfichiers) {
-    // Aussi inclure le repertoire des grosfichiers
-    // fichiersInclureStr = `${fichiersInclureStr} */grosfichiers/*`
-
-    // await linkGrosfichiersSousBackup(pathConsignation, pathRepertoire, fuuidList)
-
-    preparerGrosfichiresBackupQuotidien()
-
-    // for(let fuuid in catalogue.fuuid_grosfichiers) {
-    //   const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid)
-    //   if(err) throw new Error("Erreur grosfichier: " + err)
-    //
-    //   let infoFichier = catalogue.fuuid_grosfichiers[fuuid]
-    //   let heureStr = infoFichier.heure
-    //   if(heureStr.length == 1) heureStr = '0' + heureStr
-    //
-    //   const extension = 'mgs1'
-    //   let nomFichier = path.join(heureStr, 'grosfichiers', `${fuuid}.${extension}`)
-    //
-    //   debug("Ajout grosfichier %s", nomFichier)
-    //
-    //   // Verifier le hachage des fichiers a inclure
-    //   if(infoFichier.hachage) {
-    //     const fonctionHash = infoFichier.hachage.split(':')[0]
-    //     const hachageCalcule = await calculerHachageFichier(
-    //       path.join(repertoireBackup, nomFichier), {fonctionHash});
-    //
-    //     if(hachageCalcule !== infoFichier.hachage) {
-    //       debug("Erreur verification hachage grosfichier\nCatalogue : %s\nCalcule : %s", infoFichier.hachage, hachageCalcule)
-    //       throw `Erreur Hachage sur fichier : ${nomFichier}`
-    //     } else {
-    //       debug("Hachage grosfichier OK : %s => %s ", hachageCalcule, nomFichier)
-    //     }
-    //   } else {
-    //     throw `Erreur Hachage absent sur fichier : ${nomFichier}`;
-    //   }
-    //
-    //   fichiersInclure.push(nomFichier);
-    // }
+    // Verifier que tous les grosfichiers sont presents et valides
+    infoGrosfichiers = await verifierGrosfichiersBackup(pathConsignation, catalogue.fuuid_grosfichiers)
+    for(let fichier in rapport) {
+      if(fichier.err) {
+        console.error("Erreur traitement grosfichier %s pour backup quotidien : %O", fichier.nomFichier, fichier.err)
+      }
+    }
   }
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
@@ -412,6 +424,8 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     fichiersInclure,
     pathRepertoireBackup: repertoireBackup,
   }
+
+  if(infoGrosfichiers) informationArchive.infoGrosfichiers = infoGrosfichiers
 
   return informationArchive
 
@@ -462,22 +476,14 @@ async function genererTarArchiveQuotidienne(pathConsignation, domaine, dateJour,
   // - securite: str '3.protege'
   // - fichiersInclure: list Path des fichiers a inclure en ordre
 
-  const pathArchiveQuotidienneRepertoire = path.join(
-    pathConsignation.consignationPathBackupArchives, 'quotidiennes', domaine)
-  debug("Path repertoire archive quotidienne : %s", pathArchiveQuotidienneRepertoire)
-  await new Promise((resolve, reject)=>{
-    fs.mkdir(pathArchiveQuotidienneRepertoire, { recursive: true, mode: 0o770 }, err=>{
-      if(err) return reject(err)
-      resolve()
-    })
-  })
+  const repertoireBackupQuotidien = pathConsignation.trouverPathBackupDomaine(domaine)
+  debug("Path repertoire ackup : %s", repertoireBackupQuotidien)
 
   const dateFormattee = formatterDateString(dateJour).slice(0, 8)  // Retirer heures
   var nomArchive = [domaine, dateFormattee + '.tar'].join('_')
-  const pathArchiveQuotidienne = path.join(pathArchiveQuotidienneRepertoire, nomArchive)
+  const pathArchiveQuotidienne = path.join(repertoireBackupQuotidien, nomArchive)
   debug("Path archive quotidienne : %s", pathArchiveQuotidienne)
 
-  const repertoireBackupQuotidien = pathConsignation.trouverPathBackupQuotidien(dateJour)
   var fichiersInclureStr = fichiersInclure.join('\n');
   debug(`Fichiers quotidien inclure relatif a ${repertoireBackupQuotidien} : \n${fichiersInclure}`);
 
@@ -496,21 +502,16 @@ async function genererTarArchiveQuotidienne(pathConsignation, domaine, dateJour,
   return {hachageArchive, pathArchiveQuotidienne, nomArchive}
 }
 
-async function chargerBackupHoraire(pathConsignation, dateHeure, nomFichierCatalogue) {
+async function chargerBackupHoraire(pathConsignation, domaine, nomFichierCatalogue) {
   // Charger et verifier un backup horaire pour un domaine
   // - dateHeure: objet Date
   // - nomFichierCatalogue: str, nom du fichier de catalogue
   // - nomFichierTransactions: str, nom du fichier de transactions (e.g. DOMAINE_transactions_DATE_SECURITE.jsonl.xz)
 
-  var repertoireBackup = pathConsignation.trouverPathBackupQuotidien(dateHeure)
-
-  var heureStr = `${dateHeure.getUTCHours()}`
-  // console.debug("HEURESTR init : %O", heureStr)
-  if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
-  let fichierCatalogue = path.join(heureStr, nomFichierCatalogue);
+  var repertoireBackup = pathConsignation.trouverPathBackupHoraire(domaine)
 
   // Verifier SHA512
-  const pathCatalogue = path.join(repertoireBackup, fichierCatalogue)
+  const pathCatalogue = path.join(repertoireBackup, nomFichierCatalogue)
   const hachageCatalogue = await calculerHachageFichier(pathCatalogue)
   // if( ! infoFichier.catalogue_hachage ) {
   //   delete catalogue['_signature']  // Signale qu'on doit regenerer entete et signature du catalogue (dirty)
@@ -536,7 +537,7 @@ async function chargerBackupHoraire(pathConsignation, dateHeure, nomFichierCatal
   //   throw `Fichier catalogue ${fichierCatalogue} ne correspond pas au hachage : ${sha512Catalogue}`
   // }
 
-  let pathTransactions = path.join(repertoireBackup, heureStr, catalogue.transactions_nomfichier);
+  let pathTransactions = path.join(repertoireBackup, catalogue.transactions_nomfichier);
   const hachageTransactions = await calculerHachageFichier(pathTransactions);
   if(hachageTransactions !== catalogue.transactions_hachage) {
     throw `Fichier transaction ${pathTransactions} hachage ${hachageTransactions}
@@ -639,7 +640,7 @@ async function sauvegarderCatalogueQuotidien(pathConsignation, catalogue) {
   const {domaine, securite, jour} = catalogue
 
   const dateJournal = new Date(jour*1000)
-  var repertoireBackup = pathConsignation.trouverPathBackupHoraire(dateJournal)
+  var repertoireBackup = pathConsignation.trouverPathBackupHoraire(domaine)
 
   // Remonter du niveau heure a jour
   repertoireBackup = path.dirname(repertoireBackup);
@@ -658,7 +659,7 @@ async function sauvegarderCatalogueAnnuel(pathConsignation, catalogue) {
   const {domaine, securite, annee} = catalogue
 
   const dateJournal = new Date(annee*1000)
-  var repertoireBackup = pathConsignation.trouverPathDomaineQuotidien(domaine)
+  var repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
 
   let year = dateJournal.getUTCFullYear();
   const dateFormattee = "" + year
@@ -713,6 +714,47 @@ async function deplacerFichier(src, dst) {
       resolve()
     })
   })
+}
+
+async function genererListeCatalogues(repertoire) {
+  // Faire la liste des fichiers extraits - sera utilisee pour creer
+  // l'ordre de traitement des fichiers pour importer les transactions
+  const settingsReaddirp = {
+    type: 'files',
+    fileFilter: [
+       '*.json.xz',
+    ],
+  }
+
+  const {err, listeCatalogues} = await new Promise((resolve, reject)=>{
+    const listeCatalogues = [];
+    // console.debug("Lister catalogues sous " + repertoire);
+
+    readdirp(
+      repertoire,
+      settingsReaddirp,
+    )
+    .on('data', entry=>{
+      // console.debug('Catalogue trouve');
+      // console.debug(entry);
+      listeCatalogues.push(entry.path)
+    })
+    .on('error', err=>{
+      reject({err});
+    })
+    .on('end', ()=>{
+      // console.debug("Fini");
+      // console.debug(listeCatalogues);
+      resolve({listeCatalogues});
+    });
+  });
+
+  if(err) throw err;
+
+  // console.debug("Resultat catalogues");
+  // console.debug(listeCatalogues);
+  return listeCatalogues;
+
 }
 
 module.exports = {

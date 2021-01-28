@@ -5,12 +5,21 @@ const fs = require('fs')
 
 var fichiersTmp = []
 
+// Mocks
+var tmpdir
+const pathConsignation = {
+  trouverPathBackupDomaine: domaine=>{return tmpdir.name},
+  trouverPathBackupHoraire: domaine=>{return path.join(tmpdir.name, 'horaire')},
+  // consignationPathBackup: tmpdir.name,
+  trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid + '.mgs1')}
+}
+
 describe('processFichiersBackup', ()=>{
 
-  var tmpdir
   beforeEach(()=>{
     // Creer repertoire temporaire
     tmpdir = tmp.dirSync()
+    pathConsignation.consignationPathBackup = tmpdir.name
     // console.info("TMP dir : %s", tmpdir.name)
   })
 
@@ -62,65 +71,6 @@ describe('processFichiersBackup', ()=>{
       expect(resultat['fichier2.txt']).toBe('sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==')
     })
   })
-
-  // it('linkGrosfichiersSousBackup grosfichier introuvable', async () => {
-  //   // Creation de backup, hard link grosfichier impossible (fichier introuvable)
-  //
-  //   const pathConsignation = {
-  //     trouverPathFuuidExistant: function() {return 'folder_dummy'}
-  //   }
-  //   const fuuidList = ['abcd-1234-efgh-5678']
-  //
-  //   expect.assertions(1)
-  //   return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
-  //   .then(resultat=>{
-  //     // console.debug("Resultat : %O", resultat)
-  //     expect(resultat.err).toBeDefined()
-  //   })
-  //
-  // })
-  //
-  // it('linkGrosfichiersSousBackup 1 grosfichier', async () => {
-  //   // Creation de backup, hard link 1 grosfichier vers sous-repertoire de backup horaire
-  //
-  //   const pathConsignation = {
-  //     trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
-  //   }
-  //   const fuuidList = ['abcd-1234-efgh-5678']
-  //
-  //   fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
-  //   creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
-  //
-  //   expect.assertions(1)
-  //   return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
-  //   .then(resultat=>{
-  //     // console.debug("Resultat process fichiers : %O", resultat)
-  //     expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
-  //   })
-  //
-  // })
-  //
-  // it('linkGrosfichiersSousBackup 2 grosfichiers', async () => {
-  //   // Creation de backup, hard link 2 grosfichier vers sous-repertoire de backup horaire
-  //
-  //   const pathConsignation = {
-  //     trouverPathFuuidExistant: function(fuuid) {return {fichier: path.join(tmpdir.name, 'folder_dummy', fuuid + '.mgs1')}}
-  //   }
-  //   const fuuidList = ['abcd-1234-efgh-5678', 'abcd-1234-efgh-5679']
-  //
-  //   fs.mkdirSync(path.join(tmpdir.name, 'folder_dummy'))
-  //   creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5678').fichier), 'dadada')
-  //   creerFichierDummy(path.join(pathConsignation.trouverPathFuuidExistant('abcd-1234-efgh-5679').fichier), 'dadada')
-  //
-  //   expect.assertions(2)
-  //   return processFichiersBackup.linkGrosfichiersSousBackup(pathConsignation, tmpdir.name, fuuidList)
-  //   .then(resultat=>{
-  //     // console.debug("Resultat process fichiers : %O", resultat)
-  //     expect(resultat.fichiers[0].indexOf('/grosfichiers/abcd-1234-efgh-5678.mgs1')).toBeGreaterThan(0)
-  //     expect(resultat.fichiers[1].indexOf('/grosfichiers/abcd-1234-efgh-5679.mgs1')).toBeGreaterThan(0)
-  //   })
-  //
-  // })
 
   it('sauvegarderFichiersApplication', async () => {
     // Tester la sauvegarde du catalogue (dict) et transfere le fichier
@@ -276,11 +226,6 @@ describe('processFichiersBackup', ()=>{
       securite: '1.public',
       jour: new Date("2020-01-01 12:00").getTime()/1000,
     }
-    const pathConsignation = {
-      trouverPathBackupHoraire: ()=>{
-        return path.join(tmpdir.name, 'jour_01')
-      }
-    }
 
     const resultat = await processFichiersBackup.sauvegarderCatalogueQuotidien(
       pathConsignation, catalogue)
@@ -301,11 +246,6 @@ describe('processFichiersBackup', ()=>{
       securite: '1.public',
       annee: new Date("2020-01-01 12:00").getTime()/1000,
     }
-    const pathConsignation = {
-      trouverPathDomaineQuotidien: ()=>{
-        return tmpdir.name
-      }
-    }
 
     const resultat = await processFichiersBackup.sauvegarderCatalogueAnnuel(
       pathConsignation, catalogue)
@@ -319,7 +259,7 @@ describe('processFichiersBackup', ()=>{
 
   })
 
-  it('traiterBackupQuotidien sans fichiers', async () => {
+  it('traiterBackupQuotidien sans grosfichiers', async () => {
     var appels_transmettreEnveloppeTransaction = []
     const amqpdao = {
       transmettreEnveloppeTransaction: (transaction)=>{
@@ -333,26 +273,31 @@ describe('processFichiersBackup', ()=>{
       }
     }
 
-    const pathConsignation = {
-      trouverPathBackupQuotidien: () => {return tmpdir.name},
-      trouverPathBackupHoraire: dateJournal => {return path.join(tmpdir.name, '00')},
-      consignationPathBackupArchives: tmpdir.name,
-    }
-
-    fs.mkdirSync(path.join(tmpdir.name, '00'))
-    await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, '00', 'catalogue_horaire.json.xz'), {
+    fs.mkdirSync(path.join(tmpdir.name, 'horaire'))
+    await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire_00.json.xz'), {
       transactions_nomfichier: 'transactions_00.jsonl.xz',
       transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
+      heure: new Date('2020-01-01 00:00').getTime()/1000,
     })
-    creerFichierDummy(path.join(tmpdir.name, '00', 'transactions_00.jsonl.xz'), 'dadadon')
+    creerFichierDummy(path.join(tmpdir.name, 'horaire', 'transactions_00.jsonl.xz'), 'dadadon')
+
+    await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire_01.json.xz'), {
+      transactions_nomfichier: 'transactions_01.jsonl.xz',
+      transactions_hachage: 'sha512_b64:ssgOVrjt8LGsh5PS/qorlWooxKsrNPqaYCGbEnJsSC2u3wIaxiluAZbBrVI/g1dLNF3qV5NDgA5VTJdkuyKNbg==',
+      'en-tete': {
+        hachage_contenu: 'dummy',
+      },
+      heure: new Date('2020-01-01 01:00').getTime()/1000,
+    })
+    creerFichierDummy(path.join(tmpdir.name, 'horaire', 'transactions_01.jsonl.xz'), 'dadada')
 
     const catalogue = {
       fichiers_horaire: {
         '00': {
-          catalogue_nomfichier: 'catalogue_horaire.json.xz',
+          catalogue_nomfichier: 'catalogue_horaire_00.json.xz',
           transactions_nomfichier: 'transactions_00.jsonl.xz',
           catalogue_hachage: '',
           transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
@@ -367,7 +312,7 @@ describe('processFichiersBackup', ()=>{
       jour: new Date("2020-01-01").getTime()/1000,
     }
 
-    expect.assertions(6)
+    expect.assertions(8)
     return processFichiersBackup.traiterBackupQuotidien(amqpdao, pathConsignation, catalogue)
     .then(resultat=>{
       // console.debug("Resultat : %O", resultat)
@@ -375,18 +320,67 @@ describe('processFichiersBackup', ()=>{
       expect(resultat.archive_hachage).toBeDefined()
       expect(resultat.archive_nomfichier).toBe('domaine.test_20200101.tar')
       expect(resultat.fichiersInclure[0]).toBe('domaine.test_catalogue_20200101.json.xz')
-      expect(resultat.fichiersInclure[1]).toBe('00/catalogue_horaire.json.xz')
-      expect(resultat.fichiersInclure[2]).toBe('00/transactions_00.jsonl.xz')
+      expect(resultat.fichiersInclure[1]).toBe('horaire/catalogue_horaire_00.json.xz')
+      expect(resultat.fichiersInclure[2]).toBe('horaire/transactions_00.jsonl.xz')
+      expect(resultat.fichiersInclure[3]).toBe('horaire/catalogue_horaire_01.json.xz')
+      expect(resultat.fichiersInclure[4]).toBe('horaire/transactions_01.jsonl.xz')
 
-      const fichierTar = fs.statSync(path.join(tmpdir.name, 'quotidiennes/domaine.test', 'domaine.test_20200101.tar'))
+      const fichierTar = fs.statSync(path.join(tmpdir.name, 'domaine.test_20200101.tar'))
       // console.info("Fichier tar: %O", fichierTar)
-      expect(fichierTar.size).toBe(4096)
+      expect(fichierTar.size).toBeGreaterThan(2048)
 
     })
   })
 
   it('genererBackupQuotidien', async () => {
+    var appels_transmettreEnveloppeTransaction = []
+    const mq = {
+      formatterTransaction: (domaine, transaction) => {
+        transaction['en-tete'] = {domaine}
+        transaction['_signature'] = 'dummy'
+        return transaction
+      },
+      transmettreTransactionFormattee: (transaction)=>{
+        appels_transmettreEnveloppeTransaction.push(transaction)
+        return ''
+      },
+      transmettreEnveloppeTransaction: (transaction)=>{
+        appels_transmettreEnveloppeTransaction.push(transaction)
+        return ''
+      }
+    }
 
+    const catalogue = {
+      domaine: 'domaine.test',
+      securite: '1.public',
+      jour: new Date('2020-01-01').getTime()/1000,
+      fichiers_horaire: {},
+    }
+
+    fs.mkdirSync(path.join(tmpdir.name, 'horaire'))
+    await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire.json.xz'), {
+      transactions_nomfichier: 'transactions_00.jsonl.xz',
+      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      'en-tete': {
+        hachage_contenu: 'dummy',
+      },
+      heure: new Date('2020-01-01 12:00').getTime()/1000,
+    })
+    creerFichierDummy(path.join(tmpdir.name, 'horaire', 'transactions_00.jsonl.xz'), 'dadadon')
+
+    expect.assertions(6)
+    return processFichiersBackup.genererBackupQuotidien(mq, pathConsignation, catalogue)
+    .then(result=>{
+      console.debug("Resultat : %O", result)
+      expect(result).toBeDefined()
+      expect(result.archive_hachage).toBeDefined()
+      expect(result.archive_nomfichier).toBe('domaine.test_20200101.tar')
+
+      console.debug("Messages emis : %O", appels_transmettreEnveloppeTransaction)
+      expect(appels_transmettreEnveloppeTransaction.length).toBe(2)
+      expect(appels_transmettreEnveloppeTransaction[0].fichiers_horaire['12']).toBeDefined()
+      expect(appels_transmettreEnveloppeTransaction[1].archive_nomfichier).toBe('domaine.test_20200101.tar')
+    })
   })
 
   it('genererBackupAnnuel2', async () => {
@@ -398,9 +392,6 @@ describe('processFichiersBackup', ()=>{
   })
 
   it('verifierGrosfichiersBackup 1 fichier OK', async () => {
-    const pathConsignation = {
-      trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid + '.mgs1')}
-    }
     const infoGrosfichiers = {
       'abcd-1234': {hachage: 'sha512_b64:m9+VOgb9/QzOb/myd745kqAk2XFl308AgjUTBpS4NpTJeELbY39FfPxsZsECbGX/cyIeaVrISi2v4Z7XsMAGQg=='},
     }
@@ -419,9 +410,6 @@ describe('processFichiersBackup', ()=>{
   })
 
   it('verifierGrosfichiersBackup 1 fichier manquant', async () => {
-    const pathConsignation = {
-      trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid)}
-    }
     const infoGrosfichiers = {
       'abcd-1234': {hachage: 'sha512_b64:m9+VOgb9/QzOb/myd745kqAk2XFl308AgjUTBpS4NpTJeELbY39FfPxsZsECbGX/cyIeaVrISi2v4Z7XsMAGQg=='},
     }
@@ -434,9 +422,6 @@ describe('processFichiersBackup', ()=>{
   })
 
   it('verifierGrosfichiersBackup 1 fichier mauvais hachage', async () => {
-    const pathConsignation = {
-      trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid)}
-    }
     const infoGrosfichiers = {
       'abcd-1234': {hachage: 'sha512_b64:DUMMY'},
     }

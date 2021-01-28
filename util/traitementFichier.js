@@ -194,7 +194,9 @@ async function supprimerFichiers(fichiers, repertoire) {
     return new Promise((resolve, reject)=>{
       const fichier = path.join(repertoire, item);
       fs.unlink(fichier, err=>{
-        console.error("traitementFichiers.supprimerFichiers: Erreur suppression fichier : %O", err)
+        if(err) {
+          console.error("traitementFichiers.supprimerFichiers: Erreur suppression fichier : %O", err)
+        }
         resolve()
       })
     })
@@ -246,47 +248,6 @@ async function extraireTarFile(fichierTar, destination, opts) {
   });
 
   if(errResultatNettoyage) throw errResultatNettoyage;
-}
-
-async function genererListeCatalogues(repertoire) {
-  // Faire la liste des fichiers extraits - sera utilisee pour creer
-  // l'ordre de traitement des fichiers pour importer les transactions
-  const settingsReaddirp = {
-    type: 'files',
-    fileFilter: [
-       '*_catalogue_*.json.xz',
-    ],
-  }
-
-  const {err, listeCatalogues} = await new Promise((resolve, reject)=>{
-    const listeCatalogues = [];
-    // console.debug("Lister catalogues sous " + repertoire);
-
-    readdirp(
-      repertoire,
-      settingsReaddirp,
-    )
-    .on('data', entry=>{
-      // console.debug('Catalogue trouve');
-      // console.debug(entry);
-      listeCatalogues.push(entry.path)
-    })
-    .on('error', err=>{
-      reject({err});
-    })
-    .on('end', ()=>{
-      // console.debug("Fini");
-      // console.debug(listeCatalogues);
-      resolve({listeCatalogues});
-    });
-  });
-
-  if(err) throw err;
-
-  // console.debug("Resultat catalogues");
-  // console.debug(listeCatalogues);
-  return listeCatalogues;
-
 }
 
 async function calculHachage(req, hachage) {
