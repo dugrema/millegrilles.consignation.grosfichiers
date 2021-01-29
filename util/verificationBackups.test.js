@@ -39,7 +39,7 @@ describe('VerificationBackups', ()=>{
     await verificationBackups.parcourirBackupsHoraire(pathConsignation(repertoireSample), 'domaine.test', cb)
   })
 
-  it('parcourirBackupsQuotidiens', async() =>{
+  it('parcourir 1 backup quotidien', async() =>{
     const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
 
     const cb = function(catalogue, cataloguePath) {
@@ -49,7 +49,33 @@ describe('VerificationBackups', ()=>{
     }
 
     expect.assertions(8)
-    await verificationBackups.parcourirBackupsQuotidiens(pathConsignation(repertoireSample), 'domaine.test', cb)
+    await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
+  })
+
+  it('parcourir 1 backup annuel', async() =>{
+    const repertoireSample = path.join(BASE_SAMPLE, 'sample4')
+
+    const cb = function(catalogue, cataloguePath) {
+      // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+      expect(cataloguePath).toBeDefined()
+      expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
+    }
+
+    expect.assertions(42)
+    await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
+  })
+
+  it('parcourir mix de backups annuel/quotidiens/horaire', async() =>{
+    const repertoireSample = path.join(BASE_SAMPLE, 'sample5')
+
+    const cb = function(catalogue, cataloguePath) {
+      // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+      expect(cataloguePath).toBeDefined()
+      expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
+    }
+
+    expect.assertions(42)
+    await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
   })
 
 })

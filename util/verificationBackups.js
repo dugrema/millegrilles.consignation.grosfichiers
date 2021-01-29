@@ -75,7 +75,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
   }
 }
 
-async function parcourirBackupsQuotidiens(pathConsignation, domaine, cb, opts) {
+async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
   const repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
   const archives = await genererListeArchives(repertoireBackup)
   debug("Archives sous %s: %O", repertoireBackup, archives)
@@ -90,56 +90,95 @@ async function parcourirBackupsQuotidiens(pathConsignation, domaine, cb, opts) {
 
       fs.createReadStream(pathArchive)
         .pipe(parse())
-        .on('data', function(entry) {
-          entry.pause()
-
-          debug("Fichier tar, entry : %s", entry.path)
-          if(entry.path.endsWith('.json.xz')) {
-            promises.push(new Promise((resolve, reject)=>{
-              var decoder = lzma.createStream('autoDecoder')
-              var data = ''
-              decoder.on("data", buffer=>{
-                data += buffer
-              })
-              decoder.on("end", async ()=>{
-                // debug("Data fichier : %s", data)
-                const catalogue = JSON.parse(data)
-                // C'est le catalogue quotidien
-                debug("Catalogue charge : %O", catalogue)
-                await cb(catalogue, entry.path)
-                resolve(catalogue)
-                entry.resume()
-              })
-              decoder.on("error", err=>{
-                reject(err)
-                entry.resume()
-              })
-
-              // const outStream = fs.createWriteStream('/tmp/' + entry.path)
-              entry.pipe(decoder)
-            })) // Promise data
-          }
-
-          entry.resume()
-
-        }) // on data
-        .on('end', ()=>{
-          resolve()
+        .on('data', entry=>{
+          promises.push( processEntryTar(entry, cb) )
         })
-        .on('error', err=>{
-          reject(err)
-        })
+        .on('end', ()=>resolve())
+        .on('error', err=>reject(err))
 
     }) // Promise
 
     // Attendre que toutes les promise (catalogues) de l'archive soient terminees
     // avant de passer a la prochaine archive
-    debug("End archive quotidienne %s, attente promises", pathArchive)
+    debug("Archive %s, attente %d promesses", pathArchive, promises.length)
     await Promise.all(promises)
-    debug("Archive quotidienne %s finie", pathArchive)
+    debug("Archive %s finie", pathArchive)
+  }
+
+}
+
+async function processEntryTar(entry, cb) {
+  // Traitement d'une entree d'un fichier .tar
+  // Si c'est un catalogue, on va invoquer le callback (cb)
+  // cb(catalogue: dict, entry.path: str)
+
+  // Tentative d'interruption du stream (non garanti)
+  entry.pause()
+
+  debug("Fichier tar, entry : %s", entry.path)
+  if(entry.path.toLowerCase().endsWith('.json.xz')) {
+    // C'est un catalogue
+
+    return new Promise((resolve, reject)=>{
+      var decoder = lzma.createStream('autoDecoder')
+      var data = ''
+
+      decoder.on("data", buffer=>{
+        data += buffer
+      })
+
+      decoder.on("end", async ()=>{
+        entry.pause()
+
+        // debug("Data fichier : %s", data)
+        const catalogue = JSON.parse(data)
+        // C'est le catalogue quotidien
+        debug("Catalogue charge : %O", catalogue)
+        await cb(catalogue, entry.path)
+        resolve(catalogue)
+
+        entry.resume()
+      })
+
+      decoder.on("error", err=>{
+        reject(err)
+        entry.resume()
+      })
+
+      // Input tar entry vers lzma
+      entry.pipe(decoder)
+
+      entry.resume()  // Continuer a lire si le catalogue est plus grande que le buffer
+    }) // Promise data
+
+  } else if(entry.path.toLowerCase().endsWith('.tar')) {
+    debug("Archive .tar : %s", entry.path)
+
+    var promises = []
+    await new Promise((resolve, reject)=>{
+
+      entry.pipe(parse())
+        .on('data', subEntry=>{
+          promises.push( processEntryTar(subEntry, cb) )
+        })
+        .on('end', ()=>resolve())
+        .on('error', err=>reject(err))
+
+    }) // Promise
+
+    // Attendre que toutes les promise (catalogues) de l'archive soient terminees
+    // avant de passer a la prochaine archive
+    debug("Sous-archive %s, attente %d promesses", entry.path, promises.length)
+    await Promise.all(promises)
+    debug("Archive %s finie", entry.path)
+
+  } else {
+    // Ce n'est pas un catalogue, on fait juste resumer
+    entry.resume()
+    return Promise.resolve()
   }
 
 }
 
 
-module.exports = { parcourirBackupsHoraire, parcourirBackupsQuotidiens };
+module.exports = { parcourirBackupsHoraire, parcourirArchivesBackup };
