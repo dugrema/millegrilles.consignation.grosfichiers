@@ -137,7 +137,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
     }
   }
 
-  const erreursHachage = []
+  var erreursHachage = [], erreursCatalogues = null
   if(opts.hachage) {
     // Faire un rapport de verifications
     for(let hachage in hachagesTransactions) {
@@ -150,38 +150,45 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
       }
     }
 
-    var chainage = null, erreursCatalogues = []
-    Object.keys(dateHachageEntetes).sort().forEach(dateCatalogue=>{
-      const infoCatalogue = dateHachageEntetes[dateCatalogue]
-      const chainage_precedent = chainage
-
-      // Placer entete courante pour verification du prochain backup horaire
-      chainage = {
-        hachage_contenu: infoCatalogue.hachage_contenu,
-        uuid_transaction: infoCatalogue.uuid_transaction
-      }
-
-      const backup_precedent = infoCatalogue.backup_precedent
-      if(!chainage_precedent && !backup_precedent) {
-        return  // Rien a faire,
-      } else if( ! chainage_precedent || ! backup_precedent ) {
-        // Mismatch, on laisse continuer
-      } else if(backup_precedent.hachage_contenu === chainage_precedent.hachage_contenu &&
-                backup_precedent.uuid_transaction === chainage_precedent.uuid_transaction) {
-        return  // Chaine ok
-      }
-
-      debug("Erreur, mismatch entetes horaires\n%O\n", backup_precedent, chainage_precedent)
-
-      // Pas correct, on ajoute au rapport
-      erreursCatalogues.push({...infoCatalogue, err: 'Erreur enchainement, backup precendent non trouve ou ne correspond pas'})
-    })
+    erreursCatalogues = await verifierEntetes(dateHachageEntetes)
   }
 
   return {
     dateHachageEntetes, hachagesTransactions,
     erreursHachage, erreursCatalogues
   }
+}
+
+async function verifierEntetes(dateHachageEntetes, chainage) {
+
+  var chainage = null, erreursCatalogues = []
+  Object.keys(dateHachageEntetes).sort().forEach(dateCatalogue=>{
+    const infoCatalogue = dateHachageEntetes[dateCatalogue]
+    const chainage_precedent = chainage
+
+    // Placer entete courante pour verification du prochain backup horaire
+    chainage = {
+      hachage_contenu: infoCatalogue.hachage_contenu,
+      uuid_transaction: infoCatalogue.uuid_transaction
+    }
+
+    const backup_precedent = infoCatalogue.backup_precedent
+    if(!chainage_precedent && !backup_precedent) {
+      return  // Rien a faire,
+    } else if( ! chainage_precedent || ! backup_precedent ) {
+      // Mismatch, on laisse continuer
+    } else if(backup_precedent.hachage_contenu === chainage_precedent.hachage_contenu &&
+              backup_precedent.uuid_transaction === chainage_precedent.uuid_transaction) {
+      return  // Chaine ok
+    }
+
+    debug("Erreur, mismatch entetes horaires\n%O\n", backup_precedent, chainage_precedent)
+
+    // Pas correct, on ajoute au rapport
+    erreursCatalogues.push({...infoCatalogue, err: 'Erreur enchainement, backup precendent non trouve ou ne correspond pas'})
+  })
+
+  return erreursCatalogues
 }
 
 async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
