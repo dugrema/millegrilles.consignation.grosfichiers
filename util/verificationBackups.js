@@ -8,6 +8,7 @@ const lzma = require('lzma-native')
 const { PathConsignation } = require('../util/traitementFichier');
 const { genererListeCatalogues } = require('./processFichiersBackup')
 const { pki, ValidateurSignature } = require('./pki')
+const { calculerHachageFichier, calculerHachageStream } = require('./utilitairesHachage')
 //const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 
 async function chargerCatalogue(pathCatalogue) {
@@ -55,6 +56,40 @@ async function genererListeArchives(repertoire) {
   })
 }
 
+async function genererListeHoraire(repertoire, opts) {
+  opts = opts || {}
+
+  // Faire la liste des archives .tar du repertoire
+  const fileFilter = ['*.json.xz']
+  if(opts.hachage) {
+    fileFilter.push('*.jsonl.xz')
+    fileFilter.push('*.jsonl.xz.mgs1')
+  }
+
+  const settingsReaddirp = {
+    type: 'files',
+    fileFilter,
+    depth: 0,
+  }
+
+  return new Promise((resolve, reject)=>{
+    const listeArchives = [];
+    readdirp(
+      repertoire,
+      settingsReaddirp,
+    )
+    .on('data', entry=>{
+      listeArchives.push(entry.fullPath)
+    })
+    .on('error', err=>{
+      reject({err});
+    })
+    .on('end', ()=>{
+      resolve(listeArchives);
+    })
+  })
+}
+
 async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
   // Parcourt tous les catalogues de backup horaire d'un domaine
   // Invoque cb(catalogue: dict, pathComplet: str) pour chaque catalogue trouve
@@ -62,17 +97,39 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
   opts = opts || {}
 
   const repertoireHoraire = pathConsignation.trouverPathBackupHoraire(domaine)
-  const catalogues = await genererListeCatalogues(repertoireHoraire)
-  debug("Catalogues horaire sous %s: %O", repertoireHoraire, catalogues)
+  const fichiers = await genererListeHoraire(repertoireHoraire, opts)
+  debug("Fichiers horaire sous %s: %O", repertoireHoraire, fichiers)
 
-  for(let idx in catalogues) {
-    const pathCatalogue = path.join(repertoireHoraire, catalogues[idx])
-    const catalogue = await chargerCatalogue(pathCatalogue)
-    debug("Catalogue trouve: %s\n%O", pathCatalogue, catalogue)
+  const dateHachageEntetes = {}  // Conserver liste de hachage d'entete par date (epoch secs)
+  const hachagesTransactions = {}  // Conserver hachage de fichiers de transaction
 
-    // Verifier si on fait un callback
-    await cb(catalogue, pathCatalogue)
+  for(let idx in fichiers) {
+    const pathFichier = fichiers[idx]
+    if(pathFichier.endsWith('.json.xz')) {
+      const catalogue = await chargerCatalogue(pathFichier)
+      debug("Catalogue trouve: %s\n%O", pathFichier, catalogue)
+      try {
+        dateHachageEntetes[catalogue.heure] = catalogue['en-tete'].hachage_contenu
+      } catch(err) {
+        dateHachageEntetes[catalogue.heure] = null
+      }
+
+      if( ! hachagesTransactions[catalogue.transactions_hachage] ) {
+        hachagesTransactions[catalogue.transactions_hachage] = {verifie: false}
+      }
+
+      // Verifier si on fait un callback
+      await cb(catalogue, pathFichier)
+    } else {
+      debug("Fichier trouve: %s", pathFichier)
+      if(opts.hachage) {
+        const {sha} = await calculerHachageFichier(pathFichier)
+        hachagesTransactions[sha] = {verifie: true, transactions_nomfichier: path.basename(pathFichier)}
+      }
+    }
   }
+
+  return {dateHachageEntetes, hachagesTransactions}
 }
 
 async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
@@ -105,6 +162,13 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
     debug("Archive %s finie", pathArchive)
   }
 
+}
+
+async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
+  // Parcoure tous les fichiers de backup d'un domaine
+
+  await parcourirArchivesBackup(pathConsignation, domaine, cb, opts)
+  await parcourirBackupsHoraire(pathConsignation, domaine, cb, opts)
 }
 
 async function processEntryTar(entry, cb) {
@@ -181,4 +245,4 @@ async function processEntryTar(entry, cb) {
 }
 
 
-module.exports = { parcourirBackupsHoraire, parcourirArchivesBackup };
+module.exports = { parcourirBackupsHoraire, parcourirArchivesBackup, parcourirDomaine }

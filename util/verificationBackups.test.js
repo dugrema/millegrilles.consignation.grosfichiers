@@ -13,7 +13,7 @@ function pathConsignation(repertoire) {
   }
 }
 
-describe('VerificationBackups', ()=>{
+describe('VerificationBackups integration logique', ()=>{
 
   // Creation des samples (uniquement invoque si repertoire n'existe pas)
   it('generer archives horaire test', async ()=>{
@@ -26,7 +26,23 @@ describe('VerificationBackups', ()=>{
     }
   })
 
-  it('parcourirBackupsHoraire', async() =>{
+  // it('parcourirBackupsHoraire', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
+  //
+  //   const cb = async function(catalogue, cataloguePath) {
+  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+  //     expect(cataloguePath).toBeDefined()
+  //     expect(catalogue.heure).toBeDefined()
+  //   }
+  //
+  //   expect.assertions(10)
+  //   const resultat = await verificationBackups.parcourirBackupsHoraire(pathConsignation(repertoireSample), 'domaine.test', cb)
+  //   console.debug("parcourirBackupsHoraire resultat : %O", resultat)
+  //   expect(Object.keys(resultat.dateHachageEntetes).length).toBe(4)
+  //   expect(resultat.hachagesTransactions.length).toBe(0)
+  // })
+
+  it('parcourirBackupsHoraire hachage', async() =>{
     const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
 
     const cb = async function(catalogue, cataloguePath) {
@@ -35,47 +51,83 @@ describe('VerificationBackups', ()=>{
       expect(catalogue.heure).toBeDefined()
     }
 
-    expect.assertions(8)
-    await verificationBackups.parcourirBackupsHoraire(pathConsignation(repertoireSample), 'domaine.test', cb)
+    const resultat = await verificationBackups.parcourirBackupsHoraire(
+      pathConsignation(repertoireSample), 'domaine.test', cb, {hachage: true}
+    )
+    console.debug("parcourirBackupsHoraire hachage resultat : %O", resultat)
   })
 
-  it('parcourir 1 backup quotidien', async() =>{
-    const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
+  // it('parcourir 1 backup quotidien', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
+  //
+  //   const cb = function(catalogue, cataloguePath) {
+  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+  //     expect(cataloguePath).toBeDefined()
+  //     expect(catalogue.heure||catalogue.jour).toBeDefined()
+  //   }
+  //
+  //   expect.assertions(8)
+  //   await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
+  // })
+  //
+  // it('parcourir 1 backup annuel', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample4')
+  //
+  //   const cb = function(catalogue, cataloguePath) {
+  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+  //     expect(cataloguePath).toBeDefined()
+  //     expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
+  //   }
+  //
+  //   expect.assertions(42)
+  //   await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
+  // })
 
-    const cb = function(catalogue, cataloguePath) {
-      // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
-      expect(cataloguePath).toBeDefined()
-      expect(catalogue.heure||catalogue.jour).toBeDefined()
-    }
+  // it('parcourir mix de backups annuel/quotidiens/horaire', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample5')
+  //
+  //   const cb = function(catalogue, cataloguePath) {
+  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+  //     expect(cataloguePath).toBeDefined()
+  //     expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
+  //   }
+  //
+  //   expect.assertions(124)
+  //   await verificationBackups.parcourirDomaine(pathConsignation(repertoireSample), 'domaine.test', cb)
+  // })
+  //
+  // it('output catalogues horaires vers stream', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample6')
+  //
+  //   const outputstream = fs.createWriteStream('/tmp/outcats.txt')
+  //
+  //   const cb = function(catalogue, cataloguePath) {
+  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+  //     expect(cataloguePath).toBeDefined()
+  //     if(catalogue.heure) {
+  //       outputstream.write(JSON.stringify(catalogue))
+  //       outputstream.write('\n')
+  //     }
+  //   }
+  //
+  //   expect.assertions(124)
+  //   await verificationBackups.parcourirDomaine(pathConsignation(repertoireSample), 'domaine.test', cb)
+  // })
 
-    expect.assertions(8)
-    await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
-  })
+})
 
-  it('parcourir 1 backup annuel', async() =>{
-    const repertoireSample = path.join(BASE_SAMPLE, 'sample4')
-
-    const cb = function(catalogue, cataloguePath) {
-      // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
-      expect(cataloguePath).toBeDefined()
-      expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
-    }
-
-    expect.assertions(42)
-    await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
-  })
-
-  it('parcourir mix de backups annuel/quotidiens/horaire', async() =>{
-    const repertoireSample = path.join(BASE_SAMPLE, 'sample5')
-
-    const cb = function(catalogue, cataloguePath) {
-      // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
-      expect(cataloguePath).toBeDefined()
-      expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
-    }
-
-    expect.assertions(42)
-    await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
-  })
-
+describe("Verification backups load test", ()=>{
+  // it('parcourir 1 backup annuel complet (365 jours avec 24 heures chaque)', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample6')
+  //
+  //   const cb = function(catalogue, cataloguePath) {
+  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+  //     expect(cataloguePath).toBeDefined()
+  //     expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
+  //   }
+  //
+  //   expect.assertions(18252)
+  //   jest.setTimeout(120000)
+  //   await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
+  // })
 })

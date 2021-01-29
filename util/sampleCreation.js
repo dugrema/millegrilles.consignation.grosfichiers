@@ -109,9 +109,19 @@ async function creerBackupQuotidien(dateJour, opts) {
 
   // Preparer des backup horaires a mettre dans le .tar
   var cataloguesHoraire = []
-  cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 03:00`), {rep}))
-  cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 06:00`), {rep}))
-  cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 07:00`), {rep}))
+  if(opts.jourComplet) {
+    for(let i=0; i<24; i++) {
+      var dateArchive = new Date(dateJour.getTime())
+      dateArchive.setUTCHours(i)
+      const dateHeureStr = formatterDateString(dateArchive)
+      const dateHeureFormattee = `${dateHeureStr.slice(0,4)}-${dateHeureStr.slice(4,6)}-${dateHeureStr.slice(6,8)} ${dateHeureStr.slice(8,10)}:00`
+      cataloguesHoraire.push(await creerBackupHoraire(new Date(dateHeureFormattee), {rep}))
+    }
+  } else {
+    cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 03:00`), {rep}))
+    cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 06:00`), {rep}))
+    cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 07:00`), {rep}))
+  }
 
   console.debug("Promises catalogue quotidien - creation horaire : %O", cataloguesHoraire)
 
@@ -177,11 +187,21 @@ async function creerBackupAnnuel(dateAnnee, opts) {
   const anneeFormattee = formatterDateString(dateAnnee).slice(0, 4)
 
   const archivesQuotidiennes = []
-  archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-01-01`), {rep}))
-  archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-01-02`), {rep}))
-  archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-01-04`), {rep}))
-  archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-02-05`), {rep}))
-  archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-03-06`), {rep}))
+  if(opts.anneeComplete) {
+    for(let i=1; i<=365; i++) {
+      var dateArchive = new Date(dateAnnee.getTime())
+      dateArchive.setUTCDate(i)
+      const dateJourStr = formatterDateString(dateArchive).slice(0, 8)
+      const dateJourFormatte = `${dateJourStr.slice(0,4)}-${dateJourStr.slice(4,6)}-${dateJourStr.slice(6,8)}`
+      archivesQuotidiennes.push(await creerBackupQuotidien(new Date(dateJourFormatte), opts))
+    }
+  } else {
+    archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-01-01`), opts))
+    archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-01-02`), opts))
+    archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-01-04`), opts))
+    archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-02-05`), opts))
+    archivesQuotidiennes.push(await creerBackupQuotidien(new Date(`${anneeFormattee}-03-06`), opts))
+  }
 
   console.debug("Backup annuel, archives quotidiennes crees: %O", archivesQuotidiennes)
 
@@ -267,6 +287,9 @@ async function creerSamples() {
   await creerBackupHoraire(new Date("2020-01-05 01:00"), {rep: 'sample5'})
   await creerBackupHoraire(new Date("2020-01-05 02:00"), {rep: 'sample5'})
   await creerBackupHoraire(new Date("2020-01-05 03:00"), {rep: 'sample5'})
+
+  // Sample 6 - generer backup annuel pour 365 jours
+  await creerBackupAnnuel(new Date("2018-01-01"), {rep: 'sample6', anneeComplete: true, jourComplet: true})
 
   //await Promise.all(promises)
 }
