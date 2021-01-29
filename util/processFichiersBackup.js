@@ -774,7 +774,7 @@ async function genererListeCatalogues(repertoire) {
 
 module.exports = {
   traiterFichiersBackup, traiterFichiersApplication,
-  genererBackupQuotidien, genererBackupAnnuel,
+  genererBackupQuotidien, genererBackupAnnuel, genererListeCatalogues,
 
   sauvegarderFichiersApplication, rotationArchiveApplication,
   sauvegarderCatalogueQuotidien, sauvegarderCatalogueAnnuel,
