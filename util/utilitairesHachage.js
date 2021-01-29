@@ -23,10 +23,10 @@ async function calculerHachageStream(readStream, opts) {
     })
     readStream.on('end', ()=>{
       const resultat = sha.digest('base64')
-      resolve({sha: fonctionHash + '_b64:' + resultat})
+      resolve(fonctionHash + '_b64:' + resultat)
     })
     readStream.on('error', err=> {
-      reject({err})
+      reject(err)
     })
 
     readStream.read()

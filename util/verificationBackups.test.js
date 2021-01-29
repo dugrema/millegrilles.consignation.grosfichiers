@@ -22,6 +22,7 @@ describe('VerificationBackups integration logique', ()=>{
     } catch(err) {
       console.info("Creation des archives de test de VerificationBackups")
       const sampleCreation = require('./sampleCreation')
+      jest.setTimeout(300000)  // Donner 5 minutes pour creer les samples
       await sampleCreation()
     }
   })

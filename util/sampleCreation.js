@@ -8,6 +8,9 @@ const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_for
 
 const PATH_BACKUP = '/tmp/mg-verificationbackups'
 
+var compteur_catalogues = 0
+var backup_precedent = null
+
 async function lireCatalogue(pathCatalogue) {
   const catalogue = await new Promise((resolve, reject)=>{
     fs.readFile(pathCatalogue, (err, data)=>{
@@ -90,7 +93,18 @@ async function creerBackupHoraire(dateHeure, opts) {
     transactions_nomfichier: path.basename(pathTransaction),
     catalogue_nomfichier: `domaine.test_${dateFormattee}.json.xz`,
     heure: dateHeure.getTime()/1000,
+    'en-tete': {
+      uuid_transaction: 'uuid-' + compteur_catalogues,
+      hachage_contenu: 'hachage-' + compteur_catalogues,
+    }
   }
+
+  // Enchaine les catalogues horaires
+  compteur_catalogues++
+  if(backup_precedent) {
+    catalogue.backup_precedent = backup_precedent
+  }
+  backup_precedent = catalogue['en-tete']
 
   const pathCatalogue = `${rep}/domaine.test_${dateFormattee}.json.xz`
   sauvegarderFichier(pathCatalogue, catalogue, {lzma: true})
@@ -260,23 +274,28 @@ async function creerSamples() {
   fs.mkdirSync(PATH_BACKUP)
 
   // Fichiers horaires
+  backup_precedent = null
   await creerBackupHoraire(new Date("2020-01-01 00:00"), {rep: 'sample1'})
   await creerBackupHoraire(new Date("2020-01-01 02:00"), {rep: 'sample1'})
   await creerBackupHoraire(new Date("2020-01-01 03:00"), {rep: 'sample1'})
   await creerBackupHoraire(new Date("2020-01-01 04:00"), {rep: 'sample1'})
 
   // Archive quotidienne
+  backup_precedent = null
   await creerBackupQuotidien(new Date("2020-02-01"), {rep: 'sample2'})
 
   // Archives quotidiennes
+  backup_precedent = null
   await creerBackupQuotidien(new Date("2020-03-01"), {rep: 'sample3'})
   await creerBackupQuotidien(new Date("2020-04-02"), {rep: 'sample3'})
   await creerBackupQuotidien(new Date("2020-03-03"), {rep: 'sample3'})
 
   // Archive annuelle
+  backup_precedent = null
   await creerBackupAnnuel(new Date("2020-01-01"), {rep: 'sample4'})
 
   // Sample 5 - tous les types d'archive pour tester de "walking"
+  backup_precedent = null
   await creerBackupAnnuel(new Date("2018-01-01"), {rep: 'sample5'})
   await creerBackupAnnuel(new Date("2019-01-01"), {rep: 'sample5'})
   await creerBackupQuotidien(new Date("2020-01-01"), {rep: 'sample5'})
@@ -289,6 +308,7 @@ async function creerSamples() {
   await creerBackupHoraire(new Date("2020-01-05 03:00"), {rep: 'sample5'})
 
   // Sample 6 - generer backup annuel pour 365 jours
+  backup_precedent = null
   await creerBackupAnnuel(new Date("2018-01-01"), {rep: 'sample6', anneeComplete: true, jourComplet: true})
 
   //await Promise.all(promises)

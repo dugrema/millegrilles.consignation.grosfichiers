@@ -109,13 +109,20 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
       const catalogue = await chargerCatalogue(pathFichier)
       debug("Catalogue trouve: %s\n%O", pathFichier, catalogue)
       try {
-        dateHachageEntetes[catalogue.heure] = catalogue['en-tete'].hachage_contenu
+        dateHachageEntetes[catalogue.heure] = {
+          hachage_entete: catalogue['en-tete'].hachage_contenu,
+          uuid_transaction: catalogue['en-tete'].uuid_transaction,
+          backup_precedent: catalogue.backup_precedent,
+        }
       } catch(err) {
         dateHachageEntetes[catalogue.heure] = null
       }
 
       if( ! hachagesTransactions[catalogue.transactions_hachage] ) {
-        hachagesTransactions[catalogue.transactions_hachage] = {verifie: false}
+        hachagesTransactions[catalogue.transactions_hachage] = {
+          verifie: false,
+          transactions_nomfichier: catalogue.transactions_nomfichier,
+        }
       }
 
       // Verifier si on fait un callback
@@ -123,8 +130,8 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
     } else {
       debug("Fichier trouve: %s", pathFichier)
       if(opts.hachage) {
-        const {sha} = await calculerHachageFichier(pathFichier)
-        hachagesTransactions[sha] = {verifie: true, transactions_nomfichier: path.basename(pathFichier)}
+        const hachage = await calculerHachageFichier(pathFichier)
+        hachagesTransactions[hachage] = {verifie: true, transactions_nomfichier: path.basename(pathFichier)}
       }
     }
   }
