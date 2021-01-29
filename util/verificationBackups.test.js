@@ -42,10 +42,10 @@ describe('VerificationBackups', ()=>{
   it('parcourirBackupsQuotidiens', async() =>{
     const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
 
-    const cb = async function(catalogue, cataloguePath) {
+    const cb = function(catalogue, cataloguePath) {
       // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
       expect(cataloguePath).toBeDefined()
-      expect(catalogue.heure).toBeDefined()
+      expect(catalogue.heure||catalogue.jour).toBeDefined()
     }
 
     expect.assertions(8)

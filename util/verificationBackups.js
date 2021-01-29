@@ -85,29 +85,60 @@ async function parcourirBackupsQuotidiens(pathConsignation, domaine, cb, opts) {
     const pathArchive = archives[idx]
     debug("Ouvrir .tar %s", pathArchive)
 
-    fs.createReadStream(pathArchive)
-      .pipe(parse())
-      .on('data', async function(entry) {
-        entry.pause()
-        debug("Fichier tar, entry : %s", entry.path)
-        if(entry.path.endsWith('.json.xz')) {
-          var decoder = lzma.createStream('autoDecoder')
-          var data = ''
-          decoder.on("data", buffer=>{
-            data += buffer
-          })
-          decoder.on("end", ()=>{
-            debug("Data fichier : %s", data)
-            const catalogue = JSON.parse(data)
-            debug("Catalogue charge : %O", catalogue)
-          })
+    var promises = []
+    await new Promise((resolve, reject)=>{
 
-          const outStream = fs.createWriteStream('/tmp/' + entry.path)
-          entry.pipe(decoder)
-        }
-        entry.resume()
-      })
+      fs.createReadStream(pathArchive)
+        .pipe(parse())
+        .on('data', function(entry) {
+          entry.pause()
+
+          debug("Fichier tar, entry : %s", entry.path)
+          if(entry.path.endsWith('.json.xz')) {
+            promises.push(new Promise((resolve, reject)=>{
+              var decoder = lzma.createStream('autoDecoder')
+              var data = ''
+              decoder.on("data", buffer=>{
+                data += buffer
+              })
+              decoder.on("end", async ()=>{
+                // debug("Data fichier : %s", data)
+                const catalogue = JSON.parse(data)
+                // C'est le catalogue quotidien
+                debug("Catalogue charge : %O", catalogue)
+                await cb(catalogue, entry.path)
+                resolve(catalogue)
+                entry.resume()
+              })
+              decoder.on("error", err=>{
+                reject(err)
+                entry.resume()
+              })
+
+              // const outStream = fs.createWriteStream('/tmp/' + entry.path)
+              entry.pipe(decoder)
+            })) // Promise data
+          }
+
+          entry.resume()
+
+        }) // on data
+        .on('end', ()=>{
+          resolve()
+        })
+        .on('error', err=>{
+          reject(err)
+        })
+
+    }) // Promise
+
+    // Attendre que toutes les promise (catalogues) de l'archive soient terminees
+    // avant de passer a la prochaine archive
+    debug("End archive quotidienne %s, attente promises", pathArchive)
+    await Promise.all(promises)
+    debug("Archive quotidienne %s finie", pathArchive)
   }
+
 }
 
 
