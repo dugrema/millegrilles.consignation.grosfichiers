@@ -270,49 +270,61 @@ async function creerBackupAnnuel(dateAnnee, opts) {
   return pathArchive
 }
 
-async function creerSamples() {
-  fs.mkdirSync(PATH_BACKUP)
+async function creerSamplesHoraire() {
+  fs.mkdirSync(PATH_BACKUP + '/horaire', {recursive: true})
 
   // Fichiers horaires
   backup_precedent = null
-  await creerBackupHoraire(new Date("2020-01-01 00:00"), {rep: 'sample1'})
-  await creerBackupHoraire(new Date("2020-01-01 02:00"), {rep: 'sample1'})
-  await creerBackupHoraire(new Date("2020-01-01 03:00"), {rep: 'sample1'})
-  await creerBackupHoraire(new Date("2020-01-01 04:00"), {rep: 'sample1'})
+  await creerBackupHoraire(new Date("2020-01-01 00:00"), {rep: 'horaire/sample1'})
+  await creerBackupHoraire(new Date("2020-01-01 02:00"), {rep: 'horaire/sample1'})
+  await creerBackupHoraire(new Date("2020-01-01 03:00"), {rep: 'horaire/sample1'})
+  await creerBackupHoraire(new Date("2020-01-01 04:00"), {rep: 'horaire/sample1'})
+}
+
+async function creerSamplesQuotidien() {
+  fs.mkdirSync(PATH_BACKUP + '/quotidien')
 
   // Archive quotidienne
   backup_precedent = null
-  await creerBackupQuotidien(new Date("2020-02-01"), {rep: 'sample2'})
+  await creerBackupQuotidien(new Date("2020-02-01"), {rep: 'quotidien/sample2'})
 
   // Archives quotidiennes
   backup_precedent = null
-  await creerBackupQuotidien(new Date("2020-03-01"), {rep: 'sample3'})
-  await creerBackupQuotidien(new Date("2020-03-02"), {rep: 'sample3'})
-  await creerBackupQuotidien(new Date("2020-03-03"), {rep: 'sample3'})
+  await creerBackupQuotidien(new Date("2020-03-01"), {rep: 'quotidien/sample3'})
+  await creerBackupQuotidien(new Date("2020-03-02"), {rep: 'quotidien/sample3'})
+  await creerBackupQuotidien(new Date("2020-03-03"), {rep: 'quotidien/sample3'})
+}
+
+async function creerSamplesAnnuel() {
+  fs.mkdirSync(PATH_BACKUP + '/annuel')
 
   // Archive annuelle
   backup_precedent = null
-  await creerBackupAnnuel(new Date("2020-01-01"), {rep: 'sample4'})
+  await creerBackupAnnuel(new Date("2020-01-01"), {rep: 'annuel/sample4'})
 
   // Sample 5 - tous les types d'archive pour tester un cas complet
   backup_precedent = null
-  await creerBackupAnnuel(new Date("2017-01-01"), {rep: 'sample5'})
-  await creerBackupAnnuel(new Date("2018-01-01"), {rep: 'sample5'})
-  await creerBackupAnnuel(new Date("2019-01-01"), {rep: 'sample5'})
-  await creerBackupQuotidien(new Date("2020-01-01"), {rep: 'sample5'})
-  await creerBackupQuotidien(new Date("2020-01-02"), {rep: 'sample5'})
-  await creerBackupQuotidien(new Date("2020-01-03"), {rep: 'sample5'})
-  await creerBackupQuotidien(new Date("2020-01-04"), {rep: 'sample5'})
-  await creerBackupHoraire(new Date("2020-01-05 00:00"), {rep: 'sample5'})
-  await creerBackupHoraire(new Date("2020-01-05 01:00"), {rep: 'sample5'})
-  await creerBackupHoraire(new Date("2020-01-05 02:00"), {rep: 'sample5'})
-  await creerBackupHoraire(new Date("2020-01-05 03:00"), {rep: 'sample5'})
+  await creerBackupAnnuel(new Date("2017-01-01"), {rep: 'annuel/sample5'})
+  await creerBackupAnnuel(new Date("2018-01-01"), {rep: 'annuel/sample5'})
+  await creerBackupAnnuel(new Date("2019-01-01"), {rep: 'annuel/sample5'})
+  await creerBackupQuotidien(new Date("2020-01-01"), {rep: 'annuel/sample5'})
+  await creerBackupQuotidien(new Date("2020-01-02"), {rep: 'annuel/sample5'})
+  await creerBackupQuotidien(new Date("2020-01-03"), {rep: 'annuel/sample5'})
+  await creerBackupQuotidien(new Date("2020-01-04"), {rep: 'annuel/sample5'})
+  await creerBackupHoraire(new Date("2020-01-05 00:00"), {rep: 'annuel/sample5'})
+  await creerBackupHoraire(new Date("2020-01-05 01:00"), {rep: 'annuel/sample5'})
+  await creerBackupHoraire(new Date("2020-01-05 02:00"), {rep: 'annuel/sample5'})
+  await creerBackupHoraire(new Date("2020-01-05 03:00"), {rep: 'annuel/sample5'})
+}
+
+async function creerSamplesLoad() {
+  fs.mkdirSync(PATH_BACKUP + '/load')
 
   // Sample 6 - generer backup annuel pour 365 jours
   backup_precedent = null
-  await creerBackupAnnuel(new Date("2018-01-01"), {rep: 'sample6', anneeComplete: true, jourComplet: true})
+  await creerBackupAnnuel(new Date("2018-01-01"), {rep: 'load/sample6', anneeComplete: true, jourComplet: true})
 
   //await Promise.all(promises)
 }
 
-module.exports = creerSamples
+module.exports = {creerSamplesLoad, creerSamplesAnnuel, creerSamplesQuotidien, creerSamplesHoraire}

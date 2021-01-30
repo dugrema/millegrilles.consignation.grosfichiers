@@ -387,7 +387,8 @@ async function verifierPromisesArchive(promises, opts) {
 }
 
 async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
-  // Parcoure tous les fichiers de backup d'un domaine
+  // Parcours tous les fichiers de backup d'un domaine
+  opts = opts || {}
 
   const infoArchives = await parcourirArchivesBackup(pathConsignation, domaine, cb, opts)
   var chainage = infoArchives.chainage
@@ -395,8 +396,13 @@ async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
   debug("parcourirDomaine: Information archives: %O", infoArchives)
   debug("parcourirDomaine: Erreurs horaire: %O", erreursHoraire)
 
-  const erreursHachage = [...infoArchives.erreursHachage, ...erreursHoraire.erreursHachage]
-  const erreursCatalogues = [...infoArchives.erreursCatalogues, ...erreursHoraire.erreursCatalogues]
+  var erreursHachage = null, erreursCatalogues = null
+  if(opts.verification_hachage) {
+    erreursHachage = [...infoArchives.erreursHachage, ...erreursHoraire.erreursHachage]
+  }
+  if(opts.verification_enchainement) {
+    erreursCatalogues = [...infoArchives.erreursCatalogues, ...erreursHoraire.erreursCatalogues]
+  }
 
   return {erreursHachage, erreursCatalogues, chainage: erreursHoraire.chainage}
 }
