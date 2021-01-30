@@ -178,14 +178,15 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
   }
 
   return {
-    dateHachageEntetes, hachagesTransactions,
+    // dateHachageEntetes, hachagesTransactions,
     erreursHachage, erreursCatalogues
   }
 }
 
 function verifierEntetes(dateHachageEntetes, chainage) {
+  debug("Verifier entetes pour chainage (precedent : %O)", chainage)
 
-  var chainage = null, erreursCatalogues = []
+  var erreursCatalogues = []
   Object.keys(dateHachageEntetes).sort().forEach(dateCatalogue=>{
     const infoCatalogue = dateHachageEntetes[dateCatalogue]
     const chainage_precedent = chainage
@@ -223,7 +224,7 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
   debug("Archives sous %s: %O", repertoireBackup, archives)
 
   // Parcourire toutes les archives - detecter si l'archive est quotidienne ou annuelle
-  var erreursHachage = null, erreursCatalogues = null
+  var erreursHachage = null, erreursCatalogues = null, chainage = opts.chainage
   // var dateHachageEntetes = {}, hachagesTransactions = []
   for(let idx in archives) {
     const pathArchive = archives[idx]
@@ -247,11 +248,23 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
     debug("Archive %s, attente %d promesses", pathArchive, promises.length)
 
     const infoExtraiteArchive = await verifierPromisesArchive(promises, opts)
-    const erreurs = trouverErreursArchive(infoExtraiteArchive.dateHachageEntetes, infoExtraiteArchive.hachagesTransactions)
+    const erreurs = trouverErreursArchive(
+      infoExtraiteArchive.dateHachageEntetes,
+      infoExtraiteArchive.hachagesTransactions,
+      {...opts, chainage}
+    )
+
+    debug("Info extraite archive : %O", infoExtraiteArchive)
 
     // Cumuler les erreurs entre fichiers
     if(opts.verification_hachage) erreursHachage = [...erreursHachage || [], ...erreurs.erreursHachage]
-    if(opts.verification_enchainement) erreursCatalogues = [...erreursCatalogues || [], ...erreurs.erreursCatalogues]
+    if(opts.verification_enchainement) {
+      erreursCatalogues = [...erreursCatalogues || [], ...erreurs.erreursCatalogues]
+      chainage = {
+        uuid_transaction: infoExtraiteArchive.plusRecentCatalogue['en-tete'].uuid_transaction,
+        hachage_contenu: infoExtraiteArchive.plusRecentCatalogue['en-tete'].hachage_contenu,
+      }
+    }
 
     // DEBUG
     //dateHachageEntetes = {...dateHachageEntetes, ...infoExtraiteArchive.dateHachageEntetes}
@@ -260,13 +273,15 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
 
   return {
     //dateHachageEntetes, hachagesTransactions,
-    erreursHachage, erreursCatalogues
+    erreursHachage, erreursCatalogues, chainage
   }
 
 }
 
 function trouverErreursArchive(dateHachageEntetes, hachagesTransactions, opts) {
   opts = opts || {}
+
+  debug("Trouver erreurs de l'archive (opts: %O)", opts)
 
   var erreursCatalogues = null
   if(dateHachageEntetes) {
@@ -306,7 +321,7 @@ async function verifierPromisesArchive(promises, opts) {
       else return [...arr, item]
     }, [])
 
-  var dateHachageEntetes = null
+  var dateHachageEntetes = null, plusRecentCatalogue = null
   if(opts.verification_enchainement) {
     // Conserver les entetes pour verifier le chainage
     dateHachageEntetes = {}
@@ -322,6 +337,11 @@ async function verifierPromisesArchive(promises, opts) {
           backup_precedent: item.backup_precedent,
           uuid_transaction: item.['en-tete'].uuid_transaction,
           hachage_contenu: item.['en-tete'].hachage_contenu,
+        }
+
+        // Conserver le plus recent catalogue
+        if(!plusRecentCatalogue || plusRecentCatalogue.heure < item.heure) {
+          plusRecentCatalogue = item
         }
       })
 
@@ -354,14 +374,17 @@ async function verifierPromisesArchive(promises, opts) {
     debug("Hachage transactions %O", hachagesTransactions)
   }
 
-  return {dateHachageEntetes, hachagesTransactions}
+  return {dateHachageEntetes, hachagesTransactions, plusRecentCatalogue}
 }
 
 async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
   // Parcoure tous les fichiers de backup d'un domaine
 
-  await parcourirArchivesBackup(pathConsignation, domaine, cb, opts)
-  await parcourirBackupsHoraire(pathConsignation, domaine, cb, opts)
+  const infoArchives = await parcourirArchivesBackup(pathConsignation, domaine, cb, opts)
+  var chainage = infoArchives.chainage
+  const erreursHoraire = await parcourirBackupsHoraire(pathConsignation, domaine, cb, {...opts, chainage})
+  debug("parcourirDomaine: Information archives: %O", infoArchives)
+  debug("parcourirDomaine: Erreurs horaire: %O", erreursHoraire)
 }
 
 async function processEntryTar(entry, cb, opts) {

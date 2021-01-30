@@ -287,7 +287,7 @@ async function creerSamples() {
   // Archives quotidiennes
   backup_precedent = null
   await creerBackupQuotidien(new Date("2020-03-01"), {rep: 'sample3'})
-  await creerBackupQuotidien(new Date("2020-04-02"), {rep: 'sample3'})
+  await creerBackupQuotidien(new Date("2020-03-02"), {rep: 'sample3'})
   await creerBackupQuotidien(new Date("2020-03-03"), {rep: 'sample3'})
 
   // Archive annuelle

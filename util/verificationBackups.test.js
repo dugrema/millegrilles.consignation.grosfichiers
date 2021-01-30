@@ -78,22 +78,22 @@ describe('VerificationBackups integration logique', ()=>{
   //   const resultat = await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
   //   console.debug('parcourir 1 backup quotidien resultat : %O', resultat)
   // })
-
-  it('parcourir 1 backup quotidien verification enchainement', async() =>{
-    const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
-
-    const cb = (catalogue, cataloguePath) => {
-      // Rien a faire
-    }
-
-    expect.assertions(2)
-    const info = await verificationBackups.parcourirArchivesBackup(pathConsignation(
-      repertoireSample), 'domaine.test', cb, {verification_enchainement: true})
-    console.debug("parcourir 1 backup quotidien hachage: resultat %O", info)
-    expect(Object.keys(info.erreursCatalogues).length).toBe(0)
-    expect(info.erreursHachage).toBeNull()
-  })
-
+  //
+  // it('parcourir 1 backup quotidien verification enchainement', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
+  //
+  //   const cb = (catalogue, cataloguePath) => {
+  //     // Rien a faire
+  //   }
+  //
+  //   expect.assertions(2)
+  //   const info = await verificationBackups.parcourirArchivesBackup(pathConsignation(
+  //     repertoireSample), 'domaine.test', cb, {verification_enchainement: true})
+  //   console.debug("parcourir 1 backup quotidien verification enchainement: resultat %O", info)
+  //   expect(Object.keys(info.erreursCatalogues).length).toBe(0)
+  //   expect(info.erreursHachage).toBeNull()
+  // })
+  //
   // it('parcourir 1 backup quotidien verification hachage', async() =>{
   //   const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
   //
@@ -101,7 +101,7 @@ describe('VerificationBackups integration logique', ()=>{
   //     // Rien a faire
   //   }
   //
-  //   expect.assertions(4)
+  //   expect.assertions(2)
   //   const info = await verificationBackups.parcourirArchivesBackup(
   //     pathConsignation(repertoireSample),
   //     'domaine.test',
@@ -109,10 +109,23 @@ describe('VerificationBackups integration logique', ()=>{
   //     {verification_hachage: true}
   //   )
   //   console.debug("parcourir 1 backup quotidien hachage: resultat %O", info)
-  //   expect(info.dateHachageEntetes).toBeNull()
   //   expect(info.erreursCatalogues).toBeNull()
-  //   expect(Object.keys(info.hachagesTransactions).length).toBe(3)
   //   expect(Object.keys(info.erreursHachage).length).toBe(0)
+  // })
+  //
+  // it('parcourir 3 backups quotidiens verification enchainement', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample3')
+  //
+  //   const cb = (catalogue, cataloguePath) => {
+  //     // Rien a faire
+  //   }
+  //
+  //   expect.assertions(2)
+  //   const info = await verificationBackups.parcourirArchivesBackup(pathConsignation(
+  //     repertoireSample), 'domaine.test', cb, {verification_enchainement: true})
+  //   console.debug("parcourir 3 backups quotidiens verification enchainement: resultat %O", info)
+  //   expect(Object.keys(info.erreursCatalogues).length).toBe(0)
+  //   expect(info.erreursHachage).toBeNull()
   // })
   //
   // it('parcourir 1 backup annuel', async() =>{
@@ -137,13 +150,12 @@ describe('VerificationBackups integration logique', ()=>{
   //     expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
   //   }
   //
-  //   expect.assertions(46)
+  //   expect.assertions(44)
   //   const resultat = await verificationBackups.parcourirArchivesBackup(
   //     pathConsignation(repertoireSample), 'domaine.test', cb, {verification_enchainement: true})
-  //   //console.debug("parcourir 1 backup annuel hachage: %O", resultat)
-  //   expect(Object.keys(resultat.dateHachageEntetes).length).toBe(15)
+  //   console.debug("parcourir 1 backup annuel hachage: %O", resultat)
+  //
   //   expect(resultat.erreursCatalogues.length).toBe(0)
-  //   expect(resultat.hachagesTransactions).toBeNull()
   //   expect(resultat.erreursHachage).toBeNull()
   // })
   //
@@ -165,7 +177,7 @@ describe('VerificationBackups integration logique', ()=>{
   //   expect(resultat.hachagesTransactions).toBeNull()
   //   expect(Object.keys(resultat.erreursHachage).length).toBeNull()
   // })
-
+  //
   // it('parcourir mix de backups annuel/quotidiens/horaire', async() =>{
   //   const repertoireSample = path.join(BASE_SAMPLE, 'sample5')
   //
@@ -179,6 +191,23 @@ describe('VerificationBackups integration logique', ()=>{
   //   await verificationBackups.parcourirDomaine(pathConsignation(repertoireSample), 'domaine.test', cb)
   // })
   //
+  it('parcourir mix de backups annuel/quotidiens/horaire avec verifications', async() =>{
+    const repertoireSample = path.join(BASE_SAMPLE, 'sample5')
+
+    const cb = function(catalogue, cataloguePath) {
+      // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+      expect(cataloguePath).toBeDefined()
+      expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
+    }
+
+    expect.assertions(124)
+    const resultat = await verificationBackups.parcourirDomaine(
+      pathConsignation(repertoireSample), 'domaine.test', cb,
+      {verification_hachage: true, verification_enchainement: true}
+    )
+    console.debug("Resultat parcourir mix de backups annuel/quotidiens/horaire avec verifications: %O", resultat)
+  })
+
   // it('output catalogues horaires vers stream', async() =>{
   //   const repertoireSample = path.join(BASE_SAMPLE, 'sample6')
   //
