@@ -27,7 +27,25 @@ describe('VerificationBackups integration logique', ()=>{
     }
   })
 
-  it('parcourirBackupsHoraire', async() =>{
+  // it('parcourirBackupsHoraire', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
+  //
+  //   const cb = async function(catalogue, cataloguePath) {
+  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+  //     expect(cataloguePath).toBeDefined()
+  //     expect(catalogue.heure).toBeDefined()
+  //   }
+  //
+  //   expect.assertions(12)
+  //   const resultat = await verificationBackups.parcourirBackupsHoraire(pathConsignation(repertoireSample), 'domaine.test', cb)
+  //   console.debug("parcourirBackupsHoraire resultat : %O", resultat)
+  //   expect(resultat.dateHachageEntetes).toBeNull()
+  //   expect(resultat.hachagesTransactions).toBeNull()
+  //   expect(resultat.erreursHachage).toBeNull()
+  //   expect(resultat.erreursCatalogues).toBeNull()
+  // })
+
+  it('parcourirBackupsHoraire hachage', async() =>{
     const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
 
     const cb = async function(catalogue, cataloguePath) {
@@ -37,29 +55,16 @@ describe('VerificationBackups integration logique', ()=>{
     }
 
     expect.assertions(12)
-    const resultat = await verificationBackups.parcourirBackupsHoraire(pathConsignation(repertoireSample), 'domaine.test', cb)
-    console.debug("parcourirBackupsHoraire resultat : %O", resultat)
-    expect(resultat.dateHachageEntetes).toBeNull()
-    expect(resultat.hachagesTransactions).toBeNull()
-    expect(resultat.erreursHachage).toBeNull()
-    expect(resultat.erreursCatalogues).toBeNull()
+    const resultat = await verificationBackups.parcourirBackupsHoraire(
+      pathConsignation(repertoireSample), 'domaine.test', cb, {verification_hachage: true, verification_enchainement: true}
+    )
+    console.debug("parcourirBackupsHoraire hachage resultat : %O", resultat)
+    expect(Object.keys(resultat.dateHachageEntetes).length).toBe(4)
+    expect(Object.keys(resultat.hachagesTransactions).length).toBe(4)
+    expect(resultat.erreursHachage.length).toBe(0)
+    expect(resultat.erreursCatalogues.length).toBe(0)
   })
 
-  // it('parcourirBackupsHoraire hachage', async() =>{
-  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
-  //
-  //   const cb = async function(catalogue, cataloguePath) {
-  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
-  //     expect(cataloguePath).toBeDefined()
-  //     expect(catalogue.heure).toBeDefined()
-  //   }
-  //
-  //   const resultat = await verificationBackups.parcourirBackupsHoraire(
-  //     pathConsignation(repertoireSample), 'domaine.test', cb, {hachage: true}
-  //   )
-  //   console.debug("parcourirBackupsHoraire hachage resultat : %O", resultat)
-  // })
-  //
   // it('parcourir 1 backup quotidien', async() =>{
   //   const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
   //

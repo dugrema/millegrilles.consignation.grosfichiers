@@ -150,7 +150,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
     // Faire un rapport de verifications
     for(let hachage in hachagesTransactions) {
       const infoHachage = hachagesTransactions[hachage]
-      if(infoHachage.verifie) {
+      if( ! infoHachage.verifie ) {
         erreursHachage.push({
           hachage,
           transactions_nomfichier: infoHachage.transactions_nomfichier,
