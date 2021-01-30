@@ -44,27 +44,27 @@ describe('VerificationBackups integration logique', ()=>{
   //   expect(resultat.erreursHachage).toBeNull()
   //   expect(resultat.erreursCatalogues).toBeNull()
   // })
-
-  it('parcourirBackupsHoraire hachage', async() =>{
-    const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
-
-    const cb = async function(catalogue, cataloguePath) {
-      // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
-      expect(cataloguePath).toBeDefined()
-      expect(catalogue.heure).toBeDefined()
-    }
-
-    expect.assertions(12)
-    const resultat = await verificationBackups.parcourirBackupsHoraire(
-      pathConsignation(repertoireSample), 'domaine.test', cb, {verification_hachage: true, verification_enchainement: true}
-    )
-    console.debug("parcourirBackupsHoraire hachage resultat : %O", resultat)
-    expect(Object.keys(resultat.dateHachageEntetes).length).toBe(4)
-    expect(Object.keys(resultat.hachagesTransactions).length).toBe(4)
-    expect(resultat.erreursHachage.length).toBe(0)
-    expect(resultat.erreursCatalogues.length).toBe(0)
-  })
-
+  //
+  // it('parcourirBackupsHoraire hachage', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
+  //
+  //   const cb = async function(catalogue, cataloguePath) {
+  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+  //     expect(cataloguePath).toBeDefined()
+  //     expect(catalogue.heure).toBeDefined()
+  //   }
+  //
+  //   expect.assertions(12)
+  //   const resultat = await verificationBackups.parcourirBackupsHoraire(
+  //     pathConsignation(repertoireSample), 'domaine.test', cb, {verification_hachage: true, verification_enchainement: true}
+  //   )
+  //   console.debug("parcourirBackupsHoraire hachage resultat : %O", resultat)
+  //   expect(Object.keys(resultat.dateHachageEntetes).length).toBe(4)
+  //   expect(Object.keys(resultat.hachagesTransactions).length).toBe(4)
+  //   expect(resultat.erreursHachage.length).toBe(0)
+  //   expect(resultat.erreursCatalogues.length).toBe(0)
+  // })
+  //
   // it('parcourir 1 backup quotidien', async() =>{
   //   const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
   //
@@ -95,24 +95,28 @@ describe('VerificationBackups integration logique', ()=>{
   //   expect(info.hachagesTransactions).toBeNull()
   //   expect(info.erreursHachage).toBeNull()
   // })
-  //
-  // it('parcourir 1 backup quotidien verification hachage', async() =>{
-  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
-  //
-  //   const cb = (catalogue, cataloguePath) => {
-  //     // Rien a faire
-  //   }
-  //
-  //   expect.assertions(4)
-  //   const info = await verificationBackups.parcourirArchivesBackup(pathConsignation(
-  //     repertoireSample), 'domaine.test', cb, {verification_hachage: true})
-  //   console.debug("parcourir 1 backup quotidien hachage: resultat %O", info)
-  //   expect(info.dateHachageEntetes).toBeNull()
-  //   expect(info.erreursCatalogues).toBeNull()
-  //   expect(info.hachagesTransactions).toBeNull()
-  //   expect(info.erreursHachage).toBeNull()
-  // })
-  //
+
+  it('parcourir 1 backup quotidien verification hachage', async() =>{
+    const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
+
+    const cb = (catalogue, cataloguePath) => {
+      // Rien a faire
+    }
+
+    expect.assertions(4)
+    const info = await verificationBackups.parcourirArchivesBackup(
+      pathConsignation(repertoireSample),
+      'domaine.test',
+      cb,
+      {verification_hachage: true}
+    )
+    console.debug("parcourir 1 backup quotidien hachage: resultat %O", info)
+    expect(info.dateHachageEntetes).toBeNull()
+    expect(info.erreursCatalogues).toBeNull()
+    expect(Object.keys(info.hachagesTransactions).length).toBe(3)
+    expect(Object.keys(info.erreursHachage).length).toBe(0)
+  })
+
   // it('parcourir 1 backup annuel', async() =>{
   //   const repertoireSample = path.join(BASE_SAMPLE, 'sample4')
   //

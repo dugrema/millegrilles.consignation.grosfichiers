@@ -274,14 +274,24 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
     }
 
     if(opts.verification_hachage) {
-      // Conserver les entetes pour verifier le chainage
+      // Faire correspondre information du catalogue et calcul du fichier de transactions
 
       const listeEntetes = resultatsPromises
         .filter(item=>{               // Conserver backups horaire et resultats de hachage
-          return item && item.heure
+          return item && item.transactions_hachage
         })
         .forEach(item=>{              // Conserver info pour verifier hachage
-          hachagesTransactions[item.transactions_hachage] = 'dadada'
+          const typeEntree = item.heure?'catalogue':'transactions'
+
+          if(hachagesTransactions[item.transactions_hachage]) {
+            // Match
+            hachagesTransactions[item.transactions_hachage][typeEntree] = true
+          } else {
+            hachagesTransactions[item.transactions_hachage] = {
+              transactions_nomfichier: item.transactions_nomfichier,
+              [typeEntree]: true
+            }
+          }
         })
 
       debug("Archive %s finie, hachage transactions %O", pathArchive, hachagesTransactions)
@@ -294,11 +304,22 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
     // Verifier les chaines de catalogues horaires
     erreursCatalogues = await verifierEntetes(dateHachageEntetes, opts.chainage)
   } else {
-    erreursCatalogues = null
+    dateHachageEntetes = null
   }
 
   if(opts.verification_hachage) {
+    erreursHachage = []
 
+    // Faire un rapport de verifications
+    for(let hachage in hachagesTransactions) {
+      const infoHachage = hachagesTransactions[hachage]
+      if( ! (infoHachage.catalogue && infoHachage.transactions) ) {
+        erreursHachage.push({
+          hachage,
+          transactions_nomfichier: infoHachage.transactions_nomfichier,
+        })
+      }
+    }
   } else {
     hachagesTransactions = null
   }
@@ -389,8 +410,10 @@ async function processEntryTar(entry, cb, opts) {
 
   } else if(opts.verification_hachage) {
     // Retourner le resultat de hachage du fichier
+    entry.resume()
     const hachage = await calculerHachageStream(entry)
-    return {hachage}
+    debug("Resultat hachage %s : %s", entry.path, hachage)
+    return {transactions_hachage: hachage, transactions_nomfichier: entry.path}
   } else {
     // Ce n'est pas un catalogue, on fait juste resumer
     entry.resume()

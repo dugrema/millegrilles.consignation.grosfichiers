@@ -29,7 +29,8 @@ async function calculerHachageStream(readStream, opts) {
       reject(err)
     })
 
-    readStream.read()
+    if(readStream.read) readStream.read()
+    else readStream.resume()
   })
 }
 
