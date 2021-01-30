@@ -250,6 +250,8 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
         .on('end', ()=>resolve())
         .on('error', err=>reject(err))
 
+      // Attendre 1 tick avant de demarrer lecture .tar
+      // Bugfix pour erreur random "invalid tar file"
       const stream = fs.createReadStream(pathArchive)
       setTimeout(()=>{
         stream.pipe(tarParser)
