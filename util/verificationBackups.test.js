@@ -27,22 +27,24 @@ describe('VerificationBackups integration logique', ()=>{
     }
   })
 
-  // it('parcourirBackupsHoraire', async() =>{
-  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
-  //
-  //   const cb = async function(catalogue, cataloguePath) {
-  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
-  //     expect(cataloguePath).toBeDefined()
-  //     expect(catalogue.heure).toBeDefined()
-  //   }
-  //
-  //   expect.assertions(10)
-  //   const resultat = await verificationBackups.parcourirBackupsHoraire(pathConsignation(repertoireSample), 'domaine.test', cb)
-  //   console.debug("parcourirBackupsHoraire resultat : %O", resultat)
-  //   expect(Object.keys(resultat.dateHachageEntetes).length).toBe(4)
-  //   expect(resultat.hachagesTransactions.length).toBe(0)
-  // })
-  //
+  it('parcourirBackupsHoraire', async() =>{
+    const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
+
+    const cb = async function(catalogue, cataloguePath) {
+      // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+      expect(cataloguePath).toBeDefined()
+      expect(catalogue.heure).toBeDefined()
+    }
+
+    expect.assertions(12)
+    const resultat = await verificationBackups.parcourirBackupsHoraire(pathConsignation(repertoireSample), 'domaine.test', cb)
+    console.debug("parcourirBackupsHoraire resultat : %O", resultat)
+    expect(resultat.dateHachageEntetes).toBeNull()
+    expect(resultat.hachagesTransactions).toBeNull()
+    expect(resultat.erreursHachage).toBeNull()
+    expect(resultat.erreursCatalogues).toBeNull()
+  })
+
   // it('parcourirBackupsHoraire hachage', async() =>{
   //   const repertoireSample = path.join(BASE_SAMPLE, 'sample1')
   //
@@ -80,9 +82,10 @@ describe('VerificationBackups integration logique', ()=>{
   //     expect(catalogue.heure||catalogue.jour).toBeDefined()
   //   }
   //
-  //   expect.assertions(8)
+  //   expect.assertions(9)
   //   const info = await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb, {hachage: true})
   //   console.debug("parcourir 1 backup quotidien hachage: resultat %O", info)
+  //   expect(info.length).toBe(0)
   // })
   //
   // it('parcourir 1 backup annuel', async() =>{
@@ -98,20 +101,21 @@ describe('VerificationBackups integration logique', ()=>{
   //   await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
   // })
 
-  it('parcourir 1 backup annuel hachage', async() =>{
-    const repertoireSample = path.join(BASE_SAMPLE, 'sample4')
-
-    const cb = function(catalogue, cataloguePath) {
-      // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
-      expect(cataloguePath).toBeDefined()
-      expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
-    }
-
-    expect.assertions(42)
-    const resultat = await verificationBackups.parcourirArchivesBackup(
-      pathConsignation(repertoireSample), 'domaine.test', cb, {hachage: true})
-    console.debug("parcourir 1 backup annuel hachage: %O", resultat)
-  })
+  // it('parcourir 1 backup annuel hachage', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample4')
+  //
+  //   const cb = function(catalogue, cataloguePath) {
+  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+  //     expect(cataloguePath).toBeDefined()
+  //     expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
+  //   }
+  //
+  //   expect.assertions(43)
+  //   const resultat = await verificationBackups.parcourirArchivesBackup(
+  //     pathConsignation(repertoireSample), 'domaine.test', cb, {hachage: true})
+  //   console.debug("parcourir 1 backup annuel hachage: %O", resultat)
+  //   expect(resultat.length).toBe(0)
+  // })
 
   // it('parcourir mix de backups annuel/quotidiens/horaire', async() =>{
   //   const repertoireSample = path.join(BASE_SAMPLE, 'sample5')
@@ -158,6 +162,7 @@ describe("Verification backups load test", ()=>{
   //
   //   expect.assertions(18252)
   //   jest.setTimeout(120000)
-  //   await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
+  //   const infoChainage = await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
+  //   expect(infoChainage.length).toBe(0)
   // })
 })

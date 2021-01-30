@@ -61,7 +61,7 @@ async function genererListeHoraire(repertoire, opts) {
 
   // Faire la liste des archives .tar du repertoire
   const fileFilter = ['*.json.xz']
-  if(opts.hachage) {
+  if(opts.verification_hachage) {
     fileFilter.push('*.jsonl.xz')
     fileFilter.push('*.jsonl.xz.mgs1')
   }
@@ -100,27 +100,32 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
   const fichiers = await genererListeHoraire(repertoireHoraire, opts)
   debug("Fichiers horaire sous %s: %O", repertoireHoraire, fichiers)
 
-  const dateHachageEntetes = {}  // Conserver liste de hachage d'entete par date (epoch secs)
-  const hachagesTransactions = {}  // Conserver hachage de fichiers de transaction
+  var dateHachageEntetes = {}  // Conserver liste de hachage d'entete par date (epoch secs)
+  var hachagesTransactions = {}  // Conserver hachage de fichiers de transaction
 
   for(let idx in fichiers) {
     const pathFichier = fichiers[idx]
     if(pathFichier.endsWith('.json.xz')) {
       const catalogue = await chargerCatalogue(pathFichier)
       debug("Catalogue trouve: %s\n%O", pathFichier, catalogue)
-      const heureFormattee = formatterDateString(new Date(catalogue.heure*1000))
-      try {
-        dateHachageEntetes[heureFormattee] = {
-          hachage_contenu: catalogue['en-tete'].hachage_contenu,
-          uuid_transaction: catalogue['en-tete'].uuid_transaction,
-          heure: catalogue.heure,
-          backup_precedent: catalogue.backup_precedent,
+
+      if(opts.verification_enchainement) {
+        // Verification de l'enchainement entre catalogues horaires est actif
+        // Retourner l'information d'entete et backup precedent
+        const heureFormattee = formatterDateString(new Date(catalogue.heure*1000))
+        try {
+          dateHachageEntetes[heureFormattee] = {
+            hachage_contenu: catalogue['en-tete'].hachage_contenu,
+            uuid_transaction: catalogue['en-tete'].uuid_transaction,
+            heure: catalogue.heure,
+            backup_precedent: catalogue.backup_precedent,
+          }
+        } catch(err) {
+          dateHachageEntetes[heureFormattee] = null
         }
-      } catch(err) {
-        dateHachageEntetes[heureFormattee] = null
       }
 
-      if( ! hachagesTransactions[catalogue.transactions_hachage] ) {
+      if( opts.verification_hachage && ! hachagesTransactions[catalogue.transactions_hachage] ) {
         hachagesTransactions[catalogue.transactions_hachage] = {
           verifie: false,
           transactions_nomfichier: catalogue.transactions_nomfichier,
@@ -131,15 +136,17 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
       await cb(catalogue, pathFichier)
     } else {
       debug("Fichier trouve: %s", pathFichier)
-      if(opts.hachage) {
+      if(opts.verification_hachage) {
         const hachage = await calculerHachageFichier(pathFichier)
         hachagesTransactions[hachage] = {verifie: true, transactions_nomfichier: path.basename(pathFichier)}
       }
     }
   }
 
-  var erreursHachage = [], erreursCatalogues = null
-  if(opts.hachage) {
+  var erreursHachage = null, erreursCatalogues = null
+  if(opts.verification_hachage) {
+    erreursHachage = []
+
     // Faire un rapport de verifications
     for(let hachage in hachagesTransactions) {
       const infoHachage = hachagesTransactions[hachage]
@@ -150,8 +157,14 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
         })
       }
     }
+  } else {
+    hachagesTransactions = null
+  }
 
+  if(opts.verification_enchainement) {
     erreursCatalogues = await verifierEntetes(dateHachageEntetes, opts.chainage)
+  } else {
+    dateHachageEntetes = null
   }
 
   return {
@@ -193,6 +206,8 @@ async function verifierEntetes(dateHachageEntetes, chainage) {
 }
 
 async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
+  opts = opts || {}
+
   const repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
   const archives = await genererListeArchives(repertoireBackup)
   debug("Archives sous %s: %O", repertoireBackup, archives)
@@ -209,7 +224,7 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
       fs.createReadStream(pathArchive)
         .pipe(parse())
         .on('data', entry=>{
-          promises.push( processEntryTar(entry, cb) )
+          promises.push( processEntryTar(entry, cb, opts) )
         })
         .on('end', ()=>resolve())
         .on('error', err=>reject(err))
@@ -223,25 +238,18 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
 
     if(opts.hachage) {
       // Conserver les entetes pour verifier le chainage
-      // var flatResultats = []
-      // resultatsPromises.forEach(item=>{
-      //   if(item.length) flatResultats = [...flatResultats, ...item]
-      //   else flatResultats = [...flatResultats, item]
-      // }).filter(item=>{
-      //   return item && opts.hachage && item.heure
-      // })
-
       const listeEntetes = resultatsPromises
-        .reduce((arr, item)=>{
+        .filter(item=>item)           // Filtrer les entrees undefined
+        .reduce((arr, item)=>{        // Aplatir les listes
           if(item.length) {
             return [...arr, ...item]
           }
           else return [...arr, item]
         }, [])
-        .filter(item=>{
+        .filter(item=>{               // Conserver backups horaire
           return item && opts.hachage && item.heure
         })
-        .forEach(item=>{
+        .forEach(item=>{              // Conserver info pour chainage
           const heureFormattee = formatterDateString(new Date(item.heure*1000))
           resultats[heureFormattee] = {
             heure: item.heure,
@@ -270,8 +278,8 @@ async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
   await parcourirBackupsHoraire(pathConsignation, domaine, cb, opts)
 }
 
-async function processEntryTar(entry, cb, opt) {
-  opt = opt || {}
+async function processEntryTar(entry, cb, opts) {
+  opts = opts || {}
 
   // Traitement d'une entree d'un fichier .tar
   // Si c'est un catalogue, on va invoquer le callback (cb)
@@ -325,7 +333,7 @@ async function processEntryTar(entry, cb, opt) {
 
       entry.pipe(parse())
         .on('data', subEntry=>{
-          promises.push( processEntryTar(subEntry, cb) )
+          promises.push( processEntryTar(subEntry, cb, opts) )
         })
         .on('end', ()=>resolve())
         .on('error', err=>reject(err))
