@@ -9,7 +9,7 @@ const { PathConsignation } = require('../util/traitementFichier');
 const { genererListeCatalogues } = require('./processFichiersBackup')
 const { pki, ValidateurSignature } = require('./pki')
 const { calculerHachageFichier, calculerHachageStream } = require('./utilitairesHachage')
-//const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
+const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 
 async function chargerCatalogue(pathCatalogue) {
   return new Promise((resolve, reject)=>{
@@ -108,15 +108,16 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
     if(pathFichier.endsWith('.json.xz')) {
       const catalogue = await chargerCatalogue(pathFichier)
       debug("Catalogue trouve: %s\n%O", pathFichier, catalogue)
+      const heureFormattee = formatterDateString(new Date(catalogue.heure*1000))
       try {
-        dateHachageEntetes[catalogue.heure] = {
+        dateHachageEntetes[heureFormattee] = {
           hachage_contenu: catalogue['en-tete'].hachage_contenu,
           uuid_transaction: catalogue['en-tete'].uuid_transaction,
           heure: catalogue.heure,
           backup_precedent: catalogue.backup_precedent,
         }
       } catch(err) {
-        dateHachageEntetes[catalogue.heure] = null
+        dateHachageEntetes[heureFormattee] = null
       }
 
       if( ! hachagesTransactions[catalogue.transactions_hachage] ) {
@@ -185,7 +186,7 @@ async function verifierEntetes(dateHachageEntetes, chainage) {
     debug("Erreur, mismatch entetes horaires\n%O\n", backup_precedent, chainage_precedent)
 
     // Pas correct, on ajoute au rapport
-    erreursCatalogues.push({...infoCatalogue, err: 'Erreur enchainement, backup precendent non trouve ou ne correspond pas'})
+    erreursCatalogues.push({...infoCatalogue, err: 'Erreur enchainement, backup precedent non trouve ou ne correspond pas'})
   })
 
   return erreursCatalogues
@@ -197,7 +198,7 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
   debug("Archives sous %s: %O", repertoireBackup, archives)
 
   // Parcourire toutes les archives - detecter si l'archive est quotidienne ou annuelle
-  var resultats = []
+  var resultats = {}
   for(let idx in archives) {
     const pathArchive = archives[idx]
     debug("Ouvrir .tar %s", pathArchive)
@@ -220,16 +221,43 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
     debug("Archive %s, attente %d promesses", pathArchive, promises.length)
     const resultatsPromises = await Promise.all(promises)
 
-    var flatResultats = []
-    resultatsPromises.forEach(item=>{
-      if(item.length) flatResultats = [...flatResultats, ...item]
-      else flatResultats = [...flatResultats, item]
-    })
+    if(opts.hachage) {
+      // Conserver les entetes pour verifier le chainage
+      // var flatResultats = []
+      // resultatsPromises.forEach(item=>{
+      //   if(item.length) flatResultats = [...flatResultats, ...item]
+      //   else flatResultats = [...flatResultats, item]
+      // }).filter(item=>{
+      //   return item && opts.hachage && item.heure
+      // })
 
-    debug("Archive %s finie, resultats %O", pathArchive, flatResultats)
-    resultats = [...resultats, ...flatResultats.filter(item=>{
-      return item && opts.hachage && item.heure
-    })]
+      const listeEntetes = resultatsPromises
+        .reduce((arr, item)=>{
+          if(item.length) {
+            return [...arr, ...item]
+          }
+          else return [...arr, item]
+        }, [])
+        .filter(item=>{
+          return item && opts.hachage && item.heure
+        })
+        .forEach(item=>{
+          const heureFormattee = formatterDateString(new Date(item.heure*1000))
+          resultats[heureFormattee] = {
+            heure: item.heure,
+            backup_precedent: item.backup_precedent,
+            uuid_transaction: item.['en-tete'].uuid_transaction,
+            hachage_contenu: item.['en-tete'].hachage_contenu,
+          }
+        })
+
+      debug("Archive %s finie, resultats %O", pathArchive, resultats)
+    }
+  }
+
+  if(opts.hachage) {
+    // Verifier les chaines de catalogues horaires
+    resultats = verifierEntetes(resultats, opts.chainage)
   }
 
   return resultats
