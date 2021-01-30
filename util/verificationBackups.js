@@ -125,10 +125,15 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
         }
       }
 
-      if( opts.verification_hachage && ! hachagesTransactions[catalogue.transactions_hachage] ) {
-        hachagesTransactions[catalogue.transactions_hachage] = {
-          verifie: false,
-          transactions_nomfichier: catalogue.transactions_nomfichier,
+      if( opts.verification_hachage ) {
+        if( hachagesTransactions[catalogue.transactions_hachage] ) {
+          // Match avec transaction (deja calcule)
+          hachagesTransactions[catalogue.transactions_hachage].catalogue = true
+        } else {
+          hachagesTransactions[catalogue.transactions_hachage] = {
+            catalogue: true,
+            transactions_nomfichier: catalogue.transactions_nomfichier,
+          }
         }
       }
 
@@ -138,7 +143,12 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
       debug("Fichier trouve: %s", pathFichier)
       if(opts.verification_hachage) {
         const hachage = await calculerHachageFichier(pathFichier)
-        hachagesTransactions[hachage] = {verifie: true, transactions_nomfichier: path.basename(pathFichier)}
+        if(hachagesTransactions[hachage]) {
+          // Match avec catalogue
+          hachagesTransactions[hachage].transactions = true
+        } else {
+          hachagesTransactions[hachage] = {transactions: true, transactions_nomfichier: path.basename(pathFichier)}
+        }
       }
     }
   }
@@ -150,7 +160,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
     // Faire un rapport de verifications
     for(let hachage in hachagesTransactions) {
       const infoHachage = hachagesTransactions[hachage]
-      if( ! infoHachage.verifie ) {
+      if( ! (infoHachage.catalogue && infoHachage.transactions) ) {
         erreursHachage.push({
           hachage,
           transactions_nomfichier: infoHachage.transactions_nomfichier,
@@ -213,7 +223,7 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
   debug("Archives sous %s: %O", repertoireBackup, archives)
 
   // Parcourire toutes les archives - detecter si l'archive est quotidienne ou annuelle
-  var resultats = {}
+  var dateHachageEntetes = {}, hachagesTransactions = []
   for(let idx in archives) {
     const pathArchive = archives[idx]
     debug("Ouvrir .tar %s", pathArchive)
@@ -235,23 +245,24 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
     // avant de passer a la prochaine archive
     debug("Archive %s, attente %d promesses", pathArchive, promises.length)
     const resultatsPromises = await Promise.all(promises)
+    var resultatsFlat = resultatsPromises
+      .filter(item=>item)           // Filtrer les entrees undefined
+      .reduce((arr, item)=>{        // Aplatir les listes
+        if(Array.isArray(item)) {
+          return [...arr, ...item]
+        }
+        else return [...arr, item]
+      }, [])
 
-    if(opts.hachage) {
+    if(opts.verification_enchainement) {
       // Conserver les entetes pour verifier le chainage
-      const listeEntetes = resultatsPromises
-        .filter(item=>item)           // Filtrer les entrees undefined
-        .reduce((arr, item)=>{        // Aplatir les listes
-          if(item.length) {
-            return [...arr, ...item]
-          }
-          else return [...arr, item]
-        }, [])
+      const listeEntetes = resultatsFlat
         .filter(item=>{               // Conserver backups horaire
-          return item && opts.hachage && item.heure
+          return item && item.heure
         })
         .forEach(item=>{              // Conserver info pour chainage
           const heureFormattee = formatterDateString(new Date(item.heure*1000))
-          resultats[heureFormattee] = {
+          dateHachageEntetes[heureFormattee] = {
             heure: item.heure,
             backup_precedent: item.backup_precedent,
             uuid_transaction: item.['en-tete'].uuid_transaction,
@@ -259,16 +270,44 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
           }
         })
 
-      debug("Archive %s finie, resultats %O", pathArchive, resultats)
+      debug("Archive %s, entetes catalogues horaires %O", pathArchive, listeEntetes)
     }
+
+    if(opts.verification_hachage) {
+      // Conserver les entetes pour verifier le chainage
+
+      const listeEntetes = resultatsPromises
+        .filter(item=>{               // Conserver backups horaire et resultats de hachage
+          return item && item.heure
+        })
+        .forEach(item=>{              // Conserver info pour verifier hachage
+          hachagesTransactions[item.transactions_hachage] = 'dadada'
+        })
+
+      debug("Archive %s finie, hachage transactions %O", pathArchive, hachagesTransactions)
+    }
+
   }
 
-  if(opts.hachage) {
+  var erreursCatalogues = null, erreursHachage = null
+  if(opts.verification_enchainement) {
     // Verifier les chaines de catalogues horaires
-    resultats = verifierEntetes(resultats, opts.chainage)
+    erreursCatalogues = await verifierEntetes(dateHachageEntetes, opts.chainage)
+  } else {
+    erreursCatalogues = null
   }
 
-  return resultats
+  if(opts.verification_hachage) {
+
+  } else {
+    hachagesTransactions = null
+  }
+
+  return {
+    dateHachageEntetes, hachagesTransactions,
+    erreursHachage, erreursCatalogues
+  }
+
 }
 
 async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
@@ -348,10 +387,14 @@ async function processEntryTar(entry, cb, opts) {
 
     return resultats
 
+  } else if(opts.verification_hachage) {
+    // Retourner le resultat de hachage du fichier
+    const hachage = await calculerHachageStream(entry)
+    return {hachage}
   } else {
     // Ce n'est pas un catalogue, on fait juste resumer
     entry.resume()
-    return Promise.resolve()
+    return
   }
 
 }

@@ -75,22 +75,42 @@ describe('VerificationBackups integration logique', ()=>{
   //   }
   //
   //   expect.assertions(8)
-  //   await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
+  //   const resultat = await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
+  //   console.debug('parcourir 1 backup quotidien resultat : %O', resultat)
   // })
   //
-  // it('parcourir 1 backup quotidien hachage', async() =>{
+  // it('parcourir 1 backup quotidien verification enchainement', async() =>{
   //   const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
   //
-  //   const cb = function(catalogue, cataloguePath) {
-  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
-  //     expect(cataloguePath).toBeDefined()
-  //     expect(catalogue.heure||catalogue.jour).toBeDefined()
+  //   const cb = (catalogue, cataloguePath) => {
+  //     // Rien a faire
   //   }
   //
-  //   expect.assertions(9)
-  //   const info = await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb, {hachage: true})
+  //   expect.assertions(4)
+  //   const info = await verificationBackups.parcourirArchivesBackup(pathConsignation(
+  //     repertoireSample), 'domaine.test', cb, {verification_enchainement: true})
   //   console.debug("parcourir 1 backup quotidien hachage: resultat %O", info)
-  //   expect(info.length).toBe(0)
+  //   expect(Object.keys(info.dateHachageEntetes).length).toBe(3)
+  //   expect(Object.keys(info.erreursCatalogues).length).toBe(0)
+  //   expect(info.hachagesTransactions).toBeNull()
+  //   expect(info.erreursHachage).toBeNull()
+  // })
+  //
+  // it('parcourir 1 backup quotidien verification hachage', async() =>{
+  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample2')
+  //
+  //   const cb = (catalogue, cataloguePath) => {
+  //     // Rien a faire
+  //   }
+  //
+  //   expect.assertions(4)
+  //   const info = await verificationBackups.parcourirArchivesBackup(pathConsignation(
+  //     repertoireSample), 'domaine.test', cb, {verification_hachage: true})
+  //   console.debug("parcourir 1 backup quotidien hachage: resultat %O", info)
+  //   expect(info.dateHachageEntetes).toBeNull()
+  //   expect(info.erreursCatalogues).toBeNull()
+  //   expect(info.hachagesTransactions).toBeNull()
+  //   expect(info.erreursHachage).toBeNull()
   // })
   //
   // it('parcourir 1 backup annuel', async() =>{
