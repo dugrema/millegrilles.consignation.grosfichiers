@@ -190,7 +190,7 @@ describe('VerificationBackups integration logique', ()=>{
   //   expect.assertions(124)
   //   await verificationBackups.parcourirDomaine(pathConsignation(repertoireSample), 'domaine.test', cb)
   // })
-  //
+
   it('parcourir mix de backups annuel/quotidiens/horaire avec verifications', async() =>{
     const repertoireSample = path.join(BASE_SAMPLE, 'sample5')
 
@@ -200,7 +200,7 @@ describe('VerificationBackups integration logique', ()=>{
       expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
     }
 
-    expect.assertions(124)
+    expect.assertions(166)
     const resultat = await verificationBackups.parcourirDomaine(
       pathConsignation(repertoireSample), 'domaine.test', cb,
       {verification_hachage: true, verification_enchainement: true}
@@ -228,19 +228,24 @@ describe('VerificationBackups integration logique', ()=>{
 
 })
 
-describe("Verification backups load test", ()=>{
-  // it('parcourir 1 backup annuel complet (365 jours avec 24 heures chaque)', async() =>{
-  //   const repertoireSample = path.join(BASE_SAMPLE, 'sample6')
-  //
-  //   const cb = function(catalogue, cataloguePath) {
-  //     // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
-  //     expect(cataloguePath).toBeDefined()
-  //     expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
-  //   }
-  //
-  //   expect.assertions(18252)
-  //   jest.setTimeout(120000)
-  //   const infoChainage = await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
-  //   expect(infoChainage.length).toBe(0)
-  // })
-})
+// describe("Verification backups load test", ()=>{
+//   it('parcourir 1 backup annuel complet (365 jours avec 24 heures chaque)', async() =>{
+//     const repertoireSample = path.join(BASE_SAMPLE, 'sample6')
+//
+//     const cb = function(catalogue, cataloguePath) {
+//       // console.debug("Catalogue path: %s, catalogue: %O", cataloguePath, catalogue)
+//       expect(cataloguePath).toBeDefined()
+//       expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
+//     }
+//
+//     expect.assertions(18252)
+//     jest.setTimeout(120000)
+//     const resultat = await verificationBackups.parcourirArchivesBackup(
+//       pathConsignation(repertoireSample), 'domaine.test', cb,
+//       {verification_hachage: true, verification_enchainement: true}
+//     )
+//     console.debug("parcourir 1 backup annuel complet (365 jours avec 24 heures chaque), resultat\n%O", resultat)
+//
+//     // expect(resultat.length).toBe(0)
+//   })
+// })

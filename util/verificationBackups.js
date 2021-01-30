@@ -102,6 +102,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
 
   var dateHachageEntetes = {}  // Conserver liste de hachage d'entete par date (epoch secs)
   var hachagesTransactions = {}  // Conserver hachage de fichiers de transaction
+  var plusRecentCatalogue = null
 
   for(let idx in fichiers) {
     const pathFichier = fichiers[idx]
@@ -122,6 +123,14 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
           }
         } catch(err) {
           dateHachageEntetes[heureFormattee] = null
+        }
+
+        // Conserver le plus recent catalogue
+        if(!plusRecentCatalogue || plusRecentCatalogue.heure < catalogue.heure) {
+          plusRecentCatalogue = {
+            hachage_contenu: catalogue['en-tete'].hachage_contenu,
+            uuid_transaction: catalogue['en-tete'].uuid_transaction,
+          }
         }
       }
 
@@ -179,7 +188,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
 
   return {
     // dateHachageEntetes, hachagesTransactions,
-    erreursHachage, erreursCatalogues
+    erreursHachage, erreursCatalogues, chainage: plusRecentCatalogue,
   }
 }
 
@@ -385,6 +394,11 @@ async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
   const erreursHoraire = await parcourirBackupsHoraire(pathConsignation, domaine, cb, {...opts, chainage})
   debug("parcourirDomaine: Information archives: %O", infoArchives)
   debug("parcourirDomaine: Erreurs horaire: %O", erreursHoraire)
+
+  const erreursHachage = [...infoArchives.erreursHachage, ...erreursHoraire.erreursHachage]
+  const erreursCatalogues = [...infoArchives.erreursCatalogues, ...erreursHoraire.erreursCatalogues]
+
+  return {erreursHachage, erreursCatalogues, chainage: erreursHoraire.chainage}
 }
 
 async function processEntryTar(entry, cb, opts) {

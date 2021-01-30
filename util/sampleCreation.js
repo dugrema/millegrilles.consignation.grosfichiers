@@ -294,8 +294,9 @@ async function creerSamples() {
   backup_precedent = null
   await creerBackupAnnuel(new Date("2020-01-01"), {rep: 'sample4'})
 
-  // Sample 5 - tous les types d'archive pour tester de "walking"
+  // Sample 5 - tous les types d'archive pour tester un cas complet
   backup_precedent = null
+  await creerBackupAnnuel(new Date("2017-01-01"), {rep: 'sample5'})
   await creerBackupAnnuel(new Date("2018-01-01"), {rep: 'sample5'})
   await creerBackupAnnuel(new Date("2019-01-01"), {rep: 'sample5'})
   await creerBackupQuotidien(new Date("2020-01-01"), {rep: 'sample5'})
