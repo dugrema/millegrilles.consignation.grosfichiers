@@ -242,13 +242,18 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
     var promises = []
     await new Promise((resolve, reject)=>{
 
-      fs.createReadStream(pathArchive)
-        .pipe(parse())
+      // Parse
+      const tarParser = parse()
         .on('data', entry=>{
           promises.push( processEntryTar(entry, cb, opts) )
         })
         .on('end', ()=>resolve())
         .on('error', err=>reject(err))
+
+      const stream = fs.createReadStream(pathArchive)
+      setTimeout(()=>{
+        stream.pipe(tarParser)
+      },0)
 
     }) // Promise
 
