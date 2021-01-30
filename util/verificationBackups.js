@@ -172,7 +172,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
   }
 
   if(opts.verification_enchainement) {
-    erreursCatalogues = await verifierEntetes(dateHachageEntetes, opts.chainage)
+    erreursCatalogues = verifierEntetes(dateHachageEntetes, opts.chainage)
   } else {
     dateHachageEntetes = null
   }
@@ -183,7 +183,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
   }
 }
 
-async function verifierEntetes(dateHachageEntetes, chainage) {
+function verifierEntetes(dateHachageEntetes, chainage) {
 
   var chainage = null, erreursCatalogues = []
   Object.keys(dateHachageEntetes).sort().forEach(dateCatalogue=>{
@@ -223,7 +223,8 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
   debug("Archives sous %s: %O", repertoireBackup, archives)
 
   // Parcourire toutes les archives - detecter si l'archive est quotidienne ou annuelle
-  var dateHachageEntetes = {}, hachagesTransactions = []
+  var erreursHachage = null, erreursCatalogues = null
+  // var dateHachageEntetes = {}, hachagesTransactions = []
   for(let idx in archives) {
     const pathArchive = archives[idx]
     debug("Ouvrir .tar %s", pathArchive)
@@ -244,73 +245,40 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
     // Attendre que toutes les promise (catalogues) de l'archive soient terminees
     // avant de passer a la prochaine archive
     debug("Archive %s, attente %d promesses", pathArchive, promises.length)
-    const resultatsPromises = await Promise.all(promises)
-    var resultatsFlat = resultatsPromises
-      .filter(item=>item)           // Filtrer les entrees undefined
-      .reduce((arr, item)=>{        // Aplatir les listes
-        if(Array.isArray(item)) {
-          return [...arr, ...item]
-        }
-        else return [...arr, item]
-      }, [])
 
-    if(opts.verification_enchainement) {
-      // Conserver les entetes pour verifier le chainage
-      const listeEntetes = resultatsFlat
-        .filter(item=>{               // Conserver backups horaire
-          return item && item.heure
-        })
-        .forEach(item=>{              // Conserver info pour chainage
-          const heureFormattee = formatterDateString(new Date(item.heure*1000))
-          dateHachageEntetes[heureFormattee] = {
-            heure: item.heure,
-            backup_precedent: item.backup_precedent,
-            uuid_transaction: item.['en-tete'].uuid_transaction,
-            hachage_contenu: item.['en-tete'].hachage_contenu,
-          }
-        })
+    const infoExtraiteArchive = await verifierPromisesArchive(promises, opts)
+    const erreurs = trouverErreursArchive(infoExtraiteArchive.dateHachageEntetes, infoExtraiteArchive.hachagesTransactions)
 
-      debug("Archive %s, entetes catalogues horaires %O", pathArchive, listeEntetes)
-    }
+    // Cumuler les erreurs entre fichiers
+    if(opts.verification_hachage) erreursHachage = [...erreursHachage || [], ...erreurs.erreursHachage]
+    if(opts.verification_enchainement) erreursCatalogues = [...erreursCatalogues || [], ...erreurs.erreursCatalogues]
 
-    if(opts.verification_hachage) {
-      // Faire correspondre information du catalogue et calcul du fichier de transactions
-
-      const listeEntetes = resultatsPromises
-        .filter(item=>{               // Conserver backups horaire et resultats de hachage
-          return item && item.transactions_hachage
-        })
-        .forEach(item=>{              // Conserver info pour verifier hachage
-          const typeEntree = item.heure?'catalogue':'transactions'
-
-          if(hachagesTransactions[item.transactions_hachage]) {
-            // Match
-            hachagesTransactions[item.transactions_hachage][typeEntree] = true
-          } else {
-            hachagesTransactions[item.transactions_hachage] = {
-              transactions_nomfichier: item.transactions_nomfichier,
-              [typeEntree]: true
-            }
-          }
-        })
-
-      debug("Archive %s finie, hachage transactions %O", pathArchive, hachagesTransactions)
-    }
-
+    // DEBUG
+    //dateHachageEntetes = {...dateHachageEntetes, ...infoExtraiteArchive.dateHachageEntetes}
+    //hachagesTransactions = {...hachagesTransactions, ...infoExtraiteArchive.hachagesTransactions}
   }
 
-  var erreursCatalogues = null, erreursHachage = null
-  if(opts.verification_enchainement) {
+  return {
+    //dateHachageEntetes, hachagesTransactions,
+    erreursHachage, erreursCatalogues
+  }
+
+}
+
+function trouverErreursArchive(dateHachageEntetes, hachagesTransactions, opts) {
+  opts = opts || {}
+
+  var erreursCatalogues = null
+  if(dateHachageEntetes) {
     // Verifier les chaines de catalogues horaires
-    erreursCatalogues = await verifierEntetes(dateHachageEntetes, opts.chainage)
-  } else {
-    dateHachageEntetes = null
+    erreursCatalogues = verifierEntetes(dateHachageEntetes, opts.chainage)
   }
 
-  if(opts.verification_hachage) {
+  var erreursHachage = null
+  if(hachagesTransactions) {
     erreursHachage = []
 
-    // Faire un rapport de verifications
+    // Faire un rapport de verifications des transactions
     for(let hachage in hachagesTransactions) {
       const infoHachage = hachagesTransactions[hachage]
       if( ! (infoHachage.catalogue && infoHachage.transactions) ) {
@@ -320,15 +288,73 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
         })
       }
     }
-  } else {
-    hachagesTransactions = null
+
   }
 
-  return {
-    dateHachageEntetes, hachagesTransactions,
-    erreursHachage, erreursCatalogues
+  return {erreursCatalogues, erreursHachage}
+}
+
+async function verifierPromisesArchive(promises, opts) {
+
+  const resultatsPromises = await Promise.all(promises)
+  var resultatsFlat = resultatsPromises
+    .filter(item=>item)           // Filtrer les entrees undefined
+    .reduce((arr, item)=>{        // Aplatir les listes
+      if(Array.isArray(item)) {
+        return [...arr, ...item]
+      }
+      else return [...arr, item]
+    }, [])
+
+  var dateHachageEntetes = null
+  if(opts.verification_enchainement) {
+    // Conserver les entetes pour verifier le chainage
+    dateHachageEntetes = {}
+
+    resultatsFlat
+      .filter(item=>{               // Conserver backups horaire
+        return item && item.heure
+      })
+      .forEach(item=>{              // Conserver info pour chainage
+        const heureFormattee = formatterDateString(new Date(item.heure*1000))
+        dateHachageEntetes[heureFormattee] = {
+          heure: item.heure,
+          backup_precedent: item.backup_precedent,
+          uuid_transaction: item.['en-tete'].uuid_transaction,
+          hachage_contenu: item.['en-tete'].hachage_contenu,
+        }
+      })
+
+    debug("Entetes catalogues horaires %O", dateHachageEntetes)
   }
 
+  var hachagesTransactions = null
+  if(opts.verification_hachage) {
+    // Faire correspondre information du catalogue et calcul du fichier de transactions
+    hachagesTransactions = {}
+
+    const listeEntetes = resultatsPromises
+      .filter(item=>{               // Conserver backups horaire et resultats de hachage
+        return item && item.transactions_hachage
+      })
+      .forEach(item=>{              // Conserver info pour verifier hachage
+        const typeEntree = item.heure?'catalogue':'transactions'
+
+        if(hachagesTransactions[item.transactions_hachage]) {
+          // Match
+          hachagesTransactions[item.transactions_hachage][typeEntree] = true
+        } else {
+          hachagesTransactions[item.transactions_hachage] = {
+            transactions_nomfichier: item.transactions_nomfichier,
+            [typeEntree]: true
+          }
+        }
+      })
+
+    debug("Hachage transactions %O", hachagesTransactions)
+  }
+
+  return {dateHachageEntetes, hachagesTransactions}
 }
 
 async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
@@ -404,7 +430,7 @@ async function processEntryTar(entry, cb, opts) {
     // avant de passer a la prochaine archive
     debug("Sous-archive %s, attente %d promesses", entry.path, promises.length)
     const resultats = await Promise.all(promises)
-    debug("Archive %s finie", entry.path)
+    debug("Archive %s finie, resultats", entry.path, resultats)
 
     return resultats
 
