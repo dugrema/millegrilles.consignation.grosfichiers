@@ -96,6 +96,10 @@ class PathConsignation {
     return path.join(this.consignationPathBackup, 'domaines', domaine)
   }
 
+  getPathBackupDomaines() {
+    return path.join(this.consignationPathBackup, 'domaines')
+  }
+
   trouverPathBackupApplication(nomApplication) {
     const pathBackup = path.join(
       this.consignationPathBackup, 'applications', nomApplication )

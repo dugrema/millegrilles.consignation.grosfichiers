@@ -82,12 +82,27 @@ async function getListeDomaines(req, res, next) {
 
   try {
     debug("Path consignation : %O", req.pathConsignation)
-    const domaines = await identifierDomaines(req.pathConsignation.consignationPathBackup)
+    const domaines = await identifierDomaines(req.pathConsignation.getPathBackupDomaines())
     res.status(200).send({domaines})
   } catch(err) {
     console.error("getListeDomaines: Erreur\n%O", err)
     res.sendStatus(500)
   }
+
+}
+
+async function getCataloguesDomaine(req, res) {
+
+  const domaine = req.params.domaine
+  const pathDomaine = req.pathConsignation.trouverPathBackupDomaine(domaine)
+
+  // Retourne la liste de tous les catalogues de backup horaire d'un domaine
+  const cbCatalogues = catalogue => {
+    debug("Catalogue catalogue: %O", catalogue)
+  }
+
+  res.status(200)  // Header, commencer transfert
+  await verificationBackups.parcourirArchivesBackup(pathDomaine, domaine, cb)
 
 }
 
