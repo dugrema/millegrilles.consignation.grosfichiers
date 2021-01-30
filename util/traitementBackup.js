@@ -93,23 +93,33 @@ async function getListeDomaines(req, res, next) {
 
 async function identifierDomaines(pathRepertoireBackup) {
 
-  const fichiers = await getFichiersDomaine('*', pathRepertoireBackup)
+  const settingsReaddirp = {
+    type: 'directories',
+    depth: 0,
+  }
 
-  // Extraire les sous domaines du nom des fichiers, grouper
-  var domaines = fichiers.map(item=>{
-    const nameSplit = item.basename.split('_')
-    const domaine = nameSplit[0]
-    return domaine
-  }).reduce((dict, item)=>{
-    dict[item] = true
-    return dict
-  }, {})
-
-  // debug("Liste fichiers de backup : %O\nDomaines : %O", fichiers, domaines)
-  domaines = Object.keys(domaines)
-  debug("Domaines de backup : %O", domaines)
+  return new Promise((resolve, reject)=>{
+    const listeDomaines = [];
+    readdirp(
+      pathRepertoireBackup,
+      settingsReaddirp,
+    )
+    .on('data', entry=>{
+      listeDomaines.push(entry.path)
+    })
+    .on('error', err=>{
+      reject(err);
+    })
+    .on('end', ()=>{
+      resolve(listeDomaines);
+    })
+  })
 
   return domaines
 }
 
-module.exports = {TraitementFichierBackup, formatterDateString, getListeDomaines};
+module.exports = {
+  TraitementFichierBackup, formatterDateString, getListeDomaines,
+
+  identifierDomaines
+};

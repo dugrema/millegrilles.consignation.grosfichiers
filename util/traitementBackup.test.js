@@ -1,46 +1,30 @@
-// const MilleGrillesAmqpDAO = require('@dugrema/millegrilles.common/lib/amqpdao')
-const TraitementFichierBackup = require('./traitementBackup').TraitementFichierBackup
+const fs = require('fs')
+const path = require('path')
 
-// Mock de amqpdao (RabbitMQ)
-jest.mock('@dugrema/millegrilles.common/lib/amqpdao')
-const MilleGrillesAmqpDAO = require('@dugrema/millegrilles.common/lib/amqpdao')
-MilleGrillesAmqpDAO.mockImplementation(()=>{
+const traitementBackup = require('./traitementBackup')
 
-  var pki = {
-    idmg: "DUMMY"
-  }
-
-  return {
-    pki,
-  }
-})
+PATH_SAMPLES = '/tmp/mg-traitementbackup'
 
 describe('TraitementFichierBackup', ()=>{
 
-  var traitementFichierBackup;
-
-  beforeAll( ()=>{
-    rabbitMQMock = new MilleGrillesAmqpDAO()
-    traitementFichierBackup = new TraitementFichierBackup(rabbitMQMock)
-    return traitementFichierBackup
+  beforeAll(()=>{
+    try {
+      fs.statSync(PATH_SAMPLES)
+    } catch(err) {
+      fs.mkdirSync(path.join(PATH_SAMPLES, 'domaine1.main'), {recursive:true})
+      fs.mkdirSync(path.join(PATH_SAMPLES, 'domaine2.sous1'))
+      fs.mkdirSync(path.join(PATH_SAMPLES, 'domaine2.sous2'))
+      fs.mkdirSync(path.join(PATH_SAMPLES, 'domaine3.main'))
+      fs.mkdirSync(path.join(PATH_SAMPLES, 'domaine4.main'))
+      fs.mkdirSync(path.join(PATH_SAMPLES, 'domaine5.main'))
+    }
   })
 
-  it('devrait etre importe', ()=>{
-    expect(TraitementFichierBackup).toBeInstanceOf(Object);
-    // expect(MilleGrillesAmqpDAO).toBeInstanceOf(Object);
-  });
-
-  // it("executer traiterPutBackup", async () => {
-  //   expect.assertions(1)
-  //   const req = {
-  //     body: 'allo',
-  //     autorisationMillegrille: {idmg: "DUMMY"},
-  //     files: {transactions: 'allo', catalogue: 'toi'}
-  //   }
-  //   await traitementFichierBackup.traiterPutBackup(req).then(resultat=>{
-  //     console.info("Resultat - %O", resultat)
-  //     expect(resultat).toBeTruthy(resultat)
-  //   })
-  // })
+  it("Test get liste domaines", async () => {
+    const resultat = await traitementBackup.identifierDomaines(PATH_SAMPLES)
+    console.debug("Test get liste domaines : %O", resultat)
+    expect(resultat.length).toBe(6)
+    expect(resultat[0]).toBe('domaine1.main')
+  })
 
 });
