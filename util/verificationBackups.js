@@ -150,7 +150,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
       }
     }
 
-    erreursCatalogues = await verifierEntetes(dateHachageEntetes)
+    erreursCatalogues = await verifierEntetes(dateHachageEntetes, opts.chainage)
   }
 
   return {
@@ -197,6 +197,7 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
   debug("Archives sous %s: %O", repertoireBackup, archives)
 
   // Parcourire toutes les archives - detecter si l'archive est quotidienne ou annuelle
+  var resultats = []
   for(let idx in archives) {
     const pathArchive = archives[idx]
     debug("Ouvrir .tar %s", pathArchive)
@@ -217,10 +218,21 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
     // Attendre que toutes les promise (catalogues) de l'archive soient terminees
     // avant de passer a la prochaine archive
     debug("Archive %s, attente %d promesses", pathArchive, promises.length)
-    await Promise.all(promises)
-    debug("Archive %s finie", pathArchive)
+    const resultatsPromises = await Promise.all(promises)
+
+    var flatResultats = []
+    resultatsPromises.forEach(item=>{
+      if(item.length) flatResultats = [...flatResultats, ...item]
+      else flatResultats = [...flatResultats, item]
+    })
+
+    debug("Archive %s finie, resultats %O", pathArchive, flatResultats)
+    resultats = [...resultats, ...flatResultats.filter(item=>{
+      return item && opts.hachage && item.heure
+    })]
   }
 
+  return resultats
 }
 
 async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
@@ -230,7 +242,9 @@ async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
   await parcourirBackupsHoraire(pathConsignation, domaine, cb, opts)
 }
 
-async function processEntryTar(entry, cb) {
+async function processEntryTar(entry, cb, opt) {
+  opt = opt || {}
+
   // Traitement d'une entree d'un fichier .tar
   // Si c'est un catalogue, on va invoquer le callback (cb)
   // cb(catalogue: dict, entry.path: str)
@@ -258,6 +272,7 @@ async function processEntryTar(entry, cb) {
         // C'est le catalogue quotidien
         debug("Catalogue charge : %O", catalogue)
         await cb(catalogue, entry.path)
+
         resolve(catalogue)
 
         entry.resume()
@@ -292,8 +307,10 @@ async function processEntryTar(entry, cb) {
     // Attendre que toutes les promise (catalogues) de l'archive soient terminees
     // avant de passer a la prochaine archive
     debug("Sous-archive %s, attente %d promesses", entry.path, promises.length)
-    await Promise.all(promises)
+    const resultats = await Promise.all(promises)
     debug("Archive %s finie", entry.path)
+
+    return resultats
 
   } else {
     // Ce n'est pas un catalogue, on fait juste resumer
