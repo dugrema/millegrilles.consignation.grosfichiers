@@ -184,10 +184,15 @@ async function getFichier(req, res) {
   debug("getFichier %s params: %O", req.path, req.params)
 
   const domaine = req.params.domaine,
-        nomFichier = req.params.nomFichier
+        nomFichier = req.params.nomFichier,
+        sousrep = req.params.sousrep
   const pathRepertoireDomaine = req.pathConsignation.trouverPathBackupDomaine(domaine)
 
-  var subPathFichier = req.path.indexOf('/horaire/')>0?'horaire/'+nomFichier:nomFichier
+  if(sousrep && ! ['snapshot', 'horaire'].includes(sousrep)) {
+    return res.status(400).send({err: 'Sous repertoire non supporte : ' + sousrep})
+  }
+
+  var subPathFichier = path.join(sousrep||'', nomFichier)
 
   const pathFichier = path.join(pathRepertoireDomaine, subPathFichier)
   try {

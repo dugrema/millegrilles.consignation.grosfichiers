@@ -48,7 +48,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   router.get('/backup/catalogues/:domaine', getCataloguesDomaine)
   router.get('/backup/listeFichiers/:domaine', getListeFichiers)
   router.get('/backup/fichier/:domaine/:nomFichier', getFichier)
-  router.get('/backup/fichier/:domaine/horaire/:nomFichier', getFichier)
+  router.get('/backup/fichier/:domaine/:sousrep?/:nomFichier', getFichier)
 
   // Backup (upload)
   const backupFileFields = [

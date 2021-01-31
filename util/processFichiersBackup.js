@@ -42,7 +42,8 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
           pathFichierCatalogue = fichierCatalogue.path,
           pathFichierTransactions = fichierTransactions.path
 
-    let repertoireDestination, nouveauPathCatalogue, nouveauPathTransactions
+    // Determiner si c'est un backup regulier ou un snapshot    
+    var repertoireDestination, nouveauPathCatalogue, nouveauPathTransactions, cleanupSnapshot
     if(catalogue.snapshot) {
       debug("Backup mode snapshot")
       repertoireDestination = pathConsignation.trouverPathBackupSnapshot(catalogue.domaine)
@@ -52,6 +53,18 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
       repertoireDestination = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
       nouveauPathCatalogue = path.join(repertoireDestination, nomFichierCatalogue)
       nouveauPathTransactions = path.join(repertoireDestination, fichierTransactions.originalname)
+      cleanupSnapshot = () => {
+        return new Promise((resolve, reject)=>{
+          const repertoireSnapshot = pathConsignation.trouverPathBackupSnapshot(catalogue.domaine)
+          fs.rmdir(repertoireSnapshot, {recursive: true}, err=>{
+            if(err) {
+              console.error("Erreur suppression snapshot sous %s : %O", repertoireSnapshot, err)
+              return reject(err)
+            }
+            resolve()
+          })
+        })
+      }
     }
 
     await new Promise((resolve, reject)=>{
@@ -66,6 +79,8 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
     debug("Copier catalogue %s -> %s", pathFichierCatalogue, nouveauPathCatalogue)
     await deplacerFichier(pathFichierCatalogue, nouveauPathCatalogue)
     await deplacerFichier(pathFichierTransactions, nouveauPathTransactions)
+
+    if(cleanupSnapshot) await cleanupSnapshot()
 
     return {ok: true}
   } catch(err) {
