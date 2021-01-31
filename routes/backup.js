@@ -6,7 +6,7 @@ const multer = require('multer')
 const bodyParser = require('body-parser')
 
 const {PathConsignation, streamListeFichiers} = require('../util/traitementFichier')
-const {TraitementFichierBackup, getListeDomaines} = require('../util/traitementBackup')
+const {TraitementFichierBackup, getListeDomaines, getCataloguesDomaine} = require('../util/traitementBackup')
 const {RestaurateurBackup} = require('../util/restaurationBackup')
 
 function backupMiddleware(req, res, next) {
@@ -42,7 +42,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
 
   // Backup (upload)
   const backupFileFields = [
-    {name: 'transactions', maxcount: 4},
+    {name: 'transactions', maxcount: 1},
     {name: 'catalogue', maxcount: 1},
   ]
   router.put('/backup/domaine/:nomCatalogue',
@@ -64,12 +64,11 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   router.get('/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
   router.get('/backup/application/:nomApplication', restaurerApplication)
 
-  router.get('/backup/backup.tar', getFichierTar)  // TODO - existe encore?
-
   // Ajouter une methode GET suivante :
-  // - retourner la liste des domaines presents dans backup (repertoires de backup)
   // - retourner la liste des applications presentes dans backup (fichiers sous app)
   // - extraire tous les catalogues d'un domaine
+
+  router.get('/backup/catalogues/:domaine', getCataloguesDomaine)
 
   return router
 }
@@ -87,8 +86,8 @@ async function traiterUploadHoraire(req, res, next) {
   .then(msg=>{
       response = {
        ...msg,
-      };
-      res.end(JSON.stringify(response));
+      }
+      res.send(response)
   })
   .catch(err=>{
     console.error("Erreur traitement fichier " + req.url)
@@ -143,15 +142,6 @@ async function traiterUploadApplication(req, res, next) {
     }
   }
 
-}
-
-// Recupere tous les fichiers dans une archive tar
-async function getFichierTar(req, res, next) {
-  const idmg = req.autorisationMillegrille.idmg
-  const rabbitMQ = req.rabbitMQ
-  const traitementFichier = new TraitementFichierBackup(rabbitMQ)
-
-  traitementFichier.getFichierTarBackupComplet(req, res)
 }
 
 async function restaurerDomaine(req, res, next) {

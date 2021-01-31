@@ -18,6 +18,7 @@ const {pki, ValidateurSignature} = require('./pki')
 const { calculerHachageFichier } = require('./utilitairesHachage')
 const {PathConsignation, extraireTarFile, supprimerFichiers, getFichiersDomaine} = require('./traitementFichier')
 const {traiterFichiersBackup, traiterGrosfichiers, traiterFichiersApplication} = require('./processFichiersBackup')
+const { parcourirDomaine } = require('./verificationBackups')
 
 const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json')
 const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json')
@@ -92,18 +93,20 @@ async function getListeDomaines(req, res, next) {
 }
 
 async function getCataloguesDomaine(req, res) {
+  debug("getCataloguesDomaine params: %O", req.params)
 
   const domaine = req.params.domaine
-  const pathDomaine = req.pathConsignation.trouverPathBackupDomaine(domaine)
 
   // Retourne la liste de tous les catalogues de backup horaire d'un domaine
   const cbCatalogues = catalogue => {
-    debug("Catalogue catalogue: %O", catalogue)
+    debug("getCataloguesDomaine Catalogue a transmettre: %O", catalogue)
+    res.write(JSON.stringify(catalogue) + '\n')
   }
 
+  res.set('Content-Type', 'text/plain')
   res.status(200)  // Header, commencer transfert
-  await verificationBackups.parcourirArchivesBackup(pathDomaine, domaine, cb)
-
+  await parcourirDomaine(req.pathConsignation, domaine, cbCatalogues)
+  res.end("Done")
 }
 
 async function identifierDomaines(pathRepertoireBackup) {
@@ -135,6 +138,7 @@ async function identifierDomaines(pathRepertoireBackup) {
 
 module.exports = {
   TraitementFichierBackup, formatterDateString, getListeDomaines,
+  getCataloguesDomaine,
 
   identifierDomaines
 };

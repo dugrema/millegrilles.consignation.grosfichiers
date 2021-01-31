@@ -351,8 +351,8 @@ async function verifierPromisesArchive(promises, opts) {
         dateHachageEntetes[heureFormattee] = {
           heure: item.heure,
           backup_precedent: item.backup_precedent,
-          uuid_transaction: item.['en-tete'].uuid_transaction,
-          hachage_contenu: item.['en-tete'].hachage_contenu,
+          uuid_transaction: item['en-tete'].uuid_transaction,
+          hachage_contenu: item['en-tete'].hachage_contenu,
         }
 
         // Conserver le plus recent catalogue
