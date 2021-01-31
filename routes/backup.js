@@ -6,7 +6,10 @@ const multer = require('multer')
 const bodyParser = require('body-parser')
 
 const {PathConsignation, streamListeFichiers} = require('../util/traitementFichier')
-const {TraitementFichierBackup, getListeDomaines, getCataloguesDomaine, getListeFichiers} = require('../util/traitementBackup')
+const {
+  TraitementFichierBackup, getListeDomaines, getCataloguesDomaine,
+  getListeFichiers, getFichier
+} = require('../util/traitementBackup')
 const {RestaurateurBackup} = require('../util/restaurationBackup')
 
 function backupMiddleware(req, res, next) {
@@ -44,6 +47,8 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   router.get('/backup/listeDomaines', getListeDomaines)
   router.get('/backup/catalogues/:domaine', getCataloguesDomaine)
   router.get('/backup/listeFichiers/:domaine', getListeFichiers)
+  router.get('/backup/fichier/:domaine/:nomFichier', getFichier)
+  router.get('/backup/fichier/:domaine/horaire/:nomFichier', getFichier)
 
   // Backup (upload)
   const backupFileFields = [

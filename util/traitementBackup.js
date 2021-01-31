@@ -177,9 +177,32 @@ async function getListeFichiers(req, res) {
 
 }
 
+async function getFichier(req, res) {
+  debug("getFichier %s params: %O", req.path, req.params)
+
+  const domaine = req.params.domaine,
+        nomFichier = req.params.nomFichier
+  const pathRepertoireDomaine = req.pathConsignation.trouverPathBackupDomaine(domaine)
+
+  var subPathFichier = req.path.indexOf('/horaire/')>0?'horaire/'+nomFichier:nomFichier
+
+  const pathFichier = path.join(pathRepertoireDomaine, subPathFichier)
+  try {
+    const infoFichier = new Promise((resolve, reject)=>{
+      fs.stat(pathFichier, (err, stat)=>{
+        if(err) return reject(err)
+      })
+    })
+    res.status(200).sendFile(pathFichier)
+  } catch(err) {
+    debug("Code erreur : %O", err)
+    return res.sendStatus(404)
+  }
+}
+
 module.exports = {
   TraitementFichierBackup, formatterDateString, getListeDomaines,
-  getCataloguesDomaine, getListeFichiers,
+  getCataloguesDomaine, getListeFichiers, getFichier,
 
   identifierDomaines
 };
