@@ -16,7 +16,7 @@ class GestionnaireMessagesBackup {
   constructor(mq) {
     this.mq = mq;
     this.pki = mq.pki;
-    this.genererBackupQuotidien.bind(this);
+    //this.genererBackupQuotidien.bind(this);
     this.traitementFichier = new TraitementFichier(mq);
     this.traitementFichierBackup = new TraitementFichierBackup(mq);
     this.pathConsignation = this.traitementFichier.pathConsignation;
@@ -31,7 +31,8 @@ class GestionnaireMessagesBackup {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
         // Retourner la promise pour rendre cette operation bloquante (longue duree)
-        return this.genererBackupQuotidien(this.mq, routingKey, message, opts)
+        //this.genererBackupQuotidien(this.mq, routingKey, message, opts)
+        return new Error("commande.backup.genererBackupQuotidien pas implemente")
       },
       ['commande.backup.genererBackupQuotidien'],
       {operationLongue: true}
@@ -40,7 +41,8 @@ class GestionnaireMessagesBackup {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
         // Retourner la promise pour rendre cette operation bloquante (longue duree)
-        return this.genererBackupAnnuel(this.mq, routingKey, message, opts)
+        return new Error("commande.backup.genererBackupAnnuel pas implemente")
+        // return this.genererBackupAnnuel(this.mq, routingKey, message, opts)
       },
       ['commande.backup.genererBackupAnnuel'],
       {operationLongue: true}
@@ -48,7 +50,8 @@ class GestionnaireMessagesBackup {
 
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
-        return this.prerarerStagingRestauration(routingKey, message, opts)
+        return new Error("commande.backup.prerarerStagingRestauration pas implemente")
+        // return this.prerarerStagingRestauration(routingKey, message, opts)
       },
       ['commande.backup.preparerStagingRestauration'],
       {operationLongue: true}
@@ -56,7 +59,8 @@ class GestionnaireMessagesBackup {
 
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
-        return this.restaurerGrosFichiers(routingKey, message, opts)
+        return new Error("commande.backup.restaurerGrosFichiers pas implemente")
+        // return this.restaurerGrosFichiers(routingKey, message, opts)
       },
       ['commande.backup.restaurerGrosFichiers'],
       {operationLongue: true}

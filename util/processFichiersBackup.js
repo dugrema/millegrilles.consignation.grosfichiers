@@ -13,12 +13,30 @@ async function traiterFichiersBackup(pathConsignation, fichiersTransactions, fic
   // Meme repertoire pour toutes les transactions et catalogues horaire
 
   // Charger le fichier de catalogue pour obtenir information de domaine, heure
-  const catalogue = await new Promise((resolve, reject) => {
+  // const catalogue = await new Promise((resolve, reject) => {
+  //   fs.readFile(fichierCatalogue.path, (err, data)=>{
+  //     if(err) return reject(err)
+  //     return resolve(JSON.parse(data))
+  //   })
+  // })
+
+  const catalogue = await new Promise((resolve, reject)=>{
     fs.readFile(fichierCatalogue.path, (err, data)=>{
       if(err) return reject(err)
-      return resolve(JSON.parse(data))
+      try {
+        lzma.LZMA().decompress(data, (data, err)=>{
+          if(err) return reject(err)
+          const catalogue = JSON.parse(data)
+          // console.info("Catalogue horaire %s charge : %O", pathCatalogue, catalogue)
+          resolve(catalogue)
+        })
+      } catch(err) {
+        reject(err)
+      }
     })
   })
+
+  debug("Catalogue backup a traiter : %O", catalogue)
 
   const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
 

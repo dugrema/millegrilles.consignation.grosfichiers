@@ -38,22 +38,21 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   // Router pour fichiers locaux (meme MilleGrille)
   const backupRouter = express.Router()
 
+  router.use(backupMiddleware)
+
+  // Backup (upload)
   const backupFileFields = [
     {name: 'transactions', maxcount: 4},
     {name: 'catalogue', maxcount: 1},
   ]
-  const applicationFileFields = [
-    {name: 'application', maxcount: 1},
-  ]
-
-  router.use(backupMiddleware)
-
-  // Backup (upload)
   router.put('/backup/domaine/:nomCatalogue',
     backupUpload.fields(backupFileFields),
     traiterUploadHoraire
   )
 
+  const applicationFileFields = [
+    {name: 'application', maxcount: 1},
+  ]
   router.put('/backup/application/:nomApplication',
     backupUpload.fields(applicationFileFields),
     traiterUploadApplication
@@ -81,10 +80,10 @@ async function traiterUploadHoraire(req, res, next) {
 
   const idmg = req.autorisationMillegrille.idmg
   const rabbitMQ = req.rabbitMQ
-  const traitementFichier = new TraitementFichierBackup(rabbitMQ);
+  const traitementFichierBackup = new TraitementFichierBackup(rabbitMQ);
 
   // Streamer fichier vers FS
-  await traitementFichier.traiterPutBackup(req)
+  await traitementFichierBackup.traiterPutBackup(req)
   .then(msg=>{
       response = {
        ...msg,
