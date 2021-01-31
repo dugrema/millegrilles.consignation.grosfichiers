@@ -92,6 +92,11 @@ async function traiterUploadHoraire(req, res, next) {
       response = {
        ...msg,
       }
+      if(response.err) {
+        res.status(400)
+      } else {
+        res.status(200)
+      }
       res.send(response)
   })
   .catch(err=>{

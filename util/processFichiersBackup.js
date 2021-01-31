@@ -9,127 +9,66 @@ const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHa
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 const { supprimerFichiers, supprimerRepertoiresVides } = require('./traitementFichier')
 
-async function traiterFichiersBackup(pathConsignation, fichiersTransactions, fichierCatalogue) {
+async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransactions, fichierCatalogue) {
   // Meme repertoire pour toutes les transactions et catalogues horaire
+  debug("fichiersTransactions : %O\n%O", fichierTransactions, fichierCatalogue)
 
-  // Charger le fichier de catalogue pour obtenir information de domaine, heure
-  // const catalogue = await new Promise((resolve, reject) => {
-  //   fs.readFile(fichierCatalogue.path, (err, data)=>{
-  //     if(err) return reject(err)
-  //     return resolve(JSON.parse(data))
-  //   })
-  // })
+  try {
+    // Charger le fichier de catalogue pour obtenir information de domaine, heure
+    const hachageTransactions = await calculerHachageFichier(fichierTransactions.path)
+    const catalogue = await chargerLzma(fichierCatalogue.path)
 
-  const catalogue = await new Promise((resolve, reject)=>{
-    fs.readFile(fichierCatalogue.path, (err, data)=>{
-      if(err) return reject(err)
-      try {
-        lzma.LZMA().decompress(data, (data, err)=>{
-          if(err) return reject(err)
-          const catalogue = JSON.parse(data)
-          // console.info("Catalogue horaire %s charge : %O", pathCatalogue, catalogue)
-          resolve(catalogue)
-        })
-      } catch(err) {
-        reject(err)
+    debug("Catalogue backup a traiter : %O", catalogue)
+
+    // Valider le fichier de transactions
+    if(catalogue.hachage_transactions !== hachageTransactions) {
+      return {
+        err: "Mismatch sur le hachage des transactions",
+        [fichierTransactions.originalname]: hachageTransactions
       }
+    }
+
+    // Valider le catalogue
+    if( ! await amqpdao.pki.verifierSignatureMessage(catalogue) ) {
+      return {
+        err: "Signature catalogue invalide",
+      }
+    }
+
+    // Valider transaction maitre des cles
+    //TODO
+
+    const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
+
+    await new Promise((resolve, reject)=>{
+      // Creer tous les repertoires requis pour le backup
+      fs.mkdir(repertoireBackupHoraire, { recursive: true, mode: 0o770 }, (err)=>{
+        if(err) return reject(err);
+        resolve();
+      })
     })
-  })
 
-  debug("Catalogue backup a traiter : %O", catalogue)
+    // Deplacer le fichier de catalogue du backup
+    const nomFichier = fichierCatalogue.originalname
+    const nouveauPathCatalogue = path.join(repertoireBackupHoraire, nomFichier)
+    debug("Copier catalogue %s -> %s", fichierCatalogue.path, nouveauPathCatalogue)
+    await deplacerFichier(fichierCatalogue.path, nouveauPathCatalogue)
 
-  const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
-
-  await new Promise((resolve, reject)=>{
-    // Creer tous les repertoires requis pour le backup
-    fs.mkdir(repertoireBackupHoraire, { recursive: true, mode: 0o770 }, (err)=>{
-      if(err) return reject(err);
-      resolve();
-    })
-  })
-
-  // Deplacer le fichier de catalogue du backup
-  const nomFichier = fichierCatalogue.originalname
-  const nouveauPath = path.join(repertoireBackupHoraire, nomFichier)
-  debug("Copier catalogue %s -> %s", fichierCatalogue.path, nouveauPath)
-  await deplacerFichier(fichierCatalogue.path, nouveauPath)
-
-  // Lancer appel recursif pour deplacer et calculer hachage des fichiers
-  const resultatHachage = {}
-  for(let i in fichiersTransactions) {
-    const fichierTransaction = fichiersTransactions[i]
+    // Lancer appel recursif pour deplacer et calculer hachage des fichiers
+    const resultatHachage = {}
     //const hachage = await _fctDeplacerFichier(pathTransactions, fichierTransaction)
 
-    const nouveauPath = path.join(repertoireBackupHoraire, fichierTransaction.originalname)
-    const hachage = await calculerHachageFichier(fichierTransaction.path)
-    await deplacerFichier(fichierTransaction.path, nouveauPath)
+    const nouveauPathTransactions = path.join(repertoireBackupHoraire, fichierTransactions.originalname)
+    await deplacerFichier(fichierTransactions.path, nouveauPathTransactions)
+    resultatHachage[fichierTransactions.originalname] = hachageTransactions
 
-    resultatHachage[fichierTransaction.originalname] = hachage
+    return resultatHachage
+  } finally {
+    // Cleanup fichiers uploades
+    fs.unlink(fichierTransactions.path, ()=>{})
+    fs.unlink(fichierCatalogue.path, ()=>{})
   }
-
-  return resultatHachage
 }
-
-// async function linkGrosfichiersSousBackup(pathConsignation, pathRepertoire, fuuidList) {
-//   // Effectue un hard-link d'un grosfichier sous le repertoire de backup horaire
-//
-//   const pathBackupGrosFichiers = path.join(pathRepertoire, 'grosfichiers');
-//   const {erreurMkdir} = await new Promise((resolve, reject)=>{
-//     fs.mkdir(pathBackupGrosFichiers, { recursive: true, mode: 0o770 }, (erreurMkdir)=>{
-//       if(erreurMkdir) {
-//         console.error("Erreur mkdir grosfichiers : " + pathBackupGrosFichiers);
-//         return reject({erreurMkdir});
-//       }
-//       resolve({});
-//     });
-//   })
-//   .catch(err=>{
-//     return {erreurMkdir: err};
-//   });
-//   if(erreurMkdir) return reject(erreurMkdir);
-//
-//   const fichiers = []
-//
-//   for(const idx in fuuidList) {
-//     const fuuid = fuuidList[idx]
-//     // const paramFichier = fuuidDict[fuuid];
-//     // debug("Creer hard link pour fichier " + fuuid);
-//
-//     const {err, fichier} = await pathConsignation.trouverPathFuuidExistant(fuuid);
-//     if(err) {
-//       console.error("Erreur extraction fichier " + fuuid + " pour backup");
-//       console.error(err);
-//     } else {
-//       if(fichier) {
-//         // debug("Fichier " + fuuid + " trouve");
-//         // debug(fichier);
-//
-//         const nomFichier = path.basename(fichier);
-//         const pathFichierBackup = path.join(pathBackupGrosFichiers, nomFichier);
-//
-//         await new Promise((resolve, reject)=>{
-//           fs.link(fichier, pathFichierBackup, e=>{
-//             if(e) return reject(e);
-//             resolve();
-//           });
-//         })
-//         .catch(err=>{
-//           console.error("Erreur link grosfichier backup : " + fichier);
-//           console.error(err);
-//         })
-//
-//         fichiers.push(pathFichierBackup)
-//
-//       } else {
-//         // console.warn("Fichier " + fuuid + "  non trouve");
-//         return({err: "Fichier " + fuuid + "  non trouve"})
-//       }
-//     }
-//
-//   }
-//
-//   return {fichiers}
-// }
 
 async function traiterFichiersApplication(
   amqpdao, transactionCatalogue, transactionMaitreDesCles, fichierApplication, pathBackupApplication) {
@@ -705,6 +644,23 @@ async function sauvegarderCatalogueAnnuel(pathConsignation, catalogue) {
   await sauvegarderLzma(fullPathFichier, catalogue)
 
   return {path: fullPathFichier, nomFichier, dateFormattee}
+}
+
+async function chargerLzma(fichier) {
+  return new Promise((resolve, reject)=>{
+    fs.readFile(fichier, (err, data)=>{
+      if(err) return reject(err)
+      try {
+        lzma.LZMA().decompress(data, (data, err)=>{
+          if(err) return reject(err)
+          const catalogue = JSON.parse(data)
+          resolve(catalogue)
+        })
+      } catch(err) {
+        reject(err)
+      }
+    })
+  })
 }
 
 async function sauvegarderLzma(fichier, contenu) {

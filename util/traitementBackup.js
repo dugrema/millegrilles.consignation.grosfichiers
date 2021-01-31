@@ -42,11 +42,12 @@ class TraitementFichierBackup {
     //if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
 
     //let pathRepertoire = pathConsignation.trouverPathBackupHoraire(timestampBackup)
-    let fichiersTransactions = req.files.transactions;
+    let fichiersTransactions = req.files.transactions[0];
     let fichierCatalogue = req.files.catalogue[0];
 
     // Deplacer les fichiers de backup vers le bon repertoire /backup
-    const fichiersDomaines = await traiterFichiersBackup(pathConsignation, fichiersTransactions, fichierCatalogue)
+    const fichiersDomaines = await traiterFichiersBackup(req.amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue)
+
 
     // Transmettre cles du fichier de transactions
     if(req.body.transaction_maitredescles) {
