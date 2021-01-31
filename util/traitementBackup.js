@@ -106,10 +106,11 @@ async function getCataloguesDomaine(req, res) {
   res.set('Content-Type', 'text/plain')
   res.status(200)  // Header, commencer transfert
   await parcourirDomaine(req.pathConsignation, domaine, cbCatalogues)
-  res.end("Done")
+  res.end()
 }
 
 async function identifierDomaines(pathRepertoireBackup) {
+  // Retourne la liste de tous les domaines avec un backup
 
   const settingsReaddirp = {
     type: 'directories',
@@ -136,9 +137,49 @@ async function identifierDomaines(pathRepertoireBackup) {
   return domaines
 }
 
+async function getListeFichiers(req, res) {
+  // Retourne la liste de tous les fichiers de backup pour un domaine
+
+  debug("listerFichiers params: %O", req.params)
+
+  const domaine = req.params.domaine
+  const pathRepertoireDomaine = req.pathConsignation.trouverPathBackupDomaine(domaine)
+
+  const settingsReaddirp = {
+    type: 'files',
+    depth: 1,
+  }
+
+  try {
+    const fichiers = await new Promise((resolve, reject)=>{
+      const fichiers = []
+      readdirp(
+        pathRepertoireDomaine,
+        settingsReaddirp,
+      )
+      .on('data', entry=>{
+        fichiers.push(entry.path)
+      })
+      .on('error', err=>{
+        reject(err);
+      })
+      .on('end', ()=>{
+        resolve(fichiers);
+      })
+    })
+
+    // res.set('Content-Type', 'text/plain')
+    res.status(200).send({domaine, fichiers})
+  } catch(err) {
+    console.error("Erreur listerFichiers: %O", err)
+    res.sendStatus(500)
+  }
+
+}
+
 module.exports = {
   TraitementFichierBackup, formatterDateString, getListeDomaines,
-  getCataloguesDomaine,
+  getCataloguesDomaine, getListeFichiers,
 
   identifierDomaines
 };

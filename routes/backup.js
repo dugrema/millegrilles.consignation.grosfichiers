@@ -6,7 +6,7 @@ const multer = require('multer')
 const bodyParser = require('body-parser')
 
 const {PathConsignation, streamListeFichiers} = require('../util/traitementFichier')
-const {TraitementFichierBackup, getListeDomaines, getCataloguesDomaine} = require('../util/traitementBackup')
+const {TraitementFichierBackup, getListeDomaines, getCataloguesDomaine, getListeFichiers} = require('../util/traitementBackup')
 const {RestaurateurBackup} = require('../util/restaurationBackup')
 
 function backupMiddleware(req, res, next) {
@@ -40,6 +40,11 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
 
   router.use(backupMiddleware)
 
+  // GET pour contenu de backup (domaines, fichiers, catalogues)
+  router.get('/backup/listeDomaines', getListeDomaines)
+  router.get('/backup/catalogues/:domaine', getCataloguesDomaine)
+  router.get('/backup/listeFichiers/:domaine', getListeFichiers)
+
   // Backup (upload)
   const backupFileFields = [
     {name: 'transactions', maxcount: 1},
@@ -58,17 +63,12 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     traiterUploadApplication
   )
 
-  router.get('/backup/listeDomaines', getListeDomaines)
-
   // Path de download des fichiers de backup
   router.get('/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
   router.get('/backup/application/:nomApplication', restaurerApplication)
 
   // Ajouter une methode GET suivante :
   // - retourner la liste des applications presentes dans backup (fichiers sous app)
-  // - extraire tous les catalogues d'un domaine
-
-  router.get('/backup/catalogues/:domaine', getCataloguesDomaine)
 
   return router
 }
