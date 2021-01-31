@@ -9,7 +9,7 @@ const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHa
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 const { supprimerFichiers, supprimerRepertoiresVides } = require('./traitementFichier')
 
-async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransactions, fichierCatalogue) {
+async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransactions, fichierCatalogue, fichierMaitrecles) {
   // Meme repertoire pour toutes les transactions et catalogues horaire
   debug("fichiersTransactions : %O\n%O", fichierTransactions, fichierCatalogue)
 
@@ -36,7 +36,26 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
     }
 
     // Valider transaction maitre des cles
-    //TODO
+    // Transmettre cles du fichier de transactions
+    if(fichierMaitrecles) {
+      const transactionMaitreDesCles = await chargerLzma(fichierMaitrecles.path)
+
+      debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
+      if( ! await amqpdao.pki.verifierSignatureMessage(transactionMaitreDesCles) ) {
+        return {
+          err: "La signature de la transaction maitre des cles est invalide",
+        }
+      }
+      try {
+        await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+      } catch(err) {
+        return {
+          err: 'Erreur transmission transaction maitre des cles',
+          err_msg: err,
+          err_serveur: true,
+        }
+      }
+    }
 
     const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
 
@@ -63,6 +82,8 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
     resultatHachage[fichierTransactions.originalname] = hachageTransactions
 
     return resultatHachage
+  } catch(err) {
+    return {err: "Erreur traitement generique", err_msg: err}
   } finally {
     // Cleanup fichiers uploades
     fs.unlink(fichierTransactions.path, ()=>{})

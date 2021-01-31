@@ -54,6 +54,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   const backupFileFields = [
     {name: 'transactions', maxcount: 1},
     {name: 'catalogue', maxcount: 1},
+    {name: 'cles', maxcount: 1},
   ]
   router.put('/backup/domaine/:nomCatalogue',
     backupUpload.fields(backupFileFields),
@@ -92,7 +93,9 @@ async function traiterUploadHoraire(req, res, next) {
       response = {
        ...msg,
       }
-      if(response.err) {
+      if(response.err_serveur) {
+        res.status(504)
+      } else if(response.err) {
         res.status(400)
       } else {
         res.status(200)

@@ -42,19 +42,21 @@ class TraitementFichierBackup {
     //if(!timestampBackup) {return reject("Il manque le timestamp du backup");}
 
     //let pathRepertoire = pathConsignation.trouverPathBackupHoraire(timestampBackup)
-    let fichiersTransactions = req.files.transactions[0];
-    let fichierCatalogue = req.files.catalogue[0];
+    let fichiersTransactions = req.files.transactions[0]
+    let fichierCatalogue = req.files.catalogue[0]
+
+    // Valider transaction maitre des cles
+    // Transmettre cles du fichier de transactions
+    let fichierMaitrecles = null
+    if(req.files.cles) {
+      fichierMaitrecles = req.files.cles[0]
+    }
+
+    const amqpdao = req.amqpdao
 
     // Deplacer les fichiers de backup vers le bon repertoire /backup
-    const fichiersDomaines = await traiterFichiersBackup(req.amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue)
-
-
-    // Transmettre cles du fichier de transactions
-    if(req.body.transaction_maitredescles) {
-      const transactionMaitreDesCles = JSON.parse(req.body.transaction_maitredescles)
-      debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
-      await this.rabbitMQ.transmettreEnveloppeTransaction(transactionMaitreDesCles)
-    }
+    const fichiersDomaines = await traiterFichiersBackup(
+      amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue, fichierMaitrecles)
 
     return fichiersDomaines
   }
