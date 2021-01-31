@@ -44,33 +44,38 @@ describe('processFichiersBackup', ()=>{
 
   it('traiterFichiersBackup 1 catalogue 1 fichier transaction', async ()=>{
     // Traiter un fichier de backup horaire avec catalogue et transactions
+    const amqpdao = {
+      pki: {
+        verifierSignatureMessage: message => {return true}
+      }
+    }
 
     // Creer fichier pour catalogue, hook supprimer tmp
-    creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), JSON.stringify({
-      domaine: 'domaine.test'
-    }))
+    await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
+      domaine: 'domaine.test',
+      hachage_transactions: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+    }, {lzma: true})
     creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
 
-    const fichiersTransactions = [{
+    const fichiersTransactions = {
         originalname: 'fichier2.txt',
         path: path.join(tmpdir.name, 'fichier2.txt.init'),
-      }],
+      },
       fichierCatalogue = {
         originalname: 'fichier1.txt',
         path: path.join(tmpdir.name, 'fichier1.txt.init'),
       }
 
-    expect.assertions(3)
-    return processFichiersBackup.traiterFichiersBackup(pathConsignation, fichiersTransactions, fichierCatalogue)
-    .then(resultat=>{
-      const infoCatalogue = fs.statSync(path.join(tmpdir.name, 'horaire/fichier1.txt'))
-      expect(infoCatalogue).toBeDefined()
-      const infoTransaction = fs.statSync(path.join(tmpdir.name, 'horaire/fichier2.txt'))
-      expect(infoTransaction).toBeDefined()
+    const resultat = await processFichiersBackup.traiterFichiersBackup(amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue)
+    console.info("Resultat hachage : %O", resultat)
 
-      // console.info("Resultat hachage : %O", resultat)
-      expect(resultat['fichier2.txt']).toBe('sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==')
-    })
+    const infoCatalogue = fs.statSync(path.join(tmpdir.name, 'horaire/fichier1.txt'))
+    expect(infoCatalogue).toBeDefined()
+    const infoTransaction = fs.statSync(path.join(tmpdir.name, 'horaire/fichier2.txt'))
+    expect(infoTransaction).toBeDefined()
+
+    expect(resultat['fichier2.txt']).toBe('sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==')
+
   })
 
   it('sauvegarderFichiersApplication', async () => {
@@ -638,7 +643,12 @@ describe('processFichiersBackup', ()=>{
 
 })
 
-function creerFichierDummy(pathFichier, contenu) {
+async function creerFichierDummy(pathFichier, contenu, opts) {
+  opts = opts || {}
+
   fichiersTmp.push(pathFichier)
+
+  if(opts.lzma) return processFichiersBackup.sauvegarderLzma(pathFichier, contenu)
+
   fs.writeFileSync(pathFichier, contenu)
 }
