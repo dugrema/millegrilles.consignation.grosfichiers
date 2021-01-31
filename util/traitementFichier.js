@@ -92,6 +92,10 @@ class PathConsignation {
     return path.join(this.consignationPathBackup, 'domaines', domaine, 'horaire')
   }
 
+  trouverPathBackupSnapshot(domaine) {
+    return path.join(this.consignationPathBackup, 'domaines', domaine, 'snapshot')
+  }
+
   trouverPathBackupDomaine(domaine) {
     return path.join(this.consignationPathBackup, 'domaines', domaine)
   }

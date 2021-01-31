@@ -15,38 +15,18 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
 
   try {
     // Charger le fichier de catalogue pour obtenir information de domaine, heure
-    const hachageTransactions = await calculerHachageFichier(fichierTransactions.path)
     const catalogue = await chargerLzma(fichierCatalogue.path)
 
     debug("Catalogue backup a traiter : %O", catalogue)
 
-    // Valider le fichier de transactions
-    if(catalogue.hachage_transactions !== hachageTransactions) {
-      debug("Erreur comparaison hachage transactions du catalogue (%s) et calcule (%s)", catalogue.hachage_transactions, hachageTransactions)
-      return {
-        err: "Mismatch sur le hachage des transactions",
-        [fichierTransactions.originalname]: hachageTransactions
-      }
-    }
+    const erreurValidation = await validerBackup(amqpdao, catalogue, fichierTransactions, fichierMaitrecles)
 
-    // Valider le catalogue
-    if( ! await amqpdao.pki.verifierSignatureMessage(catalogue) ) {
-      return {
-        err: "Signature catalogue invalide",
-      }
-    }
+    if(erreurValidation) return erreurValidation // Erreur de validation
 
     // Valider transaction maitre des cles
     // Transmettre cles du fichier de transactions
     if(fichierMaitrecles) {
       const transactionMaitreDesCles = await chargerLzma(fichierMaitrecles.path)
-
-      debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
-      if( ! await amqpdao.pki.verifierSignatureMessage(transactionMaitreDesCles) ) {
-        return {
-          err: "La signature de la transaction maitre des cles est invalide",
-        }
-      }
       try {
         await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
       } catch(err) {
@@ -58,37 +38,83 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
       }
     }
 
-    const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
+    const nomFichierCatalogue = fichierCatalogue.originalname,
+          pathFichierCatalogue = fichierCatalogue.path,
+          pathFichierTransactions = fichierTransactions.path
+
+    let repertoireDestination, nouveauPathCatalogue, nouveauPathTransactions
+    if(catalogue.snapshot) {
+      debug("Backup mode snapshot")
+      repertoireDestination = pathConsignation.trouverPathBackupSnapshot(catalogue.domaine)
+      nouveauPathCatalogue = path.join(repertoireDestination, 'catalogue.json.xz')
+      nouveauPathTransactions = path.join(repertoireDestination, 'transactions.jsonl.xz.mgs1')
+    } else {
+      repertoireDestination = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
+      nouveauPathCatalogue = path.join(repertoireDestination, nomFichierCatalogue)
+      nouveauPathTransactions = path.join(repertoireDestination, fichierTransactions.originalname)
+    }
 
     await new Promise((resolve, reject)=>{
       // Creer tous les repertoires requis pour le backup
-      fs.mkdir(repertoireBackupHoraire, { recursive: true, mode: 0o770 }, (err)=>{
-        if(err) return reject(err);
-        resolve();
+      fs.mkdir(repertoireDestination, { recursive: true, mode: 0o770 }, (err)=>{
+        if(err) return reject(err)
+        resolve()
       })
     })
 
     // Deplacer le fichier de catalogue du backup
-    const nomFichier = fichierCatalogue.originalname
-    const nouveauPathCatalogue = path.join(repertoireBackupHoraire, nomFichier)
-    debug("Copier catalogue %s -> %s", fichierCatalogue.path, nouveauPathCatalogue)
-    await deplacerFichier(fichierCatalogue.path, nouveauPathCatalogue)
+    debug("Copier catalogue %s -> %s", pathFichierCatalogue, nouveauPathCatalogue)
+    await deplacerFichier(pathFichierCatalogue, nouveauPathCatalogue)
+    await deplacerFichier(pathFichierTransactions, nouveauPathTransactions)
 
-    // Lancer appel recursif pour deplacer et calculer hachage des fichiers
-    const resultatHachage = {}
-    //const hachage = await _fctDeplacerFichier(pathTransactions, fichierTransaction)
-
-    const nouveauPathTransactions = path.join(repertoireBackupHoraire, fichierTransactions.originalname)
-    await deplacerFichier(fichierTransactions.path, nouveauPathTransactions)
-    resultatHachage[fichierTransactions.originalname] = hachageTransactions
-
-    return resultatHachage
+    return {ok: true}
   } catch(err) {
     return {err: "Erreur traitement generique", err_msg: err}
   } finally {
     // Cleanup fichiers uploades
     fs.unlink(fichierTransactions.path, ()=>{})
     fs.unlink(fichierCatalogue.path, ()=>{})
+  }
+}
+
+async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMaitrecles) {
+  // Valider le fichier de transactions
+  const hachageTransactions = await calculerHachageFichier(fichierTransactions.path)
+  if(catalogue.hachage_transactions !== hachageTransactions) {
+    debug("Erreur comparaison hachage transactions du catalogue (%s) et calcule (%s)", catalogue.hachage_transactions, hachageTransactions)
+    return {
+      err: "Mismatch sur le hachage des transactions",
+      [fichierTransactions.originalname]: hachageTransactions
+    }
+  }
+
+  // Valider le catalogue
+  if( ! await amqpdao.pki.verifierSignatureMessage(catalogue) ) {
+    return {
+      err: "Signature catalogue invalide",
+    }
+  }
+
+  // Valider transaction maitre des cles
+  // Transmettre cles du fichier de transactions
+  if(fichierMaitrecles) {
+    const transactionMaitreDesCles = await chargerLzma(fichierMaitrecles.path)
+
+    debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
+    if( ! await amqpdao.pki.verifierSignatureMessage(transactionMaitreDesCles) ) {
+      return {
+        err: "La signature de la transaction maitre des cles est invalide",
+      }
+    }
+    try {
+      await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+    } catch(err) {
+      return {
+        err: 'Erreur transmission transaction maitre des cles',
+        err_msg: err,
+        err_serveur: true,
+      }
+    }
   }
 }
 
@@ -775,7 +801,7 @@ module.exports = {
   sauvegarderFichiersApplication, rotationArchiveApplication,
   sauvegarderCatalogueQuotidien, sauvegarderCatalogueAnnuel,
   traiterBackupQuotidien, sauvegarderLzma, verifierGrosfichiersBackup,
-  traiterBackupAnnuel,
+  traiterBackupAnnuel, chargerLzma
 
   // linkGrosfichiersSousBackup,
 }

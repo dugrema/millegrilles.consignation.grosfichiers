@@ -12,6 +12,7 @@ var tmpdir
 const pathConsignation = {
   trouverPathBackupDomaine: domaine=>{return tmpdir.name},
   trouverPathBackupHoraire: domaine=>{return path.join(tmpdir.name, 'horaire')},
+  trouverPathBackupSnapshot: domaine=>{return path.join(tmpdir.name, 'snapshot')},
   // consignationPathBackup: tmpdir.name,
   trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid + '.mgs1')}
 }
@@ -42,7 +43,7 @@ describe('processFichiersBackup', ()=>{
     expect(processFichiersBackup).toBeInstanceOf(Object);
   });
 
-  it('traiterFichiersBackup 1 catalogue 1 fichier transaction', async ()=>{
+  it('traiterFichiersBackup backup regulier', async ()=>{
     // Traiter un fichier de backup horaire avec catalogue et transactions
     const amqpdao = {
       pki: {
@@ -74,9 +75,105 @@ describe('processFichiersBackup', ()=>{
     const infoTransaction = fs.statSync(path.join(tmpdir.name, 'horaire/fichier2.txt'))
     expect(infoTransaction).toBeDefined()
 
-    expect(resultat['fichier2.txt']).toBe('sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==')
+    expect(resultat['ok']).toBe(true)
 
   })
+
+  it('traiterFichiersBackup snapshot nouveau', async ()=>{
+    // Traiter un fichier de backup horaire avec catalogue et transactions
+    const amqpdao = {
+      pki: {
+        verifierSignatureMessage: message => {return true}
+      }
+    }
+
+    // Creer fichier pour catalogue, hook supprimer tmp
+    await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
+      domaine: 'domaine.test',
+      hachage_transactions: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      snapshot: true,
+    }, {lzma: true})
+    creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
+
+    const fichiersTransactions = {
+        originalname: 'fichier2.txt',
+        path: path.join(tmpdir.name, 'fichier2.txt.init'),
+      },
+      fichierCatalogue = {
+        originalname: 'fichier1.txt',
+        path: path.join(tmpdir.name, 'fichier1.txt.init'),
+      }
+
+    const resultat = await processFichiersBackup.traiterFichiersBackup(amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue)
+    console.info("Resultat hachage : %O", resultat)
+
+    const infoCatalogue = fs.statSync(path.join(tmpdir.name, 'snapshot/catalogue.json.xz'))
+    expect(infoCatalogue).toBeDefined()
+    const infoTransaction = fs.statSync(path.join(tmpdir.name, 'snapshot/transactions.jsonl.xz.mgs1'))
+    expect(infoTransaction).toBeDefined()
+
+    expect(resultat['ok']).toBe(true)
+  })
+
+  it('traiterFichiersBackup snapshot override', async ()=>{
+    // Traiter un fichier de backup horaire avec catalogue et transactions
+    const amqpdao = {
+      pki: {
+        verifierSignatureMessage: message => {return true}
+      }
+    }
+
+    // Creer deux sets de backup snapshot
+    await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
+      domaine: 'domaine.test',
+      hachage_transactions: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      snapshot: true,
+      valeur: 1,
+    }, {lzma: true})
+    creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
+
+    await creerFichierDummy(path.join(tmpdir.name, 'fichier3.txt.init'), {
+      domaine: 'domaine.test',
+      hachage_transactions: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      snapshot: true,
+      valeur: 2,
+    }, {lzma: true})
+    creerFichierDummy(path.join(tmpdir.name, 'fichier4.txt.init'), 'Transaction')
+
+    // Premier snapshot
+    fichiersTransactions = {
+      originalname: 'fichier2.txt',
+      path: path.join(tmpdir.name, 'fichier2.txt.init'),
+    }
+    fichierCatalogue = {
+      originalname: 'fichier1.txt',
+      path: path.join(tmpdir.name, 'fichier1.txt.init'),
+    }
+    const resultat1 = await processFichiersBackup.traiterFichiersBackup(amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue)
+    console.info("Resultat hachage : %O", resultat1)
+    expect(fs.statSync(path.join(tmpdir.name, 'snapshot/catalogue.json.xz'))).toBeDefined()
+    expect(fs.statSync(path.join(tmpdir.name, 'snapshot/transactions.jsonl.xz.mgs1'))).toBeDefined()
+    expect(resultat1['ok']).toBe(true)
+
+    // Deuxieme snapshot, devrait ecraser le premier snapshot
+    fichiersTransactions = {
+      originalname: 'fichier4.txt',
+      path: path.join(tmpdir.name, 'fichier4.txt.init'),
+    }
+    fichierCatalogue = {
+      originalname: 'fichier3.txt',
+      path: path.join(tmpdir.name, 'fichier3.txt.init'),
+    }
+    const resultat2 = await processFichiersBackup.traiterFichiersBackup(amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue)
+    console.info("Resultat hachage : %O", resultat2)
+    expect(fs.statSync(path.join(tmpdir.name, 'snapshot/catalogue.json.xz'))).toBeDefined()
+    expect(fs.statSync(path.join(tmpdir.name, 'snapshot/transactions.jsonl.xz.mgs1'))).toBeDefined()
+    expect(resultat2['ok']).toBe(true)
+
+    const catalogue2 = await processFichiersBackup.chargerLzma(path.join(tmpdir.name, 'snapshot/catalogue.json.xz'))
+    expect(catalogue2.valeur).toBe(2)
+  })
+
 
   it('sauvegarderFichiersApplication', async () => {
     // Tester la sauvegarde du catalogue (dict) et transfere le fichier
