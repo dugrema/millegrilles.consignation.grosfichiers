@@ -334,8 +334,8 @@ async function genererBackupAnnuel(mq, pathConsignation, catalogue) {
       const domaine = catalogue.domaine
       const pathArchivesQuotidiennes = pathConsignation.trouverPathBackupDomaine(domaine)
 
-      const fichiersSupprimer = fichiersInclure.filter((item, idx)=>idx>0)
-      await supprimerFichiers(fichiersSupprimer, pathArchivesQuotidiennes)
+      // const fichiersSupprimer = fichiersInclure.filter((item, idx)=>idx>0)
+      // await supprimerFichiers(fichiersSupprimer, pathArchivesQuotidiennes)
 
       return resolve(informationArchive)
 
@@ -594,32 +594,129 @@ async function traiterBackupAnnuel(mq, pathConsignation, catalogue) {
 
   const {domaine, securite} = catalogue
   const anneeBackup = new Date(catalogue.annee * 1000)
+  const anneeBackupFormattee = formatterDateString(anneeBackup).slice(0,4)
 
   const pathRepertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
+  debug("Path repertoire backups pour domaine %s : %s", domaine, pathRepertoireBackup)
 
-  const fichiersInclure = []
+  const archivesQuotidiennes = await trouverArchivesQuotidiennes(pathRepertoireBackup)
+
+  // Faire collection avec tous les backups quotidiens. Un backup present dans
+  // le catalogue quotidien recu prend preseance sur un fichier trouve.
+  const dictBackupsQuotidien = {...archivesQuotidiennes, ...catalogue.fichiers_quotidien}
+  // catalogue.fichiers_quotidien = dictBackupsQuotidien
+
+  debug("Backup quotidiens a inserer dans l'archive annuelle : %O", dictBackupsQuotidien)
 
   // Trier la liste des jours pour ajout dans le fichier .tar
-  const listeJoursTriee = Object.keys(catalogue.fichiers_quotidien)
+  const listeJoursTriee = Object.keys(dictBackupsQuotidien)
   listeJoursTriee.sort()
   debug("Liste jours tries : %O", listeJoursTriee)
 
-  for(const idx in listeJoursTriee) {
-    const jourStr = listeJoursTriee[idx]
-    debug("Traitement jour %s", jourStr)
-    let infoFichier = catalogue.fichiers_quotidien[jourStr]
-    debug("Verifier fichier backup quotidien %s :\n%O", jourStr, infoFichier)
+  // const fichiersInclure = []  // Conserver fichiers a inclure dans le tar
+  // for(const idx in listeJoursTriee) {
+  //   const jourStr = listeJoursTriee[idx]
+  //   debug("Traitement jour %s", jourStr)
+  //   let infoFichier = catalogue.fichiers_quotidien[jourStr]
+  //   debug("Verifier fichier backup quotidien %s :\n%O", jourStr, infoFichier)
+  //
+  //   let fichierArchive = infoFichier.archive_nomfichier
+  //
+  //   // Verifier SHA512
+  //   const pathFichierArchive = path.join(pathRepertoireBackup, fichierArchive)
+  //   const hachageArchive = await calculerHachageFichier(pathFichierArchive)
+  //   if(infoFichier.archive_hachage && hachageArchive != infoFichier.archive_hachage) {
+  //     throw new Error(`Fichier archive ${fichierArchive} ne correspond pas au hachage : ${hachageArchive}`)
+  //   }
+  //
+  //   fichiersInclure.push(fichierArchive)
+  // }
 
-    let fichierArchive = infoFichier.archive_nomfichier
+  // Faire liste des fichiers de catalogue et transactions a inclure dans le tar quotidien
+  const fichiersInclure = []
 
-    // Verifier SHA512
-    const pathFichierArchive = path.join(pathRepertoireBackup, fichierArchive)
-    const hachageArchive = await calculerHachageFichier(pathFichierArchive)
-    if(hachageArchive != infoFichier.archive_hachage) {
-      throw new Error(`Fichier archive ${fichierArchive} ne correspond pas au hachage : ${hachageArchive}`)
+  // Charger l'information de tous les catalogues horaire correspondants au
+  // backup quotidien. Valide le hachage des fichiers de catalogue et de
+  // transaction.
+  // for(let heureStr in catalogue.fichiers_horaire) {
+  var catalogueAnnuelModifie = false
+  for(let idx in listeJoursTriee) {
+    const jour = listeJoursTriee[idx]
+
+    // S'assurer que le jour est dans la bonne annee
+    if( ! jour.startsWith(anneeBackupFormattee) ) {
+      // Mauvaise annee, on skip
+      continue
     }
 
-    fichiersInclure.push(fichierArchive)
+    var infoQuotidien = catalogue.fichiers_quotidien[jour]   // Info provenant du catalogue annuel
+    var infoRepertoireQuotidien = archivesQuotidiennes[jour] // Info provenant du repertoire
+
+    if( ! infoQuotidien ) {
+      // Le fichier est manquant du catalogue annuel provisionnel, on va
+      // ajouter l'information provenant du repertoire
+      catalogueAnnuelModifie = true
+
+      infoQuotidien = {
+        archive_nomfichier: infoRepertoireQuotidien.archive_nomfichier,
+        archive_hachage: infoRepertoireQuotidien.archive_hachage,
+        jour: infoRepertoireQuotidien.jour,
+      }
+      catalogue.fichiers_quotidien[jour] = infoQuotidien
+    } else {
+      // Valider qu'on a trouve le fichier et que le hachage correspond
+      if( ! infoRepertoireQuotidien ) {
+        throw new Error(`Backup quotidien ${domaine} ${jour} introuvable`)
+      }
+      if( infoRepertoireQuotidien.archive_hachage !== infoQuotidien.archive_hachage ) {
+        throw new Error(`Backup quotidien ${domaine} ${jour} hachage archive ne correspond pas`)
+      }
+    }
+
+    // Charger backup horaire. Valide le hachage des transactions
+    // const infoHoraire = await chargerBackupHoraire(pathConsignation, domaine, catalogueNomFichier)
+    debug("Preparer backup quotidien : %O", infoQuotidien)
+
+    // // var heureStr = ''+heureBackup.getUTCHours()
+    // // if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
+    // //
+    // // let infoFichier = catalogue.fichiers_horaire[heureStr]
+    // if(infoFichier) {
+    //   // debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
+    //
+    //   // Verifier hachage du catalogue horaire (si present dans le catalogue quotidien)
+    //   if(infoFichier.catalogue_hachage && infoFichier.catalogue_hachage !== infoHoraire.hachageCatalogue) {
+    //     // throw new Error(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}`)
+    //     console.warning(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}. On regenere valeurs avec fichiers locaux.`)
+    //   }
+    // } else {
+    //   debug("Catalogue quotidien recu n'a pas backup horaire %s, information generee a partir des fichiers locaux", heureStr)
+    //   infoFichier = {
+    //     catalogue_nomfichier: catalogueNomFichier,
+    //     transactions_nomfichier: infoHoraire.catalogue.transactions_nomfichier,
+    //     transactions_hachage: infoHoraire.catalogue.transactions_hachage,
+    //   }
+    //   catalogue.fichiers_horaire[heureStr] = infoFichier
+    // }
+    //
+    // // Conserver information manquante dans le catalogue quotidien
+    // infoFichier.catalogue_hachage = infoHoraire.hachageCatalogue
+    // infoFichier.hachage_entete = calculerHachageData(infoHoraire.catalogue['en-tete'].hachage_contenu)
+    // infoFichier.uuid_transaction = infoHoraire.catalogue['en-tete'].uuid_transaction
+
+    // Conserver path des fichiers relatif au path horaire Utilise pour l'archive tar.
+    fichiersInclure.push(infoQuotidien.archive_nomfichier)
+  }
+
+  // Sauvegarder journal quotidien, sauvegarder en format .json.xz
+  if( ! catalogue['_signature'] || catalogueAnnuelModifie ) {
+    // Journal est dirty, on doit le re-signer
+    debug("Regenerer signature du catalogue horaire, entete precedente : %O", catalogue['en-tete'])
+
+    delete catalogue['_signature']
+    delete catalogue['en-tete']
+
+    mq.formatterTransaction(domaine, catalogue)
   }
 
   // Sauvegarder journal annuel, sauvegarder en format .json.xz
@@ -668,8 +765,19 @@ async function traiterBackupAnnuel(mq, pathConsignation, catalogue) {
     catalogue,
   }
 
-  return informationArchive
+  // Supprimer les fichiers horaires, catalogue quotidien
+  var promisesUnlink = fichiersInclure.map(item=>{
+    const pathFichier = path.join(pathRepertoireBackup, item)
+    return new Promise((resolve, reject)=>{
+      fs.unlink(pathFichier, err=>{
+        // if(err) return reject(err)
+        resolve()
+      })
+    })
+  })
+  await Promise.all(promisesUnlink)
 
+  return informationArchive
 }
 
 async function sauvegarderCatalogueQuotidien(pathConsignation, catalogue) {
@@ -846,13 +954,20 @@ async function trouverArchivesQuotidiennes(repertoire) {
   const cataloguesQuotidiens = {}
   for(let idx in pathCatalogues) {
     const pathCatalogue = pathCatalogues[idx]
-    var catalogues = await extraireCatalogues(pathCatalogue)
-    catalogues = catalogues.forEach(item=>{
-      if(item.jour) {
-        const jourFormatte = formatterDateString(new Date(item.jour*1000)).slice(0, 8)  // Retirer heures
-        cataloguesQuotidiens[jourFormatte] = item
+    const catalogues = await extraireCatalogues(pathCatalogue)
+    for(let i in catalogues) {
+      const catalogue = catalogues[i]
+      if(catalogue.jour) {
+        const jourFormatte = formatterDateString(new Date(catalogue.jour*1000)).slice(0, 8)  // Retirer heures
+        const hachage = await calculerHachageFichier(pathCatalogue)
+        cataloguesQuotidiens[jourFormatte] = {
+          archive_nomfichier: path.basename(pathCatalogue),
+          archive_hachage: hachage,
+          jour: catalogue.jour,
+          catalogue,
+        }
       }
-    })
+    }
   }
 
   debug("trouverArchivesQuotidiennes: Resultat catalogues %O", cataloguesQuotidiens);
