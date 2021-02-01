@@ -780,40 +780,73 @@ describe('processFichiersBackup', ()=>{
     // })
   })
 
-  it('backup horaire -> quotidien', async ()=>{
-    await sampleCreation.creerSamplesHoraire({rep: tmpdir.name})
+  // it('backup horaire -> quotidien', async ()=>{
+  //   await sampleCreation.creerSamplesHoraire({rep: tmpdir.name})
+  //
+  //   var appels_transmettreEnveloppeTransaction = []
+  //   const mq = {
+  //     formatterTransaction: (domaine, transaction) => {
+  //       transaction['en-tete'] = {domaine}
+  //       transaction['_signature'] = 'dummy'
+  //       return transaction
+  //     },
+  //   }
+  //
+  //   const catalogue = {
+  //     jour: new Date("2020-01-01").getTime()/1000,
+  //     domaine: 'domaine.test',
+  //     securite: '1.public',
+  //     fichiers_horaire: {},
+  //     // 'en-tete': {},
+  //     // archive_nomfichier: 'domaine.test_20200101.tar',
+  //   }
+  //
+  //   const resultat = await processFichiersBackup.traiterBackupQuotidien(mq, pathConsignation, catalogue)
+  //   console.debug("backup horaire -> quotidien : %O", resultat)
+  //   console.debug("Messages : %O", appels_transmettreEnveloppeTransaction)
+  //   console.debug("Fichiers horaires : %O", resultat.catalogue.fichiers_horaire)
+  // })
 
-    var appels_transmettreEnveloppeTransaction = []
-    const mq = {
-      formatterTransaction: (domaine, transaction) => {
-        transaction['en-tete'] = {domaine}
-        transaction['_signature'] = 'dummy'
-        return transaction
-      },
-      // transmettreTransactionFormattee: (transaction)=>{
-      //   appels_transmettreEnveloppeTransaction.push(transaction)
-      //   return ''
-      // },
-      // transmettreEnveloppeTransaction: (transaction)=>{
-      //   appels_transmettreEnveloppeTransaction.push(transaction)
-      //   return ''
-      // }
-    }
+  it('', async ()=>{
+    await sampleCreation.creerBackupQuotidien(new Date("2020-02-01"), {rep: path.join(tmpdir.name, 'quotidien')})
 
-    const catalogue = {
-      jour: new Date("2020-01-01").getTime()/1000,
-      domaine: 'domaine.test',
-      securite: '1.public',
-      fichiers_horaire: {},
-      // 'en-tete': {},
-      // archive_nomfichier: 'domaine.test_20200101.tar',
-    }
-
-    const resultat = await processFichiersBackup.traiterBackupQuotidien(mq, pathConsignation, catalogue)
-    console.debug("backup horaire -> quotidien : %O", resultat)
-    console.debug("Messages : %O", appels_transmettreEnveloppeTransaction)
-    console.debug("Fichiers horaires : %O", resultat.catalogue.fichiers_horaire)
+    const resultat = await processFichiersBackup.trouverArchivesQuotidiennes(tmpdir.name)
+    console.debug("backup quotidien -> annuel : %O", resultat)
+    expect(resultat['20200201']).toBeDefined()
   })
+
+  // it('backup quotidien -> annuel', async ()=>{
+  //   await sampleCreation.creerBackupQuotidien(new Date("2020-02-01"), {rep: path.join(tmpdir.name, 'quotidien')})
+  //
+  //   var appels_transmettreEnveloppeTransaction = []
+  //   const mq = {
+  //     // formatterTransaction: (domaine, transaction) => {
+  //     //   transaction['en-tete'] = {domaine}
+  //     //   transaction['_signature'] = 'dummy'
+  //     //   return transaction
+  //     // },
+  //     transmettreTransactionFormattee: (transaction)=>{
+  //       appels_transmettreEnveloppeTransaction.push(transaction)
+  //       return ''
+  //     },
+  //     transmettreEnveloppeTransaction: (transaction)=>{
+  //       appels_transmettreEnveloppeTransaction.push(transaction)
+  //       return ''
+  //     },
+  //   }
+  //
+  //   const catalogue = {
+  //     annee: new Date("2020-01-01").getTime()/1000,
+  //     domaine: 'domaine.test',
+  //     securite: '1.public',
+  //     fichiers_quotidien: {},
+  //   }
+  //
+  //   const resultat = await processFichiersBackup.genererBackupAnnuel(mq, pathConsignation, catalogue)
+  //   console.debug("backup quotidien -> annuel : %O", resultat)
+  //   console.debug("Messages : %O", appels_transmettreEnveloppeTransaction)
+  //   console.debug("Fichiers horaires : %O", resultat.catalogue.fichiers_quotidien)
+  // })
 
 })
 

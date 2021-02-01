@@ -5,6 +5,7 @@ const path = require('path')
 const crypto = require('crypto');
 const lzma = require('lzma-native')
 const tar = require('tar')
+const parse = require('tar-parse')
 const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHachage')
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 const { supprimerFichiers, supprimerRepertoiresVides } = require('./traitementFichier')
@@ -664,6 +665,7 @@ async function traiterBackupAnnuel(mq, pathConsignation, catalogue) {
 
     fichiersInclure,
     pathRepertoireBackup,
+    catalogue,
   }
 
   return informationArchive
@@ -808,6 +810,117 @@ async function genererListeCatalogues(repertoire) {
 
 }
 
+async function trouverArchivesQuotidiennes(repertoire) {
+  // Faire la liste des fichiers extraits - sera utilisee pour creer
+  // l'ordre de traitement des fichiers pour importer les transactions
+  const settingsReaddirp = {
+    type: 'files',
+    fileFilter: [
+       '*.tar',
+    ],
+  }
+
+  const pathCatalogues = await new Promise((resolve, reject)=>{
+    const pathCatalogues = [];
+    // console.debug("Lister catalogues sous " + repertoire);
+
+    readdirp(
+      repertoire,
+      settingsReaddirp,
+    )
+    .on('data', entry=>{
+      // console.debug('Catalogue trouve');
+      // console.debug(entry);
+      pathCatalogues.push(path.join(repertoire, entry.path))
+    })
+    .on('error', err=>{
+      reject(err);
+    })
+    .on('end', ()=>{
+      // console.debug("Fini");
+      // console.debug(listeCatalogues);
+      resolve(pathCatalogues)
+    })
+  })
+
+  const cataloguesQuotidiens = {}
+  for(let idx in pathCatalogues) {
+    const pathCatalogue = pathCatalogues[idx]
+    var catalogues = await extraireCatalogues(pathCatalogue)
+    catalogues = catalogues.forEach(item=>{
+      if(item.jour) {
+        const jourFormatte = formatterDateString(new Date(item.jour*1000)).slice(0, 8)  // Retirer heures
+        cataloguesQuotidiens[jourFormatte] = item
+      }
+    })
+  }
+
+  debug("trouverArchivesQuotidiennes: Resultat catalogues %O", cataloguesQuotidiens);
+  return cataloguesQuotidiens;
+
+}
+
+async function extraireCatalogues(pathArchive) {
+
+  const catalogues = await new Promise((resolve, reject)=>{
+    var promises = []
+
+    // Parse
+    const tarParser = parse()
+      .on('data', entry=>{
+        if(entry.path.toLowerCase().endsWith('.json.xz')) {
+          promises.push( extraireCatalogueEntry(entry) )
+        }
+      })
+      .on('end', ()=>{
+        const catalogues = Promise.all(promises)
+        resolve(catalogues)
+      })
+      .on('error', err=>reject(err))
+
+    // Attendre 1 tick avant de demarrer lecture .tar
+    // Bugfix pour erreur random "invalid tar file"
+    const stream = fs.createReadStream(pathArchive)
+    setTimeout(()=>{
+      stream.pipe(tarParser)
+    },0)
+
+  }) // Promise
+
+  return catalogues
+}
+
+async function extraireCatalogueEntry(entryTar) {
+  return new Promise((resolve, reject)=>{
+    var decoder = lzma.createStream('autoDecoder')
+    var data = ''
+
+    decoder.on("data", buffer=>{
+      data += buffer
+    })
+
+    decoder.on("end", async ()=>{
+      entryTar.pause()
+
+      const catalogue = JSON.parse(data)
+      resolve(catalogue)
+
+      entryTar.resume()
+    })
+
+    decoder.on("error", err=>{
+      reject(err)
+      entryTar.resume()
+    })
+
+    // Input tar entry vers lzma
+    entryTar.pipe(decoder)
+
+    entryTar.resume()  // Continuer a lire
+  }) // Promise data
+
+}
+
 module.exports = {
   traiterFichiersBackup, traiterFichiersApplication,
   genererBackupQuotidien, genererBackupAnnuel, genererListeCatalogues,
@@ -815,7 +928,7 @@ module.exports = {
   sauvegarderFichiersApplication, rotationArchiveApplication,
   sauvegarderCatalogueQuotidien, sauvegarderCatalogueAnnuel,
   traiterBackupQuotidien, sauvegarderLzma, verifierGrosfichiersBackup,
-  traiterBackupAnnuel, chargerLzma
+  traiterBackupAnnuel, chargerLzma, trouverArchivesQuotidiennes
 
   // linkGrosfichiersSousBackup,
 }

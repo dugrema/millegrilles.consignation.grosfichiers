@@ -84,7 +84,7 @@ async function creerBackupHoraire(dateHeure, opts) {
 
   var rep = path.join(opts.rep||'', 'horaire')
 
-  console.debug("REP backup horaire : %s", rep)
+  // console.debug("REP backup horaire : %s", rep)
 
   const transactions = 'contenu dummy sans importance. Date: ' + dateFormattee
   const pathTransaction = await sauvegarderFichier(`${rep}/domaine.test_${dateFormattee}.jsonl.xz.mgs1`, transactions)
@@ -120,6 +120,9 @@ async function creerBackupHoraire(dateHeure, opts) {
 async function creerBackupQuotidien(dateJour, opts) {
   opts = opts || {}
   var rep = opts.rep || ''
+  var repQuotidien = rep.startsWith('/')?rep:path.join(PATH_BACKUP, rep)
+
+  console.debug("creerBackupQuotidien : REP Quotidien : %s", repQuotidien)
 
   const dateFormattee = formatterDateString(dateJour).slice(0, 8)
   const dateJourFormatte = `${dateFormattee.slice(0,4)}-${dateFormattee.slice(4,6)}-${dateFormattee.slice(6,8)}`
@@ -134,19 +137,20 @@ async function creerBackupQuotidien(dateJour, opts) {
       dateArchive.setUTCHours(i)
       const dateHeureStr = formatterDateString(dateArchive)
       const dateHeureFormattee = `${dateHeureStr.slice(0,4)}-${dateHeureStr.slice(4,6)}-${dateHeureStr.slice(6,8)} ${dateHeureStr.slice(8,10)}:00`
-      cataloguesHoraire.push(await creerBackupHoraire(new Date(dateHeureFormattee), {rep}))
+      cataloguesHoraire.push(await creerBackupHoraire(new Date(dateHeureFormattee), {rep: repQuotidien}))
     }
   } else {
-    cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 03:00`), {rep}))
-    cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 06:00`), {rep}))
-    cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 07:00`), {rep}))
+    cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 03:00`), {rep: repQuotidien}))
+    cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 06:00`), {rep: repQuotidien}))
+    cataloguesHoraire.push(await creerBackupHoraire(new Date(`${dateJourFormatte} 07:00`), {rep: repQuotidien}))
   }
 
-  console.debug("Promises catalogue quotidien - creation horaire : %O", cataloguesHoraire)
+  // console.debug("Promises catalogue quotidien - creation horaire : %O", cataloguesHoraire)
 
   const fichiers = {}
   for(idx in cataloguesHoraire) {
-    const pathCatalogue = path.join(PATH_BACKUP, cataloguesHoraire[idx])
+    // console.debug("Catalogue horaire : %s", cataloguesHoraire[idx])
+    let pathCatalogue = cataloguesHoraire[idx]
     const catalogue = await lireCatalogue(pathCatalogue)
 
     fichiersArchiveQuotidienne.push(path.basename(pathCatalogue))
@@ -168,17 +172,17 @@ async function creerBackupQuotidien(dateJour, opts) {
     jour: dateJour.getTime()/1000,
   }
 
-  const pathCatalogue = `${rep}/horaire/domaine.test_${dateFormattee}.json.xz`
+  const pathCatalogue = `${repQuotidien}/horaire/domaine.test_${dateFormattee}.json.xz`
   await sauvegarderFichier(pathCatalogue, catalogue, {lzma: true})
   fichiersArchiveQuotidienne.unshift(path.basename(pathCatalogue))
 
-  const pathBase = path.join(PATH_BACKUP, rep, 'horaire')
+  const pathBase = path.join(repQuotidien, 'horaire')
   const nomArchive = `domaine.test_${dateFormattee}.tar`
-  const pathArchive = path.join(PATH_BACKUP, rep, nomArchive)
+  const pathArchive = path.join(repQuotidien, nomArchive)
 
   // Creer archive tar quotidienne
   // Creer nouvelle archive annuelle
-  console.debug("Creer archive quotidienne: %s", pathArchive)
+  // console.debug("Creer archive quotidienne: %s", pathArchive)
   await tar.c(
     {
       file: pathArchive,
@@ -186,15 +190,15 @@ async function creerBackupQuotidien(dateJour, opts) {
     },
     fichiersArchiveQuotidienne
   ).then(()=>{
-    console.debug("TAR cree : %s", pathArchive)
+    // console.debug("TAR cree : %s", pathArchive)
   })
 
   // Supprimer tous les fichiers dans l'archive
   for(let idx in fichiersArchiveQuotidienne) {
-    const fichier = path.join(PATH_BACKUP, rep, 'horaire', fichiersArchiveQuotidienne[idx])
+    const fichier = path.join(repQuotidien, 'horaire', fichiersArchiveQuotidienne[idx])
     fs.unlinkSync(fichier)
   }
-  fs.rmdirSync(path.join(PATH_BACKUP, rep, 'horaire'))
+  fs.rmdirSync(path.join(repQuotidien, 'horaire'))
 
   return {pathArchive, catalogue}
 }
@@ -335,4 +339,4 @@ async function creerSamplesLoad() {
   //await Promise.all(promises)
 }
 
-module.exports = {creerSamplesLoad, creerSamplesAnnuel, creerSamplesQuotidien, creerSamplesHoraire}
+module.exports = {creerSamplesLoad, creerSamplesAnnuel, creerSamplesQuotidien, creerSamplesHoraire, creerBackupQuotidien}
