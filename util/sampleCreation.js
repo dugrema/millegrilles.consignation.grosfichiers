@@ -34,7 +34,10 @@ async function lireCatalogue(pathCatalogue) {
 
 async function sauvegarderFichier(pathFichier, contenu, opts) {
   opts = opts || {}
-  const pathComplet = path.join(PATH_BACKUP, pathFichier)
+  var pathComplet = pathFichier
+  if(!pathFichier.startsWith('/')) {
+    pathComplet = path.join(PATH_BACKUP, pathFichier)
+  }
   try {
     fs.mkdirSync(path.dirname(pathComplet), { recursive: true })
   } catch(err) {
@@ -80,6 +83,8 @@ async function creerBackupHoraire(dateHeure, opts) {
   const dateFormattee = formatterDateString(dateHeure).slice(0, 10)
 
   var rep = path.join(opts.rep||'', 'horaire')
+
+  console.debug("REP backup horaire : %s", rep)
 
   const transactions = 'contenu dummy sans importance. Date: ' + dateFormattee
   const pathTransaction = await sauvegarderFichier(`${rep}/domaine.test_${dateFormattee}.jsonl.xz.mgs1`, transactions)
@@ -270,15 +275,18 @@ async function creerBackupAnnuel(dateAnnee, opts) {
   return pathArchive
 }
 
-async function creerSamplesHoraire() {
-  fs.mkdirSync(PATH_BACKUP + '/horaire', {recursive: true})
+async function creerSamplesHoraire(opts) {
+  opts = opts || {}
+  const pathSamples = opts.rep || (PATH_BACKUP + '/horaire/sample1')
+  fs.mkdirSync(pathSamples, {recursive: true})
+  console.debug("Samples horaires folder : %s, opts: %O", pathSamples, opts)
 
   // Fichiers horaires
   backup_precedent = null
-  await creerBackupHoraire(new Date("2020-01-01 00:00"), {rep: 'horaire/sample1'})
-  await creerBackupHoraire(new Date("2020-01-01 02:00"), {rep: 'horaire/sample1'})
-  await creerBackupHoraire(new Date("2020-01-01 03:00"), {rep: 'horaire/sample1'})
-  await creerBackupHoraire(new Date("2020-01-01 04:00"), {rep: 'horaire/sample1'})
+  await creerBackupHoraire(new Date("2020-01-01 00:00"), {rep: pathSamples})
+  await creerBackupHoraire(new Date("2020-01-01 02:00"), {rep: pathSamples})
+  await creerBackupHoraire(new Date("2020-01-01 03:00"), {rep: pathSamples})
+  await creerBackupHoraire(new Date("2020-01-01 04:00"), {rep: pathSamples})
 }
 
 async function creerSamplesQuotidien() {

@@ -42,7 +42,7 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
           pathFichierCatalogue = fichierCatalogue.path,
           pathFichierTransactions = fichierTransactions.path
 
-    // Determiner si c'est un backup regulier ou un snapshot    
+    // Determiner si c'est un backup regulier ou un snapshot
     var repertoireDestination, nouveauPathCatalogue, nouveauPathTransactions, cleanupSnapshot
     if(catalogue.snapshot) {
       debug("Backup mode snapshot")
@@ -375,6 +375,15 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     debug("Preparer backup horaire : %O", infoHoraire)
 
     const heureBackup = new Date(infoHoraire.catalogue.heure*1000)
+    if(heureBackup.getUTCFullYear() === jourBackup.getUTCFullYear() &&
+        heureBackup.getUTCMonth() === jourBackup.getUTCMonth() &&
+        heureBackup.getUTCDate() !== jourBackup.getUTCDate()
+      ) {
+      debug("backup jour %s ne correspond pas au backup horaire %s", jourBackup, heureBackup )
+      // Passer au prochain fichier
+      continue
+    }
+
     var heureStr = ''+heureBackup.getUTCHours()
     if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
 
@@ -400,7 +409,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     // Conserver information manquante dans le catalogue quotidien
     infoFichier.catalogue_hachage = infoHoraire.hachageCatalogue
     infoFichier.hachage_entete = calculerHachageData(infoHoraire.catalogue['en-tete'].hachage_contenu)
-    infoFichier['uuid-transaction'] = infoHoraire.catalogue['en-tete']['uuid-transaction']
+    infoFichier.uuid_transaction = infoHoraire.catalogue['en-tete'].uuid_transaction
 
     // Conserver path des fichiers relatif au path horaire Utilise pour l'archive tar.
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathCatalogue))
@@ -459,6 +468,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
     fichiersInclure,
     pathRepertoireBackup: repertoireBackup,
+    catalogue,
   }
 
   return informationArchive
