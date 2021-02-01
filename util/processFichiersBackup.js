@@ -97,8 +97,8 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
 async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMaitrecles) {
   // Valider le fichier de transactions
   const hachageTransactions = await calculerHachageFichier(fichierTransactions.path)
-  if(catalogue.hachage_transactions !== hachageTransactions) {
-    debug("Erreur comparaison hachage transactions du catalogue (%s) et calcule (%s)", catalogue.hachage_transactions, hachageTransactions)
+  if(catalogue.transactions_hachage !== hachageTransactions) {
+    debug("Erreur comparaison hachage transactions du catalogue (%s) et calcule (%s)", catalogue.transactions_hachage, hachageTransactions)
     return {
       err: "Mismatch sur le hachage des transactions",
       [fichierTransactions.originalname]: hachageTransactions
