@@ -414,30 +414,6 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     // Conserver path des fichiers relatif au path horaire Utilise pour l'archive tar.
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathCatalogue))
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathTransactions));
-
-    // Faire liste des grosfichiers au besoin, va etre inclue dans le rapport de backup
-    // const fuuid_grosfichiers = infoHoraire.catalogue.fuuid_grosfichiers
-    // if(fuuid_grosfichiers) {
-    //   debug("GrosFichiers du catalogue : %O", fuuid_grosfichiers)
-    //   const grosfichiers = {}
-    //   catalogue.grosfichiers = grosfichiers
-    //
-    //   // Verifier que tous les grosfichiers sont presents et valides
-    //   var infoGrosfichiers = await verifierGrosfichiersBackup(pathConsignation, fuuid_grosfichiers)
-    //   debug("InfoGrosFichiers : %O", infoGrosfichiers)
-    //   for(let idx in infoGrosfichiers) {
-    //     const fichier = infoGrosfichiers[idx]
-    //     debug("Traitement fichier %O", fichier)
-    //     if(fichier.err) {
-    //       console.error("Erreur traitement grosfichier %s pour backup quotidien : %O", fichier.nomFichier, fichier.err)
-    //       delete fichier.err
-    //     }
-    //     if(fichier.hachage) {
-    //       grosfichiers[fichier.fuuid] = fichier
-    //       delete grosfichiers[fichier.fuuid].fuuid
-    //     }
-    //   }
-    // }
   }
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
@@ -458,6 +434,19 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   // Creer nom du fichier d'archive
   const infoArchiveQuotidienne = await genererTarArchiveQuotidienne(
     pathConsignation, domaine, jourBackup, fichiersInclure)
+
+  // Supprimer les fichiers horaires, catalogue quotidien
+  const pathBackup = pathConsignation.trouverPathBackupDomaine(domaine)
+  var promisesUnlink = fichiersInclure.map(item=>{
+    const pathFichier = path.join(pathBackup, item)
+    return new Promise((resolve, reject)=>{
+      fs.unlink(pathFichier, err=>{
+        if(err) return reject(err)
+        resolve()
+      })
+    })
+  })
+  await Promise.all(promisesUnlink)
 
   const informationArchive = {
     archive_hachage: infoArchiveQuotidienne.hachageArchive,
