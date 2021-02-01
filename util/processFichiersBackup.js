@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const lzma = require('lzma-native')
 const tar = require('tar')
 const parse = require('tar-parse')
+const Rsync = require('rsync')
 const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHachage')
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 const { supprimerFichiers, supprimerRepertoiresVides } = require('./traitementFichier')
@@ -830,6 +831,29 @@ async function deplacerFichier(src, dst) {
   })
 }
 
+async function rsyncBackupVersCopie(pathConsignation, domaine, pathDestination) {
+  // Effectue une synchronization avec rsync entre le repertoire de backup
+  // et une copie (locale ou distante)
+  const pathSource = pathConsignation.trouverPathBackupDomaine(domaine)
+
+  var rsync = new Rsync()
+    // .shell('ssh')
+    .flags('r')
+    .set('delete-after')
+    .source(pathSource)
+    .destination(pathDestination);
+
+  return new Promise((resolve, reject)=>{
+    rsync.execute((err, code, cmd)=>{
+      debug("Commande RSYNC : %s", cmd)
+      if(err) {
+        return reject(err)
+      }
+      resolve(code)
+    })
+  })
+}
+
 async function genererListeCatalogues(repertoire) {
   // Faire la liste des fichiers extraits - sera utilisee pour creer
   // l'ordre de traitement des fichiers pour importer les transactions
@@ -992,6 +1016,7 @@ async function extraireCatalogueEntry(entryTar) {
 module.exports = {
   traiterFichiersBackup, traiterFichiersApplication,
   genererBackupQuotidien, genererBackupAnnuel, genererListeCatalogues,
+  rsyncBackupVersCopie,
 
   sauvegarderFichiersApplication, rotationArchiveApplication,
   sauvegarderCatalogueQuotidien, sauvegarderCatalogueAnnuel,
