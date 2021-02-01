@@ -613,32 +613,12 @@ async function traiterBackupAnnuel(mq, pathConsignation, catalogue) {
   listeJoursTriee.sort()
   debug("Liste jours tries : %O", listeJoursTriee)
 
-  // const fichiersInclure = []  // Conserver fichiers a inclure dans le tar
-  // for(const idx in listeJoursTriee) {
-  //   const jourStr = listeJoursTriee[idx]
-  //   debug("Traitement jour %s", jourStr)
-  //   let infoFichier = catalogue.fichiers_quotidien[jourStr]
-  //   debug("Verifier fichier backup quotidien %s :\n%O", jourStr, infoFichier)
-  //
-  //   let fichierArchive = infoFichier.archive_nomfichier
-  //
-  //   // Verifier SHA512
-  //   const pathFichierArchive = path.join(pathRepertoireBackup, fichierArchive)
-  //   const hachageArchive = await calculerHachageFichier(pathFichierArchive)
-  //   if(infoFichier.archive_hachage && hachageArchive != infoFichier.archive_hachage) {
-  //     throw new Error(`Fichier archive ${fichierArchive} ne correspond pas au hachage : ${hachageArchive}`)
-  //   }
-  //
-  //   fichiersInclure.push(fichierArchive)
-  // }
-
   // Faire liste des fichiers de catalogue et transactions a inclure dans le tar quotidien
   const fichiersInclure = []
 
   // Charger l'information de tous les catalogues horaire correspondants au
   // backup quotidien. Valide le hachage des fichiers de catalogue et de
   // transaction.
-  // for(let heureStr in catalogue.fichiers_horaire) {
   var catalogueAnnuelModifie = false
   for(let idx in listeJoursTriee) {
     const jour = listeJoursTriee[idx]
@@ -676,33 +656,6 @@ async function traiterBackupAnnuel(mq, pathConsignation, catalogue) {
     // Charger backup horaire. Valide le hachage des transactions
     // const infoHoraire = await chargerBackupHoraire(pathConsignation, domaine, catalogueNomFichier)
     debug("Preparer backup quotidien : %O", infoQuotidien)
-
-    // // var heureStr = ''+heureBackup.getUTCHours()
-    // // if(heureStr.length == 1) heureStr = '0' + heureStr; // Ajouter 0 devant heure < 10
-    // //
-    // // let infoFichier = catalogue.fichiers_horaire[heureStr]
-    // if(infoFichier) {
-    //   // debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
-    //
-    //   // Verifier hachage du catalogue horaire (si present dans le catalogue quotidien)
-    //   if(infoFichier.catalogue_hachage && infoFichier.catalogue_hachage !== infoHoraire.hachageCatalogue) {
-    //     // throw new Error(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}`)
-    //     console.warning(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}. On regenere valeurs avec fichiers locaux.`)
-    //   }
-    // } else {
-    //   debug("Catalogue quotidien recu n'a pas backup horaire %s, information generee a partir des fichiers locaux", heureStr)
-    //   infoFichier = {
-    //     catalogue_nomfichier: catalogueNomFichier,
-    //     transactions_nomfichier: infoHoraire.catalogue.transactions_nomfichier,
-    //     transactions_hachage: infoHoraire.catalogue.transactions_hachage,
-    //   }
-    //   catalogue.fichiers_horaire[heureStr] = infoFichier
-    // }
-    //
-    // // Conserver information manquante dans le catalogue quotidien
-    // infoFichier.catalogue_hachage = infoHoraire.hachageCatalogue
-    // infoFichier.hachage_entete = calculerHachageData(infoHoraire.catalogue['en-tete'].hachage_contenu)
-    // infoFichier.uuid_transaction = infoHoraire.catalogue['en-tete'].uuid_transaction
 
     // Conserver path des fichiers relatif au path horaire Utilise pour l'archive tar.
     fichiersInclure.push(infoQuotidien.archive_nomfichier)
