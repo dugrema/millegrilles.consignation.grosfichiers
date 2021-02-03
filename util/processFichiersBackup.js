@@ -25,24 +25,6 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
 
     if(erreurValidation) return erreurValidation // Erreur de validation
 
-    // // Valider transaction maitre des cles
-    // // Transmettre cles du fichier de transactions
-    // if(fichierMaitrecles) {
-    //   const transactionMaitreDesCles = await chargerLzma(fichierMaitrecles.path)
-    //   try {
-    //     // amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
-    //     const reponseCles = await amqpdao.transmettreEnveloppeCommande(transactionMaitreDesCles, 'MaitreDesCles.sauvegarderCle')
-    //     // const reponseCles = await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
-    //     debug("Reponse sauvegarde maitre des cles : %O", reponseCles)
-    //   } catch(err) {
-    //     return {
-    //       err: 'Erreur transmission transaction maitre des cles',
-    //       err_msg: err,
-    //       err_serveur: true,
-    //     }
-    //   }
-    // }
-
     const nomFichierCatalogue = fichierCatalogue.originalname,
           pathFichierCatalogue = fichierCatalogue.path,
           pathFichierTransactions = fichierTransactions.path
@@ -426,6 +408,18 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     fichiersInclure.push(path.relative(repertoireBackup, infoHoraire.pathTransactions));
   }
 
+  // Si on n'a aucuns fichiers a inclure, on a termine
+  if(fichiersInclure.length === 0) {
+    return {
+      jour: catalogue.jour,
+      domaine: catalogue.domaine,
+      securite: catalogue.securite,
+
+      fichiersInclure,
+      catalogue,
+    }
+  }
+
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
   if( ! catalogue['_signature'] ) {
     debug("Regenerer signature du catalogue horaire, entete precedente : %O", catalogue['en-tete'])
@@ -755,7 +749,9 @@ async function sauvegarderCatalogueQuotidien(pathConsignation, catalogue) {
   const nomFichier = domaine + "_catalogue_" + dateFormattee  + ".json.xz"
   const fullPathFichier = path.join(repertoireBackup, nomFichier)
 
-  await sauvegarderLzma(fullPathFichier, catalogue)
+  // Sauvegarder fichier puis renommer vers le bon nom en cas d'erreur de sauvegarde
+  await sauvegarderLzma(fullPathFichier + '.work', catalogue)
+  await deplacerFichier(fullPathFichier + '.work', fullPathFichier)
 
   // debug("Fichier cree : " + fullPathFichier);
   return {path: fullPathFichier, nomFichier, dateFormattee}
@@ -775,7 +771,8 @@ async function sauvegarderCatalogueAnnuel(pathConsignation, catalogue) {
   const fullPathFichier = path.join(repertoireBackup, nomFichier)
 
   // debug("Path fichier journal mensuel " + fullPathFichier);
-  await sauvegarderLzma(fullPathFichier, catalogue)
+  await sauvegarderLzma(fullPathFichier + '.work', catalogue)
+  await deplacerFichier(fullPathFichier + '.work', fullPathFichier)
 
   return {path: fullPathFichier, nomFichier, dateFormattee}
 }
