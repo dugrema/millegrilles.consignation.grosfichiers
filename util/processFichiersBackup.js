@@ -362,6 +362,11 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   // Faire liste des fichiers de catalogue et transactions a inclure dans le tar quotidien
   const fichiersInclure = []
 
+  if(!catalogue.fichiers_horaire) {
+    catalogue.fichiers_horaire = {}
+    delete catalogue['_signature']  // Forcer nouvelle signature
+  }
+
   // Charger l'information de tous les catalogues horaire correspondants au
   // backup quotidien. Valide le hachage des fichiers de catalogue et de
   // transaction.
@@ -374,8 +379,8 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     debug("Preparer backup horaire : %O", infoHoraire)
 
     const heureBackup = new Date(infoHoraire.catalogue.heure*1000)
-    if(heureBackup.getUTCFullYear() === jourBackup.getUTCFullYear() &&
-        heureBackup.getUTCMonth() === jourBackup.getUTCMonth() &&
+    if(heureBackup.getUTCFullYear() !== jourBackup.getUTCFullYear() ||
+        heureBackup.getUTCMonth() !== jourBackup.getUTCMonth() ||
         heureBackup.getUTCDate() !== jourBackup.getUTCDate()
       ) {
       debug("backup jour %s ne correspond pas au backup horaire %s", jourBackup, heureBackup )
@@ -422,7 +427,6 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     return {
       jour: catalogue.jour,
       domaine: catalogue.domaine,
-      securite: catalogue.securite,
       catalogue,
     }
   }
@@ -464,7 +468,6 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     archive_nomfichier: infoArchiveQuotidienne.nomArchive,
     jour: catalogue.jour,
     domaine: catalogue.domaine,
-    securite: catalogue.securite,
 
     fichiersInclure,
     pathRepertoireBackup: repertoireBackup,
