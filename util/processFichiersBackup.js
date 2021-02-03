@@ -252,24 +252,31 @@ async function genererBackupQuotidien(mq, pathConsignation, catalogue) {
 
   try {
     const informationArchive = await traiterBackupQuotidien(mq, pathConsignation, catalogue)
-    const { fichiersInclure, pathRepertoireBackup } = informationArchive
-    delete informationArchive.fichiersInclure // Pas necessaire pour la transaction
-    delete informationArchive.pathRepertoireBackup // Pas necessaire pour la transaction
+    catalogue = informationArchive.catalogue
 
-    // Finaliser le backup en retransmettant le journal comme transaction
-    // de backup quotidien. Met le flag du document quotidien a false
-    debug("Transmettre journal backup quotidien comme transaction de backup quotidien")
-    const reponseCatalogue = await mq.transmettreEnveloppeTransaction(catalogue)
-    debug("Reponse transmission du catalogue horaire : %O", reponseCatalogue)
+    if(informationArchive.fichiersInclure) {
+      delete informationArchive.catalogue
+      const { fichiersInclure, pathRepertoireBackup } = informationArchive
+      delete informationArchive.fichiersInclure // Pas necessaire pour la transaction
+      delete informationArchive.pathRepertoireBackup // Pas necessaire pour la transaction
 
-    // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
-    debug("Transmettre transaction informationArchive :\n%O", informationArchive)
-    const reponseMessageQuotidien = await mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo')
-    debug("Reponse transmission message horaire pour catalogue quotidien : %O", reponseMessageQuotidien)
+      // Finaliser le backup en retransmettant le journal comme transaction
+      // de backup quotidien. Met le flag du document quotidien a false
+      debug("Transmettre journal backup quotidien comme transaction de backup quotidien: %O", catalogue)
+      const reponseCatalogue = await mq.transmettreEnveloppeTransaction(catalogue)
+      debug("Reponse transmission du catalogue horaire : %O", reponseCatalogue)
 
-    // Effacer les fichiers transferes dans l'archive quotidienne
-    const fichiersASupprimer = fichiersInclure.filter(item=>item.startsWith('horaire/'))
-    await nettoyerRepertoireBackupHoraire(pathConsignation, catalogue.domaine, fichiersASupprimer)
+      // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
+      debug("Transmettre transaction informationArchive :\n%O", informationArchive)
+      const reponseMessageQuotidien = await mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo')
+      debug("Reponse transmission message horaire pour catalogue quotidien : %O", reponseMessageQuotidien)
+
+      // Effacer les fichiers transferes dans l'archive quotidienne
+      const fichiersASupprimer = fichiersInclure.filter(item=>item.startsWith('horaire/'))
+      await nettoyerRepertoireBackupHoraire(pathConsignation, catalogue.domaine, fichiersASupprimer)
+    } else {
+      debug("Aucun fichiers horaires trouves")
+    }
 
     return informationArchive
 
@@ -387,6 +394,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
       if(infoFichier.catalogue_hachage && infoFichier.catalogue_hachage !== infoHoraire.hachageCatalogue) {
         // throw new Error(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}`)
         console.warn(`Hachage catalogue ${catalogueNomFichier} mismatch : calcule ${infoHoraire.hachageCatalogue}. On regenere valeurs avec fichiers locaux.`)
+        delete catalogue['_signature']  // Forcer nouvelle signature
       }
     } else {
       debug("Catalogue quotidien recu n'a pas backup horaire %s, information generee a partir des fichiers locaux", heureStr)
@@ -396,6 +404,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
         transactions_hachage: infoHoraire.catalogue.transactions_hachage,
       }
       catalogue.fichiers_horaire[heureStr] = infoFichier
+      delete catalogue['_signature']  // Forcer nouvelle signature
     }
 
     // Conserver information manquante dans le catalogue quotidien
@@ -414,8 +423,6 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
       jour: catalogue.jour,
       domaine: catalogue.domaine,
       securite: catalogue.securite,
-
-      fichiersInclure,
       catalogue,
     }
   }
@@ -426,7 +433,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     // Journal est dirty, on doit le re-signer
     // const domaine = catalogue['en-tete'].domaine
     delete catalogue['en-tete']
-    mq.formatterTransaction(domaine, catalogue)
+    mq.formatterTransaction('Backup.catalogueQuotidienFinaliser', catalogue)
   }
 
   var resultat = await sauvegarderCatalogueQuotidien(pathConsignation, catalogue)
