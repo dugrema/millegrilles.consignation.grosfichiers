@@ -25,20 +25,23 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
 
     if(erreurValidation) return erreurValidation // Erreur de validation
 
-    // Valider transaction maitre des cles
-    // Transmettre cles du fichier de transactions
-    if(fichierMaitrecles) {
-      const transactionMaitreDesCles = await chargerLzma(fichierMaitrecles.path)
-      try {
-        await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
-      } catch(err) {
-        return {
-          err: 'Erreur transmission transaction maitre des cles',
-          err_msg: err,
-          err_serveur: true,
-        }
-      }
-    }
+    // // Valider transaction maitre des cles
+    // // Transmettre cles du fichier de transactions
+    // if(fichierMaitrecles) {
+    //   const transactionMaitreDesCles = await chargerLzma(fichierMaitrecles.path)
+    //   try {
+    //     // amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+    //     const reponseCles = await amqpdao.transmettreEnveloppeCommande(transactionMaitreDesCles, 'MaitreDesCles.sauvegarderCle')
+    //     // const reponseCles = await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+    //     debug("Reponse sauvegarde maitre des cles : %O", reponseCles)
+    //   } catch(err) {
+    //     return {
+    //       err: 'Erreur transmission transaction maitre des cles',
+    //       err_msg: err,
+    //       err_serveur: true,
+    //     }
+    //   }
+    // }
 
     const nomFichierCatalogue = fichierCatalogue.originalname,
           pathFichierCatalogue = fichierCatalogue.path,
@@ -124,8 +127,11 @@ async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMai
       }
     }
     try {
-      await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+      //const reponseCle = await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+      const reponseCle = await amqpdao.transmettreEnveloppeCommande(transactionMaitreDesCles, 'MaitreDesCles.sauvegarderCle')
+      debug("Reponse sauvegarde cle de backup : %O", reponseCle)
     } catch(err) {
+      debug("ERREUR validerBackup commande maitre des cles : %O", err)
       return {
         err: 'Erreur transmission transaction maitre des cles',
         err_msg: err,
@@ -271,11 +277,13 @@ async function genererBackupQuotidien(mq, pathConsignation, catalogue) {
     // Finaliser le backup en retransmettant le journal comme transaction
     // de backup quotidien. Met le flag du document quotidien a false
     debug("Transmettre journal backup quotidien comme transaction de backup quotidien")
-    await mq.transmettreEnveloppeTransaction(catalogue)
+    const reponseCatalogue = await mq.transmettreEnveloppeTransaction(catalogue)
+    debug("Reponse transmission du catalogue horaire : %O", reponseCatalogue)
 
     // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
     debug("Transmettre transaction informationArchive :\n%O", informationArchive)
-    await mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo')
+    const reponseMessageQuotidien = await mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo')
+    debug("Reponse transmission message horaire pour catalogue quotidien : %O", reponseMessageQuotidien)
 
     // Effacer les fichiers transferes dans l'archive quotidienne
     const fichiersASupprimer = fichiersInclure.filter(item=>item.startsWith('horaire/'))
@@ -391,12 +399,12 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
     let infoFichier = catalogue.fichiers_horaire[heureStr]
     if(infoFichier) {
-      // debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
+      debug("Preparer backup heure %s :\n%O", heureStr, infoFichier)
 
       // Verifier hachage du catalogue horaire (si present dans le catalogue quotidien)
       if(infoFichier.catalogue_hachage && infoFichier.catalogue_hachage !== infoHoraire.hachageCatalogue) {
         // throw new Error(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}`)
-        console.warning(`Hachage catalogue ${pathCatalogue} mismatch : calcule ${infoHoraire.hachageCatalogue}. On regenere valeurs avec fichiers locaux.`)
+        console.warn(`Hachage catalogue ${catalogueNomFichier} mismatch : calcule ${infoHoraire.hachageCatalogue}. On regenere valeurs avec fichiers locaux.`)
       }
     } else {
       debug("Catalogue quotidien recu n'a pas backup horaire %s, information generee a partir des fichiers locaux", heureStr)
