@@ -412,18 +412,23 @@ async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
     erreursCatalogues = [...infoArchives.erreursCatalogues, ...erreursHoraire.erreursCatalogues]
   }
 
-  return {erreursHachage, erreursCatalogues, chainage: erreursHoraire.chainage}
+  return {erreursHachage, erreursCatalogues, chainage: erreursHoraire.chainage || chainage}
 }
 
-async function genererRapportVerification(mq, pathConsignation, domaine, opts) {
+async function genererRapportVerification(mq, pathConsignation, domaine, uuid_rapport, opts) {
   const resultat = await parcourirDomaine(pathConsignation, domaine, ()=>{}, opts)
   debug("genererRapportVerification resultat : %O", resultat)
-  // return resultat
 
   // Transmettre la reponse immediatement pour indiquer le debut du traitement
-  //var reponse = {'action': 'debut_restauration', 'domaine': 'fichiers'}
   const properties = opts.properties
-  mq.transmettreReponse(resultat, properties.replyTo, properties.correlationId)
+
+  const rapport = {
+    ...resultat,
+    domaine,
+    uuid_rapport,
+  }
+
+  mq.transmettreReponse(rapport, properties.replyTo, properties.correlationId)
 }
 
 async function processEntryTar(entry, cb, opts) {

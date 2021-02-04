@@ -53,7 +53,7 @@ class GestionnaireMessagesBackup {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
         return genererRapportVerification(
-          this.mq, this.pathConsignation, message.domaine,
+          this.mq, this.pathConsignation, message.domaine, message.uuid_rapport,
           {...opts, verification_hachage: true, verification_enchainement: true}
         )
       },
