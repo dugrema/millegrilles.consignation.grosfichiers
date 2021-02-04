@@ -197,12 +197,13 @@ class TraitementFichier {
 
 }
 
-async function supprimerFichiers(fichiers, repertoire) {
+async function supprimerFichiers(fichiers, repertoire, opts) {
+  opts = opts || {}
   var promises = fichiers.map(item=>{
     return new Promise((resolve, reject)=>{
       const fichier = path.join(repertoire, item);
       fs.unlink(fichier, err=>{
-        if(err) {
+        if(err && !opts.noerror) {
           console.error("traitementFichiers.supprimerFichiers: Erreur suppression fichier : %O", err)
         }
         resolve()

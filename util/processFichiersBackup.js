@@ -290,7 +290,7 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
   debug("Supprimer fichiers backup %O", fichiersASupprimer)
 
   const repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
-  await supprimerFichiers(fichiersASupprimer, repertoireBackup)
+  await supprimerFichiers(fichiersASupprimer, repertoireBackup, {noerror: true})
 
   try {
     const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(domaine)
@@ -302,7 +302,7 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
       })
     })
   } catch(err) {
-    console.error("Erreur suppression repertoire de backup horaire: %O", err)
+    debug("Erreur suppression repertoire de backup horaire: %O", err)
   }
 }
 
