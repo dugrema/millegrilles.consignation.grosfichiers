@@ -248,7 +248,7 @@ async function sauvegarderFichiersApplication(transactionCatalogue, fichierAppli
 async function genererBackupQuotidien(mq, pathConsignation, catalogue) {
   debug("Generer backup quotidien : %O", catalogue);
 
-  const repertoireBackup = pathConsignation.trouverPathBackupDomaine(catalogue.domaine)
+  // const repertoireBackup = pathConsignation.trouverPathBackupDomaine(catalogue.domaine)
 
   try {
     const informationArchive = await traiterBackupQuotidien(mq, pathConsignation, catalogue)
@@ -309,47 +309,42 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
 async function genererBackupAnnuel(mq, pathConsignation, catalogue) {
   debug("Generer backup annuel : %O", catalogue);
 
-  return new Promise( async (resolve, reject) => {
-
-    try {
-      const informationArchive = await traiterBackupAnnuel(mq, pathConsignation, catalogue)
-
+  try {
+    const informationArchive = await traiterBackupAnnuel(mq, pathConsignation, catalogue)
+    if(informationArchive.fichiersInclure) {
       debug("Journal annuel sauvegarde : %O", informationArchive)
 
+      delete informationArchive.catalogue
+      const { fichiersInclure, pathRepertoireBackup } = informationArchive
+      delete informationArchive.fichiersInclure // Pas necessaire pour la transaction
+      delete informationArchive.pathRepertoireBackup // Pas necessaire pour la transaction
+
       // Finaliser le backup en retransmettant le journal comme transaction
-      // de backup quotidien
+      // de backup annuel
       await mq.transmettreEnveloppeTransaction(catalogue)
-
-      // Generer transaction pour journal annuel. Inclue SHA512 et nom de l'archive mensuelle
-      const {fichiersInclure} = informationArchive
-
-      delete informationArchive.fichiersInclure
-      delete informationArchive.pathRepertoireBackup
 
       debug("Transmettre transaction avec information \n%O", informationArchive)
       await mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveAnnuelleInfo')
 
+      // Nettoyage des fichiers
       const domaine = catalogue.domaine
       const pathArchivesQuotidiennes = pathConsignation.trouverPathBackupDomaine(domaine)
+      await supprimerFichiers(fichiersInclure, pathArchivesQuotidiennes, {noerror: true})
 
-      // const fichiersSupprimer = fichiersInclure.filter((item, idx)=>idx>0)
-      // await supprimerFichiers(fichiersSupprimer, pathArchivesQuotidiennes)
-
-      return resolve(informationArchive)
-
-    } catch (err) {
-      console.error("Erreur creation backup annuel")
-      console.error(err)
-      reject(err)
+      return informationArchive
+    } else {
+      debug("Aucun fichiers quotidiens trouves pour le backup annuel")
     }
 
-  })
+  } catch (err) {
+    console.error("genererBackupAnnuel: Erreur creation backup annuel:\n%O", err)
+  }
 
 }
 
 // Genere un fichier de backup quotidien qui correspond au catalogue
 async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
-  debug("genererBackupQuotidien : catalogue \n%O", catalogue)
+  debug("traiterBackupQuotidien : catalogue \n%O", catalogue)
 
   const {domaine, securite} = catalogue
   const jourBackup = new Date(catalogue.jour * 1000)

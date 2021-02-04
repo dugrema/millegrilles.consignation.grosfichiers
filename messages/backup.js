@@ -31,10 +31,7 @@ class GestionnaireMessagesBackup {
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
-        // debug("ERROR : commande.backup.genererBackupQuotidien pas implemente, message %O", message)
-        // Retourner la promise pour rendre cette operation bloquante (longue duree)
         return genererBackupQuotidien(this.mq, this.pathConsignation, message.catalogue)
-        // throw new Error("commande.backup.genererBackupQuotidien pas implemente")
       },
       ['commande.backup.genererBackupQuotidien'],
       {operationLongue: true}
@@ -42,9 +39,7 @@ class GestionnaireMessagesBackup {
 
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
-        // Retourner la promise pour rendre cette operation bloquante (longue duree)
-        throw new Error("commande.backup.genererBackupAnnuel pas implemente")
-        // return this.genererBackupAnnuel(this.mq, routingKey, message, opts)
+        return genererBackupAnnuel(this.mq, this.pathConsignation, message.catalogue)
       },
       ['commande.backup.genererBackupAnnuel'],
       {operationLongue: true}
