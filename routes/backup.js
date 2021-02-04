@@ -94,8 +94,10 @@ async function traiterUploadHoraire(req, res, next) {
        ...msg,
       }
       if(response.err_serveur) {
+        console.error("traiterUploadHoraire ERROR SERVEUR %O", response)
         res.status(504)
       } else if(response.err) {
+        console.error("traiterUploadHoraire ERROR GENERIQUE %O", response)
         res.status(400)
       } else {
         res.status(200)
