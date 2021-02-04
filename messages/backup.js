@@ -31,7 +31,7 @@ class GestionnaireMessagesBackup {
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
-        return genererBackupQuotidien(this.mq, this.pathConsignation, message.catalogue)
+        return genererBackupQuotidien(this.mq, this.pathConsignation, message.catalogue, message.uuid_rapport)
       },
       ['commande.backup.genererBackupQuotidien'],
       {operationLongue: true}
@@ -39,7 +39,7 @@ class GestionnaireMessagesBackup {
 
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
-        return genererBackupAnnuel(this.mq, this.pathConsignation, message.catalogue)
+        return genererBackupAnnuel(this.mq, this.pathConsignation, message.catalogue, message.uuid_rapport)
       },
       ['commande.backup.genererBackupAnnuel'],
       {operationLongue: true}

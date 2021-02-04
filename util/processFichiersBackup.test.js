@@ -48,7 +48,7 @@ describe('processFichiersBackup', ()=>{
     // Creer fichier pour catalogue, hook supprimer tmp
     await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
       domaine: 'domaine.test',
-      hachage_transactions: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      transactions_hachage: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
     }, {lzma: true})
     creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
 
@@ -87,7 +87,7 @@ describe('processFichiersBackup', ()=>{
     // Creer fichier pour catalogue, hook supprimer tmp
     await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
       domaine: 'domaine.test',
-      hachage_transactions: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      transactions_hachage: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
     }, {lzma: true})
     creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
 
@@ -126,7 +126,7 @@ describe('processFichiersBackup', ()=>{
     // Creer fichier pour catalogue, hook supprimer tmp
     await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
       domaine: 'domaine.test',
-      hachage_transactions: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      transactions_hachage: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
       snapshot: true,
     }, {lzma: true})
     creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
@@ -162,7 +162,7 @@ describe('processFichiersBackup', ()=>{
     // Creer deux sets de backup snapshot
     await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
       domaine: 'domaine.test',
-      hachage_transactions: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      transactions_hachage: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
       snapshot: true,
       valeur: 1,
     }, {lzma: true})
@@ -517,6 +517,10 @@ describe('processFichiersBackup', ()=>{
       transmettreEnveloppeTransaction: (transaction)=>{
         appels_transmettreEnveloppeTransaction.push(transaction)
         return ''
+      },
+      emettreEvenement: (message, domaine)=>{
+        appels_transmettreEnveloppeTransaction.push({message, domaine})
+        return ''
       }
     }
 
@@ -538,22 +542,24 @@ describe('processFichiersBackup', ()=>{
     })
     creerFichierDummy(path.join(tmpdir.name, 'horaire', 'transactions_00.jsonl.xz'), 'dadadon')
 
-    expect.assertions(7)
-    return processFichiersBackup.genererBackupQuotidien(mq, pathConsignation, catalogue)
-    .then(result=>{
-      // console.debug("Resultat : %O", result)
-      expect(result).toBeDefined()
-      expect(result.archive_hachage).toBeDefined()
-      expect(result.archive_nomfichier).toBe('domaine.test_20200101.tar')
+    const result = await processFichiersBackup.genererBackupQuotidien(mq, pathConsignation, catalogue)
+    console.debug("Resultat : %O\nMessages:\n%O", result, appels_transmettreEnveloppeTransaction)
+    expect(result).toBeDefined()
+    expect(result.archive_hachage).toBeDefined()
+    expect(result.archive_nomfichier).toBe('domaine.test_20200101.tar')
 
-      // console.debug("Messages emis : %O", appels_transmettreEnveloppeTransaction)
-      expect(appels_transmettreEnveloppeTransaction.length).toBe(2)
-      expect(appels_transmettreEnveloppeTransaction[0].fichiers_horaire['12']).toBeDefined()
-      expect(appels_transmettreEnveloppeTransaction[1].archive_nomfichier).toBe('domaine.test_20200101.tar')
+    // console.debug("Messages emis : %O", appels_transmettreEnveloppeTransaction)
+    expect(appels_transmettreEnveloppeTransaction.length).toBe(4)
+    expect(appels_transmettreEnveloppeTransaction[0].domaine).toBe('evenement.Backup.backupMaj')
+    expect(appels_transmettreEnveloppeTransaction[0].message.evenement).toBe('backupQuotidienDebut')
+    expect(appels_transmettreEnveloppeTransaction[3].domaine).toBe('evenement.Backup.backupMaj')
+    expect(appels_transmettreEnveloppeTransaction[3].message.evenement).toBe('backupQuotidienTermine')
 
-      // S'assurer que le repertoire horaire/ a ete supprime (tous les fichiers sont archives)
-      expect(()=>fs.statSync(path.join(tmpdir.name, 'horaire'))).toThrow()
-    })
+    expect(appels_transmettreEnveloppeTransaction[1].fichiers_horaire['12']).toBeDefined()
+    expect(appels_transmettreEnveloppeTransaction[2].archive_nomfichier).toBe('domaine.test_20200101.tar')
+
+    // S'assurer que le repertoire horaire/ a ete supprime (tous les fichiers sont archives)
+    expect(()=>fs.statSync(path.join(tmpdir.name, 'horaire'))).toThrow()
   })
 
   it('traiterBackupAnnuel', async () => {
@@ -634,6 +640,10 @@ describe('processFichiersBackup', ()=>{
       transmettreEnveloppeTransaction: (transaction)=>{
         appels_transmettreEnveloppeTransaction.push(transaction)
         return ''
+      },
+      emettreEvenement: (message, domaine)=>{
+        appels_transmettreEnveloppeTransaction.push({message, domaine})
+        return ''
       }
     }
 
@@ -674,18 +684,21 @@ describe('processFichiersBackup', ()=>{
     // Supprimer archive quotidienne
     fs.unlinkSync(pathCatalogueQuotidien)
 
-    expect.assertions(5)
-    return processFichiersBackup.genererBackupAnnuel(mq, pathConsignation, catalogue)
-    .then(resultat=>{
-      // console.debug("Resultat genererBackupAnnuel: %O\nTransactions: %O", resultat, appels_transmettreEnveloppeTransaction)
+    const resultat = await processFichiersBackup.genererBackupAnnuel(mq, pathConsignation, catalogue)
+    // console.debug("Resultat genererBackupAnnuel: %O\nTransactions:\n%O", resultat, appels_transmettreEnveloppeTransaction)
 
-      expect(fs.statSync(path.join(tmpdir.name, resultat.archive_nomfichier))).toBeDefined()
-      expect(()=>fs.statSync(path.join(tmpdir.name, 'quotidien_20200101.tar'))).toThrow()
+    expect(fs.statSync(path.join(tmpdir.name, resultat.archive_nomfichier))).toBeDefined()
+    expect(()=>fs.statSync(path.join(tmpdir.name, 'quotidien_20200101.tar'))).toThrow()
 
-      expect(appels_transmettreEnveloppeTransaction.length).toBe(2)
-      expect(appels_transmettreEnveloppeTransaction[0].fichiers_quotidien["20200101"]).toBeDefined()
-      expect(appels_transmettreEnveloppeTransaction[1].archive_nomfichier).toBe('domaine.test_2020.tar')
-    })
+    expect(appels_transmettreEnveloppeTransaction.length).toBe(4)
+    expect(appels_transmettreEnveloppeTransaction[0].domaine).toBe('evenement.Backup.backupMaj')
+    expect(appels_transmettreEnveloppeTransaction[0].message.evenement).toBe('backupAnnuelDebut')
+    expect(appels_transmettreEnveloppeTransaction[3].domaine).toBe('evenement.Backup.backupMaj')
+    expect(appels_transmettreEnveloppeTransaction[3].message.evenement).toBe('backupAnnuelTermine')
+
+    expect(appels_transmettreEnveloppeTransaction[1].fichiers_quotidien["20200101"]).toBeDefined()
+    expect(appels_transmettreEnveloppeTransaction[2].archive_nomfichier).toBe('domaine.test_2020.tar')
+
   })
 
   // it('verifierGrosfichiersBackup 1 fichier OK', async () => {
@@ -802,6 +815,10 @@ describe('processFichiersBackup', ()=>{
         appels_transmettreEnveloppeTransaction.push(transaction)
         return ''
       },
+      emettreEvenement: (message, domaine)=>{
+        appels_transmettreEnveloppeTransaction.push({message, domaine})
+        return ''
+      }
     }
 
     const catalogue = {
@@ -812,12 +829,14 @@ describe('processFichiersBackup', ()=>{
     }
 
     const resultat = await processFichiersBackup.genererBackupAnnuel(mq, pathConsignation, catalogue)
-    // console.debug("backup quotidien -> annuel : %O", resultat)
+    // console.debug("backup quotidien -> annuel resultat : %O", resultat)
     // console.debug("Messages : %O", appels_transmettreEnveloppeTransaction)
-    // console.debug("Fichiers horaires : %O", resultat.catalogue.fichiers_quotidien)
 
-    expect(appels_transmettreEnveloppeTransaction.length).toBe(2)
-    expect(resultat.catalogue.fichiers_quotidien['20200201']).toBeDefined()
+    const catalogueMessage = appels_transmettreEnveloppeTransaction[1]
+    // console.debug("Fichiers : %O", catalogueMessage.fichiers_quotidien)
+
+    expect(appels_transmettreEnveloppeTransaction.length).toBe(4)
+    expect(catalogueMessage.fichiers_quotidien['20200201']).toBeDefined()
   })
 
 })

@@ -245,12 +245,15 @@ async function sauvegarderFichiersApplication(transactionCatalogue, fichierAppli
 
 }
 
-async function genererBackupQuotidien(mq, pathConsignation, catalogue) {
-  debug("Generer backup quotidien : %O", catalogue);
+async function genererBackupQuotidien(mq, pathConsignation, catalogue, uuidRapport) {
+  debug("Generer backup quotidien pour rapport %s : %O", uuidRapport, catalogue);
 
   // const repertoireBackup = pathConsignation.trouverPathBackupDomaine(catalogue.domaine)
 
   try {
+    // Evenement pour le rapport de backup
+    transmettreEvenementBackup(mq, 'backupQuotidienDebut', catalogue.domaine, uuidRapport)
+
     const informationArchive = await traiterBackupQuotidien(mq, pathConsignation, catalogue)
     catalogue = informationArchive.catalogue
 
@@ -278,10 +281,14 @@ async function genererBackupQuotidien(mq, pathConsignation, catalogue) {
       debug("Aucun fichiers horaires trouves")
     }
 
-    return informationArchive
+    // Evenement pour le rapport de backup
+    transmettreEvenementBackup(mq, 'backupQuotidienTermine', catalogue.domaine, uuidRapport)
 
+    return informationArchive
   } catch (err) {
     console.error("genererBackupQuotidien: Erreur creation backup quotidien:\n%O", err)
+    // Evenement pour le rapport de backup
+    transmettreEvenementBackup(mq, 'backupQuotidienTermine', catalogue.domaine, uuidRapport, {err})
   }
 
 }
@@ -306,11 +313,15 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
   }
 }
 
-async function genererBackupAnnuel(mq, pathConsignation, catalogue) {
-  debug("Generer backup annuel : %O", catalogue);
+async function genererBackupAnnuel(mq, pathConsignation, catalogue, uuidRapport) {
+  debug("Generer backup annuel pour rapport %s : %O", uuidRapport, catalogue);
 
   try {
+    // Evenement pour le rapport de backup
+    transmettreEvenementBackup(mq, 'backupAnnuelDebut', catalogue.domaine, uuidRapport)
+
     const informationArchive = await traiterBackupAnnuel(mq, pathConsignation, catalogue)
+
     if(informationArchive.fichiersInclure) {
       debug("Journal annuel sauvegarde : %O", informationArchive)
 
@@ -331,13 +342,19 @@ async function genererBackupAnnuel(mq, pathConsignation, catalogue) {
       const pathArchivesQuotidiennes = pathConsignation.trouverPathBackupDomaine(domaine)
       await supprimerFichiers(fichiersInclure, pathArchivesQuotidiennes, {noerror: true})
 
-      return informationArchive
     } else {
       debug("Aucun fichiers quotidiens trouves pour le backup annuel")
     }
 
+    // Evenement pour le rapport de backup
+    transmettreEvenementBackup(mq, 'backupAnnuelTermine', catalogue.domaine, uuidRapport)
+
+    return informationArchive
+
   } catch (err) {
     console.error("genererBackupAnnuel: Erreur creation backup annuel:\n%O", err)
+    // Evenement pour le rapport de backup
+    transmettreEvenementBackup(mq, 'backupAnnuelTermine', catalogue.domaine, uuidRapport, {err})
   }
 
 }
@@ -1021,6 +1038,23 @@ async function extraireCatalogueEntry(entryTar) {
     entryTar.resume()  // Continuer a lire
   }) // Promise data
 
+}
+
+function transmettreEvenementBackup(mq, typeEvenement, domaine, uuidRapport, info) {
+  const message = {
+    evenement: typeEvenement,
+    domaine,
+    uuid_rapport: uuidRapport,
+    timestamp: new Date().getTime()/1000,
+  }
+
+  if(info) {
+    evenement_contenu.info = info
+  }
+
+  const routingKey = 'evenement.Backup.backupMaj'
+
+  mq.emettreEvenement(message, routingKey)
 }
 
 module.exports = {
