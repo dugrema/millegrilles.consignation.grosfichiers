@@ -10,6 +10,7 @@ const { TraitementFichierBackup } = require('../util/traitementBackup')
 const { RestaurateurBackup } = require('../util/restaurationBackup')
 const { calculerHachageFichier, calculerHachageData } = require('../util/utilitairesHachage')
 const { genererBackupQuotidien, genererBackupAnnuel } = require('../util/processFichiersBackup')
+const { genererRapportVerification } = require('../util/verificationBackups')
 
 class GestionnaireMessagesBackup {
 
@@ -32,7 +33,7 @@ class GestionnaireMessagesBackup {
       (routingKey, message, opts) => {
         // debug("ERROR : commande.backup.genererBackupQuotidien pas implemente, message %O", message)
         // Retourner la promise pour rendre cette operation bloquante (longue duree)
-        genererBackupQuotidien(this.mq, this.pathConsignation, message.catalogue)
+        return genererBackupQuotidien(this.mq, this.pathConsignation, message.catalogue)
         // throw new Error("commande.backup.genererBackupQuotidien pas implemente")
       },
       ['commande.backup.genererBackupQuotidien'],
@@ -47,7 +48,18 @@ class GestionnaireMessagesBackup {
       },
       ['commande.backup.genererBackupAnnuel'],
       {operationLongue: true}
-    );
+    )
+
+    this.mq.routingKeyManager.addRoutingKeyCallback(
+      (routingKey, message, opts) => {
+        return genererRapportVerification(
+          this.mq, this.pathConsignation, message.domaine,
+          {...opts, verification_hachage: true, verification_enchainement: true}
+        )
+      },
+      ['commande.backup.verifierDomaine'],
+      {operationLongue: true}
+    )
 
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {

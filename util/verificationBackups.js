@@ -10,6 +10,7 @@ const { genererListeCatalogues } = require('./processFichiersBackup')
 const { pki, ValidateurSignature } = require('./pki')
 const { calculerHachageFichier, calculerHachageStream } = require('./utilitairesHachage')
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
+const { hacherDictionnaire } = require('@dugrema/millegrilles.common/lib/forgecommon')
 
 async function chargerCatalogue(pathCatalogue) {
   return new Promise((resolve, reject)=>{
@@ -116,7 +117,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
         const heureFormattee = formatterDateString(new Date(catalogue.heure*1000))
         try {
           dateHachageEntetes[heureFormattee] = {
-            hachage_contenu: catalogue['en-tete'].hachage_contenu,
+            hachage_entete: hacherDictionnaire(catalogue['en-tete']),
             uuid_transaction: catalogue['en-tete'].uuid_transaction,
             heure: catalogue.heure,
             backup_precedent: catalogue.backup_precedent,
@@ -128,7 +129,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
         // Conserver le plus recent catalogue
         if(!plusRecentCatalogue || plusRecentCatalogue.heure < catalogue.heure) {
           plusRecentCatalogue = {
-            hachage_contenu: catalogue['en-tete'].hachage_contenu,
+            hachage_entete: hacherDictionnaire(catalogue['en-tete']),
             uuid_transaction: catalogue['en-tete'].uuid_transaction,
           }
         }
@@ -202,7 +203,7 @@ function verifierEntetes(dateHachageEntetes, chainage) {
 
     // Placer entete courante pour verification du prochain backup horaire
     chainage = {
-      hachage_contenu: infoCatalogue.hachage_contenu,
+      hachage_entete: infoCatalogue.hachage_entete,
       uuid_transaction: infoCatalogue.uuid_transaction
     }
 
@@ -211,7 +212,7 @@ function verifierEntetes(dateHachageEntetes, chainage) {
       return  // Rien a faire,
     } else if( ! chainage_precedent || ! backup_precedent ) {
       // Mismatch, on laisse continuer
-    } else if(backup_precedent.hachage_contenu === chainage_precedent.hachage_contenu &&
+    } else if(backup_precedent.hachage_entete === chainage_precedent.hachage_entete &&
               backup_precedent.uuid_transaction === chainage_precedent.uuid_transaction) {
       return  // Chaine ok
     }
@@ -278,7 +279,7 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
       erreursCatalogues = [...erreursCatalogues || [], ...erreurs.erreursCatalogues]
       chainage = {
         uuid_transaction: infoExtraiteArchive.plusRecentCatalogue['en-tete'].uuid_transaction,
-        hachage_contenu: infoExtraiteArchive.plusRecentCatalogue['en-tete'].hachage_contenu,
+        hachage_entete: hacherDictionnaire(infoExtraiteArchive.plusRecentCatalogue['en-tete']),
       }
     }
 
@@ -352,7 +353,7 @@ async function verifierPromisesArchive(promises, opts) {
           heure: item.heure,
           backup_precedent: item.backup_precedent,
           uuid_transaction: item['en-tete'].uuid_transaction,
-          hachage_contenu: item['en-tete'].hachage_contenu,
+          hachage_entete: hacherDictionnaire(item['en-tete']),
         }
 
         // Conserver le plus recent catalogue
@@ -412,6 +413,17 @@ async function parcourirDomaine(pathConsignation, domaine, cb, opts) {
   }
 
   return {erreursHachage, erreursCatalogues, chainage: erreursHoraire.chainage}
+}
+
+async function genererRapportVerification(mq, pathConsignation, domaine, opts) {
+  const resultat = await parcourirDomaine(pathConsignation, domaine, ()=>{}, opts)
+  debug("genererRapportVerification resultat : %O", resultat)
+  // return resultat
+
+  // Transmettre la reponse immediatement pour indiquer le debut du traitement
+  //var reponse = {'action': 'debut_restauration', 'domaine': 'fichiers'}
+  const properties = opts.properties
+  mq.transmettreReponse(resultat, properties.replyTo, properties.correlationId)
 }
 
 async function processEntryTar(entry, cb, opts) {
@@ -499,4 +511,4 @@ async function processEntryTar(entry, cb, opts) {
 }
 
 
-module.exports = { parcourirBackupsHoraire, parcourirArchivesBackup, parcourirDomaine }
+module.exports = { parcourirBackupsHoraire, parcourirArchivesBackup, parcourirDomaine, genererRapportVerification }
