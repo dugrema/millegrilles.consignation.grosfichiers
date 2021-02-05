@@ -14,7 +14,7 @@ CMD [ "npm", "start" ]
 
 # Installer ffmpeg, imagemagick pour conversion video et images
 RUN apt update && \
-    apt install ffmpeg imagemagick-6.q16 -y && \
+    apt install ffmpeg imagemagick-6.q16 rsync -y && \
     apt clean && \
     rm -rf /var/cache/apt
 
