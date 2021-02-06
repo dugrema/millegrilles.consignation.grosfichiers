@@ -44,7 +44,7 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
   try {
 
     const fuuidPreviewImage = uuidv1()
-    var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, false, {})
+    var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, true, {})
 
     // Makedir consignation
     const pathRepertoire = path.dirname(pathPreviewImage)
@@ -55,20 +55,12 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
       })
     })
 
-    if(opts.iv) {
-      // Trouver fichier original crypte    const pathFichierChiffre = this.pathConsignation.trouverPathLocal(fuuid, true);
-      fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, message.extension, opts.cleSymmetrique, opts.iv)
-      fichierSource = fichierSrcTmp.path
+    // Trouver fichier original crypte    const pathFichierChiffre = this.pathConsignation.trouverPathLocal(fuuid, true);
+    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, message.extension, opts.cleSymmetrique, opts.iv)
+    fichierSource = fichierSrcTmp.path
 
-      fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.' + message.extension })
-      fichierDestination = fichierDstTmp.path
-
-      extension = 'mgs1'
-
-    } else {
-      fichierSource = pathConsignation.trouverPathLocal(fuuid, false, {extension: message.extension})
-      fichierDestination = pathPreviewImage
-    }
+    fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.' + message.extension })
+    fichierDestination = fichierDstTmp.path
 
     debug("Fichier (dechiffre) %s pour generer preview image", fichierSource)
     var resultatConversion = await fctConversion(fichierSource, fichierDestination)
@@ -90,10 +82,9 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     debug("Hachage nouveau preview/thumbnail : %s", hachage)
 
     // Changer extension fichier destination
-    const fichierDestAvecExtension = pathPreviewImage + '.' + extension
     await new Promise((resolve, reject)=>{
-      debug("Renommer fichier dest pour ajouter extension : %s", fichierDestAvecExtension)
-      fs.rename(pathPreviewImage, fichierDestAvecExtension, err=>{
+      debug("Renommer fichier dest pour ajouter extension : %s", pathPreviewImage)
+      fs.rename(pathPreviewImage, pathPreviewImage, err=>{
         if(err) return reject(err)
         resolve()
       })

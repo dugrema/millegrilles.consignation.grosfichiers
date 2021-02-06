@@ -79,13 +79,16 @@ async function transcoderVideo(mq, pathConsignation, message) {
   const domaineActionCles = 'MaitreDesCles.cleGrosFichier'
   const transactionCles = {
     domaine: 'GrosFichiers',
-    identificateurs_document: { fuuid: resultatTranscodage.fuuidVideo },
+    identificateurs_document: {
+      fuuid: resultatTranscodage.fuuidVideo,
+      attachement_fuuid: message.fuuid,
+      type: 'video',
+    },
     cles: resultatTranscodage.clesChiffrees,
     iv: resultatTranscodage.iv,
-    sujet: 'cles.grosFichiers',
-    securite,
+    hachage_bytes: resultatTranscodage.hachage,
   }
-  await mq.transmettreTransactionFormattee(transactionCles, domaineActionCles)
+  await mq.transmettreCommande(transactionCles, domaineActionCles)
 
   // Transmettre transaction associer video transcode
   const transactionAssocierPreview = {
@@ -160,15 +163,19 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
   debug("Fin traitement preview, resultat : %O", resultatPreview)
 
   // Transmettre transaction info chiffrage
-  const domaineActionCles = 'MaitreDesCles.cleGrosFichier'
+  const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
   const transactionCles = {
     domaine: 'GrosFichiers',
-    identificateurs_document: { fuuid: resultatPreview.fuuid },
+    identificateurs_document: {
+      fuuid: resultatPreview.fuuid,
+      attachement_fuuid: message.fuuid,
+      type: 'preview',
+    },
     cles: resultatPreview.clesChiffrees,
     iv: resultatPreview.iv,
-    sujet: 'cles.grosFichiers',
+    hachage_bytes: resultatPreview.hachage_preview,
   }
-  mq.transmettreTransactionFormattee(transactionCles, domaineActionCles)
+  await mq.transmettreCommande(domaineActionCles, transactionCles)
 
   // Transmettre transaction preview
   const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
