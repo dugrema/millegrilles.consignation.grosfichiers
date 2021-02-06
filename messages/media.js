@@ -121,62 +121,60 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
   debug("Commande genererPreviewImage recue : %O", message)
 
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
-  const permission = message.permission
   var opts = {}
-  var securite = '2.prive'
-  if(permission) {
-    // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
-    debug("Recu permission de dechiffrage, on transmet vers le maitre des cles")
-
-    securite = permission.securite || '3.protege'
-
-    // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
-    const chainePem = mq.pki.getChainePems()
-    permission['_certificat_tiers'] = chainePem
-    debug("Nouvelle requete permission a transmettre : %O", permission)
-    const domaineAction = permission['en-tete'].domaine
-    const reponseCle = await mq.transmettreRequete(domaineAction, permission, {noformat: true})
-    debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
-
-    // Dechiffrer cle recue
-    const cleChiffree = reponseCle.cle
-    const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
-
-    // Demander cles publiques pour chiffrer preview
-    const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
-    const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
-    const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
-
-    opts = {cleSymmetrique: cleDechiffree, iv: reponseCle.iv, clesPubliques}
-
-  } else {
-    debug("Fichier non chiffre, on traite immediatement")
+  // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
+  var hachageFichier = message.hachage
+  if(message.version_courante) {
+    // C'est une retransmission
+    hachageFichier = message.version_courante.hachage
   }
+  const liste_hachage_bytes = [hachageFichier]
+
+  // debug("Recu permission de dechiffrage, on transmet vers le maitre des cles")
+
+  // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
+  // const chainePem = mq.pki.getChainePems()
+  const domaineAction = 'MaitreDesCles.dechiffrage'
+  const requete = {liste_hachage_bytes}
+  debug("Nouvelle requete dechiffrage cle a transmettre : %O", requete)
+  const reponseCle = await mq.transmettreRequete(domaineAction, requete)
+  if(reponseCle.acces !== '1.permis') {
+    return {err: reponseCle.acces, msg: `Erreur dechiffrage cle pour generer preview de ${message.fuuid}`}
+  }
+  debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
+
+  // Dechiffrer cle recue
+  const informationCle = reponseCle.cles[hachageFichier]
+  const cleChiffree = informationCle.cle
+  const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
+
+  // Demander cles publiques pour chiffrer preview
+  const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
+  const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
+  const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
+
+  opts = {cleSymmetrique: cleDechiffree, iv: informationCle.iv, clesPubliques}
 
   debug("Debut generation preview")
   const resultatPreview = await fctConversion(mq, pathConsignation, message, opts)
   debug("Fin traitement preview, resultat : %O", resultatPreview)
 
-  if(permission) {
-    // Transmettre transaction info chiffrage
-    const domaineActionCles = 'MaitreDesCles.cleGrosFichier'
-    const transactionCles = {
-      domaine: 'GrosFichiers',
-      identificateurs_document: { fuuid: resultatPreview.fuuid },
-      cles: resultatPreview.clesChiffrees,
-      iv: resultatPreview.iv,
-      sujet: 'cles.grosFichiers',
-      securite,
-    }
-    mq.transmettreTransactionFormattee(transactionCles, domaineActionCles)
+  // Transmettre transaction info chiffrage
+  const domaineActionCles = 'MaitreDesCles.cleGrosFichier'
+  const transactionCles = {
+    domaine: 'GrosFichiers',
+    identificateurs_document: { fuuid: resultatPreview.fuuid },
+    cles: resultatPreview.clesChiffrees,
+    iv: resultatPreview.iv,
+    sujet: 'cles.grosFichiers',
   }
+  mq.transmettreTransactionFormattee(transactionCles, domaineActionCles)
 
   // Transmettre transaction preview
   const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
   const transactionAssocierPreview = {
     uuid: message.uuid,
     fuuid: message.fuuid,
-    securite,
     mimetype_preview: resultatPreview.mimetype,
     fuuid_preview: resultatPreview.fuuid,
     extension_preview: resultatPreview.extension,
