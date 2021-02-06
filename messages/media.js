@@ -37,46 +37,52 @@ async function transcoderVideo(mq, pathConsignation, message) {
   const permission = message.permission
   var opts = {}
   var securite = '3.protege'
-  if(message.fuuid && permission) {
-    debug("Recu permission de dechiffrage, on transmet vers le maitre des cles")
+  // Transmettre evenement debut de transcodage
+  mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageDebut')
 
-    // Transmettre evenement debut de transcodage
-    mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageDebut')
+  // securite = permission.securite || '3.protege'
+  //
+  // // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
+  // const chainePem = mq.pki.getChainePems()
+  // permission['_certificat_tiers'] = chainePem
+  // debug("Nouvelle requete permission a transmettre : %O", permission)
+  // const domaineAction = permission['en-tete'].domaine
+  // const reponseCle = await mq.transmettreRequete(domaineAction, permission, {noformat: true})
+  // debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
 
-    securite = permission.securite || '3.protege'
+  var hachageFichier = message.hachage
+  const liste_hachage_bytes = [hachageFichier]
 
-    // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
-    const chainePem = mq.pki.getChainePems()
-    permission['_certificat_tiers'] = chainePem
-    debug("Nouvelle requete permission a transmettre : %O", permission)
-    const domaineAction = permission['en-tete'].domaine
-    const reponseCle = await mq.transmettreRequete(domaineAction, permission, {noformat: true})
-    debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
-
-    // Dechiffrer cle recue
-    const cleChiffree = reponseCle.cle
-    const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
-
-    // Demander cles publiques pour chiffrer video transcode
-    const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
-    const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
-    const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
-
-    opts = {cleSymmetrique: cleDechiffree, iv: reponseCle.iv, clesPubliques}
-
-  } else {
-    // Transmettre message erreur transcodage
-    const err = "Fuuid/Permission dechiffrage absente"
-    mq.emettreEvenement({fuuid: message.fuuid, err}, 'evenement.fichiers.transcodageErreur')
-    throw new Error(err)
+  // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
+  // const chainePem = mq.pki.getChainePems()
+  const domaineAction = 'MaitreDesCles.dechiffrage'
+  const requete = {liste_hachage_bytes}
+  debug("Nouvelle requete dechiffrage cle a transmettre : %O", requete)
+  const reponseCle = await mq.transmettreRequete(domaineAction, requete)
+  if(reponseCle.acces !== '1.permis') {
+    return {err: reponseCle.acces, msg: `Erreur dechiffrage cle pour generer preview de ${message.fuuid}`}
   }
+  debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
+
+  // Dechiffrer cle recue
+  const informationCle = reponseCle.cles[hachageFichier]
+  const cleChiffree = informationCle.cle
+  const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
+
+  // Demander cles publiques pour chiffrer video transcode
+  const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
+  const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
+  const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
+
+  opts = {cleSymmetrique: cleDechiffree, iv: informationCle.iv, clesPubliques}
+
 
   debug("Debut dechiffrage fichier video")
   const resultatTranscodage = await traitementMedia.transcoderVideo(
     mq, pathConsignation, opts.clesPubliques, opts.cleSymmetrique, opts.iv, message)
 
   // Transmettre transaction info chiffrage
-  const domaineActionCles = 'MaitreDesCles.cleGrosFichier'
+  const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
   const transactionCles = {
     domaine: 'GrosFichiers',
     identificateurs_document: {
@@ -88,7 +94,7 @@ async function transcoderVideo(mq, pathConsignation, message) {
     iv: resultatTranscodage.iv,
     hachage_bytes: resultatTranscodage.hachage,
   }
-  await mq.transmettreCommande(transactionCles, domaineActionCles)
+  await mq.transmettreCommande(domaineActionCles, transactionCles)
 
   // Transmettre transaction associer video transcode
   const transactionAssocierPreview = {
@@ -132,8 +138,6 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
     hachageFichier = message.version_courante.hachage
   }
   const liste_hachage_bytes = [hachageFichier]
-
-  // debug("Recu permission de dechiffrage, on transmet vers le maitre des cles")
 
   // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
   // const chainePem = mq.pki.getChainePems()
