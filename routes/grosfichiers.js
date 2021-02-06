@@ -366,6 +366,7 @@ function pipeReponse(req, res) {
 
 async function creerStreamDechiffrage(mq, req) {
   const fuuidFichier = req.params.fuuid
+  debug("Creer stream dechiffrage, query : %O", req.query)
 
   // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
   const chainePem = mq.pki.getChainePems()
@@ -375,10 +376,16 @@ async function creerStreamDechiffrage(mq, req) {
 
   debug("Reponse permission access a %s:\n%O", fuuidFichier, reponsePermission)
 
+  if( ! reponsePermission.roles_permis ) {
+    debug("Permission refuse sur %s, le fichier n'est pas public", fuuidFichier)
+    return {acces: '0.refuse'}
+  }
+
   // permission['_certificat_tiers'] = chainePem
-  const domaineActionDemandeCle = 'MaitreDesCles.decryptageGrosFichier'
-  const reponseCle = await mq.transmettreRequete(
-    domaineActionDemandeCle, reponsePermission, {noformat: true, attacherCertificat: true})
+  const domaineActionDemandeCle = 'MaitreDesCles.dechiffrage'
+  const reponseCle = await mq.transmettreRequete(domaineActionDemandeCle, {
+    liste_hachage_bytes: reponsePermission.liste_hachage_bytes,
+  })
   debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
   if(reponseCle.acces === '0.refuse') {
     return {acces: responseCle.acces, 'err': 'Acces refuse'}
@@ -401,7 +408,12 @@ async function creerStreamDechiffrage(mq, req) {
       debug("Fuuid effectif pour video %s : %s", resolution, fuuidEffectif)
     }
 
-    var infoClePreview = reponseCle.cles_par_fuuid[fuuidEffectif]
+    var infoClePreview = null
+    Object.values(reponseCle.cles).forEach(item=>{
+      if(item.identificateurs_document.fuuid === fuuidEffectif) {
+        infoClePreview = item
+      }
+    })
     cleChiffree = infoClePreview.cle
     iv = infoClePreview.iv
 
