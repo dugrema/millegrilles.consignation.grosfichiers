@@ -181,7 +181,7 @@ class TraitementFichier {
       // Transmettre les transactions et deplacer le fichier
       await deplacerFichier(req, nouveauPathFichier)
       debug("Transmettre transaction chiffrage")
-      await this.rabbitMQ.transmettreEnveloppeTransaction(transactionChiffrage)
+      await this.rabbitMQ.transmettreEnveloppeCommande(transactionChiffrage)
       debug("Transmettre transaction fichier")
       await this.rabbitMQ.transmettreEnveloppeTransaction(transactionFichier)
 
