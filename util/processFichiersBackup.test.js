@@ -502,6 +502,61 @@ describe('processFichiersBackup', ()=>{
     expect(resultat.fichiersInclure[2]).toBe('horaire/transactions_00.jsonl.xz')
   })
 
+  it.only('traiterBackupQuotidien regenerer signature', async () => {
+    // Test de changement du catalogue et regeneration de la signature
+
+    var appels_transmettreEnveloppeTransaction = []
+    var params_opts = null
+    const amqpdao = {
+      transmettreEnveloppeTransaction: (transaction)=>{
+        appels_transmettreEnveloppeTransaction.push(transaction)
+        return ''
+      },
+      formatterTransaction: (domaine, transaction, opts) => {
+        transaction['en-tete'] = {domaine}
+        transaction['_signature'] = 'dummy'
+        params_opts = opts
+        return transaction
+      }
+    }
+
+    fs.mkdirSync(path.join(tmpdir.name, 'horaire'))
+    await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire_00.json.xz'), {
+      transactions_nomfichier: 'transactions_00.jsonl.xz',
+      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      'en-tete': {
+        hachage_contenu: 'dummy',
+      },
+      heure: new Date('2020-01-01 00:00').getTime()/1000,
+    })
+    creerFichierDummy(path.join(tmpdir.name, 'horaire', 'transactions_00.jsonl.xz'), 'dadadon')
+
+    const catalogue = {
+      fichiers_horaire: {},
+      'en-tete': {
+        domaine: 'domaine.test',
+        fingerprint_certificat: 'DUMMY A REMPLACER',
+      },
+      '_signature': 'DUMMY A REMPLACER',
+      '_certificat': 'DUMMY A REMPLACER',
+      domaine: 'domaine.test',
+      securite: '1.public',
+      jour: new Date("2020-01-01").getTime()/1000,
+    }
+
+    const resultat = await processFichiersBackup.traiterBackupQuotidien(amqpdao, pathConsignation, catalogue)
+    console.debug("Resultat : %O", resultat)
+    const catalogueResultat = resultat.catalogue
+
+    expect(params_opts.attacherCertificat).toBe(true)
+
+    // Note : amqpdao est un mock qui met _signature a dummy. On fait juste
+    // tester que la logique a retire en-tete et _certificat
+    expect(catalogueResultat['_signature']).toBe('dummy')
+    expect(catalogueResultat['en-tete'].fingerprint_certificat).toBeUndefined()
+    expect(catalogueResultat['_certificat']).toBeUndefined()
+  })
+
   it('genererBackupQuotidien', async () => {
     var appels_transmettreEnveloppeTransaction = []
     const mq = {

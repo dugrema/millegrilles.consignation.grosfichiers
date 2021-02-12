@@ -449,7 +449,8 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     // Journal est dirty, on doit le re-signer
     // const domaine = catalogue['en-tete'].domaine
     delete catalogue['en-tete']
-    mq.formatterTransaction('Backup.catalogueQuotidienFinaliser', catalogue)
+    delete catalogue['_certificat']
+    mq.formatterTransaction('Backup.catalogueQuotidienFinaliser', catalogue, {attacherCertificat: true})
   }
 
   var resultat = await sauvegarderCatalogueQuotidien(pathConsignation, catalogue)
