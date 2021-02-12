@@ -693,9 +693,10 @@ async function traiterBackupAnnuel(mq, pathConsignation, catalogue) {
     debug("Regenerer signature du catalogue horaire, entete precedente : %O", catalogue['en-tete'])
 
     delete catalogue['_signature']
+    delete catalogue['_certificat']
     delete catalogue['en-tete']
 
-    mq.formatterTransaction(domaine, catalogue)
+    mq.formatterTransaction(domaine, catalogue, {attacherCertificat: true})
   }
 
   // Sauvegarder journal annuel, sauvegarder en format .json.xz

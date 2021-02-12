@@ -502,7 +502,7 @@ describe('processFichiersBackup', ()=>{
     expect(resultat.fichiersInclure[2]).toBe('horaire/transactions_00.jsonl.xz')
   })
 
-  it.only('traiterBackupQuotidien regenerer signature', async () => {
+  it('traiterBackupQuotidien regenerer signature', async () => {
     // Test de changement du catalogue et regeneration de la signature
 
     var appels_transmettreEnveloppeTransaction = []
@@ -678,6 +678,66 @@ describe('processFichiersBackup', ()=>{
       expect(resultat.fichiersInclure[0]).toBe('domaine.test_catalogue_2020.json.xz')
       expect(resultat.fichiersInclure[1]).toBe('quotidien_20200101.tar')
     })
+  })
+
+  it('traiterBackupAnnuel regenerer signature', async () => {
+    var appels_transmettreEnveloppeTransaction = []
+    var amqpdao_opts = null
+    const amqpdao = {
+      transmettreEnveloppeTransaction: (transaction)=>{
+        appels_transmettreEnveloppeTransaction.push(transaction)
+        return ''
+      },
+      formatterTransaction: (domaine, transaction, opts) => {
+        transaction['en-tete'] = {domaine, 'uuid-transaction': 'uuid-dummy'}
+        transaction['_signature'] = 'dummy'
+        amqpdao_opts = opts
+        return transaction
+      }
+    }
+
+    // Creer fichier de catalogue quotidien
+    const pathCatalogueQuotidien = path.join(tmpdir.name, 'catalogue_quotidien_20200101.json.xz')
+    await processFichiersBackup.sauvegarderLzma(pathCatalogueQuotidien, {
+      transactions_nomfichier: 'transactions_00.jsonl.xz',
+      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      'en-tete': {
+        hachage_contenu: 'dummy',
+      },
+      jour: new Date('2020-01-01 00:00').getTime()/1000,
+    })
+
+    // Preparer une archive quotidienne .tar avec le fichier de catalogue
+    // Creer nouvelle archive quotidienne
+    await tar.c(
+      {
+        file: path.join(tmpdir.name, 'quotidien_20200101.tar'),
+        cwd: tmpdir.name,
+      },
+      ['catalogue_quotidien_20200101.json.xz']
+    )
+
+    const hachageArchive = await calculerHachageFichier(path.join(tmpdir.name, 'quotidien_20200101.tar'),)
+    const catalogue = {
+      fichiers_quotidien: {},
+      domaine: 'domaine.test',
+      securite: '1.public',
+      annee: new Date("2020-01-01").getTime()/1000,
+    }
+
+    // Supprimer archive quotidienne
+    fs.unlinkSync(pathCatalogueQuotidien)
+
+    const resultat = await processFichiersBackup.traiterBackupAnnuel(amqpdao, pathConsignation, catalogue)
+    console.debug("Resultat traiterBackupAnnuel : %O", resultat)
+    const catalogueResultat = resultat.catalogue
+
+    expect(amqpdao_opts.attacherCertificat).toBe(true)
+
+    expect(catalogueResultat['_signature']).toBe('dummy')
+    expect(catalogueResultat['_certificat']).toBeUndefined()
+    expect(catalogueResultat['en-tete'].fingerprint_certificat).toBeUndefined()
+
   })
 
   it('genererBackupAnnuel', async () => {
