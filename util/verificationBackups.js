@@ -491,7 +491,11 @@ async function processEntryTar(entry, cb, opts) {
         .on('end', ()=>resolve())
         .on('error', err=>reject(err))
 
+      entry.resume()
+
     }) // Promise
+
+    entry.resume()
 
     // Attendre que toutes les promise (catalogues) de l'archive soient terminees
     // avant de passer a la prochaine archive

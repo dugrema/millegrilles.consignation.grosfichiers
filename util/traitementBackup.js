@@ -109,7 +109,9 @@ async function getCataloguesDomaine(req, res) {
   res.set('Content-Type', 'text/plain')
   res.status(200)  // Header, commencer transfert
   await parcourirDomaine(req.pathConsignation, domaine, cbCatalogues)
-  res.end()
+  res.end('\n\n')
+
+  debug("getCataloguesDomaine termine pour %s", req.path)
 }
 
 async function identifierDomaines(pathRepertoireBackup) {

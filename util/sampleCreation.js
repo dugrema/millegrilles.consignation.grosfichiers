@@ -3,6 +3,7 @@ const path = require('path')
 const lzma = require('lzma-native')
 const tar = require('tar')
 
+const { hacherDictionnaire } = require('@dugrema/millegrilles.common/lib/forgecommon')
 const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHachage')
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 
@@ -109,7 +110,11 @@ async function creerBackupHoraire(dateHeure, opts) {
   if(backup_precedent) {
     catalogue.backup_precedent = backup_precedent
   }
-  backup_precedent = catalogue['en-tete']
+  backup_precedent = {
+    uuid_transaction: catalogue['en-tete'].uuid_transaction,
+    hachage_entete: hacherDictionnaire(catalogue['en-tete']),
+  }
+
 
   const pathCatalogue = `${rep}/domaine.test_${dateFormattee}.json.xz`
   sauvegarderFichier(pathCatalogue, catalogue, {lzma: true})
@@ -308,7 +313,7 @@ async function creerSamplesQuotidien() {
 }
 
 async function creerSamplesAnnuel() {
-  fs.mkdirSync(PATH_BACKUP + '/annuel')
+  fs.mkdirSync(PATH_BACKUP + '/annuel', {recursive: true})
 
   // Archive annuelle
   backup_precedent = null

@@ -27,6 +27,7 @@ describe('VerificationBackups integration logique backups annuels', ()=>{
       const sampleCreation = require('./sampleCreation')
       jest.setTimeout(300000)  // Donner 5 minutes pour creer les samples
       await sampleCreation.creerSamplesAnnuel()
+      console.info("Samples annuels crees")
     }
   })
 
@@ -94,7 +95,7 @@ describe('VerificationBackups integration logique backups annuels', ()=>{
     console.debug("parcourir mix de backups annuel/quotidiens/horaire: %O", resultat)
     expect(resultat.erreursHachage).toBeNull()
     expect(resultat.erreursCatalogues).toBeNull()
-    expect(resultat.chainage).toBeNull()
+    expect(resultat.chainage).toBeUndefined()
   })
 
   it('parcourir mix de backups annuel/quotidiens/horaire avec verifications', async() =>{
@@ -183,7 +184,7 @@ describe('VerificationBackups integration logique', ()=>{
       pathConsignation(repertoireSample), 'domaine.test', cb, {verification_hachage: true, verification_enchainement: true}
     )
     console.debug("parcourirBackupsHoraire hachage resultat : %O", resultat)
-    expect(resultat.chainage.hachage_contenu).toBe('hachage-0')
+    expect(resultat.chainage.hachage_entete).toBe('sha256_b64:jDZQRkEdwrreh4HIzTz9IqfhzyWrfUeQoF3CUmkimsA=')
     expect(resultat.chainage.uuid_transaction).toBe('uuid-0')
     expect(resultat.erreursHachage.length).toBe(0)
     expect(resultat.erreursCatalogues.length).toBe(0)
