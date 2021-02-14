@@ -62,21 +62,21 @@ class TraitementFichierBackup {
   }
 
   async traiterPutApplication(req) {
-    debug("Body PUT traiterPutApplication : %O", req.body)
+    debug("Body PUT traiterPutApplication : %O\nFiles: %O", req.body, req.files)
 
     const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
     const nomApplication = req.params.nomApplication
 
     const pathRepertoire = pathConsignation.trouverPathBackupApplication(nomApplication)
 
-    const transactionsCatalogue = JSON.parse(req.body.catalogue)
-    const transactionsMaitredescles = JSON.parse(req.body.transaction_maitredescles)
     const fichierApplication = req.files.application[0]
+    const fichierCatalogue = req.files.catalogue[0]
+    const fichierMaitrecles = req.files.cles[0]
 
     // Deplacer les fichiers de backup vers le bon repertoire /backup
     const amqpdao = req.rabbitMQ
     await traiterFichiersApplication(
-      amqpdao, transactionsCatalogue, transactionsMaitredescles, fichierApplication, pathRepertoire)
+      amqpdao, fichierCatalogue.path, fichierMaitrecles.path, fichierApplication.path, pathRepertoire)
   }
 
 }

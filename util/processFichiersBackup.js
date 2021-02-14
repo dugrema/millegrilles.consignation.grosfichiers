@@ -124,43 +124,67 @@ async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMai
 }
 
 async function traiterFichiersApplication(
-  amqpdao, transactionCatalogue, transactionMaitreDesCles, fichierApplication, pathBackupApplication) {
+  amqpdao, fichierCatalogue, fichierMaitrecles, fichierApplication, pathBackupApplication) {
   debug("traiterFichiersApplication, fichier tmp : %s\npath destination : %s", fichierApplication, pathBackupApplication)
 
   const baseFolder = path.dirname(pathBackupApplication)
 
-  const nomApplication = transactionCatalogue.application
+  // const nomApplication = transactionCatalogue.application
+  const transactionCatalogue = await chargerFichierJson(fichierCatalogue)
 
-  // Verifier hachage de l'archive de backup
-  const hachageCalcule = await calculerHachageFichier(fichierApplication.path)
-  const hachageRecu = transactionCatalogue.archive_hachage
-  if(hachageCalcule !== hachageRecu) {
-    console.error("Hachage recu: %s\nCalcule: %s", hachageRecu, hachageCalcule)
-    throw new Error("Mismatch hachage archive")
-  }
+  const promises = []
 
-  await new Promise((resolve, reject)=>{
+  // Creer repertoire backup application
+  promises.push(new Promise((resolve, reject)=>{
     fs.mkdir(pathBackupApplication, { recursive: true, mode: 0o770 }, (erreurMkdir)=>{
       if(erreurMkdir) {
         console.error("Erreur mkdir : " + pathBackupApplication)
         return reject({erreurMkdir})
       }
       debug("Repertoire archive application cree : %s", pathBackupApplication)
-      resolve()
+      resolve(`Mkdir OK : ${pathBackupApplication}`)
     })
-  })
+  }))
 
   // Transmettre la transaction de maitredescles
-  debug("Transmettre cles du fichier de backup application : %O", transactionMaitreDesCles)
-  await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
+  promises.push(
+    chargerFichierJson(fichierMaitrecles)
+    .then(transactionMaitreDesCles=>{
+      debug("Transmettre cles du fichier de backup application : %O", transactionMaitreDesCles)
+      return amqpdao.transmettreEnveloppeCommande(transactionMaitreDesCles, 'MaitreDesCles.sauvegarderCle')
+    })
+  )
 
-  // Sauvegarder fichiers application
-  await sauvegarderFichiersApplication(transactionCatalogue, fichierApplication, pathBackupApplication)
+  // Sauvegarder fichier de catalogue
+  promises.push(
+    calculerHachageFichier(fichierApplication)
+    .then( hachageCalcule => {
+      const hachageRecu = transactionCatalogue.archive_hachage
+
+      if(hachageCalcule !== hachageRecu) {
+        console.error("Hachage recu: %s\nCalcule: %s", hachageRecu, hachageCalcule)
+        throw new Error("Mismatch hachage archive")
+      }
+
+      // Sauvegarder archive d'application dans le repertoire de backup
+      return sauvegarderFichiersApplication(transactionCatalogue, fichierApplication, pathBackupApplication)
+    }).then(_=>'Hachage transaction ok, fichiers sauvegardes')
+  )
 
   debug("Transmettre catalogue backup application : %O", transactionCatalogue)
-  await amqpdao.transmettreEnveloppeTransaction(transactionCatalogue)
+  promises.push( amqpdao.transmettreEnveloppeTransaction(transactionCatalogue) )
 
-  await rotationArchiveApplication(pathBackupApplication)
+  try {
+    // Attendre le traitement de toutes les promises
+    const resultat = await Promise.all(promises)
+
+    // Aucunes erreurs dans le traitement. Faire la rotation des archives de l'application
+    await rotationArchiveApplication(pathBackupApplication)
+  } catch(err) {
+    console.error("traiterFichiersApplication: Erreur traitement application backup : %O\nPromises: %O", err, promises)
+    throw err  // Lancuer a nouveau, transmet une erreur 500
+  }
+
 }
 
 async function rotationArchiveApplication(pathBackupApplication) {
@@ -236,7 +260,7 @@ async function sauvegarderFichiersApplication(transactionCatalogue, fichierAppli
   debug("Sauvegarder fichiers backup application\nArchive : %s\nCatalogue :%s", nomArchive, pathCatalogue)
 
   // Deplacer fichier archive
-  await deplacerFichier(fichierApplication.path, pathArchive)
+  await deplacerFichier(fichierApplication, pathArchive)
 
   // Sauvegarder catalogue transaction
   const catalogueJson = JSON.stringify(transactionCatalogue)
@@ -799,6 +823,20 @@ async function sauvegarderCatalogueAnnuel(pathConsignation, catalogue) {
   await deplacerFichier(fullPathFichier + '.work', fullPathFichier)
 
   return {path: fullPathFichier, nomFichier, dateFormattee}
+}
+
+async function chargerFichierJson(fichier) {
+  return new Promise((resolve, reject)=>{
+    fs.readFile(fichier, (err, data)=>{
+      if(err) return reject(err)
+      try {
+        const catalogue = JSON.parse(data)
+        resolve(catalogue)
+      } catch(err) {
+        reject(err)
+      }
+    })
+  })
 }
 
 async function chargerLzma(fichier) {
