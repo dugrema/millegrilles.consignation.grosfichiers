@@ -166,9 +166,8 @@ async function traiterFichiersApplication(
         throw new Error("Mismatch hachage archive")
       }
 
-      // Sauvegarder archive d'application dans le repertoire de backup
-      return sauvegarderFichiersApplication(transactionCatalogue, fichierApplication, pathBackupApplication)
-    }).then(_=>'Hachage transaction ok, fichiers sauvegardes')
+      return `Hachage transaction ok ${hachageRecu}, fichiers sauvegardes`
+    })
   )
 
   debug("Transmettre catalogue backup application : %O", transactionCatalogue)
@@ -177,6 +176,9 @@ async function traiterFichiersApplication(
   try {
     // Attendre le traitement de toutes les promises
     const resultat = await Promise.all(promises)
+
+    // Sauvegarder archive d'application dans le repertoire de backup
+    await sauvegarderFichiersApplication(transactionCatalogue, fichierApplication, pathBackupApplication)
 
     // Aucunes erreurs dans le traitement. Faire la rotation des archives de l'application
     await rotationArchiveApplication(pathBackupApplication)
