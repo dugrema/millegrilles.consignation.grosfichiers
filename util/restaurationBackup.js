@@ -101,7 +101,13 @@ class RestaurateurBackup {
     })
 
     // Stream
-    res.status(200).sendFile(pathArchive)
+    if(req.method === 'HEAD') {
+      // Uniquement transmettre le header (info archive)
+      res.sendStatus(200)
+    } else {
+      // Assumer que c'est un GET
+      res.status(200).sendFile(pathArchive)
+    }
   }
 
   async restaurerGrosFichiersHoraire() {

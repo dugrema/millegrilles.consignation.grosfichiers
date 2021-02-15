@@ -210,9 +210,50 @@ async function getFichier(req, res) {
   }
 }
 
+async function getListeApplications(req, res, next) {
+  debug("Retourner la liste des applications avec au moins un fichier de backup disponible")
+
+  try {
+    debug("Path consignation : %O", req.pathConsignation)
+    const applications = await identifierApplications(req.pathConsignation.consignationPathBackupApplications)
+    res.status(200).send({applications})
+  } catch(err) {
+    console.error("getListeApplications: Erreur\n%O", err)
+    res.sendStatus(500)
+  }
+
+}
+
+function identifierApplications(pathRepertoireBackup) {
+  // Retourne la liste de tous les domaines avec un backup
+
+  const settingsReaddirp = {
+    type: 'directories',
+    depth: 0,
+  }
+
+  return new Promise((resolve, reject)=>{
+    const listeApplications = [];
+    readdirp(
+      pathRepertoireBackup,
+      settingsReaddirp,
+    )
+    .on('data', entry=>{
+      listeApplications.push(entry.path)
+    })
+    .on('error', err=>{
+      reject(err);
+    })
+    .on('end', ()=>{
+      resolve(listeApplications);
+    })
+  })
+
+}
+
 module.exports = {
   TraitementFichierBackup, formatterDateString, getListeDomaines,
-  getCataloguesDomaine, getListeFichiers, getFichier,
+  getCataloguesDomaine, getListeFichiers, getFichier, getListeApplications,
 
   identifierDomaines
 };

@@ -7,7 +7,7 @@ const bodyParser = require('body-parser')
 
 const {PathConsignation, streamListeFichiers} = require('../util/traitementFichier')
 const {
-  TraitementFichierBackup, getListeDomaines, getCataloguesDomaine,
+  TraitementFichierBackup, getListeDomaines, getListeApplications, getCataloguesDomaine,
   getListeFichiers, getFichier
 } = require('../util/traitementBackup')
 const {RestaurateurBackup} = require('../util/restaurationBackup')
@@ -61,6 +61,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
     traiterUploadHoraire
   )
 
+  router.get('/backup/listeApplications', getListeApplications)
   const applicationFileFields = [
     {name: 'application', maxcount: 1},
     {name: 'catalogue', maxcount: 1},
@@ -73,6 +74,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
 
   // Path de download des fichiers de backup
   router.get('/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
+  router.head('/backup/application/:nomApplication', restaurerApplication)
   router.get('/backup/application/:nomApplication', restaurerApplication)
 
   // Ajouter une methode GET suivante :
