@@ -3,11 +3,9 @@ const fs = require('fs');
 const uuidv1 = require('uuid/v1');
 const crypto = require('crypto');
 const forge = require('node-forge');
-const { Decrypteur } = require('../util/cryptoUtils.js');
+const { decrypter } = require('../util/cryptoUtils.js');
 const { PathConsignation } = require('../util/traitementFichier');
 const transformationImages = require('../util/transformationImages');
-
-const decrypteur = new Decrypteur();
 
 var PRIVATE_KEY_FORGE;
 
@@ -74,7 +72,7 @@ class DecrypterFichier {
     })
     .then(()=>{
       // console.debug("Decrypter");
-      return decrypteur.decrypter(pathFichierCrypte, pathFichierDecrypte, cleSecreteDecryptee, iv);
+      return decrypter(pathFichierCrypte, pathFichierDecrypte, cleSecreteDecryptee, iv);
     })
     .then(async resultat =>{
 

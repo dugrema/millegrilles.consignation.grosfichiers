@@ -8,67 +8,54 @@ const {Transform} = require('stream')
 const AES_ALGORITHM = 'aes-256-cbc';  // Meme algorithme utilise sur MG en Python
 const RSA_ALGORITHM = 'RSA-OAEP';
 
-class Decrypteur {
+function decrypter(sourceCryptee, destination, cleSecreteDecryptee, iv, opts) {
+  if(!opts) opts = {}
 
-  decrypter(sourceCryptee, destination, cleSecreteDecryptee, iv, opts) {
-    if(!opts) opts = {}
-    return new Promise((resolve, reject)=>{
-      let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv, opts);
+  let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv, opts)
+  return _decrypter(sourceCryptee, destination, cryptoStream, opts)
+}
 
-      // console.log("Decryptage fichier " + sourceCryptee + " vers " + destination);
-      let writeStream = fs.createWriteStream(destination);
+function decrypterGCM(sourceCryptee, destination, cleSecreteDecryptee, iv, tag, opts) {
+  if(!opts) opts = {}
 
-      // Calculer taille et sha256 du fichier decrypte. Necessaire pour transaction.
-      const sha512 = crypto.createHash('sha512');
-      var sha512Hash = null;
-      var tailleFichier = 0;
-      // var ivLu = false
-      cryptoStream.writer.on('data', chunk=>{
-        // if(!ivLu) {
-        //   ivLu = true
-        //
-        //   // Verifier le iv
-        //   const ivExtrait = chunk.slice(0, 16).toString('base64')
-        //   if(ivExtrait !== iv) {
-        //     console.error('cryptoUtils.decrypter: IV ne correspond pas, chunk length : %s', chunk.length)
-        //     readStream.close()
-        //     writeStream.close()
-        //     return reject('cryptoUtils.decrypter: IV ne correspond pas')
-        //   }
-        //
-        //   chunk = chunk.slice(16)
-        // }
+  let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv, {...opts, tag})
+  return _decrypter(sourceCryptee, destination, cryptoStream, opts)
+}
 
-        sha512.update(chunk);
-        tailleFichier = tailleFichier + chunk.length;
-        // writeStream.write(chunk)
-      });
-      cryptoStream.writer.on('end', ()=>{
-        // Comparer hash a celui du header
-        sha512Hash = 'sha512_b64:' + sha512.digest('base64')
-        // console.debug("Hash fichier " + sha256Hash);
-        // writeStream.close()
-      });
+function _decrypter(sourceCryptee, destination, cryptoStream, opts) {
+  let writeStream = fs.createWriteStream(destination)
 
-      writeStream.on('close', ()=>{
-        // console.debug("Fermeture fichier decrypte");
-        resolve({tailleFichier, sha512Hash});
-      });
-      writeStream.on('error', ()=>{
-        console.error("Erreur decryptage fichier");
-        reject();
-      });
+  // Calculer taille et sha256 du fichier decrypte. Necessaire pour transaction.
+  const sha512 = crypto.createHash('sha512')
+  var sha512Hash = null
+  var tailleFichier = 0
 
-      // Ouvrir et traiter fichier
-      let readStream = fs.createReadStream(sourceCryptee);
-      readStream.pipe(cryptoStream.reader);
+  cryptoStream.writer.on('data', chunk=>{
+    sha512.update(chunk);
+    tailleFichier = tailleFichier + chunk.length;
+  });
+  cryptoStream.writer.on('end', ()=>{
+    // Comparer hash a celui du header
+    sha512Hash = 'sha512_b64:' + sha512.digest('base64')
+  });
 
-      cryptoStream.writer.pipe(writeStream);
-      // readStream.read()
+  // Pipe dechiffrage -> writer
+  cryptoStream.writer.pipe(writeStream)
 
+  let readStream = fs.createReadStream(sourceCryptee)
+
+  return new Promise((resolve, reject)=>{
+    writeStream.on('close', ()=>{
+      resolve({tailleFichier, sha512Hash});
     });
-  }
+    writeStream.on('error', ()=>{
+      console.error("Erreur decryptage fichier");
+      reject();
+    })
 
+    // Lancer le traitement du fichier
+    readStream.pipe(cryptoStream.reader)
+  })
 }
 
 function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
@@ -76,8 +63,6 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
   // On prepare un decipher pipe pour decrypter le contenu.
 
   let ivBuffer = Buffer.from(iv, 'base64');
-  // console.debug("IV (" + ivBuffer.length + "): ");
-  // console.debug(iv);
 
   let decryptedSecretKey;
   if(typeof cleSecrete === 'string') {
@@ -99,11 +84,9 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
     decryptedSecretKey = cleSecrete;
   }
 
-  // console.debug("Cle secrete decryptee (" + decryptedSecretKey.length + ") bytes");
-
   // Creer un decipher stream
   const transformStream = new Transform()
-  var ivLu = false
+  var ivLu = true; //opts.tag?true:false
   transformStream._transform = (chunk, encoding, next) => {
     // debug("Chunk taille : %s, encoding : %s", chunk.length, encoding)
 
@@ -123,7 +106,15 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
     next()
   }
 
-  var decipher = crypto.createDecipheriv('aes256', decryptedSecretKey, ivBuffer);
+  var decipher = null
+  if(opts.tag) {
+    const bufferTag = Buffer.from(opts.tag, 'base64')
+    decipher = crypto.createDecipheriv('aes-256-gcm', decryptedSecretKey, ivBuffer)
+    decipher.setAuthTag(bufferTag)
+  } else {
+    decipher = crypto.createDecipheriv('aes-256-cbc', decryptedSecretKey, ivBuffer)
+  }
+
   decipher.pipe(transformStream)
 
   return {reader: decipher, writer: transformStream}
@@ -131,22 +122,6 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
 
 function decrypterSymmetrique(contenuCrypte, cleSecrete, iv) {
   return new Promise((resolve, reject)=>{
-
-    // console.debug("Params decrypteSymmetrique")
-    // console.debug(contenuCrypte);
-    // console.debug(cleSecrete);
-    // console.debug(iv);
-
-    // Dechiffrage avec Crypto
-    // let cleSecreteBuffer = Buffer.from(cleSecrete, 'base64');
-    // let ivBuffer = Buffer.from(iv, 'base64');
-
-    // // console.log("Creer decipher secretKey: " + cleSecreteBuffer.toString('base64') + ", iv: " + ivBuffer.toString('base64'));
-    // var decipher = crypto.createDecipheriv(AES_ALGORITHM, cleSecreteBuffer, ivBuffer);
-    //
-    // // console.debug("Decrypter " + contenuCrypte.toString('base64'));
-    // let contenuDecrypteString = decipher.update(contenuCrypte, 'base64',  'utf8');
-    // contenuDecrypteString += decipher.final('utf8');
 
     // Dechiffrage avec node-forge
     let cleSecreteBuffer = forge.util.decode64(cleSecrete.toString('base64'));
@@ -162,28 +137,13 @@ function decrypterSymmetrique(contenuCrypte, cleSecrete, iv) {
       reject("Erreur dechiffrage");
     }
     let output = decipher.output;
-    // console.debug("Output decrypte: " + result);
-    // console.debug(output);
     contenuDecrypteString = output.data.toString('utf8');
-
-    // Verifier le IV (16 premiers bytes)
-    // for(let i=0; i<16; i++) {
-    //   let xor_result = output.data[i] ^ 0x02; // ivBuffer[i];
-    //   console.debug("Output " + i + ": " + output.data[i] + ", ivBuffer: " + ivBuffer[i] + ", xor: " + xor_result);
-    // }
 
     // Enlever 16 bytes pour IV
     contenuDecrypteString = contenuDecrypteString.slice(16);
 
-    // console.debug("Contenu decrypte :");
-    // console.debug(contenuDecrypteString);
-
-    // let dictDecrypte = JSON.parse(contenuDecrypteString);
-    // console.log("Dict decrypte: ");
-    // console.log(dictDecrypte);
-
-    resolve(contenuDecrypteString);
-  });
+    resolve(contenuDecrypteString)
+  })
 }
 
-module.exports = { Decrypteur, getDecipherPipe4fuuid, decrypterSymmetrique }
+module.exports = { decrypter, getDecipherPipe4fuuid, decrypterSymmetrique }
