@@ -33,6 +33,7 @@ class PathConsignation {
     }
 
     this.consignationPathDownloadStaging = path.join(consignationPath, 'downloadStaging');
+    this.consignationPathUploadStaging = path.join(consignationPath, 'uploadStaging');
 
     this.consignationPath = consignationPath;
 
@@ -111,15 +112,17 @@ class PathConsignation {
     return pathBackup
   }
 
-  _formatterPath(fichierUuid) {
-    // Extrait la date du fileUuid, formatte le path en fonction de cette date.
-    // let timestamp = uuidToDate.extract(fichierUuid.replace('/', ''));
-    // console.debug("uuid: " + fichierUuid + ". Timestamp " + timestamp);
+  _formatterPath(fichierUuid, opts) {
+    opts = opts || {}
 
-    const extension = 'mgs1'
-    let nomFichier = fichierUuid + '.' + extension;
+    // Format du fichier (type de chiffrage)
+    const format = opts.format || 'mgs2'
+    const extension = '.' + format
 
-    return nomFichier;
+    const niveau1 = fichierUuid.slice(0,5)
+    const niveau2 = fichierUuid.slice(5,7)
+
+    return path.join(niveau1, niveau2, fichierUuid + extension)
   }
 
 }

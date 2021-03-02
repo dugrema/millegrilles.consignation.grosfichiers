@@ -8,6 +8,7 @@ var cookieParser = require('cookie-parser');
 const {InitialiserGrosFichiers} = require('../routes/grosfichiers');
 const {InitialiserBackup} = require('../routes/backup');
 const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki');
+const {PathConsignation} = require('../util/traitementFichier')
 
 function initialiser() {
 
@@ -22,6 +23,7 @@ function initialiser() {
     const rabbitMQ = req.fctRabbitMQParIdmg(idmg)
     req.rabbitMQ = rabbitMQ
     req.amqpdao = rabbitMQ  // Nouvelle approche
+    req.pathConsignation = new PathConsignation({idmg})
     next()
   })
 
@@ -31,9 +33,8 @@ function initialiser() {
 
   app.use(express.static(path.join(__dirname, 'public')))
 
-  const backup = InitialiserBackup()
-  app.all('^/backup/*', (req, res, next)=>{debug("BACKUP"); next()}, backup)
-  app.all('^/fichiers/*', (req, res, next)=>{debug("FICHIERS"); next()}, InitialiserGrosFichiers())
+  app.all('^/backup/*', InitialiserBackup())
+  app.all('^/fichiers/*', InitialiserGrosFichiers())
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {
