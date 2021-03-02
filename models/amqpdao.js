@@ -18,7 +18,7 @@ async function init() {
 
   // Charger PKI
   const instPki = new MilleGrillesPKI()
-  instPki.chargerPEMs(certPems)
+  instPki.initialiserPkiPEMS(certPems)
 
   // Connecter a MilleGrilles avec AMQP DAO
   const amqpdao = new MilleGrillesAmqpDAO(instPki)

@@ -1,15 +1,17 @@
 const debug = require('debug')('millegrilles:fichiers:traitementMedia')
 const tmp = require('tmp-promise')
-
-const { Decrypteur } = require('../util/cryptoUtils.js')
-const transformationImages = require('../util/transformationImages')
 const uuidv1 = require('uuid/v1')
 const path = require('path')
 const fs = require('fs')
 
-const {calculerHachageFichier} = require('./utilitairesHachage')
+// const { Decrypteur } = require('./cryptoUtils.js')
+const { creerCipher, creerDecipher } = require('@dugrema/millegrilles.common/lib/chiffrage')
+const { hacher } = require('@dugrema/millegrilles.common/lib/hachage')
+const transformationImages = require('./transformationImages')
 
-const decrypteur = new Decrypteur()
+const { calculerHachageFichier } = require('./utilitairesHachage')
+
+// const decrypteur = new Decrypteur()
 
 // const crypto = require('crypto');
 // const im = require('imagemagick');
