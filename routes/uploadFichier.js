@@ -11,11 +11,19 @@ function init(pathConsignation) {
   const route = express()
 
   // Operations d'upload
-  route.put('/fichiers/:correlation/:position', traiterUpload)
-  route.post('/fichiers/:correlation', bodyParser.json(), traiterPostUpload)
-  route.delete('/fichiers/:correlation', traiterDeleteUpload)
+  route.put('/fichiers/:correlation/:position', verifierNiveauPrive, traiterUpload)
+  route.post('/fichiers/:correlation', verifierNiveauPrive, bodyParser.json(), traiterPostUpload)
+  route.delete('/fichiers/:correlation', verifierNiveauPrive, traiterDeleteUpload)
 
   return route
+}
+
+function verifierNiveauPrive(req, res, next) {
+  // S'assurer que l'usager est au moins logge avec le niveau prive
+  if(!req.autorisationMillegrille.prive) {
+    return req.sendStatus(403)
+  }
+  next()
 }
 
 async function traiterUpload(req, res) {
@@ -79,6 +87,7 @@ async function traiterPostUpload(req, res, next) {
   files.sort((a,b)=>{return a-b})
 
   const commandeMaitreCles = informationFichier.commandeMaitrecles
+  const transactionGrosFichiers = informationFichier.transactionGrosFichiers
   const hachage = commandeMaitreCles.hachage_bytes
   const pathOutput = path.join(pathCorrelation, hachage + '.mgs2')
   const writer = fs.createWriteStream(pathOutput)
@@ -108,24 +117,32 @@ async function traiterPostUpload(req, res, next) {
     await verificateurHachage.verify()
     debug("Fichier correlation %s OK\nhachage %s", correlation, hachage)
 
+    // Transmettre la cle
+    debug("Transmettre commande cle pour le fichier")
+    await req.amqpdao.transmettreEnveloppeCommande(commandeMaitreCles)
+
+    debug("Deplacer le fichier vers le storage permanent")
     const pathStorage = req.pathConsignation.trouverPathLocal(hachage)
     const status = await new Promise((resolve, reject) => {
       fs.mkdir(path.dirname(pathStorage), {recursive: true}, err=>{
         if(err) {
           debug("Erreur creation repertoire pour deplacement fichier : %O", err)
-          return resolve(500)
+          return reject(err)
         }
 
         fs.rename(pathOutput, pathStorage, err=>{
           if(err) {
             debug("Erreur deplacement fichier : %O", err)
-            return resolve(500)
+            return reject(err)
           }
           return resolve(201)
         })
-
       })
     })
+
+    debug("Transmettre transaction fichier")
+    await req.amqpdao.transmettreEnveloppeTransaction(transactionGrosFichiers)
+
     res.sendStatus(status)
 
   } catch(err) {
