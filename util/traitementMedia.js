@@ -42,20 +42,11 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
 
   var fichierSource = null, fichierDestination = null,
       fichierSrcTmp = null, fichierDstTmp = null,
-      extension = null
+      pathPreviewImageTmp = null, extension = null
   try {
 
     const fuuidPreviewImage = uuidv1()
-    var pathPreviewImage = pathConsignation.trouverPathLocal(fuuidPreviewImage, true, {})
-
-    // Makedir consignation
-    const pathRepertoire = path.dirname(pathPreviewImage)
-    await new Promise((resolve, reject) => {
-      fs.mkdir(pathRepertoire, { recursive: true }, async (err)=>{
-        if(err) return reject(err)
-        resolve()
-      })
-    })
+    pathPreviewImageTmp = await tmp.file({ mode: 0o600, postfix: '.' + message.extension })
 
     // Trouver fichier original crypte    const pathFichierChiffre = this.pathConsignation.trouverPathLocal(fuuid, true);
     fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, message.extension, opts.cleSymmetrique, opts.metaCle)
@@ -72,8 +63,8 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     var resultatChiffrage = {}
     if(fichierDstTmp) {
       // Chiffrer preview
-      debug("Chiffrer preview de %s vers %s", fichierDstTmp, pathPreviewImage)
-      resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathPreviewImage, opts.clesPubliques)
+      debug("Chiffrer preview de %s vers %s", fichierDstTmp, pathPreviewImageTmp.path)
+      resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathPreviewImageTmp.path, opts.clesPubliques)
       debug("Resultat chiffrage preview image : %O", resultatChiffrage)
     } else {
       extension = resultatConversion.extension
@@ -82,11 +73,22 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     // Calculer hachage fichier
     // const hachage = await calculerHachageFichier(pathPreviewImage)
     // debug("Hachage nouveau preview/thumbnail : %s", hachage)
+    const hachage = resultatChiffrage.meta.hachage_bytes
+    const pathPreviewImage = pathConsignation.trouverPathLocal(hachage)
+
+    // Makedir consignation
+    const pathRepertoire = path.dirname(pathPreviewImage)
+    await new Promise((resolve, reject) => {
+      fs.mkdir(pathRepertoire, { recursive: true }, async (err)=>{
+        if(err) return reject(err)
+        resolve()
+      })
+    })
 
     // Changer extension fichier destination
     await new Promise((resolve, reject)=>{
       debug("Renommer fichier dest pour ajouter extension : %s", pathPreviewImage)
-      fs.rename(pathPreviewImage, pathPreviewImage, err=>{
+      fs.rename(pathPreviewImageTmp.path, pathPreviewImage, err=>{
         if(err) return reject(err)
         resolve()
       })
@@ -101,7 +103,7 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
 
   } finally {
     // Effacer le fichier temporaire
-    const fichiersTmp = [fichierSrcTmp, fichierDstTmp]
+    const fichiersTmp = [fichierSrcTmp, fichierDstTmp, pathPreviewImageTmp]
     fichiersTmp.forEach(item=>{
       try {
         if(item) {
