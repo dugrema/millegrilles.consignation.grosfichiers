@@ -4,7 +4,7 @@ const uuidv1 = require('uuid/v1')
 const path = require('path')
 const fs = require('fs')
 
-// const { Decrypteur } = require('./cryptoUtils.js')
+const { decrypterGCM } = require('./cryptoUtils.js')
 const { creerCipher, creerDecipher } = require('@dugrema/millegrilles.common/lib/chiffrage')
 const { hacher } = require('@dugrema/millegrilles.common/lib/hachage')
 const transformationImages = require('./transformationImages')
@@ -58,7 +58,7 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     })
 
     // Trouver fichier original crypte    const pathFichierChiffre = this.pathConsignation.trouverPathLocal(fuuid, true);
-    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, message.extension, opts.cleSymmetrique, opts.iv)
+    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, message.extension, opts.cleSymmetrique, opts.metaCle)
     fichierSource = fichierSrcTmp.path
 
     fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.' + message.extension })
@@ -80,8 +80,8 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     }
 
     // Calculer hachage fichier
-    const hachage = await calculerHachageFichier(pathPreviewImage)
-    debug("Hachage nouveau preview/thumbnail : %s", hachage)
+    // const hachage = await calculerHachageFichier(pathPreviewImage)
+    // debug("Hachage nouveau preview/thumbnail : %s", hachage)
 
     // Changer extension fichier destination
     await new Promise((resolve, reject)=>{
@@ -93,9 +93,8 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     })
 
     return {
-      fuuid: fuuidPreviewImage,
       extension,
-      hachage_preview: hachage,
+      hachage_preview: resultatChiffrage.meta.hachage_bytes,
       ...resultatConversion,
       ...resultatChiffrage
     }
@@ -117,15 +116,19 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
 
 }
 
-async function dechiffrerTemporaire(pathConsignation, fuuid, extension, cleSymmetrique, iv) {
+async function dechiffrerTemporaire(pathConsignation, fuuid, extension, cleSymmetrique, metaCle, opts) {
+  opts = opts || {}
+
   const pathFichierChiffre = pathConsignation.trouverPathLocal(fuuid, true);
 
   const tmpDecrypted = await tmp.file({ mode: 0o600, postfix: '.' + extension })
   const decryptedPath = tmpDecrypted.path
 
   // Decrypter
-  var resultatsDecryptage = await decrypteur.decrypter(
-    pathFichierChiffre, decryptedPath, cleSymmetrique, iv, {cleFormat: 'hex'})
+  // var resultatsDecryptage = await decrypteur.decrypter(
+  //   pathFichierChiffre, decryptedPath, cleSymmetrique, iv, {cleFormat: 'hex'})
+
+  await decrypterGCM(pathFichierChiffre, decryptedPath, cleSymmetrique, metaCle.iv, metaCle.tag, opts)
 
   return tmpDecrypted
 }
@@ -135,45 +138,52 @@ async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques) {
   const writeStream = fs.createWriteStream(fichierDst);
 
   // Creer cipher
-  const infoChiffrage = await mq.pki.creerCipherChiffrageAsymmetrique(clesPubliques)
-  const cipher = infoChiffrage.cipher,
-        iv = infoChiffrage.iv,
-        clesChiffrees = infoChiffrage.certClesChiffrees
+  const cipher = await mq.pki.creerCipherChiffrageAsymmetrique(
+    clesPubliques, 'GrosFichiers', {}
+  )
+  // const cipher = infoChiffrage.cipher,
+  //       iv = infoChiffrage.iv,
+  //       clesChiffrees = infoChiffrage.certClesChiffrees
 
-  debug("Info chipher : iv:%s, cles:\n%O", iv, clesChiffrees)
+  // debug("Info chipher : iv:%s, cles:\n%O", iv, clesChiffrees)
 
-  return await new Promise((resolve, reject)=>{
+  return new Promise((resolve, reject)=>{
     const s = fs.ReadStream(fichierSrc)
     var tailleFichier = 0
-    var ivInsere = false
+    // var ivInsere = false
     s.on('data', data => {
-      if(!ivInsere) {
-        // Inserer le IV au debut du fichier
-        ivInsere = true
-        debug("Inserer IV : %O", iv)
-        const ivBuffer = new Buffer(iv, 'base64')
-        const contenuCrypte = cipher.update(ivBuffer);
-        tailleFichier += contenuCrypte.length
-        writeStream.write(contenuCrypte)
-      }
+      // if(!ivInsere) {
+      //   // Inserer le IV au debut du fichier
+      //   ivInsere = true
+      //   debug("Inserer IV : %O", iv)
+      //   const ivBuffer = new Buffer(iv, 'base64')
+      //   const contenuCrypte = cipher.update(ivBuffer);
+      //   tailleFichier += contenuCrypte.length
+      //   writeStream.write(contenuCrypte)
+      // }
       const contenuCrypte = cipher.update(data);
       tailleFichier += contenuCrypte.length
       writeStream.write(contenuCrypte)
 
       // writeStream.write(data)
     })
-    s.on('end', _ => {
-      const contenuCrypte = cipher.final()
-      tailleFichier += contenuCrypte.length
-      writeStream.write(contenuCrypte)
+    s.on('end', async _ => {
+      const informationChiffrage = await cipher.finish()
+      console.debug("Information chiffrage fichier : %O", informationChiffrage)
+      // tailleFichier += contenuCrypte.length
+      // writeStream.write(contenuCrypte)
       writeStream.close()
-      return resolve({tailleFichier, iv, clesChiffrees})
+      return resolve({
+        tailleFichier,
+        meta: informationChiffrage.meta,
+        commandeMaitreCles: informationChiffrage.commandeMaitreCles
+      })
     })
   })
 
 }
 
-async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetrique, iv, message) {
+async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetrique, iv, tag, message) {
 
   const fuuid = message.fuuid;
   const extension = message.extension;
@@ -194,7 +204,7 @@ async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetriq
   mq.emettreEvenement({fuuid, progres: 1}, 'evenement.fichiers.transcodageEnCours')
   var fichierSrcTmp = '', fichierDstTmp = ''
   try {
-    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, 'vid', cleSymmetrique, iv)
+    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, 'vid', cleSymmetrique, iv, tag)
     fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.mp4'})
     var fichierSource = fichierSrcTmp.path
     debug("Fichier transcodage video, source dechiffree : %s", fichierSource)

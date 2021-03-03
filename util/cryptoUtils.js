@@ -4,6 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const forge = require('node-forge');
 const {Transform} = require('stream')
+const multibase = require('multibase')
 
 const AES_ALGORITHM = 'aes-256-cbc';  // Meme algorithme utilise sur MG en Python
 const RSA_ALGORITHM = 'RSA-OAEP';
@@ -17,6 +18,8 @@ function decrypter(sourceCryptee, destination, cleSecreteDecryptee, iv, opts) {
 
 function decrypterGCM(sourceCryptee, destination, cleSecreteDecryptee, iv, tag, opts) {
   if(!opts) opts = {}
+  const params = {sourceCryptee, destination, cleSecreteDecryptee, iv, tag, opts}
+  console.debug("DecrypterGCM params : %O", params)
 
   let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv, {...opts, tag})
   return _decrypter(sourceCryptee, destination, cryptoStream, opts)
@@ -62,7 +65,7 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
   if(!opts) opts = {}
   // On prepare un decipher pipe pour decrypter le contenu.
 
-  let ivBuffer = Buffer.from(iv, 'base64');
+  let ivBuffer = Buffer.from(multibase.decode(iv));
 
   let decryptedSecretKey;
   if(typeof cleSecrete === 'string') {
@@ -108,7 +111,7 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
 
   var decipher = null
   if(opts.tag) {
-    const bufferTag = Buffer.from(opts.tag, 'base64')
+    const bufferTag = Buffer.from(multibase.decode(opts.tag))
     decipher = crypto.createDecipheriv('aes-256-gcm', decryptedSecretKey, ivBuffer)
     decipher.setAuthTag(bufferTag)
   } else {
@@ -146,4 +149,4 @@ function decrypterSymmetrique(contenuCrypte, cleSecrete, iv) {
   })
 }
 
-module.exports = { decrypter, getDecipherPipe4fuuid, decrypterSymmetrique }
+module.exports = { decrypter, getDecipherPipe4fuuid, decrypterSymmetrique, decrypterGCM }

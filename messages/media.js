@@ -160,7 +160,7 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
   const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
   const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
 
-  opts = {cleSymmetrique: cleDechiffree, iv: informationCle.iv, clesPubliques}
+  opts = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
 
   debug("Debut generation preview")
   const resultatPreview = await fctConversion(mq, pathConsignation, message, opts)
@@ -168,18 +168,25 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
 
   // Transmettre transaction info chiffrage
   const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
-  const transactionCles = {
-    domaine: 'GrosFichiers',
-    identificateurs_document: {
-      fuuid: resultatPreview.fuuid,
-      attachement_fuuid: message.fuuid,
-      type: 'preview',
-    },
-    cles: resultatPreview.clesChiffrees,
-    iv: resultatPreview.iv,
-    hachage_bytes: resultatPreview.hachage_preview,
+  const commandeMaitreCles = resultatPreview.commandeMaitreCles
+  commandeMaitreCles.identificateurs_document = {
+    attachement_fuuid: message.fuuid,
+    type: 'preview',
   }
-  await mq.transmettreCommande(domaineActionCles, transactionCles)
+  // const transactionCles = {
+  //   domaine: 'GrosFichiers',
+  //   identificateurs_document: {
+  //     fuuid: resultatPreview.fuuid,
+  //     attachement_fuuid: message.fuuid,
+  //     type: 'preview',
+  //   },
+  //   cles: resultatPreview.clesChiffrees,
+  //   iv: resultatPreview.iv,
+  //   tag: resultatPreview.tag,
+  //   format: resultatPreview.format,
+  //   hachage_bytes: resultatPreview.hachage_preview,
+  // }
+  await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
 
   // Transmettre transaction preview
   const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
@@ -187,7 +194,7 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
     uuid: message.uuid,
     fuuid: message.fuuid,
     mimetype_preview: resultatPreview.mimetype,
-    fuuid_preview: resultatPreview.fuuid,
+    fuuid_preview: resultatPreview.hachage_preview,
     extension_preview: resultatPreview.extension,
     hachage_preview: resultatPreview.hachage_preview,
   }

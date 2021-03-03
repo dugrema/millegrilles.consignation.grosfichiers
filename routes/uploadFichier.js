@@ -21,7 +21,7 @@ function init(pathConsignation) {
 function verifierNiveauPrive(req, res, next) {
   // S'assurer que l'usager est au moins logge avec le niveau prive
   if(!req.autorisationMillegrille.prive) {
-    return req.sendStatus(403)
+    return res.sendStatus(403)
   }
   next()
 }
