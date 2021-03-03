@@ -74,27 +74,34 @@ async function transcoderVideo(mq, pathConsignation, message) {
   const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
   const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
 
-  opts = {cleSymmetrique: cleDechiffree, iv: informationCle.iv, clesPubliques}
-
+  // opts = {cleSymmetrique: cleDechiffree, iv: informationCle.iv, clesPubliques}
+  opts = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
 
   debug("Debut dechiffrage fichier video")
   const resultatTranscodage = await traitementMedia.transcoderVideo(
-    mq, pathConsignation, opts.clesPubliques, opts.cleSymmetrique, opts.iv, message)
+    mq, pathConsignation, message, opts)
+
+  debug("Resultat transcodage : %O", resultatTranscodage)
 
   // Transmettre transaction info chiffrage
   const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
-  const transactionCles = {
-    domaine: 'GrosFichiers',
-    identificateurs_document: {
-      fuuid: resultatTranscodage.fuuidVideo,
+  // const transactionCles = {
+  //   domaine: 'GrosFichiers',
+  //   identificateurs_document: {
+  //     fuuid: resultatTranscodage.fuuidVideo,
+  //     attachement_fuuid: message.fuuid,
+  //     type: 'video',
+  //   },
+  //   cles: resultatTranscodage.clesChiffrees,
+  //   iv: resultatTranscodage.iv,
+  //   hachage_bytes: resultatTranscodage.hachage,
+  // }
+  const commandeMaitreCles = resultatTranscodage.commandeMaitreCles
+  commandeMaitreCles.identificateurs_document = {
       attachement_fuuid: message.fuuid,
       type: 'video',
-    },
-    cles: resultatTranscodage.clesChiffrees,
-    iv: resultatTranscodage.iv,
-    hachage_bytes: resultatTranscodage.hachage,
-  }
-  await mq.transmettreCommande(domaineActionCles, transactionCles)
+    }
+  await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
 
   // Transmettre transaction associer video transcode
   const transactionAssocierPreview = {
@@ -113,7 +120,7 @@ async function transcoderVideo(mq, pathConsignation, message) {
   mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageTermine')
 
   const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
-  mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
+  await mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
 }
 
 async function genererPreviewImage(mq, pathConsignation, message) {

@@ -73,26 +73,7 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     // Calculer hachage fichier
     // const hachage = await calculerHachageFichier(pathPreviewImage)
     // debug("Hachage nouveau preview/thumbnail : %s", hachage)
-    const hachage = resultatChiffrage.meta.hachage_bytes
-    const pathPreviewImage = pathConsignation.trouverPathLocal(hachage)
-
-    // Makedir consignation
-    const pathRepertoire = path.dirname(pathPreviewImage)
-    await new Promise((resolve, reject) => {
-      fs.mkdir(pathRepertoire, { recursive: true }, async (err)=>{
-        if(err) return reject(err)
-        resolve()
-      })
-    })
-
-    // Changer extension fichier destination
-    await new Promise((resolve, reject)=>{
-      debug("Renommer fichier dest pour ajouter extension : %s", pathPreviewImage)
-      fs.rename(pathPreviewImageTmp.path, pathPreviewImage, err=>{
-        if(err) return reject(err)
-        resolve()
-      })
-    })
+    await _deplacerVersStorage(pathConsignation, resultatChiffrage, pathPreviewImageTmp)
 
     return {
       extension,
@@ -185,13 +166,14 @@ async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques) {
 
 }
 
-async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetrique, iv, tag, message) {
+async function transcoderVideo(mq, pathConsignation, message, opts) {
+  opts = opts || {}
+
+  const {cleSymmetrique, metaCle, clesPubliques} = opts
 
   const fuuid = message.fuuid;
   const extension = message.extension;
   // const securite = message.securite;
-  console.debug("Message transcoder video")
-  console.debug(message)
 
   // Requete info fichier
   const infoFichier = await mq.transmettreRequete('GrosFichiers.documentsParFuuid', {fuuid})
@@ -204,9 +186,9 @@ async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetriq
   }
 
   mq.emettreEvenement({fuuid, progres: 1}, 'evenement.fichiers.transcodageEnCours')
-  var fichierSrcTmp = '', fichierDstTmp = ''
+  var fichierSrcTmp = '', fichierDstTmp = '', pathVideoDestTmp = ''
   try {
-    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, 'vid', cleSymmetrique, iv, tag)
+    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, 'vid', cleSymmetrique, metaCle)
     fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.mp4'})
     var fichierSource = fichierSrcTmp.path
     debug("Fichier transcodage video, source dechiffree : %s", fichierSource)
@@ -217,28 +199,35 @@ async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetriq
     mq.emettreEvenement({fuuid, progres: 95}, 'evenement.fichiers.transcodageEnCours')
 
     // Chiffrer le video transcode
-    const fuuidVideo480p = uuidv1()
-    const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, true)
+    // const fuuidVideo480p = uuidv1()
+    // const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, true)
+
+    pathVideoDestTmp = await tmp.file({ mode: 0o600, postfix: '.mp4'})
 
     await new Promise((resolve, reject)=>{
-      fs.mkdir(path.dirname(pathVideo480p), {recursive: true}, e => {
+      fs.mkdir(path.dirname(pathVideoDestTmp.path), {recursive: true}, e => {
         if(e) return reject(e)
         resolve()
       })
     })
 
-    debug("Chiffrer le fichier transcode (%s) vers %s", fichierDstTmp.path, pathVideo480p)
-    const resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathVideo480p, clesPubliques)
+    debug("Chiffrer le fichier transcode (%s) vers %s", fichierDstTmp.path, pathVideoDestTmp.path)
+    const resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathVideoDestTmp.path, clesPubliques)
+    debug("Resultat chiffrage fichier transcode : %O", resultatChiffrage)
 
     // Calculer hachage
-    const hachage = await calculerHachageFichier(pathVideo480p)
-    debug("Hachage nouveau fichier transcode : %s", hachage)
+    // const hachage = await calculerHachageFichier(pathVideo480p)
+    // debug("Hachage nouveau fichier transcode : %s", hachage)
+
+    // Deplacer le fichier vers le repertoire de storage
+    await _deplacerVersStorage(pathConsignation, resultatChiffrage, pathVideoDestTmp)
+    const hachage = resultatChiffrage.meta.hachage_bytes
 
     const resultat = {
       uuid: infoFichier.uuid,
       height: resultatMp4.height,
       bitrate: resultatMp4.bitrate,
-      fuuidVideo: fuuidVideo480p,
+      fuuidVideo: hachage,
       mimetypeVideo: 'video/mp4',
       hachage,
       ...resultatChiffrage,
@@ -258,18 +247,10 @@ async function transcoderVideo(mq, pathConsignation, clesPubliques, cleSymmetriq
     console.error(err);
   } finally {
     // S'assurer que les fichiers temporaires sont supprimes
-    if(fichierSrcTmp) {
-      fichierSrcTmp.cleanup()
-      // fs.unlink(fichierSrcTmp.path, err=>{
-      //   if(err) console.error("Erreur suppression fichier tmp dechiffre : %O", err)
-      // })
-    }
-    if(fichierDstTmp) {
-      fichierDstTmp.cleanup()
-      // fs.unlink(fichierDstTmp.path, err=>{
-      //   if(err) console.error("Erreur suppression fichier tmp transcode (dechiffre) : %O", err)
-      // })
-    }
+    [fichierSrcTmp, fichierDstTmp, pathVideoDestTmp].forEach(fichier=>{
+      console.debug("Cleanup fichier tmp : %O", fichier)
+      fichier.cleanup()
+    })
   }
 
 }
@@ -305,6 +286,29 @@ async function traiterVideo(pathImageSrc, pathImageDst) {
     extension: 'jpg',
     dataVideo,
   }
+}
+
+async function _deplacerVersStorage(pathConsignation, resultatChiffrage, pathPreviewImageTmp) {
+  const hachage = resultatChiffrage.meta.hachage_bytes
+  const pathPreviewImage = pathConsignation.trouverPathLocal(hachage)
+
+  // Makedir consignation
+  const pathRepertoire = path.dirname(pathPreviewImage)
+  await new Promise((resolve, reject) => {
+    fs.mkdir(pathRepertoire, { recursive: true }, async (err)=>{
+      if(err) return reject(err)
+      resolve()
+    })
+  })
+
+  // Changer extension fichier destination
+  await new Promise((resolve, reject)=>{
+    debug("Renommer fichier dest pour ajouter extension : %s", pathPreviewImage)
+    fs.rename(pathPreviewImageTmp.path, pathPreviewImage, err=>{
+      if(err) return reject(err)
+      resolve()
+    })
+  })
 }
 
 module.exports = {
