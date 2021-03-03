@@ -283,7 +283,7 @@ async function creerStreamDechiffrage(mq, req) {
   debug("Creer stream dechiffrage, query : %O", req.query)
 
   // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
-  const chainePem = mq.pki.getChainePems()
+  const chainePem = mq.pki.chainePEM
   const domaineActionDemandePermission = 'GrosFichiers.demandePermissionDechiffragePublic',
         requetePermission = {fuuid: fuuidFichier}
   const reponsePermission = await mq.transmettreRequete(domaineActionDemandePermission, requetePermission)
@@ -306,35 +306,31 @@ async function creerStreamDechiffrage(mq, req) {
   }
 
   var cleChiffree, iv, fuuidEffectif = fuuidFichier, infoVideo = ''
-  //if(utiliserPreview && reponsePermission['fuuid_preview']) {
-    if(req.query.preview) {
-      debug("Utiliser le preview pour extraction")
-      fuuidEffectif = reponsePermission['fuuid_preview']
-    } else if(req.query.video) {
-      const resolution = req.query.video
-      debug("Utiliser le video resolution %s pour extraction", resolution)
-      // Faire une requete pour trouver le video associe a la resolution
-      const domaineRequeteFichier = 'GrosFichiers.documentsParFuuid'
-      const infoFichier = await mq.transmettreRequete(domaineRequeteFichier, {fuuid: fuuidFichier})
-      debug("Information fichier video : %O", infoFichier)
-      infoVideo = infoFichier.versions[fuuidFichier].video[resolution]
-      fuuidEffectif = infoVideo.fuuid
-      debug("Fuuid effectif pour video %s : %s", resolution, fuuidEffectif)
-    }
 
-    var infoClePreview = null
-    Object.values(reponseCle.cles).forEach(item=>{
-      if(item.identificateurs_document.fuuid === fuuidEffectif) {
-        infoClePreview = item
-      }
-    })
-    cleChiffree = infoClePreview.cle
-    iv = infoClePreview.iv
+  if(req.query.preview) {
+    debug("Utiliser le preview pour extraction")
+    fuuidEffectif = reponsePermission['fuuid_preview']
+  } else if(req.query.video) {
+    const resolution = req.query.video
+    debug("Utiliser le video resolution %s pour extraction", resolution)
+    // Faire une requete pour trouver le video associe a la resolution
+    const domaineRequeteFichier = 'GrosFichiers.documentsParFuuid'
+    const infoFichier = await mq.transmettreRequete(domaineRequeteFichier, {fuuid: fuuidFichier})
+    debug("Information fichier video : %O", infoFichier)
+    infoVideo = infoFichier.versions[fuuidFichier].video[resolution]
+    fuuidEffectif = infoVideo.fuuid
+    debug("Fuuid effectif pour video %s : %s", resolution, fuuidEffectif)
+  }
+
+  var infoClePreview = reponseCle.cles[fuuidEffectif]
+  cleChiffree = infoClePreview.cle
+  iv = infoClePreview.iv
+  tag = infoClePreview.tag
 
   // Dechiffrer cle recue
   const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
 
-  const decipherStream = getDecipherPipe4fuuid(cleDechiffree, iv, {cleFormat: 'hex'})
+  const decipherStream = getDecipherPipe4fuuid(cleDechiffree, iv, {tag})
 
   return {acces: reponseCle.acces, permission: reponsePermission, fuuidEffectif, decipherStream, infoVideo}
 }
