@@ -46,7 +46,11 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
   try {
 
     const fuuidPreviewImage = uuidv1()
-    pathPreviewImageTmp = await tmp.file({ mode: 0o600, postfix: '.' + message.extension })
+    pathPreviewImageTmp = await tmp.file({
+      mode: 0o600,
+      postfix: '.' + message.extension,
+      dir: pathConsignation.consignationPathUploadStaging, // Meme drive que storage pour rename
+    })
 
     // Trouver fichier original crypte    const pathFichierChiffre = this.pathConsignation.trouverPathLocal(fuuid, true);
     fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, message.extension, opts.cleSymmetrique, opts.metaCle)
@@ -202,7 +206,11 @@ async function transcoderVideo(mq, pathConsignation, message, opts) {
     // const fuuidVideo480p = uuidv1()
     // const pathVideo480p = pathConsignation.trouverPathLocal(fuuidVideo480p, true)
 
-    pathVideoDestTmp = await tmp.file({ mode: 0o600, postfix: '.mp4'})
+    pathVideoDestTmp = await tmp.file({
+      mode: 0o600,
+      postfix: '.mp4',
+      dir: pathConsignation.consignationPathUploadStaging, // Meme drive que storage pour rename
+    })
 
     await new Promise((resolve, reject)=>{
       fs.mkdir(path.dirname(pathVideoDestTmp.path), {recursive: true}, e => {
