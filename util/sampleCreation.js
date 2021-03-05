@@ -3,8 +3,10 @@ const path = require('path')
 const lzma = require('lzma-native')
 const tar = require('tar')
 
-const { hacherDictionnaire } = require('@dugrema/millegrilles.common/lib/forgecommon')
+// const { hacherDictionnaire } = require('@dugrema/millegrilles.common/lib/forgecommon')
 const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHachage')
+const { hacherMessage } = require('@dugrema/millegrilles.common/lib/formatteurMessage')
+const { verifierMessage } = require('@dugrema/millegrilles.common/lib/validateurMessage')
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 
 const PATH_BACKUP = '/tmp/mg-verificationbackups'
@@ -112,7 +114,7 @@ async function creerBackupHoraire(dateHeure, opts) {
   }
   backup_precedent = {
     uuid_transaction: catalogue['en-tete'].uuid_transaction,
-    hachage_entete: hacherDictionnaire(catalogue['en-tete']),
+    hachage_entete: hacherMessage(catalogue['en-tete']),
   }
 
 

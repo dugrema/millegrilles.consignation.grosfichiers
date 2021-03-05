@@ -48,7 +48,7 @@ describe('processFichiersBackup', ()=>{
     // Creer fichier pour catalogue, hook supprimer tmp
     await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
       domaine: 'domaine.test',
-      transactions_hachage: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      transactions_hachage: 'z8Vx6tEfdbz6udDHH6RaCTjvFhATgP4CPSvnbmaffPY4ttehdNUYFX278XAZA9nXqq8HGPL46oXjyfaoE3hJ252pH2t',
     }, {lzma: true})
     creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
 
@@ -61,7 +61,7 @@ describe('processFichiersBackup', ()=>{
         path: path.join(tmpdir.name, 'fichier1.txt.init'),
       }
 
-    const resultat = await processFichiersBackup.traiterFichiersBackup(amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue)
+    var resultat = await processFichiersBackup.traiterFichiersBackup(amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue)
     console.info("Resultat hachage : %O", resultat)
 
     const infoCatalogue = fs.statSync(path.join(tmpdir.name, 'horaire/fichier1.txt'))
@@ -87,7 +87,7 @@ describe('processFichiersBackup', ()=>{
     // Creer fichier pour catalogue, hook supprimer tmp
     await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
       domaine: 'domaine.test',
-      transactions_hachage: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      transactions_hachage: 'z8Vx6tEfdbz6udDHH6RaCTjvFhATgP4CPSvnbmaffPY4ttehdNUYFX278XAZA9nXqq8HGPL46oXjyfaoE3hJ252pH2t',
     }, {lzma: true})
     creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
 
@@ -126,7 +126,7 @@ describe('processFichiersBackup', ()=>{
     // Creer fichier pour catalogue, hook supprimer tmp
     await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
       domaine: 'domaine.test',
-      transactions_hachage: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      transactions_hachage: 'z8Vx6tEfdbz6udDHH6RaCTjvFhATgP4CPSvnbmaffPY4ttehdNUYFX278XAZA9nXqq8HGPL46oXjyfaoE3hJ252pH2t',
       snapshot: true,
     }, {lzma: true})
     creerFichierDummy(path.join(tmpdir.name, 'fichier2.txt.init'), 'Transaction')
@@ -162,7 +162,7 @@ describe('processFichiersBackup', ()=>{
     // Creer deux sets de backup snapshot
     await creerFichierDummy(path.join(tmpdir.name, 'fichier1.txt.init'), {
       domaine: 'domaine.test',
-      transactions_hachage: 'sha512_b64:1+ROfpt6khAjwaJfsH274cNSZlpekgjU9iUTuyOTCM8htjm53L8eMJP7qy4v6MGx9CbU5O0z9AdBNiFW73YsVQ==',
+      transactions_hachage: 'z8Vx6tEfdbz6udDHH6RaCTjvFhATgP4CPSvnbmaffPY4ttehdNUYFX278XAZA9nXqq8HGPL46oXjyfaoE3hJ252pH2t',
       snapshot: true,
       valeur: 1,
     }, {lzma: true})
@@ -209,7 +209,7 @@ describe('processFichiersBackup', ()=>{
     }
 
     expect.assertions(2)
-    return processFichiersBackup.sauvegarderFichiersApplication(catalogue, {path: pathApplication}, pathBackupApplication)
+    return processFichiersBackup.sauvegarderFichiersApplication(catalogue, pathApplication, pathBackupApplication)
     .then(()=>{
       // Verifier que le catalogue et archive application sont crees
       const pathApplication = path.join(tmpdir.name, 'backup', 'application.txt')
@@ -317,25 +317,34 @@ describe('processFichiersBackup', ()=>{
       transmettreEnveloppeTransaction: (transaction)=>{
         appels_transmettreEnveloppeTransaction.push(transaction)
         return ''
+      },
+      transmettreEnveloppeCommande: (transaction)=>{
+        appels_transmettreEnveloppeTransaction.push(transaction)
+        return ''
       }
     }
 
     const transactionCatalogue = {
-            archive_hachage: 'sha512_b64:m9+VOgb9/QzOb/myd745kqAk2XFl308AgjUTBpS4NpTJeELbY39FfPxsZsECbGX/cyIeaVrISi2v4Z7XsMAGQg==',
+            archive_hachage: 'z8VvuHZrjzp2T1Uy86Ktf3wqRsm79QoWqfQXbVQqazT4UoMji9uhQnyTDFRSfS7KBPcWmTxc2PjrHQWTkXU7KekgxEm',
             archive_nomfichier: 'application.txt',
             catalogue_nomfichier: 'catalogue.json',
+            'en-tete': {estampille: 1}
           },
           transactionMaitreDesCles = {},
-          fichierApplication = path.join(tmpdir.name, 'application.txt')
+          fichierApplication = path.join(tmpdir.name, 'application.txt'),
+          fichierCatalogue = path.join(tmpdir.name, 'catalogue.json')
+          fichierMaitrecles = path.join(tmpdir.name, 'maitrecles.json.autre')
 
+    creerFichierDummy(fichierCatalogue, JSON.stringify(transactionCatalogue))
+    creerFichierDummy(fichierMaitrecles, JSON.stringify(transactionMaitreDesCles))
     creerFichierDummy(fichierApplication, 'dadido')
 
-    expect.assertions(1)
-    return processFichiersBackup.traiterFichiersApplication(
-      amqpdao, transactionCatalogue, transactionMaitreDesCles, {path: fichierApplication}, tmpdir.name)
-      .then(()=>{
-        expect(appels_transmettreEnveloppeTransaction.length).toBe(2)
-      })
+    // expect.assertions(1)
+
+    await processFichiersBackup.traiterFichiersApplication(
+      amqpdao, fichierCatalogue, fichierMaitrecles, fichierApplication, tmpdir.name)
+
+    expect(appels_transmettreEnveloppeTransaction.length).toBe(2)
   })
 
 
@@ -396,7 +405,7 @@ describe('processFichiersBackup', ()=>{
     fs.mkdirSync(path.join(tmpdir.name, 'horaire'))
     await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire_00.json.xz'), {
       transactions_nomfichier: 'transactions_00.jsonl.xz',
-      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      transactions_hachage: 'z8VwjAw4P6LaxnDJJpWSLi3fsKFoz9Zsv6hGprDxMTmLsTckN7UgJsYwa6uFsgbfnaC9YArKZg2mzLEtR3ANhJZLSQR',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
@@ -406,7 +415,7 @@ describe('processFichiersBackup', ()=>{
 
     await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire_01.json.xz'), {
       transactions_nomfichier: 'transactions_01.jsonl.xz',
-      transactions_hachage: 'sha512_b64:ssgOVrjt8LGsh5PS/qorlWooxKsrNPqaYCGbEnJsSC2u3wIaxiluAZbBrVI/g1dLNF3qV5NDgA5VTJdkuyKNbg==',
+      transactions_hachage: 'z8VwMrJNg3SpCg3tmtAjzhb84RkWngHJXnF1CnfY2XGUFbStuuKdXo7fEuxpYjCcd2fAqTiv2H7MRAEECBoyX8fQKA5',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
@@ -420,7 +429,7 @@ describe('processFichiersBackup', ()=>{
           catalogue_nomfichier: 'catalogue_horaire_00.json.xz',
           transactions_nomfichier: 'transactions_00.jsonl.xz',
           catalogue_hachage: '',
-          transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+          transactions_hachage: 'z8VwjAw4P6LaxnDJJpWSLi3fsKFoz9Zsv6hGprDxMTmLsTckN7UgJsYwa6uFsgbfnaC9YArKZg2mzLEtR3ANhJZLSQR',
         }
       },
       'en-tete': {
@@ -467,7 +476,7 @@ describe('processFichiersBackup', ()=>{
     fs.mkdirSync(path.join(tmpdir.name, 'horaire'))
     await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire_00.json.xz'), {
       transactions_nomfichier: 'transactions_00.jsonl.xz',
-      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      transactions_hachage: 'z8VwjAw4P6LaxnDJJpWSLi3fsKFoz9Zsv6hGprDxMTmLsTckN7UgJsYwa6uFsgbfnaC9YArKZg2mzLEtR3ANhJZLSQR',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
@@ -477,7 +486,7 @@ describe('processFichiersBackup', ()=>{
 
     await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire_01.json.xz'), {
       transactions_nomfichier: 'transactions_01.jsonl.xz',
-      transactions_hachage: 'sha512_b64:ssgOVrjt8LGsh5PS/qorlWooxKsrNPqaYCGbEnJsSC2u3wIaxiluAZbBrVI/g1dLNF3qV5NDgA5VTJdkuyKNbg==',
+      transactions_hachage: 'z8VwMrJNg3SpCg3tmtAjzhb84RkWngHJXnF1CnfY2XGUFbStuuKdXo7fEuxpYjCcd2fAqTiv2H7MRAEECBoyX8fQKA5',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
@@ -523,7 +532,7 @@ describe('processFichiersBackup', ()=>{
     fs.mkdirSync(path.join(tmpdir.name, 'horaire'))
     await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire_00.json.xz'), {
       transactions_nomfichier: 'transactions_00.jsonl.xz',
-      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      transactions_hachage: 'z8VwjAw4P6LaxnDJJpWSLi3fsKFoz9Zsv6hGprDxMTmLsTckN7UgJsYwa6uFsgbfnaC9YArKZg2mzLEtR3ANhJZLSQR',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
@@ -589,7 +598,7 @@ describe('processFichiersBackup', ()=>{
     fs.mkdirSync(path.join(tmpdir.name, 'horaire'))
     await processFichiersBackup.sauvegarderLzma(path.join(tmpdir.name, 'horaire', 'catalogue_horaire.json.xz'), {
       transactions_nomfichier: 'transactions_00.jsonl.xz',
-      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      transactions_hachage: 'z8VwjAw4P6LaxnDJJpWSLi3fsKFoz9Zsv6hGprDxMTmLsTckN7UgJsYwa6uFsgbfnaC9YArKZg2mzLEtR3ANhJZLSQR',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
@@ -635,7 +644,7 @@ describe('processFichiersBackup', ()=>{
     const pathCatalogueQuotidien = path.join(tmpdir.name, 'catalogue_quotidien_20200101.json.xz')
     await processFichiersBackup.sauvegarderLzma(pathCatalogueQuotidien, {
       transactions_nomfichier: 'transactions_00.jsonl.xz',
-      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      transactions_hachage: 'z8VwjAw4P6LaxnDJJpWSLi3fsKFoz9Zsv6hGprDxMTmLsTckN7UgJsYwa6uFsgbfnaC9YArKZg2mzLEtR3ANhJZLSQR',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
@@ -700,7 +709,7 @@ describe('processFichiersBackup', ()=>{
     const pathCatalogueQuotidien = path.join(tmpdir.name, 'catalogue_quotidien_20200101.json.xz')
     await processFichiersBackup.sauvegarderLzma(pathCatalogueQuotidien, {
       transactions_nomfichier: 'transactions_00.jsonl.xz',
-      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      transactions_hachage: 'z8VwjAw4P6LaxnDJJpWSLi3fsKFoz9Zsv6hGprDxMTmLsTckN7UgJsYwa6uFsgbfnaC9YArKZg2mzLEtR3ANhJZLSQR',
       'en-tete': {
         hachage_contenu: 'dummy',
       },
@@ -766,7 +775,7 @@ describe('processFichiersBackup', ()=>{
     const pathCatalogueQuotidien = path.join(tmpdir.name, 'catalogue_quotidien_20200101.json.xz')
     await processFichiersBackup.sauvegarderLzma(pathCatalogueQuotidien, {
       transactions_nomfichier: 'transactions_00.jsonl.xz',
-      transactions_hachage: 'sha512_b64:xSsI8/pzk+sB4lrKS13PJfM34MOd/Now8/TcGGaCrfnZTCvOLIgRfvp060A8MdvopXN9N1mWC6PeY6vJN4Lr6g==',
+      transactions_hachage: 'z8VwjAw4P6LaxnDJJpWSLi3fsKFoz9Zsv6hGprDxMTmLsTckN7UgJsYwa6uFsgbfnaC9YArKZg2mzLEtR3ANhJZLSQR',
       'en-tete': {
         hachage_contenu: 'dummy',
       },

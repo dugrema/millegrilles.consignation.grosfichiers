@@ -7,7 +7,9 @@ const lzma = require('lzma-native')
 const tar = require('tar')
 const parse = require('tar-parse')
 const Rsync = require('rsync')
-const { calculerHachageFichier, calculerHachageData } = require('./utilitairesHachage')
+const { hacherMessage } = require('@dugrema/millegrilles.common/lib/formatteurMessage')
+const { verifierMessage } = require('@dugrema/millegrilles.common/lib/validateurMessage')
+const { calculerHachageFichier, verifierHachageFichier } = require('./utilitairesHachage')
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 const { supprimerFichiers, supprimerRepertoiresVides } = require('./traitementFichier')
 
@@ -81,7 +83,7 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
 
 async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMaitrecles) {
   // Valider le fichier de transactions
-  const hachageTransactions = await calculerHachageFichier(fichierTransactions.path)
+  const hachageTransactions = await verifierHachageFichier(fichierTransactions.path, catalogue.transactions_hachage)
   if(catalogue.transactions_hachage !== hachageTransactions) {
     debug("Erreur comparaison hachage transactions du catalogue (%s) et calcule (%s)", catalogue.transactions_hachage, hachageTransactions)
     return {
@@ -157,7 +159,7 @@ async function traiterFichiersApplication(
 
   // Sauvegarder fichier de catalogue
   promises.push(
-    calculerHachageFichier(fichierApplication)
+    verifierHachageFichier(fichierApplication)
     .then( hachageCalcule => {
       const hachageRecu = transactionCatalogue.archive_hachage
 
@@ -452,7 +454,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
 
     // Conserver information manquante dans le catalogue quotidien
     infoFichier.catalogue_hachage = infoHoraire.hachageCatalogue
-    infoFichier.hachage_entete = calculerHachageData(infoHoraire.catalogue['en-tete'].hachage_contenu)
+    infoFichier.hachage_entete = hacherMessage(infoHoraire.catalogue['en-tete'])
     infoFichier.uuid_transaction = infoHoraire.catalogue['en-tete'].uuid_transaction
 
     // Conserver path des fichiers relatif au path horaire Utilise pour l'archive tar.
