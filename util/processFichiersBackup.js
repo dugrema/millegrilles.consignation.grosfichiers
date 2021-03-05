@@ -93,7 +93,7 @@ async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMai
   }
 
   // Valider le catalogue
-  if( ! await amqpdao.pki.verifierSignatureMessage(catalogue) ) {
+  if( ! await amqpdao.pki.verifierMessage(catalogue) ) {
     return {
       err: "Signature catalogue invalide",
     }
@@ -105,7 +105,7 @@ async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMai
     const transactionMaitreDesCles = await chargerLzma(fichierMaitrecles.path)
 
     debug("Transmettre cles du fichier de transactions : %O", transactionMaitreDesCles)
-    if( ! await amqpdao.pki.verifierSignatureMessage(transactionMaitreDesCles) ) {
+    if( ! await amqpdao.pki.verifierMessage(transactionMaitreDesCles) ) {
       return {
         err: "La signature de la transaction maitre des cles est invalide",
       }
@@ -478,7 +478,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     // const domaine = catalogue['en-tete'].domaine
     delete catalogue['en-tete']
     delete catalogue['_certificat']
-    mq.formatterTransaction('Backup.catalogueQuotidienFinaliser', catalogue, {attacherCertificat: true})
+    catalogue = await mq.pki.formatterMessage(catalogue, 'Backup.catalogueQuotidienFinaliser', {attacherCertificat: true})
   }
 
   var resultat = await sauvegarderCatalogueQuotidien(pathConsignation, catalogue)
