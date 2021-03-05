@@ -10,7 +10,9 @@ const { genererListeCatalogues } = require('./processFichiersBackup')
 const { pki, ValidateurSignature } = require('./pki')
 const { calculerHachageFichier, calculerHachageStream } = require('./utilitairesHachage')
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
-const { hacherDictionnaire } = require('@dugrema/millegrilles.common/lib/forgecommon')
+// const { hacherDictionnaire } = require('@dugrema/millegrilles.common/lib/forgecommon')
+const { hacherMessage } = require('@dugrema/millegrilles.common/lib/formatteurMessage')
+const { verifierMessage } = require('@dugrema/millegrilles.common/lib/validateurMessage')
 
 async function chargerCatalogue(pathCatalogue) {
   return new Promise((resolve, reject)=>{
@@ -117,7 +119,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
         const heureFormattee = formatterDateString(new Date(catalogue.heure*1000))
         try {
           dateHachageEntetes[heureFormattee] = {
-            hachage_entete: hacherDictionnaire(catalogue['en-tete']),
+            hachage_entete: await hacherMessage(catalogue['en-tete']),
             uuid_transaction: catalogue['en-tete'].uuid_transaction,
             heure: catalogue.heure,
             backup_precedent: catalogue.backup_precedent,
@@ -129,7 +131,7 @@ async function parcourirBackupsHoraire(pathConsignation, domaine, cb, opts) {
         // Conserver le plus recent catalogue
         if(!plusRecentCatalogue || plusRecentCatalogue.heure < catalogue.heure) {
           plusRecentCatalogue = {
-            hachage_entete: hacherDictionnaire(catalogue['en-tete']),
+            hachage_entete: await hacherMessage(catalogue['en-tete']),
             uuid_transaction: catalogue['en-tete'].uuid_transaction,
           }
         }
@@ -279,7 +281,7 @@ async function parcourirArchivesBackup(pathConsignation, domaine, cb, opts) {
       erreursCatalogues = [...erreursCatalogues || [], ...erreurs.erreursCatalogues]
       chainage = {
         uuid_transaction: infoExtraiteArchive.plusRecentCatalogue['en-tete'].uuid_transaction,
-        hachage_entete: hacherDictionnaire(infoExtraiteArchive.plusRecentCatalogue['en-tete']),
+        hachage_entete: await hacherMessage(infoExtraiteArchive.plusRecentCatalogue['en-tete']),
       }
     }
 
@@ -343,24 +345,24 @@ async function verifierPromisesArchive(promises, opts) {
     // Conserver les entetes pour verifier le chainage
     dateHachageEntetes = {}
 
-    resultatsFlat
+    await Promise.all(resultatsFlat
       .filter(item=>{               // Conserver backups horaire
         return item && item.heure
       })
-      .forEach(item=>{              // Conserver info pour chainage
+      .map(async item=>{              // Conserver info pour chainage
         const heureFormattee = formatterDateString(new Date(item.heure*1000))
         dateHachageEntetes[heureFormattee] = {
           heure: item.heure,
           backup_precedent: item.backup_precedent,
           uuid_transaction: item['en-tete'].uuid_transaction,
-          hachage_entete: hacherDictionnaire(item['en-tete']),
+          hachage_entete: await hacherMessage(item['en-tete']),
         }
 
         // Conserver le plus recent catalogue
         if(!plusRecentCatalogue || plusRecentCatalogue.heure < item.heure) {
           plusRecentCatalogue = item
         }
-      })
+      }))
 
     debug("Entetes catalogues horaires %O", dateHachageEntetes)
   }

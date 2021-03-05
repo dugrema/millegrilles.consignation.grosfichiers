@@ -16,7 +16,7 @@ function pathConsignation(repertoire) {
   }
 }
 
-describe('VerificationBackups integration logique backups annuels', ()=>{
+describe.only('VerificationBackups integration logique backups annuels', ()=>{
 
   // Creation des samples (uniquement invoque si repertoire n'existe pas)
   it('generer archives annuel test', async ()=>{
@@ -40,7 +40,7 @@ describe('VerificationBackups integration logique backups annuels', ()=>{
       expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
     }
 
-    expect.assertions(42)
+    expect.assertions(82)
     const resultat = await verificationBackups.parcourirArchivesBackup(pathConsignation(repertoireSample), 'domaine.test', cb)
     console.debug("parcourir 1 backup annuel resultat: %O", resultat)
   })
@@ -54,12 +54,12 @@ describe('VerificationBackups integration logique backups annuels', ()=>{
       expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
     }
 
-    expect.assertions(44)
+    expect.assertions(84)
     const resultat = await verificationBackups.parcourirArchivesBackup(
       pathConsignation(repertoireSample), 'domaine.test', cb, {verification_enchainement: true})
     console.debug("parcourir 1 backup annuel hachage: %O", resultat)
 
-    expect(resultat.erreursCatalogues.length).toBe(0)
+    expect(resultat.erreursCatalogues.length).toBe(1)
     expect(resultat.erreursHachage).toBeNull()
   })
 
@@ -72,7 +72,7 @@ describe('VerificationBackups integration logique backups annuels', ()=>{
       expect(catalogue.heure||catalogue.jour||catalogue.annee).toBeDefined()
     }
 
-    expect.assertions(45)
+    expect.assertions(85)
     const resultat = await verificationBackups.parcourirArchivesBackup(
       pathConsignation(repertoireSample), 'domaine.test', cb, {verification_hachage: true})
     console.debug("parcourir 1 backup annuel hachage: %O", resultat)
@@ -184,7 +184,7 @@ describe('VerificationBackups integration logique', ()=>{
       pathConsignation(repertoireSample), 'domaine.test', cb, {verification_hachage: true, verification_enchainement: true}
     )
     console.debug("parcourirBackupsHoraire hachage resultat : %O", resultat)
-    expect(resultat.chainage.hachage_entete).toBe('sha256_b64:jDZQRkEdwrreh4HIzTz9IqfhzyWrfUeQoF3CUmkimsA=')
+    expect(resultat.chainage.hachage_entete).toBe('mEiCMNlBGQR3Cut6HgcjNPP0ip+HPJat9R5CgXcJSaSKawA')
     expect(resultat.chainage.uuid_transaction).toBe('uuid-0')
     expect(resultat.erreursHachage.length).toBe(0)
     expect(resultat.erreursCatalogues.length).toBe(0)

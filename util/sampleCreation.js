@@ -114,7 +114,7 @@ async function creerBackupHoraire(dateHeure, opts) {
   }
   backup_precedent = {
     uuid_transaction: catalogue['en-tete'].uuid_transaction,
-    hachage_entete: hacherMessage(catalogue['en-tete']),
+    hachage_entete: await hacherMessage(catalogue['en-tete']),
   }
 
 
