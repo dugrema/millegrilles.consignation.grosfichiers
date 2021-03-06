@@ -159,21 +159,12 @@ async function traiterFichiersApplication(
 
   // Sauvegarder fichier de catalogue
   promises.push(
-    verifierHachageFichier(fichierApplication)
-    .then( hachageCalcule => {
-      const hachageRecu = transactionCatalogue.archive_hachage
-
-      if(hachageCalcule !== hachageRecu) {
-        console.error("Hachage recu: %s\nCalcule: %s", hachageRecu, hachageCalcule)
-        throw new Error("Mismatch hachage archive")
-      }
-
-      return `Hachage transaction ok ${hachageRecu}, fichiers sauvegardes`
-    })
+    verifierHachageFichier(fichierApplication, transactionCatalogue.archive_hachage)
+    .then( _ => 'Hachage transaction ok, fichiers sauvegardes' )
   )
 
-  debug("Transmettre catalogue backup application : %O", transactionCatalogue)
-  promises.push( amqpdao.transmettreEnveloppeTransaction(transactionCatalogue) )
+  // debug("Transmettre catalogue backup application : %O", transactionCatalogue)
+  // promises.push( amqpdao.transmettreEnveloppeTransaction(transactionCatalogue) )
 
   try {
     // Attendre le traitement de toutes les promises
