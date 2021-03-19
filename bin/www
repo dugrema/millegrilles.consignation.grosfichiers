@@ -17,20 +17,22 @@ async function init() {
   debug("Initialisation serveur IDMG : %s", idmg)
 
   // Creer une collection avec la connexion a MQ (format qui supporte hebergement)
-  const rabbitMQParIdmg = {
-    [idmg]: instAmqpdao
-  }
-
-  const fctRabbitMQParIdmg = (idmg) => {
-    return rabbitMQParIdmg[idmg]
-  }
+  // const rabbitMQParIdmg = {
+  //   [idmg]: instAmqpdao
+  // }
+  //
+  // const fctRabbitMQParIdmg = (idmg) => {
+  //   return rabbitMQParIdmg[idmg]
+  // }
 
   const root = express()
   root.use(logger('dev'))
 
   // Injecter fonction de mapping de RabbitMQ
   root.use((req, res, next) => {
-    req.fctRabbitMQParIdmg = fctRabbitMQParIdmg
+    req.amqpdao = instAmqpdao
+    req.rabbitMQ = instAmqpdao
+    req.idmg = idmg
     next()
   })
 

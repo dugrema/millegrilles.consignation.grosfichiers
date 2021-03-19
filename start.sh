@@ -17,7 +17,8 @@ export DEBUG=millegrilles.*
 
 # export SERVER_TYPE=https
 
-#export IDMG=QME8SjhaCFySD9qBt1AikQ1U7WxieJY2xDg2JCMczJST
-# export DISABLE_SSL_AUTH=1
+# Desactiver validation usager locale
+export IDMG=z2xMUPJHXDgkLEgdziA21EuA4BCvtWtKLuSnyqVJyvexgxj8yPsMRW
+export DISABLE_SSL_AUTH=1
 
 npm start

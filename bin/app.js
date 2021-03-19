@@ -19,10 +19,10 @@ function initialiser() {
 
   // Inject RabbitMQ pour la MilleGrille detectee sous etape SSL
   app.use((req, res, next)=>{
-    const idmg = req.autorisationMillegrille.idmg
-    const rabbitMQ = req.fctRabbitMQParIdmg(idmg)
-    req.rabbitMQ = rabbitMQ
-    req.amqpdao = rabbitMQ  // Nouvelle approche
+    //const idmg = req.autorisationMillegrille.idmg
+    const idmg = req.idmg
+    //const rabbitMQ = req.fctRabbitMQParIdmg(idmg)
+    // req.amqpdao = rabbitMQ  // Nouvelle approche
     req.pathConsignation = new PathConsignation({idmg})
     next()
   })
