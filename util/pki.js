@@ -500,20 +500,20 @@ function verificationCertificatSSL(req, res, next) {
       const certificatsHeader = req.headers.certificat
       if(!certificatsHeader) {
         debug("Requete url:%s aucun certificat SSL fourni, verifier si acces prive ou public", req.url)
+        const idmg = peerCertificate.subject.O
 
-        if(req.headers['user-prive']) {
+        if(req.headers['user-securite']) {
+          const securite = req.headers['user-securite']
           // Acces prive aux fichiers
           req.autorisationMillegrille = {
-            idmg: req.headers['idmg-compte'],
-            protege: false,
-            prive: true,
+            idmg,
+            protege: '3.protege'===securite?true:false,
+            prive: ['3.protege', '2.prive'].includes(securite)?true:false,
             public: true,
-            securite: '2.prive'
+            securite,
           }
         } else {
           // Acces public aux fichiers de la MilleGrille qui correspond a NGINX
-          const idmg = peerCertificate.subject.O
-
           req.autorisationMillegrille = {
             idmg,
             protege: false,
