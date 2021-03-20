@@ -1,4 +1,4 @@
-FROM node:12
+FROM node:14
 
 # Create app directory
 WORKDIR /usr/src/app
@@ -10,12 +10,15 @@ ENV NODE_ENV=production
 
 EXPOSE 443
 
-CMD [ "npm", "start" ]
+COPY ./package*.json ./
 
 # Installer ffmpeg, imagemagick pour conversion video et images
-RUN apt update && \
+RUN npm i --production && \
+    apt update && \
     apt install ffmpeg imagemagick-6.q16 rsync -y && \
     apt clean && \
     rm -rf /var/cache/apt
 
-COPY node_modules/ node_modules/
+# COPY node_modules/ node_modules/
+
+CMD [ "npm", "start" ]
