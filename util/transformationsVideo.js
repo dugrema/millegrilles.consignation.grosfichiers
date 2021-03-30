@@ -1,19 +1,19 @@
 const fs = require('fs')
 const FFmpeg = require('fluent-ffmpeg')
 
-async function probeVideo(sourcePath, opts) {
+async function probeVideo(input, opts) {
   opts = opts || {}
   const maxHeight = opts.maxHeight || 720,
         maxBitrate = opts.maxBitrate || 750000
 
   const resultat = await new Promise((resolve, reject)=>{
-    FFmpeg.ffprobe(sourcePath, (err, metadata) => {
+    FFmpeg.ffprobe(input, (err, metadata) => {
       if(err) return reject(err)
       resolve(metadata)
     })
   })
 
-  // console.debug("Resultat probe : %O", resultat)
+  console.debug("Resultat probe : %O", resultat)
 
   const infoVideo = resultat.streams.filter(item=>item.codec_type === 'video')[0]
   // console.debug("Information video : %O", infoVideo)
@@ -21,7 +21,8 @@ async function probeVideo(sourcePath, opts) {
   // Determiner le bitrate et la taille (verticale) du video pour eviter un
   // upscaling ou augmentation bitrate
   const bitrate = infoVideo.bit_rate,
-        height = infoVideo.height
+        height = infoVideo.height,
+        nb_frames = infoVideo.nb_frames !== 'N/A'?infoVideo.nb_frames:null
 
   // console.debug("Trouve : taille %d, bitrate %d", height, bitrate)
 
@@ -32,10 +33,9 @@ async function probeVideo(sourcePath, opts) {
     return item <= bitrate && item <= maxBitrate
   })[0]
 
-  console.debug("Information pour encodage : height %d, bit rate %d",
-    tailleEncoding, bitRateEncoding)
+  // console.debug("Information pour encodage : height %d, bit rate %d", tailleEncoding, bitRateEncoding)
 
-  return {height: tailleEncoding, bitrate: bitRateEncoding}
+  return {height: tailleEncoding, bitrate: bitRateEncoding, nb_frames}
 }
 
 async function transcoderVideo(sourcePath, destinationPath, opts) {
@@ -60,10 +60,23 @@ async function transcoderVideo(sourcePath, destinationPath, opts) {
   var modeInputStream = true
   var input = fs.createReadStream(sourcePath)
 
+  var progressHook, framesTotal = videoInfo.nb_frames, framesCourant = 0
+  if(progressCb) {
+    progressHook = progress => {
+      if(framesTotal) {
+        progressCb({framesTotal, ...progress})
+      } else {
+        progressCb(progress)
+        // Conserver le nombre de frames connus pour passe 2
+        framesCourant = progress.frames
+      }
+    }
+  }
+
   // Passe 1
   console.debug("Debut passe 1")
   const videoOpts = { videoBitrate, height, videoCodec }
-  const optsTranscodage = {progressCb}
+  const optsTranscodage = {progressCb: progressHook}
   try {
     await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
   } catch(err) {
@@ -87,6 +100,10 @@ async function transcoderVideo(sourcePath, destinationPath, opts) {
     // Reset inputstream
     input = fs.createReadStream(sourcePath)
   }
+
+  // Set nombre de frames trouves dans la passe 1 au besoin (sert au progress %)
+  if(!framesTotal) framesTotal = framesCourant
+
   await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
   console.debug("Passe 2 terminee")
 
