@@ -1,4 +1,7 @@
+const debug = require('debug')('millegrilles:fichiers:transformationsVideo')
 const fs = require('fs')
+const fsPromises = require('fs/promises')
+const tmpPromises = require('tmp-promise')
 const FFmpeg = require('fluent-ffmpeg')
 
 async function probeVideo(input, opts) {
@@ -13,10 +16,10 @@ async function probeVideo(input, opts) {
     })
   })
 
-  console.debug("Resultat probe : %O", resultat)
+  debug("Resultat probe : %O", resultat)
 
   const infoVideo = resultat.streams.filter(item=>item.codec_type === 'video')[0]
-  // console.debug("Information video : %O", infoVideo)
+  // debug("Information video : %O", infoVideo)
 
   // Determiner le bitrate et la taille (verticale) du video pour eviter un
   // upscaling ou augmentation bitrate
@@ -24,7 +27,7 @@ async function probeVideo(input, opts) {
         height = infoVideo.height,
         nb_frames = infoVideo.nb_frames !== 'N/A'?infoVideo.nb_frames:null
 
-  // console.debug("Trouve : taille %d, bitrate %d", height, bitrate)
+  // debug("Trouve : taille %d, bitrate %d", height, bitrate)
 
   const tailleEncoding = [720, 480, 360, 240].filter(item=>{
     return item <= height && item <= maxHeight
@@ -33,32 +36,35 @@ async function probeVideo(input, opts) {
     return item <= bitrate && item <= maxBitrate
   })[0]
 
-  // console.debug("Information pour encodage : height %d, bit rate %d", tailleEncoding, bitRateEncoding)
+  // debug("Information pour encodage : height %d, bit rate %d", tailleEncoding, bitRateEncoding)
 
   return {height: tailleEncoding, bitrate: bitRateEncoding, nb_frames}
 }
 
-async function transcoderVideo(sourcePath, destinationPath, opts) {
+async function transcoderVideo(streamFactory, destinationPath, opts) {
   if(!opts) opts = {}
 
   var   videoBitrate = opts.videoBitrate || 500000
         height = opts.height || 480
+
   const videoCodec = opts.videoCodec || 'libx264',
         audioCodec = opts.audioCodec || 'aac',
         audioBitrate = opts.audioBitrate || '64k',
         progressCb = opts.progressCb
 
-  var videoInfo = await probeVideo(sourcePath, {maxBitrate: videoBitrate, maxHeight: height})
+  var input = streamFactory()
+  var videoInfo = await probeVideo(input, {maxBitrate: videoBitrate, maxHeight: height})
+  input.close()
   videoBitrate = videoInfo.bitrate
   height = videoInfo.height
 
   videoBitrate = '' + (videoBitrate / 1000) + 'k'
-  console.debug('Utilisation video bitrate : %s', videoBitrate)
+  debug('Utilisation video bitrate : %s', videoBitrate)
 
   // Tenter transcodage avec un stream - fallback sur fichier direct
   // Va etre utilise avec un decipher sur fichiers .mgs2
   var modeInputStream = true
-  var input = fs.createReadStream(sourcePath)
+  input = streamFactory()  // Reset stream (utilise par probeVideo)
 
   var progressHook, framesTotal = videoInfo.nb_frames, framesCourant = 0
   if(progressCb) {
@@ -74,40 +80,54 @@ async function transcoderVideo(sourcePath, destinationPath, opts) {
   }
 
   // Passe 1
-  console.debug("Debut passe 1")
+  debug("Debut passe 1")
   const videoOpts = { videoBitrate, height, videoCodec }
   const optsTranscodage = {progressCb: progressHook}
+
+  var fichierInputTmp = null
   try {
-    await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
-  } catch(err) {
-    // Verifier si on a une erreur de streaming (e.g. video .mov n'est pas
-    // supporte en streaming)
-    const errMsg = err.message
-    if(errMsg.indexOf("ffmpeg exited with code 1") === -1) {
-      throw err  // Erreur non geree
+    try {
+      await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
+    } catch(err) {
+      // Verifier si on a une erreur de streaming (e.g. video .mov n'est pas
+      // supporte en streaming)
+      const errMsg = err.message
+      if(errMsg.indexOf("ffmpeg exited with code 1") === -1) {
+        throw err  // Erreur non geree
+      }
+
+      debug("Echec parsing stream, dechiffrer dans un fichier temporaire et utiliser directement")
+      modeInputStream = false
+
+      // Copier le contenu du stream dans un fichier temporaire
+      fichierInputTmp = await extraireFichierTemporaire(streamFactory())
+      input = fichierInputTmp.path
+      debug("Fichier temporaire output pret: %s", input)
+
+      await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
+    }
+    debug("Passe 1 terminee, debut passe 2")
+
+    // Passe 2
+    const audioOpts = {audioCodec, audioBitrate}
+    if(modeInputStream) {
+      // Reset inputstream
+      input = streamFactory()
     }
 
-    console.debug("Echec parsing stream, dechiffrer dans un fichier temporaire et utiliser directement")
-    modeInputStream = false
-    input = sourcePath  // TODO utiliser fichier tmp dechiffre
-    await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
+    // Set nombre de frames trouves dans la passe 1 au besoin (sert au progress %)
+    if(!framesTotal) framesTotal = framesCourant
+
+    await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
+    debug("Passe 2 terminee")
+
+    return {video: videoOpts, audio: audioOpts}
+  } finally {
+    if(fichierInputTmp) {
+      debug("Cleanup du fichier temporaire %s", fichierInputTmp.path)
+      fichierInputTmp.cleanup()
+    }
   }
-  console.debug("Passe 1 terminee, debut passe 2")
-
-  // Passe 2
-  const audioOpts = {audioCodec, audioBitrate}
-  if(modeInputStream) {
-    // Reset inputstream
-    input = fs.createReadStream(sourcePath)
-  }
-
-  // Set nombre de frames trouves dans la passe 1 au besoin (sert au progress %)
-  if(!framesTotal) framesTotal = framesCourant
-
-  await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
-  console.debug("Passe 2 terminee")
-
-  return {video: videoOpts, audio: audioOpts}
 }
 
 function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, opts) {
@@ -134,7 +154,7 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
     ffmpegProcessCmd
       .outputOptions(['-an', '-f', 'null', '-pass', '1'])
   } else if(passe === 2) {
-    console.debug("Audio info : %O", audioOpts)
+    debug("Audio info : %O", audioOpts)
     ffmpegProcessCmd
       .audioCodec(audioCodec)
       .audioBitrate(audioBitrate)
@@ -166,6 +186,25 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
   }
 
   return processPromise
+}
+
+async function extraireFichierTemporaire(inputStream) {
+  const fichierInputTmp = await tmpPromises.file({keep: true})
+  debug("Fichier temporaire : %s", fichierInputTmp.path)
+
+  const outputStream = fs.createWriteStream(fichierInputTmp.path)
+  const promiseOutput =  new Promise((resolve, reject)=>{
+    outputStream.on('error', err=>{
+      reject(err)
+      fichierInputTmp.cleanup()
+    })
+    outputStream.on('close', _=>{resolve(fichierInputTmp)})
+  })
+
+  inputStream.pipe(outputStream)
+  // inputStream.read()
+
+  return promiseOutput
 }
 
 module.exports = {

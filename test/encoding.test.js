@@ -9,6 +9,7 @@ const VIDEOS = [
   '/home/mathieu/Videos/Flying_with_Geese.mov',
   '/home/mathieu/Videos/1136.mpeg',
   '/home/mathieu/Videos/Dr Quantum - Double Slit Experiment.flv',
+  '/home/mathieu/Videos/bennythesupercop.wmv',
 ]
 const VIDEO_SEL = 0
 
@@ -26,7 +27,7 @@ describe('convertir video', ()=>{
 
   })
 
-  test('video 1 mp4', async () => {
+  test.only('video 1 mp4', async () => {
     console.debug("Convertir video 1 mp4")
     const opts = {
       videoBitrate: 600000,
@@ -36,7 +37,9 @@ describe('convertir video', ()=>{
       progressCb: progress,
     }
 
-    await transcoderVideo(VIDEOS[VIDEO_SEL], '/home/mathieu/Videos/output.mp4', opts)
+    const streamFactory = () => {return fs.createReadStream(VIDEOS[VIDEO_SEL])}
+
+    await transcoderVideo(streamFactory, '/home/mathieu/Videos/output.mp4', opts)
   }, 20 * 60 * 1000)
 
   test('video 1 webm', async () => {
