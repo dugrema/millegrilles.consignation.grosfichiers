@@ -2,6 +2,7 @@ const debug = require('debug')('millegrilles:fichiers:transformationsVideo')
 const fs = require('fs')
 const fsPromises = require('fs/promises')
 const tmpPromises = require('tmp-promise')
+const path = require('path')
 const FFmpeg = require('fluent-ffmpeg')
 
 async function probeVideo(input, opts) {
@@ -80,13 +81,19 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
     }
   }
 
+  // Creer repertoire temporaire pour fichiers de log, outputfile
+  const tmpDir = await tmpPromises.dir({unsafeCleanup: true})
+
   // Passe 1
   debug("Debut passe 1")
-  const videoOpts = { videoBitrate, height, videoCodec }
-  const optsTranscodage = {progressCb: progressHook}
-
-  var fichierInputTmp = null, fichierOutputTmp = null
+  var fichierInputTmp = null  //, fichierOutputTmp = null
   try {
+    const videoOpts = { videoBitrate, height, videoCodec }
+    const optsTranscodage = {
+      progressCb: progressHook,
+      tmpDir: tmpDir.path,
+    }
+
     try {
       await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
     } catch(err) {
@@ -101,8 +108,9 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
       modeInputStream = false
 
       // Copier le contenu du stream dans un fichier temporaire
-      fichierInputTmp = await extraireFichierTemporaire(streamFactory())
-      input = fichierInputTmp.path
+      input = path.join(tmpDir.path, 'input.dat')
+      fichierInputTmp = await extraireFichierTemporaire(input, streamFactory())
+      // input = fichierInputTmp.path
       debug("Fichier temporaire input pret: %s", input)
 
       await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
@@ -119,8 +127,9 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
     // Set nombre de frames trouves dans la passe 1 au besoin (sert au progress %)
     if(!framesTotal) framesTotal = framesCourant
 
-    fichierOutputTmp = await tmpPromises.file({keep: true, postfix: '.' + format})
-    const destinationPath = fichierOutputTmp.path
+    //fichierOutputTmp = await tmpPromises.file({keep: true, postfix: '.' + format})
+    const destinationPath = path.join(tmpDir.path, 'output.' + format)
+    // const destinationPath = fichierOutputTmp.path
     debug("Fichier temporaire output : %s", destinationPath)
 
     await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
@@ -136,14 +145,18 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
 
     return {video: videoOpts, audio: audioOpts}
   } finally {
-    if(fichierInputTmp) {
-      debug("Cleanup du fichier temporaire input %s", fichierInputTmp.path)
-      fichierInputTmp.cleanup()
+    if(tmpDir) {
+      debug("Suppression du repertoire temporaire %s", tmpDir.path)
+      tmpDir.cleanup()
     }
-    if(fichierOutputTmp) {
-      debug("Cleanup du fichier temporaire output %s", fichierOutputTmp.path)
-      fichierOutputTmp.cleanup()
-    }
+    // if(fichierInputTmp) {
+    //   debug("Cleanup du fichier temporaire input %s", fichierInputTmp.path)
+    //   fichierInputTmp.cleanup()
+    // }
+    // if(fichierOutputTmp) {
+    //   debug("Cleanup du fichier temporaire output %s", fichierOutputTmp.path)
+    //   fichierOutputTmp.cleanup()
+    // }
   }
 }
 
@@ -160,23 +173,25 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
         audioBitrate = audioOpts.audioBitrate
 
   const progressCb = opts.progressCb,
-        format = opts.format || 'mp4'
+        format = opts.format || 'mp4',
+        tmpDir = opts.tmpDir || '/tmp'
 
   const ffmpegProcessCmd = new FFmpeg(source, {niceness: 10})
     .withVideoBitrate(''+videoBitrate)
     .withSize('?x' + height)
     .videoCodec(videoCodec)
 
+  var passlog = path.join(tmpDir, 'ffmpeg2pass-')
   if(passe === 1) {
     // Passe 1, desactiver traitement stream audio
     ffmpegProcessCmd
-      .outputOptions(['-an', '-f', 'null', '-pass', '1'])
+      .outputOptions(['-an', '-f', 'null', '-pass', '1', '-passlogfile', passlog])
   } else if(passe === 2) {
     debug("Audio info : %O, format %s", audioOpts, format)
     ffmpegProcessCmd
       .audioCodec(audioCodec)
       .audioBitrate(audioBitrate)
-      .outputOptions(['-pass', '2', '-movflags', 'faststart'])
+      .outputOptions(['-pass', '2', '-movflags', 'faststart', '-passlogfile', passlog])
   } else {
     throw new Error("Passe doit etre 1 ou 2 (passe=%O)", passe)
   }
@@ -207,17 +222,17 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
   return processPromise
 }
 
-async function extraireFichierTemporaire(inputStream) {
-  const fichierInputTmp = await tmpPromises.file({keep: true})
-  debug("Fichier temporaire : %s", fichierInputTmp.path)
+async function extraireFichierTemporaire(fichierPath, inputStream) {
+  //const fichierInputTmp = await tmpPromises.file({keep: true})
+  debug("Fichier temporaire : %s", fichierPath)
 
-  const outputStream = fs.createWriteStream(fichierInputTmp.path)
+  const outputStream = fs.createWriteStream(fichierPath)
   const promiseOutput =  new Promise((resolve, reject)=>{
     outputStream.on('error', err=>{
       reject(err)
-      fichierInputTmp.cleanup()
+      // fichierInputTmp.cleanup()
     })
-    outputStream.on('close', _=>{resolve(fichierInputTmp)})
+    outputStream.on('close', _=>{resolve()})
   })
 
   inputStream.pipe(outputStream)

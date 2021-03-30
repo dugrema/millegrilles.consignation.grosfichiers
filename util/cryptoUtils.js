@@ -25,6 +25,18 @@ function decrypterGCM(sourceCryptee, destination, cleSecreteDecryptee, iv, tag, 
   return _decrypter(sourceCryptee, destination, cryptoStream, opts)
 }
 
+function gcmStreamReaderFactory(sourceCrypteePath, cleSecreteDecryptee, iv, tag, opts) {
+  /* Genere un objet qui agit comme "StreamReader" (e.g. reader.pipe(writer)) */
+  const factory = _ => {
+    let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv, {...opts, tag})
+    let readStream = fs.createReadStream(sourceCrypteePath)
+    readStream.pipe(cryptoStream.reader)
+    return cryptoStream.writer
+  }
+
+  return factory
+}
+
 function _decrypter(sourceCryptee, destination, cryptoStream, opts) {
   let writeStream = fs.createWriteStream(destination)
 
@@ -120,6 +132,8 @@ function getDecipherPipe4fuuid(cleSecrete, iv, opts) {
 
   decipher.pipe(transformStream)
 
+  transformStream.close = _ => {decipher.end()}
+
   return {reader: decipher, writer: transformStream}
 }
 
@@ -149,4 +163,4 @@ function decrypterSymmetrique(contenuCrypte, cleSecrete, iv) {
   })
 }
 
-module.exports = { decrypter, getDecipherPipe4fuuid, decrypterSymmetrique, decrypterGCM }
+module.exports = { decrypter, getDecipherPipe4fuuid, decrypterSymmetrique, decrypterGCM, gcmStreamReaderFactory }

@@ -1,7 +1,10 @@
 const fs = require('fs')
 const FFmpeg = require('fluent-ffmpeg')
+const {creerCipher} = require('@dugrema/millegrilles.common/lib/chiffrage')
+const multibase = require('multibase')
 
 const { probeVideo, transcoderVideo } = require('../util/transformationsVideo')
+const { gcmStreamReaderFactory } = require('../util/cryptoUtils')
 
 const VIDEOS = [
   '/home/mathieu/Videos/IMG_2010.MOV',
@@ -13,21 +16,65 @@ const VIDEOS = [
 ]
 const VIDEO_SEL = 0
 
+const VIDEO_CHIFFRE = '/home/mathieu/Videos/output.mgs2'
+
+describe('preparation fichier chiffre', () => {
+  test('chiffrer', async () => {
+    console.debug("Chiffrer")
+    const cipher = await creerCipherChiffrage()
+    const readStream = fs.createReadStream(VIDEOS[VIDEO_SEL])
+    const writeStream = fs.createWriteStream(VIDEO_CHIFFRE)
+    readStream.on('data', data=>{
+      // console.debug("Data recu : %O", data)
+      let cipherText = cipher.update(data)
+      writeStream.write(cipherText)
+    })
+
+    await new Promise((resolve, reject)=>{
+      readStream.on('end', async _ =>{
+        var resultat = await cipher.finish()
+        console.debug("Resultat : %O", resultat)
+
+        var mbValeur = multibase.encode('base64', resultat.password)
+        mbValeur = String.fromCharCode.apply(null, mbValeur)
+        console.debug("Password en multibase : %s", mbValeur)
+
+        resolve(resultat)
+      })
+      readStream.on('error', err=>{reject(err)})
+    })
+    readStream.read()
+  }, 60000)
+})
+
+var paramsChiffrage = {
+  password: 'mLBZe5OGUyH2/HAebuM4RPEdpOtA7I+NQfZ/ofV6r2MM',
+  iv: 'mA5dYPHho39l/fGSS',
+  tag: 'm4shMtiBolpilcBwHBCNVXA',
+  hachage_bytes: 'z8VwZJEariwZsJUPYFUthn9fZEk5P5QXSvwKexm5yCXuun1oBNiTvwTBKb9qHzL6RE4R4WZvEL3LaLLkZSX9wwnBdHo'
+}
+
+// var input = fs.createReadStream(VIDEOS[VIDEO_SEL])
+const streamFactory = gcmStreamReaderFactory(
+  VIDEO_CHIFFRE,
+  multibase.decode(paramsChiffrage.password),
+  paramsChiffrage.iv, paramsChiffrage.tag
+)
+
 describe('convertir video', ()=>{
 
   test('video 1 probe', async () => {
 
-    var input = fs.createReadStream(VIDEOS[VIDEO_SEL])
+    // var input = fs.createReadStream(VIDEOS[VIDEO_SEL])
     var opts = {
       maxBitrate: 1000000,
       maxHeight: 1080,
     }
-    const resultat = await probeVideo(input, opts)
+    const resultat = await probeVideo(streamFactory(), opts)
     console.debug("Resultat probe : %O", resultat)
-
   })
 
-  test('video 1 mp4', async () => {
+  test.only('video 1 mp4', async () => {
     console.debug("Convertir video 1 mp4")
     const opts = {
       videoBitrate: 600000,
@@ -37,13 +84,13 @@ describe('convertir video', ()=>{
       progressCb: progress,
     }
 
-    const streamFactory = () => {return fs.createReadStream(VIDEOS[VIDEO_SEL])}
+    // const streamFactory = () => {return fs.createReadStream(VIDEOS[VIDEO_SEL])}
     const outputStream = fs.createWriteStream('/home/mathieu/Videos/output.mp4')
 
     await transcoderVideo(streamFactory, outputStream, opts)
   }, 20 * 60 * 1000)
 
-  test.only('video 1 webm', async () => {
+  test('video 1 webm', async () => {
     console.debug("Convertir video 1 webm")
     const opts = {
       videoBitrate: 750000,
@@ -54,7 +101,7 @@ describe('convertir video', ()=>{
       progressCb: progress,
     }
 
-    const streamFactory = () => {return fs.createReadStream(VIDEOS[VIDEO_SEL])}
+    // const streamFactory = () => {return fs.createReadStream(VIDEOS[VIDEO_SEL])}
     const outputStream = fs.createWriteStream('/home/mathieu/Videos/output.webm')
 
     await transcoderVideo(streamFactory, outputStream, opts)
@@ -72,4 +119,18 @@ function progress(progress, opts) {
     let pct = Math.floor(frames / framesTotal * 100)
     console.debug("Progres %d%", pct)
   }
+}
+
+async function creerCipherChiffrage() {
+  const cipher = await creerCipher()
+
+  const cipherWrapper = {
+    update: cipher.update,
+    finish: async () => {
+      const infoChiffrage = await cipher.finish()
+      return infoChiffrage
+    }
+  }
+
+  return cipherWrapper
 }
