@@ -29,7 +29,7 @@ async function probeVideo(input, opts) {
 
   // debug("Trouve : taille %d, bitrate %d", height, bitrate)
 
-  const tailleEncoding = [720, 480, 360, 240].filter(item=>{
+  const tailleEncoding = [2160, 1440, 1080, 720, 480, 360, 240].filter(item=>{
     return item <= height && item <= maxHeight
   })[0]
   const bitRateEncoding = [1200000, 1000000, 750000, 600000, 500000, 400000, 200000].filter(item=>{
