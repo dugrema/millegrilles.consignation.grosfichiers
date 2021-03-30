@@ -27,7 +27,7 @@ describe('convertir video', ()=>{
 
   })
 
-  test.only('video 1 mp4', async () => {
+  test('video 1 mp4', async () => {
     console.debug("Convertir video 1 mp4")
     const opts = {
       videoBitrate: 600000,
@@ -38,20 +38,26 @@ describe('convertir video', ()=>{
     }
 
     const streamFactory = () => {return fs.createReadStream(VIDEOS[VIDEO_SEL])}
+    const outputStream = fs.createWriteStream('/home/mathieu/Videos/output.mp4')
 
-    await transcoderVideo(streamFactory, '/home/mathieu/Videos/output.mp4', opts)
+    await transcoderVideo(streamFactory, outputStream, opts)
   }, 20 * 60 * 1000)
 
-  test('video 1 webm', async () => {
+  test.only('video 1 webm', async () => {
     console.debug("Convertir video 1 webm")
     const opts = {
       videoBitrate: 750000,
       height: 720,
       videoCodec: 'libvpx-vp9',
       audioCodec: 'libopus',
+      format: 'webm',
       progressCb: progress,
     }
-    await transcoderVideo(VIDEOS[VIDEO_SEL], '/home/mathieu/Videos/output.webm', opts)
+
+    const streamFactory = () => {return fs.createReadStream(VIDEOS[VIDEO_SEL])}
+    const outputStream = fs.createWriteStream('/home/mathieu/Videos/output.webm')
+
+    await transcoderVideo(streamFactory, outputStream, opts)
   }, 60 * 60 * 1000)
 
 })
