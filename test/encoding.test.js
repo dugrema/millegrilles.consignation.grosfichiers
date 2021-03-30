@@ -13,12 +13,20 @@ const VIDEOS = [
   '/home/mathieu/Videos/1136.mpeg',
   '/home/mathieu/Videos/Dr Quantum - Double Slit Experiment.flv',
   '/home/mathieu/Videos/bennythesupercop.wmv',
+  '/home/mathieu/Videos/032.MOV',
 ]
-const VIDEO_SEL = 0
+const VIDEO_SEL = 6
 
 const VIDEO_CHIFFRE = '/home/mathieu/Videos/output.mgs2'
 
-describe('preparation fichier chiffre', () => {
+var paramsChiffrage = {
+  password: 'm7vrtSdojc839bJNBx6Pkua+RX5ftATRye+XfkdPgckQ',
+  iv: 'mPXo99amRqlorLrcF',
+  tag: 'm0sntBQKFHU2rQYejjCBKcQ',
+  hachage_bytes: 'z8VwZQ2cujqxvSAwX5qnisxsnN87VfVJR1k5frHvgAhfB4FuesquB32Lx1LFeUfBfwae3KTCymZcwBa5QmCje3eTcVr'
+}
+
+describe.only('preparation fichier chiffre', () => {
   test('chiffrer', async () => {
     console.debug("Chiffrer")
     const cipher = await creerCipherChiffrage()
@@ -39,6 +47,13 @@ describe('preparation fichier chiffre', () => {
         mbValeur = String.fromCharCode.apply(null, mbValeur)
         console.debug("Password en multibase : %s", mbValeur)
 
+        paramsChiffrage = {
+          password: mbValeur,
+          ...resultat.meta
+        }
+
+        console.debug("Params chiffrage : %O", paramsChiffrage)
+
         resolve(resultat)
       })
       readStream.on('error', err=>{reject(err)})
@@ -47,19 +62,15 @@ describe('preparation fichier chiffre', () => {
   }, 60000)
 })
 
-var paramsChiffrage = {
-  password: 'mLBZe5OGUyH2/HAebuM4RPEdpOtA7I+NQfZ/ofV6r2MM',
-  iv: 'mA5dYPHho39l/fGSS',
-  tag: 'm4shMtiBolpilcBwHBCNVXA',
-  hachage_bytes: 'z8VwZJEariwZsJUPYFUthn9fZEk5P5QXSvwKexm5yCXuun1oBNiTvwTBKb9qHzL6RE4R4WZvEL3LaLLkZSX9wwnBdHo'
-}
-
 // var input = fs.createReadStream(VIDEOS[VIDEO_SEL])
-const streamFactory = gcmStreamReaderFactory(
-  VIDEO_CHIFFRE,
-  multibase.decode(paramsChiffrage.password),
-  paramsChiffrage.iv, paramsChiffrage.tag
-)
+const streamFactory = _ => {
+  const factory = gcmStreamReaderFactory(
+    VIDEO_CHIFFRE,
+    multibase.decode(paramsChiffrage.password),
+    paramsChiffrage.iv, paramsChiffrage.tag
+  )
+  return factory()
+}
 
 describe('convertir video', ()=>{
 
