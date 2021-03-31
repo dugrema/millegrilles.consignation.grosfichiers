@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const forge = require('node-forge');
 const {Transform} = require('stream')
 const multibase = require('multibase')
+const { creerCipher, preparerCommandeMaitrecles } = require('@dugrema/millegrilles.common/lib/chiffrage')
 
 const AES_ALGORITHM = 'aes-256-cbc';  // Meme algorithme utilise sur MG en Python
 const RSA_ALGORITHM = 'RSA-OAEP';
@@ -190,7 +191,37 @@ async function chargerCleDechiffrage(mq, hachage_bytes) {
   return {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
 }
 
+async function creerOutputstreamChiffrage(certificatsPem, identificateurs_document, domaine, opts) {
+  opts = opts || {}
+
+  const cipher = await creerCipher()
+
+  const transformStream = new Transform()
+  transformStream._transform = (chunk, encoding, next) => {
+    const cipherChunk = cipher.update(chunk)
+    transformStream.push(cipherChunk)
+    next()
+  }
+  transformStream.resultat = null
+
+  transformStream.on('end', async _ =>{
+    const infoChiffrage = await cipher.finish()
+    const meta = infoChiffrage.meta
+
+    // Preparer commande MaitreDesCles
+    transformStream.commandeMaitredescles = await preparerCommandeMaitrecles(
+      certificatsPem, infoChiffrage.password, domaine,
+      meta.hachage_bytes, meta.iv, meta.tag,
+      identificateurs_document,
+      opts
+    )
+    debug("Resultat chiffrage disponible : %O", transformStream.commandeMaitredescles)
+  })
+
+  return transformStream
+}
+
 module.exports = {
   decrypter, getDecipherPipe4fuuid, decrypterSymmetrique, decrypterGCM,
-  gcmStreamReaderFactory, chargerCleDechiffrage
+  gcmStreamReaderFactory, chargerCleDechiffrage, creerOutputstreamChiffrage,
 }

@@ -5,7 +5,7 @@ const tmpPromises = require('tmp-promise')
 const path = require('path')
 const multibase = require('multibase')
 const FFmpeg = require('fluent-ffmpeg')
-const { chargerCleDechiffrage } = require('./cryptoUtils')
+const { chargerCleDechiffrage, creerOutputstreamChiffrage } = require('./cryptoUtils')
 const { gcmStreamReaderFactory } = require('../util/cryptoUtils')
 
 async function probeVideo(input, opts) {
@@ -42,7 +42,7 @@ async function probeVideo(input, opts) {
 
   // debug("Information pour encodage : height %d, bit rate %d", tailleEncoding, bitRateEncoding)
 
-  return {height: tailleEncoding, bitrate: bitRateEncoding, nb_frames}
+  return {height: tailleEncoding, bitrate: bitRateEncoding, nb_frames, raw: infoVideo}
 }
 
 async function transcoderVideo(streamFactory, outputStream, opts) {
@@ -146,20 +146,16 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
     outputFileReader.pipe(outputStream)
     await promiseOutput
 
-    return {video: videoOpts, audio: audioOpts}
+    // Faire un probe de l'output pour recuperer stats
+    var videoInfo = await probeVideo(destinationPath)
+    debug("Information video transcode: %O", videoInfo.raw)
+
+    return {video: videoOpts, audio: audioOpts, probe: videoInfo.raw}
   } finally {
     if(tmpDir) {
       debug("Suppression du repertoire temporaire %s", tmpDir.path)
       tmpDir.cleanup()
     }
-    // if(fichierInputTmp) {
-    //   debug("Cleanup du fichier temporaire input %s", fichierInputTmp.path)
-    //   fichierInputTmp.cleanup()
-    // }
-    // if(fichierOutputTmp) {
-    //   debug("Cleanup du fichier temporaire output %s", fichierOutputTmp.path)
-    //   fichierOutputTmp.cleanup()
-    // }
   }
 }
 
@@ -271,40 +267,64 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
     cleInfo.metaCle.tag
   )
 
-  const outputStream = fs.createWriteStream('/tmp/output.webm')
-
-  const opts = {...profil, progressCb}
-  debug("Debut dechiffrage fichier video, opts : %O", opts)
-  // const resultatTranscodage = await traitementMedia.transcoderVideo(
-  //   mq, pathConsignation, message, opts)
-  const resultatTranscodage = await transcoderVideo(inputStreamFactory, outputStream, opts)
-
-  debug("Resultat transcodage : %O", resultatTranscodage)
+  // Recuperer certificats de chiffrage (maitre des cles, millegrille)
+  const certificatsPem = cleInfo.clesPubliques.map(item=>item[0])
 
   // Transmettre transaction info chiffrage
-  const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
-  const commandeMaitreCles = resultatTranscodage.commandeMaitreCles
-  commandeMaitreCles.identificateurs_document = {
+  const identificateurs_document = {
       attachement_fuuid: fuuid,
       type: 'video',
     }
-  await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
+  const domaine = 'GrosFichiers'
+  const cipherOutputStream = await creerOutputstreamChiffrage(certificatsPem, identificateurs_document, domaine, {})
+
+  const opts = {...profil, progressCb}
+  debug("Debut dechiffrage fichier video, opts : %O", opts)
+  const fichierOutputTmp = await tmpPromises.file({prefix: 'video-', keep: true})
+  let resultatTranscodage = null
+  try {
+    const outputStream = fs.createWriteStream(fichierOutputTmp.path)
+    cipherOutputStream.pipe(outputStream)
+    resultatTranscodage = await transcoderVideo(inputStreamFactory, cipherOutputStream, opts)
+
+    // Deplacer le fichier temporaire vers path consignation
+    const fuuidOutput = cipherOutputStream.commandeMaitredescles.hachage_bytes
+    const pathLocalOutput = pathConsignation.trouverPathLocal(fuuidOutput)
+    await fsPromises.mkdir(path.dirname(pathLocalOutput), {recursive: true})
+    fsPromises.rename(fichierOutputTmp.path, pathLocalOutput)
+  } catch(err) {
+    // Cleanup fichier temporaire cas d'erreur
+    fichierOutputTmp.cleanup().catch(err=>{debug("Err cleanup fichier video tmp (OK) : %O", err)})
+    throw err
+  }
+  const probeInfo = resultatTranscodage.probe
+
+  const commandeMaitredescles = cipherOutputStream.commandeMaitredescles
+  debug("Resultat transcodage = %O\ncommandeMaitredescles = %O", resultatTranscodage, commandeMaitredescles)
 
   // Transmettre transaction associer video transcode
   const transactionAssocierPreview = {
-    uuid: message.uuid,
     fuuid: fuuid,
 
-    height: resultatTranscodage.height,
-    fuuidVideo: resultatTranscodage.fuuidVideo,
-    mimetypeVideo: resultatTranscodage.mimetypeVideo,
-    hachage: resultatTranscodage.hachage,
-    tailleFichier: resultatTranscodage.tailleFichier,
+    mimetype: message.mimetype,
+    fuuidVideo: commandeMaitredescles.hachage_bytes,
+    hachage: commandeMaitredescles.hachage_bytes,
+
+    width: probeInfo.width,
+    height: probeInfo.height,
+    codec: 'ABCD',
+    bitrate: 123456,
+    tailleFichier: 1234,
   }
 
   debug("Transaction transcoder video : %O", transactionAssocierPreview)
   mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageTermine')
 
+  // Transmettre commande maitre des cles
+  const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
+  await mq.transmettreCommande(domaineActionCles, commandeMaitredescles)
+
+  // Transmettre transaction pour associer le video au fuuid
   const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
   await mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
 }
