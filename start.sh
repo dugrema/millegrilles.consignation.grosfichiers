@@ -13,7 +13,7 @@ export MG_MQ_URL=amqps://$HOST:5673
 
 export PORT=3021
 
-export DEBUG=millegrilles.*
+export DEBUG=millegrilles:fichiers:transformationsVideo
 
 # export SERVER_TYPE=https
 

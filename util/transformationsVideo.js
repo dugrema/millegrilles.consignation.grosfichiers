@@ -3,7 +3,10 @@ const fs = require('fs')
 const fsPromises = require('fs/promises')
 const tmpPromises = require('tmp-promise')
 const path = require('path')
+const multibase = require('multibase')
 const FFmpeg = require('fluent-ffmpeg')
+const { chargerCleDechiffrage } = require('./cryptoUtils')
+const { gcmStreamReaderFactory } = require('../util/cryptoUtils')
 
 async function probeVideo(input, opts) {
   opts = opts || {}
@@ -241,6 +244,102 @@ async function extraireFichierTemporaire(fichierPath, inputStream) {
   return promiseOutput
 }
 
+async function traiterCommandeTranscodage(mq, pathConsignation, message) {
+  debug("Commande traiterCommandeTranscodage video recue : %O", message)
+
+  // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
+  const fuuid = message.fuuid
+
+  // Transmettre evenement debut de transcodage
+  mq.emettreEvenement({fuuid}, 'evenement.fichiers.transcodageDebut')
+
+  const cleInfo = await chargerCleDechiffrage(mq, fuuid)
+  debug("Cle dechiffrage : %O", cleInfo)
+
+  const profil = getProfilTranscodage(message)
+
+  const progressCb = progress => {
+    debug("Progress : %O", progress)
+  }
+
+  // Creer un factory d'input streams decipher
+  const pathFichierChiffre = pathConsignation.trouverPathLocal(fuuid, true);
+  const inputStreamFactory = gcmStreamReaderFactory(
+    pathFichierChiffre,
+    cleInfo.cleSymmetrique,
+    cleInfo.metaCle.iv,
+    cleInfo.metaCle.tag
+  )
+
+  const outputStream = fs.createWriteStream('/tmp/output.webm')
+
+  const opts = {...profil, progressCb}
+  debug("Debut dechiffrage fichier video, opts : %O", opts)
+  // const resultatTranscodage = await traitementMedia.transcoderVideo(
+  //   mq, pathConsignation, message, opts)
+  const resultatTranscodage = await transcoderVideo(inputStreamFactory, outputStream, opts)
+
+  debug("Resultat transcodage : %O", resultatTranscodage)
+
+  // Transmettre transaction info chiffrage
+  const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
+  const commandeMaitreCles = resultatTranscodage.commandeMaitreCles
+  commandeMaitreCles.identificateurs_document = {
+      attachement_fuuid: fuuid,
+      type: 'video',
+    }
+  await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
+
+  // Transmettre transaction associer video transcode
+  const transactionAssocierPreview = {
+    uuid: message.uuid,
+    fuuid: fuuid,
+
+    height: resultatTranscodage.height,
+    fuuidVideo: resultatTranscodage.fuuidVideo,
+    mimetypeVideo: resultatTranscodage.mimetypeVideo,
+    hachage: resultatTranscodage.hachage,
+    tailleFichier: resultatTranscodage.tailleFichier,
+  }
+
+  debug("Transaction transcoder video : %O", transactionAssocierPreview)
+  mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageTermine')
+
+  const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
+  await mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
+}
+
+function getProfilTranscodage(params) {
+  const profils = {
+    webm: {
+      videoBitrate: 750000,
+      height: 720,
+      videoCodec: 'libvpx-vp9',
+      audioCodec: 'libopus',
+      audioBitrate: '64k',
+      format: 'webm',
+    },
+    mp4: {
+      videoBitrate: 600000,
+      height: 480,
+      videoCodec: 'libx264',
+      audioCodec: 'aac',
+      audioBitrate: '64k',
+      format: 'mp4',
+    }
+  }
+
+  let profil = null
+  switch(params.mimetype) {
+    case 'video/webm':
+      profil = {...profils.webm, ...params}
+    case 'video/mp4':
+      profil = {...profils.mp4, ...params}
+  }
+
+  return profil
+}
+
 module.exports = {
-  probeVideo, transcoderVideo,
+  probeVideo, transcoderVideo, traiterCommandeTranscodage,
 }
