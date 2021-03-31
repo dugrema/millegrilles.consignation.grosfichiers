@@ -197,9 +197,11 @@ async function creerOutputstreamChiffrage(certificatsPem, identificateurs_docume
   const cipher = await creerCipher()
 
   const transformStream = new Transform()
+  transformStream.byteCount = 0
   transformStream._transform = (chunk, encoding, next) => {
     const cipherChunk = cipher.update(chunk)
     transformStream.push(cipherChunk)
+    transformStream.byteCount += cipherChunk.length
     next()
   }
   transformStream.resultat = null

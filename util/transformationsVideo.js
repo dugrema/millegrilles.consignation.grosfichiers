@@ -63,7 +63,7 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
   videoBitrate = videoInfo.bitrate
   height = videoInfo.height
 
-  videoBitrate = '' + (videoBitrate / 1000) + 'k'
+  // videoBitrate = '' + (videoBitrate / 1000) + 'k'
   debug('Utilisation video bitrate : %s', videoBitrate)
 
   // Tenter transcodage avec un stream - fallback sur fichier direct
@@ -291,6 +291,7 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
     const fuuidOutput = cipherOutputStream.commandeMaitredescles.hachage_bytes
     const pathLocalOutput = pathConsignation.trouverPathLocal(fuuidOutput)
     await fsPromises.mkdir(path.dirname(pathLocalOutput), {recursive: true})
+    debug("Deplacer output transcodage vers %s", pathLocalOutput)
     fsPromises.rename(fichierOutputTmp.path, pathLocalOutput)
   } catch(err) {
     // Cleanup fichier temporaire cas d'erreur
@@ -312,9 +313,9 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
 
     width: probeInfo.width,
     height: probeInfo.height,
-    codec: 'ABCD',
-    bitrate: 123456,
-    tailleFichier: 1234,
+    codec: profil.videoCodecName,
+    bitrate: resultatTranscodage.video.videoBitrate,
+    tailleFichier: cipherOutputStream.byteCount,
   }
 
   debug("Transaction transcoder video : %O", transactionAssocierPreview)
@@ -338,6 +339,7 @@ function getProfilTranscodage(params) {
       audioCodec: 'libopus',
       audioBitrate: '64k',
       format: 'webm',
+      videoCodecName: 'vp9',
     },
     mp4: {
       videoBitrate: 600000,
@@ -346,6 +348,7 @@ function getProfilTranscodage(params) {
       audioCodec: 'aac',
       audioBitrate: '64k',
       format: 'mp4',
+      videoCodecName: 'h264',
     }
   }
 
