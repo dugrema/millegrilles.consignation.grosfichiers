@@ -72,12 +72,13 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
   input = streamFactory()  // Reset stream (utilise par probeVideo)
 
   var progressHook, framesTotal = videoInfo.nb_frames, framesCourant = 0
+  var passe = 1
   if(progressCb) {
     progressHook = progress => {
       if(framesTotal) {
-        progressCb({framesTotal, ...progress})
+        progressCb({framesTotal, passe, ...progress})
       } else {
-        progressCb(progress)
+        progressCb({passe, ...progress})
         // Conserver le nombre de frames connus pour passe 2
         framesCourant = progress.frames
       }
@@ -121,6 +122,7 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
     debug("Passe 1 terminee, debut passe 2")
 
     // Passe 2
+    passe = 2  // Pour progressCb
     const audioOpts = {audioCodec, audioBitrate}
     if(modeInputStream) {
       // Reset inputstream
@@ -176,7 +178,7 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
         tmpDir = opts.tmpDir || '/tmp'
 
   const ffmpegProcessCmd = new FFmpeg(source, {niceness: 10})
-    .withVideoBitrate(''+videoBitrate)
+    .withVideoBitrate(''+Math.floor(videoBitrate/1000)+'k')
     .withSize('?x' + height)
     .videoCodec(videoCodec)
 
@@ -255,7 +257,7 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
   const profil = getProfilTranscodage(message)
 
   const progressCb = progress => {
-    debug("Progress : %O", progress)
+    progressUpdate(mq, {fuuid, mimetype: message.mimetype}, progress)
   }
 
   // Creer un factory d'input streams decipher
@@ -356,11 +358,38 @@ function getProfilTranscodage(params) {
   switch(params.mimetype) {
     case 'video/webm':
       profil = {...profils.webm, ...params}
+      break
     case 'video/mp4':
       profil = {...profils.mp4, ...params}
+      break
   }
 
   return profil
+}
+
+function progressUpdate(mq, paramsVideo, progress) {
+  /* Transmet un evenement de progres pour un transcodage video */
+  var pctProgres = '', ponderation = 1, bump = 0
+
+  if(progress.passe === 1) {
+    ponderation = 10
+  } else if (progress.passe === 2) {
+    ponderation = 90
+    bump = 10
+  }
+
+  if(progress.framesTotal && progress.frames) {
+    // Methode la plus precise
+    pctProgres = Math.floor(progress.frames * ponderation / progress.framesTotal) + bump
+  } else if(progress.percent) {
+    // Moins precis, se fier a ffmpeg
+    pctProgres = progress.percent
+  }
+  if(pctProgres) {
+
+    const {mimetype, fuuid} = paramsVideo
+    debug("Progres %s vers %s %d%", fuuid, mimetype, pctProgres)
+  }
 }
 
 module.exports = {
