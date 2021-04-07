@@ -215,7 +215,8 @@ async function downloadFichierPublic(req, res, next) {
         res.setHeader('Content-Disposition', 'attachment; filename="' + nomFichier +'"')
       }
       // res.setHeader('Content-Length', res.tailleFichier)
-      res.setHeader('Content-Type', res.permission['mimetype'])
+      var mimetype = res.permission['mimetype'] || 'application/stream'
+      res.setHeader('Content-Type', mimetype)
     }
 
   } catch(err) {
