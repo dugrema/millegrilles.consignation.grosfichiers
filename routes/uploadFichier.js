@@ -141,9 +141,10 @@ async function traiterPostUpload(req, res, next) {
     })
 
     debug("Transmettre transaction fichier")
-    await req.amqpdao.transmettreEnveloppeTransaction(transactionGrosFichiers)
+    const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeTransaction(transactionGrosFichiers)
+    debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
 
-    res.sendStatus(status)
+    res.status(status).send(reponseGrosfichiers)
 
   } catch(err) {
     debug("Erreur de verification du hachage : %O", err)
