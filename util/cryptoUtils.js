@@ -64,9 +64,14 @@ function _decrypter(sourceCryptee, destination, cryptoStream, opts) {
     writeStream.on('close', ()=>{
       resolve({tailleFichier, sha512Hash});
     });
-    writeStream.on('error', ()=>{
-      console.error("Erreur decryptage fichier");
-      reject();
+    writeStream.on('error', err=>{
+      console.error("cryptoUtils._decrypter writeStream Erreur ecriture dechiffrage fichier %O", err);
+      reject(err)
+    })
+
+    readStream.on('error', err=>{
+      console.error("cryptoUtils._decrypter readStream Erreur lecture fichier pour dechiffrage %O", err);
+      reject(err)
     })
 
     // Lancer le traitement du fichier
