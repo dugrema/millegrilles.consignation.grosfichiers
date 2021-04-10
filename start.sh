@@ -13,12 +13,13 @@ export MG_MQ_URL=amqps://$HOST:5673
 
 export PORT=3021
 
-export DEBUG=millegrilles:fichiers:transformationsVideo,millegrilles:fichiers:cryptoUtils,millegrilles:fichiers:uploadFichier
+# export DEBUG=millegrilles:fichiers:transformationsVideo,millegrilles:fichiers:cryptoUtils,millegrilles:fichiers:uploadFichier
+export DEBUG=millegrilles:messages:*
 
 # export SERVER_TYPE=https
 
 # Desactiver validation usager locale
-export IDMG=z2xMUPJHXDgkLEgdziA21EuA4BCvtWtKLuSnyqVJyvexgxj8yPsMRW
-export DISABLE_SSL_AUTH=1
+# export IDMG=z2xMUPJHXDgkLEgdziA21EuA4BCvtWtKLuSnyqVJyvexgxj8yPsMRW
+# export DISABLE_SSL_AUTH=1
 
 npm start

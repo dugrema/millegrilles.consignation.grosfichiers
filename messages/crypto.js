@@ -1,3 +1,4 @@
+const debug = require('debug')('millegrilles:messages:crypto')
 const path = require('path');
 const fs = require('fs');
 const uuidv1 = require('uuid/v1');
@@ -39,7 +40,7 @@ class DecrypterFichier {
   }
 
   async decrypterFichier(routingKey, message) {
-    // console.log("Message de declassement de grosfichiers, debut ");
+    debug("Message de dechiffrage de grosfichiers, : %O", message);
 
     const fuuid = message.fuuid;
     const cleSecreteDecryptee = message.cleSecreteDecryptee;

@@ -1,4 +1,4 @@
-const debug = require('debug')('millegrilles:fichiers:media')
+const debug = require('debug')('millegrilles:messages:media')
 const {PathConsignation} = require('../util/traitementFichier');
 const traitementMedia = require('../util/traitementMedia.js')
 const { traiterCommandeTranscodage } = require('../util/transformationsVideo')
@@ -32,7 +32,7 @@ class GenerateurMedia {
       {operationLongue: true}
     )
     this.mq.routingKeyManager.addRoutingKeyCallback(
-      (routingKey, message)=>{return traiterCommandeTranscodage(this.mq, this.pathConsignation, message)},
+      (routingKey, message)=>{return _traiterCommandeTranscodage(this.mq, this.pathConsignation, message)},
       ['commande.fichiers.transcoderVideo'],
       {operationLongue: true}
     )
@@ -40,85 +40,28 @@ class GenerateurMedia {
 
 }
 
-// async function transcoderVideo(mq, pathConsignation, message) {
-//   debug("Commande genererPreviewImage recue : %O", message)
-//
-//   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
-//   const permission = message.permission
-//   var opts = {}
-//
-//   // Transmettre evenement debut de transcodage
-//   mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageDebut')
-//
-//   var hachageFichier = message.fuuid
-//   const liste_hachage_bytes = [hachageFichier]
-//
-//   // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
-//   // const chainePem = mq.pki.getChainePems()
-//   const domaineAction = 'MaitreDesCles.dechiffrage'
-//   const requete = {liste_hachage_bytes}
-//   debug("Nouvelle requete dechiffrage cle a transmettre : %O", requete)
-//   const reponseCle = await mq.transmettreRequete(domaineAction, requete)
-//   if(reponseCle.acces !== '1.permis') {
-//     return {err: reponseCle.acces, msg: `Erreur dechiffrage cle pour generer preview de ${message.fuuid}`}
-//   }
-//   debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
-//
-//   // Dechiffrer cle recue
-//   const informationCle = reponseCle.cles[hachageFichier]
-//   const cleChiffree = informationCle.cle
-//   const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
-//
-//   // Demander cles publiques pour chiffrer video transcode
-//   const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
-//   const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
-//   const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
-//
-//   // opts = {cleSymmetrique: cleDechiffree, iv: informationCle.iv, clesPubliques}
-//   opts = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
-//
-//   debug("Debut dechiffrage fichier video")
-//   const resultatTranscodage = await traitementMedia.transcoderVideo(
-//     mq, pathConsignation, message, opts)
-//
-//   debug("Resultat transcodage : %O", resultatTranscodage)
-//
-//   // Transmettre transaction info chiffrage
-//   const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
-//   const commandeMaitreCles = resultatTranscodage.commandeMaitreCles
-//   commandeMaitreCles.identificateurs_document = {
-//       attachement_fuuid: message.fuuid,
-//       type: 'video',
-//     }
-//   await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
-//
-//   // Transmettre transaction associer video transcode
-//   const transactionAssocierPreview = {
-//     uuid: resultatTranscodage.uuid,
-//     fuuid: message.fuuid,
-//
-//     height: resultatTranscodage.height,
-//     fuuidVideo: resultatTranscodage.fuuidVideo,
-//     mimetypeVideo: resultatTranscodage.mimetypeVideo,
-//     hachage: resultatTranscodage.hachage,
-//     tailleFichier: resultatTranscodage.tailleFichier,
-//   }
-//
-//   debug("Transaction transcoder video : %O", transactionAssocierPreview)
-//   mq.emettreEvenement({fuuid: message.fuuid}, 'evenement.fichiers.transcodageTermine')
-//
-//   const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
-//   await mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
-// }
-
-async function genererPreviewImage(mq, pathConsignation, message) {
+function genererPreviewImage(mq, pathConsignation, message) {
   const fctConversion = traitementMedia.genererPreviewImage
-  await _genererPreview(mq, pathConsignation, message, fctConversion)
+  return _genererPreview(mq, pathConsignation, message, fctConversion)
+    .catch(err=>{
+      console.error("media.genererPreviewImage ERROR fuuid %s: %O", message.fuuid, err)
+    })
 }
 
-async function genererPreviewVideo(mq, pathConsignation, message) {
+function genererPreviewVideo(mq, pathConsignation, message) {
   const fctConversion = traitementMedia.genererPreviewVideo
-  await _genererPreview(mq, pathConsignation, message, fctConversion)
+  return _genererPreview(mq, pathConsignation, message, fctConversion)
+    .catch(err=>{
+      console.error("media.genererPreviewVideo ERROR fuuid %s: %O", message.fuuid, err)
+    })
+
+}
+
+function _traiterCommandeTranscodage(mq, pathConsignation, message) {
+  return traiterCommandeTranscodage(this.mq, this.pathConsignation, message)
+    .catch(err=>{
+      console.error("media._traiterCommandeTranscodage ERROR %s: %O", message.fuuid, err)
+    })
 }
 
 async function _genererPreview(mq, pathConsignation, message, fctConversion) {
@@ -168,19 +111,7 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
     attachement_fuuid: message.fuuid,
     type: 'preview',
   }
-  // const transactionCles = {
-  //   domaine: 'GrosFichiers',
-  //   identificateurs_document: {
-  //     fuuid: resultatPreview.fuuid,
-  //     attachement_fuuid: message.fuuid,
-  //     type: 'preview',
-  //   },
-  //   cles: resultatPreview.clesChiffrees,
-  //   iv: resultatPreview.iv,
-  //   tag: resultatPreview.tag,
-  //   format: resultatPreview.format,
-  //   hachage_bytes: resultatPreview.hachage_preview,
-  // }
+
   await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
 
   // Transmettre transaction preview

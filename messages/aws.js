@@ -1,4 +1,4 @@
-const debug = require('debug')('millegrilles:fichiers:aws')
+const debug = require('debug')('millegrilles:messages:aws')
 const fs = require('fs')
 const path = require('path')
 // const {PassThrough} = require('stream')
@@ -156,6 +156,7 @@ async function executerUploadFichier(
   mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
   fuuid, mimetype, opts
 ) {
+  debug("aws Upload fichier : %s", fuuid)
   // Dechiffrer fichier (tmp) pour upload
   if(!opts) opts = {}
 
