@@ -58,7 +58,7 @@ function genererPreviewVideo(mq, pathConsignation, message) {
 }
 
 function _traiterCommandeTranscodage(mq, pathConsignation, message) {
-  return traiterCommandeTranscodage(this.mq, this.pathConsignation, message)
+  return traiterCommandeTranscodage(mq, pathConsignation, message)
     .catch(err=>{
       console.error("media._traiterCommandeTranscodage ERROR %s: %O", message.fuuid, err)
     })

@@ -337,7 +337,7 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
     const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
     await mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
   } catch(err) {
-    debug("Erreur transcodage : %O", err)
+    console.error("transformationsVideo: Erreur transcodage : %O", err)
     mq.emettreEvenement({fuuid, mimetype, videoBitrate, height, err: ''+err}, `evenement.fichiers.${fuuid}.transcodageErreur`)
     mq.emettreEvenement({fuuid, mimetype, videoBitrate, height, err: ''+err}, `evenement.fichiers.${fuuid}.transcodageErreur`, {exchange: '2.prive'})
     throw err
