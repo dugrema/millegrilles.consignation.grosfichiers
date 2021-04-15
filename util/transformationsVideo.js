@@ -14,6 +14,9 @@ async function probeVideo(input, opts) {
         maxBitrate = opts.maxBitrate || 750000
 
   const resultat = await new Promise((resolve, reject)=>{
+    input.on('error', err=>{
+      reject(err)
+    })
     FFmpeg.ffprobe(input, (err, metadata) => {
       if(err) return reject(err)
       resolve(metadata)

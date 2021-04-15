@@ -32,6 +32,10 @@ function gcmStreamReaderFactory(sourceCrypteePath, cleSecreteDecryptee, iv, tag,
     let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv, {...opts, tag})
     let readStream = fs.createReadStream(sourceCrypteePath)
     readStream.pipe(cryptoStream.reader)
+    readStream.on('error', err=>{
+      console.error("Erreur ouverture/lecture fichier : %O", err)
+      cryptoStream.writer.emit('error', err)
+    })
     return cryptoStream.writer
   }
 
