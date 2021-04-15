@@ -137,7 +137,27 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
     // const destinationPath = fichierOutputTmp.path
     debug("Fichier temporaire output : %s", destinationPath)
 
-    await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
+    try {
+      await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
+    } catch(err) {
+      // Verifier si on a une erreur de streaming (e.g. video .mov n'est pas
+      // supporte en streaming)
+      const errMsg = err.message
+      if(errMsg.indexOf("ffmpeg exited with code 1") === -1) {
+        throw err  // Erreur non geree
+      }
+
+      debug("Echec parsing stream, dechiffrer dans un fichier temporaire et utiliser directement")
+      modeInputStream = false
+
+      // Copier le contenu du stream dans un fichier temporaire
+      input = path.join(tmpDir.path, 'input.dat')
+      fichierInputTmp = await extraireFichierTemporaire(input, streamFactory())
+      // input = fichierInputTmp.path
+      debug("Fichier temporaire input pret: %s", input)
+
+      await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
+    }
     debug("Passe 2 terminee, transferer le fichier output")
 
     const outputFileReader = fs.createReadStream(destinationPath)
@@ -203,8 +223,8 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
 
   const processPromise = new Promise((resolve, reject)=>{
     ffmpegProcessCmd.on('error', function(err) {
-        // console.error('An error occurred: %O', err);
-        reject(err);
+      console.error('ERROR - transformationsVideo.transcoderPasse: %O\nInfo params: %O', err, ffmpegProcessCmd)
+      reject(err);
     })
     ffmpegProcessCmd.on('end', function(filenames) {
       resolve()
@@ -246,10 +266,10 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
   debug("Commande traiterCommandeTranscodage video recue : %O", message)
 
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
-  const fuuid = message.fuuid,
-        mimetype = message.mimetype,
-        videoBitrate = message.videoBitrate,
-        height = message.height
+  var fuuid = message.fuuid,
+      mimetype = message.mimetype,
+      videoBitrate = message.videoBitrate,
+      height = message.height
 
   try {
     // Transmettre evenement debut de transcodage
@@ -260,6 +280,12 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
     debug("Cle dechiffrage : %O", cleInfo)
 
     const profil = getProfilTranscodage(message)
+    if(!profil) {
+      console.error("traiterCommandeTranscodage profil non trouvable : %O", message)
+      throw new Error("Profil inconnue pour parametres fournis " + JSON.stringify(message))
+    }
+    videoBitrate = profil.bitrate
+    height = profil.height
 
     const progressCb = progress => {
       progressUpdate(mq, {fuuid, mimetype, videoBitrate, height}, progress)
