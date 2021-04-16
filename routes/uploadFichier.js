@@ -2,6 +2,7 @@ const debug = require('debug')('millegrilles:fichiers:uploadFichier')
 const express = require('express')
 const bodyParser = require('body-parser')
 const fs = require('fs')
+const fsPromises = require('fs/promises')
 const path = require('path')
 const readdirp = require('readdirp')
 
@@ -123,37 +124,29 @@ async function traiterPostUpload(req, res, next) {
 
     debug("Deplacer le fichier vers le storage permanent")
     const pathStorage = req.pathConsignation.trouverPathLocal(hachage)
-    const status = await new Promise((resolve, reject) => {
-      fs.mkdir(path.dirname(pathStorage), {recursive: true}, err=>{
-        if(err) {
-          debug("Erreur creation repertoire pour deplacement fichier : %O", err)
-          return reject(err)
-        }
-
-        fs.rename(pathOutput, pathStorage, err=>{
-          if(err) {
-            debug("Erreur deplacement fichier : %O", err)
-            return reject(err)
-          }
-          return resolve(201)
-        })
-      })
-    })
+    await fsPromises.mkdir(path.dirname(pathStorage), {recursive: true})
+    try {
+      await fsPromises.rename(pathOutput, pathStorage)
+    } catch(err) {
+      console.warn("WARN : Erreur deplacement fichier, on copie : %O", err)
+      await fsPromises.copyFile(pathOutput, pathStorage)
+      await fsPromises.unlink(pathOutput)
+    }
 
     debug("Transmettre transaction fichier")
     const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeTransaction(transactionGrosFichiers)
     debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
 
-    res.status(status).send(reponseGrosfichiers)
+    res.status(201).send(reponseGrosfichiers)
 
   } catch(err) {
-    debug("Erreur de verification du hachage : %O", err)
+    console.error("ERROR uploadFichier.traiterPostUpload: Erreur de verification du hachage : %O", err)
     res.sendStatus(500)
   } finally {
     // Nettoyer le repertoire
     fs.rmdir(pathCorrelation, {recursive: true}, err=>{
       if(err) {
-        debug("Erreur suppression repertoire tmp %s : %O", pathCorrelation, err)
+        console.warn("WARN uploadFichier.traiterPostUpload: Erreur suppression repertoire tmp %s : %O", pathCorrelation, err)
       }
     })
   }

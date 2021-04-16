@@ -3,6 +3,7 @@ const tmp = require('tmp-promise')
 const uuidv1 = require('uuid/v1')
 const path = require('path')
 const fs = require('fs')
+const fsPromises = require('fs/promises')
 
 const { decrypterGCM } = require('./cryptoUtils.js')
 const { creerCipher, creerDecipher } = require('@dugrema/millegrilles.common/lib/chiffrage')
@@ -310,13 +311,14 @@ async function _deplacerVersStorage(pathConsignation, resultatChiffrage, pathPre
   })
 
   // Changer extension fichier destination
-  await new Promise((resolve, reject)=>{
-    debug("Renommer fichier dest pour ajouter extension : %s", pathPreviewImage)
-    fs.rename(pathPreviewImageTmp.path, pathPreviewImage, err=>{
-      if(err) return reject(err)
-      resolve()
-    })
-  })
+  debug("Renommer fichier dest pour ajouter extension : %s", pathPreviewImage)
+  try {
+    await fsPromises.rename(pathPreviewImageTmp.path, pathPreviewImage)
+  } catch(err) {
+    console.warn("WARN traitementMedia._deplacerVersStorage: move (rename) echec, on fait copy")
+    await fsPromises.copyFile(pathPreviewImageTmp.path, pathPreviewImage)
+    await fsPromises.unlink(pathPreviewImageTmp.path)
+  }
 }
 
 module.exports = {

@@ -1,5 +1,6 @@
 const debug = require('debug')('millegrilles:fichiers:traitementFichier')
 const fs = require('fs')
+const fsPromises = require('fs/promises')
 const readdirp = require('readdirp')
 const path = require('path')
 const uuidv1 = require('uuid/v1')
@@ -293,20 +294,17 @@ async function calculHachage(req, hachage) {
 }
 
 async function deplacerFichier(req, nouveauPathFichier) {
-  await new Promise((resolve, reject)=>{
-    const fichier = req.file
-    const pathRepertoire = path.dirname(nouveauPathFichier);
+  const fichier = req.file
+  const pathRepertoire = path.dirname(nouveauPathFichier);
 
-    fs.mkdir(pathRepertoire, {recursive: true}, err=>{
-      if(err) return reject(err)
-
-      fs.rename(fichier.path, nouveauPathFichier, err => {
-        if(err) return reject(err)
-        resolve()
-      })
-
-    })
-  })
+  await fsPromises.mkdir(pathRepertoire, {recursive: true})
+  try {
+    await fsPromises.rename(fichier.path, nouveauPathFichier)
+  } catch(err) {
+    console.warn("WARN - Rename (move) fichier vers destination %s echec, on copie", nouveauPathFichier)
+    await fsPromises.copyFile(fichier.path, nouveauPathFichier)
+    await fsPromises.unlink(fichier.path)
+  }
 }
 
 async function streamListeFichiers(req, res, next) {

@@ -330,7 +330,13 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
       const pathLocalOutput = pathConsignation.trouverPathLocal(fuuidOutput)
       await fsPromises.mkdir(path.dirname(pathLocalOutput), {recursive: true})
       debug("Deplacer output transcodage vers %s", pathLocalOutput)
-      fsPromises.rename(fichierOutputTmp.path, pathLocalOutput)
+      try {
+        await fsPromises.rename(fichierOutputTmp.path, pathLocalOutput)
+      } catch(err) {
+        console.warn("WARN - transformationsVideo.traiterCommandeTranscodage: Echec deplacement fichier output via rename, on copie")
+        await fsPromises.copyFile(fichierOutputTmp.path, pathLocalOutput)
+        await fsPromises.unlink(fichierOutputTmp.path)
+      }
     } catch(err) {
       // Cleanup fichier temporaire cas d'erreur
       fichierOutputTmp.cleanup().catch(err=>{debug("Err cleanup fichier video tmp (OK) : %O", err)})
