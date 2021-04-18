@@ -92,12 +92,16 @@ class RestaurateurBackup {
 
     const pathArchive = path.join(pathRepertoireApplications, catalogueApplication.archive_nomfichier)
 
+    debug("restaurationBackup.RestaurateurBackup.restaurerApplication Catalogue application : %O", catalogueApplication)
+
     res.set({
       archive_hachage: catalogueApplication.archive_hachage,
       archive_nomfichier: catalogueApplication.archive_nomfichier,
       archive_epoch: catalogueApplication['en-tete'].estampille,
       cle: catalogueApplication.cle,
       iv: catalogueApplication.iv,
+      tag: catalogueApplication.tag,
+      format_chiffrage: catalogueApplication.format,
     })
 
     // Stream
