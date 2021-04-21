@@ -52,6 +52,10 @@ class PathConsignation {
     return path.join(this.consignationPathLocal, pathFichier);
   }
 
+  trouverPathRelatif(fichierUuid) {
+    return this._formatterPath(fichierUuid)
+  }
+
   // Trouve un fichier existant lorsque l'extension n'est pas connue
   async trouverPathFuuidExistant(fichierUuid) {
     let pathFichier = this._formatterPath(fichierUuid, {});
