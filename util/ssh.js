@@ -11,26 +11,6 @@ const path = require('path')
 const _privateKeyPath = process.env.SFTP_KEY || '/run/secrets/pki.fichiers.key'
 const _privateKey = fs.readFileSync(_privateKeyPath)
 
-function routeSSH() {
-
-  const route = express.Router()
-
-  route.get('/', (req,res)=>{res.send("SSH module OK")})
-
-  route.get('/getPublicKey', getPublicKey)
-
-  // Routes avec connexion a SSH
-  route.use(connecterSSH)
-
-  // Routes avec SFTP (requiert connexion SSH existante)
-  route.use(preparerSftp)
-  route.get('/connecter', (req,res)=>{res.sendStatus(200)})
-  route.get('/getFichier', getFichier)
-  route.get('/putFichier', putFichier)
-
-  return route
-}
-
 async function connecterSSH(host, port, username) {
   debug("Connecter SSH sur %s:%d avec username %s", host, port, username)
   const conn = new Client()
@@ -51,40 +31,40 @@ function preparerSftp(conn) {
   })
 }
 
-async function getFichier(req, res, next) {
-  const conn = req.sshConnection
-  try {
-    // const sftp = await new Promise((resolve, reject)=>{
-    //   conn.sftp((err, sftp)=>{
-    //     if(err) return reject(err)
-    //     return resolve(sftp)
-    //   })
-    // })
-    //
-    // debug("SFTP ok")
-    const sftp = req.sftp
-    // Lire fichier
-    await new Promise((resolve, reject)=>{
-      sftp.fastGet('test.txt', './test.txt', err=>{
-        if(err) return reject(err)
-        resolve()
-      })
-    })
-
-    return res.sendStatus(200)
-  } catch(err) {
-    debug("ERR sftp : %O", err)
-    return res.sendStatus(500)
-  }
-
-}
+// async function getFichier(req, res, next) {
+//   const conn = req.sshConnection
+//   try {
+//     // const sftp = await new Promise((resolve, reject)=>{
+//     //   conn.sftp((err, sftp)=>{
+//     //     if(err) return reject(err)
+//     //     return resolve(sftp)
+//     //   })
+//     // })
+//     //
+//     // debug("SFTP ok")
+//     const sftp = req.sftp
+//     // Lire fichier
+//     await new Promise((resolve, reject)=>{
+//       sftp.fastGet('test.txt', './test.txt', err=>{
+//         if(err) return reject(err)
+//         resolve()
+//       })
+//     })
+//
+//     return res.sendStatus(200)
+//   } catch(err) {
+//     debug("ERR sftp : %O", err)
+//     return res.sendStatus(500)
+//   }
+//
+// }
 
 function mkdir(sftp, resolve, reject, reps) {
   // Condition de fin de recursion
   if(reps.length === 0) return resolve()
 
   var rep = reps.shift()
-  debug("Creer repertoire %s", rep)
+  // debug("Creer repertoire %s", rep)
   sftp.mkdir(rep, err=>{
     // Code 4: folder exists, c'est OK
     if(err && err.code !== 4) return reject(err)
@@ -92,7 +72,9 @@ function mkdir(sftp, resolve, reject, reps) {
   })
 }
 
-async function putFichier(sftp, localPath, remotePath) {
+async function putFichier(sftp, localPath, remotePath, opts) {
+  opts = opts || {}
+
   // S'assurer que le repertoire existe
   const repertoire = path.dirname(remotePath)
   await new Promise((resolve, reject)=>{
@@ -111,14 +93,16 @@ async function putFichier(sftp, localPath, remotePath) {
       acc.push(last)
       return acc
     }, [])
-    debug("Ajouter reps : %O", reps)
+    // debug("Ajouter reps : %O", reps)
     mkdir(sftp, resolve, reject, reps)
   })
   debug("Repertoire %s cree", repertoire)
 
-  const stepFunc = (current, _, total) => {
-    debug("Upload : %s/%s", current, total)
-  }
+  // const stepFunc = (current, _, total) => {
+  //   debug("Upload : %s/%s", current, total)
+  // }
+
+  const stepFunc = opts.progressCb
 
   // Lire fichier
   return new Promise((resolve, reject)=>{

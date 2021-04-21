@@ -35,18 +35,17 @@ function getPublicKeySsh(message, rk, opts) {
   debug("publication.getPublicKey (replyTo: %s)", properties.replyTo)
   const clePublique = getPublicKey()
 
-  const reponse = {
-    clePublique,
-    test: true, valeur: 'mon contenu'
-  }
-
+  const reponse = {clePublique}
   _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
 }
 
-async function publierFichierSftp(message) {
+async function publierFichierSftp(message, rk, opts) {
+  opts = opts || {}
   try {
     const {host, port, username, fuuid} = message
     const basedir = message.basedir || './'
+    const properties = opts.properties || {}
+
     const conn = await connecterSSH(host, port, username)
     const sftp = await preparerSftp(conn)
     debug("Connexion SSH et SFTP OK")
@@ -59,6 +58,11 @@ async function publierFichierSftp(message) {
     debug("Path remote pour le fichier : %s", remotePath)
     await putFichier(sftp, localPath, remotePath)
     debug("Put fichier termine OK")
+
+    if(properties && properties.replyTo) {
+      const reponse = {ok: true}
+      _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
+    }
 
   } catch(err) {
     console.error("ERROR publication.publierFichierSftp: Erreur publication fichier sur sftp : %O", err)
