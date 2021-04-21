@@ -97,9 +97,16 @@ async function putFichier(sftp, localPath, remotePath) {
   const repertoire = path.dirname(remotePath)
   await new Promise((resolve, reject)=>{
     debug("Creer repertoire remote : %s", repertoire)
+
+    // Creer liste de repertoires a creer a partir du repertoire courant
     var last = ''
-    var reps = repertoire.split('/').reduce((acc, item)=>{
+    var reps = repertoire.split('/').reduce((acc, item, index)=>{
       if(item === '.') return acc
+      if(item === '' && index === 0) {
+        // On a un path absolu
+        last = '/'
+        return acc
+      }
       last = path.join(last, item)
       acc.push(last)
       return acc

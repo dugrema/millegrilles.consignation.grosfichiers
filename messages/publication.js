@@ -1,4 +1,5 @@
 const debug = require('debug')('millegrilles:fichiers:publication')
+const path = require('path')
 const { PathConsignation } = require('../util/traitementFichier')
 const { getPublicKey, connecterSSH, preparerSftp, putFichier } = require('../util/ssh')
 
@@ -45,6 +46,7 @@ function getPublicKeySsh(message, rk, opts) {
 async function publierFichierSftp(message) {
   try {
     const {host, port, username, fuuid} = message
+    const basedir = message.basedir || './'
     const conn = await connecterSSH(host, port, username)
     const sftp = await preparerSftp(conn)
     debug("Connexion SSH et SFTP OK")
@@ -53,7 +55,7 @@ async function publierFichierSftp(message) {
     debug("Fichier local a publier sur SSH : %s", localPath)
     // const localPath = '/var/opt/millegrilles/consignation/grosfichiers/z8VwJ/R6/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2'
     // const remotePath = './test1/soustest/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2'
-    const remotePath = './' + _pathConsignation.trouverPathRelatif(fuuid)
+    const remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid))
     debug("Path remote pour le fichier : %s", remotePath)
     await putFichier(sftp, localPath, remotePath)
     debug("Put fichier termine OK")
