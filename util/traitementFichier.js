@@ -52,8 +52,8 @@ class PathConsignation {
     return path.join(this.consignationPathLocal, pathFichier);
   }
 
-  trouverPathRelatif(fichierUuid) {
-    return this._formatterPath(fichierUuid)
+  trouverPathRelatif(fichierUuid, opts) {
+    return this._formatterPath(fichierUuid, opts)
   }
 
   // Trouve un fichier existant lorsque l'extension n'est pas connue
@@ -120,8 +120,14 @@ class PathConsignation {
   _formatterPath(fichierUuid, opts) {
     opts = opts || {}
 
+    var format = 'mgs2'
+    if(opts.format) {
+      format = opts.format
+    } else if(opts.mimetype) {
+      format = MAP_MIMETYPE_EXTENSION[opts.mimetype] || 'bin'
+    }
+
     // Format du fichier (type de chiffrage)
-    const format = opts.format || 'mgs2'
     const extension = '.' + format
 
     const niveau1 = fichierUuid.slice(0,5)

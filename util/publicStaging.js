@@ -6,9 +6,8 @@ const {getDecipherPipe4fuuid} = require('../util/cryptoUtils')
 
 const STAGING_FILE_TIMEOUT_MSEC = 300000
 
-async function creerStreamDechiffrage(mq, req) {
-  const fuuidFichier = req.params.fuuid
-  debug("Creer stream dechiffrage, query : %O", req.query)
+async function creerStreamDechiffrage(mq, fuuidFichier) {
+  debug("Creer stream dechiffrage : %s", fuuidFichier)
 
   // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
   const chainePem = mq.pki.chainePEM

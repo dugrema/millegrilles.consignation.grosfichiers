@@ -4,6 +4,7 @@ const { PathConsignation } = require('../util/traitementFichier')
 const { getPublicKey, connecterSSH, preparerSftp, putFichier: putFichierSsh } = require('../util/ssh')
 const { init: initIpfs, addFichier: addFichierIpfs } = require('../util/ipfs')
 const { preparerConnexionS3, uploaderFichier: putFichierAwsS3 } = require('../util/awss3')
+const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../util/publicStaging')
 
 var _mq = null,
     _pathConsignation = null
@@ -50,15 +51,23 @@ async function publierFichierSftp(message, rk, opts) {
     const {host, port, username, fuuid} = message
     const basedir = message.basedir || './'
     const properties = opts.properties || {}
+    const securite = message.securite || '3.protege'
+
+    var localPath = _pathConsignation.trouverPathLocal(fuuid)
+    debug("Fichier local a publier sur SSH : %s", localPath)
+
+    if(securite === '1.public') {
+      // Dechiffrer le fichier public dans staging
+      const infoFichierPublic = await preparerStagingPublic(fuuid)
+      debug("Information fichier public : %O", infoFichierPublic)
+      localPath = infoFichierPublic.filePath
+    }
 
     const conn = await connecterSSH(host, port, username)
     const sftp = await preparerSftp(conn)
     debug("Connexion SSH et SFTP OK")
 
-    const localPath = _pathConsignation.trouverPathLocal(fuuid)
-    debug("Fichier local a publier sur SSH : %s", localPath)
-
-    const remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid))
+    const remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid, {mimetype: message.mimetype}))
     debug("Path remote pour le fichier : %s", remotePath)
 
     await putFichierSsh(sftp, localPath, remotePath)
@@ -148,6 +157,29 @@ async function publierFichierAwsS3(message, rk, opts) {
       _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
     }
   }
+}
+
+async function preparerStagingPublic(fuuid) {
+  // Dechiffrer un fichier public dans zone de downloadStaging (auto-cleanup)
+
+  const infoStream = await creerStreamDechiffrage(_mq, fuuid)
+  if(infoStream.acces === '0.refuse') {
+    debug("Permission d'acces refuse en mode %s pour %s", niveauAcces, fuuid)
+    return res.sendStatus(403)  // Acces refuse
+  }
+
+  // // Ajouter information de dechiffrage pour la reponse
+  // res.decipherStream = infoStream.decipherStream
+  // res.permission = infoStream.permission
+  // res.fuuid = infoStream.fuuidEffectif
+
+  // const fuuidEffectif = infoStream.fuuidEffectif
+
+  // Preparer le fichier dechiffre dans repertoire de staging
+  const infoFichierEffectif = await stagingPublic(_pathConsignation, fuuid, infoStream)
+  //res.stat = infoFichierEffectif.stat
+  //res.filePath = infoFichierEffectif.filePath
+  return infoFichierEffectif
 }
 
 module.exports = {init, on_connecter, getPublicKey}
