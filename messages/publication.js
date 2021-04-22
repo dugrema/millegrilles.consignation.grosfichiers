@@ -3,6 +3,7 @@ const path = require('path')
 const { PathConsignation } = require('../util/traitementFichier')
 const { getPublicKey, connecterSSH, preparerSftp, putFichier: putFichierSsh } = require('../util/ssh')
 const { init: initIpfs, addFichier: addFichierIpfs } = require('../util/ipfs')
+const { preparerConnexionS3, uploaderFichier: putFichierAwsS3 } = require('../util/awss3')
 
 var _mq = null,
     _pathConsignation = null
@@ -104,8 +105,41 @@ async function publierFichierIpfs(message, rk, opts) {
   }
 }
 
-async function publierFichierAwsS3(message) {
+async function publierFichierAwsS3(message, rk, opts) {
+  opts = opts || {}
+  const properties = opts.properties || {}
+  try {
+    const {fuuid, bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = message
 
+    // Connecter AWS S3
+    const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
+
+    const localPath = _pathConsignation.trouverPathLocal(fuuid)
+    debug("Fichier local a publier sur IPFS : %s", localPath)
+
+    const progressCb = update => {
+      debug("Progress S3 : %O", update)
+    }
+
+    debug("Debut upload AWS S3 %s vers %s", fuuid, bucketName)
+    const resultat = await putFichierAwsS3(s3, message, localPath, bucketName, bucketDirfichier, {progressCb})
+    debug("Resultat upload S3 : %O", resultat)
+    // Resultat:
+    // {
+	  //    ETag: '"874e56c9ae15779368e082b3b95b0832"',
+	  //    Location: 'https://millegrilles.s3.amazonaws.com/mg-dev4/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2',
+	  //    key: 'mg-dev4/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2',
+	  //    Key: 'mg-dev4/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2',
+	  //    Bucket: 'millegrilles'
+    // }
+
+    return resultat
+  } catch(err) {
+    console.error("ERROR publication.publierFichierAwsS3: Erreur publication fichier sur AWS S3 : %O", err)
+    if(properties && properties.replyTo) {
+      _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
+    }
+  }
 }
 
 module.exports = {init, on_connecter, getPublicKey}
