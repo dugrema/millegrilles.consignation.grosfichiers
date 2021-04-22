@@ -1,7 +1,8 @@
 const debug = require('debug')('millegrilles:fichiers:publication')
 const path = require('path')
 const { PathConsignation } = require('../util/traitementFichier')
-const { getPublicKey, connecterSSH, preparerSftp, putFichier } = require('../util/ssh')
+const { getPublicKey, connecterSSH, preparerSftp, putFichier: putFichierSsh } = require('../util/ssh')
+const { init: initIpfs, addFichier: addFichierIpfs } = require('../util/ipfs')
 
 var _mq = null,
     _pathConsignation = null
@@ -11,6 +12,8 @@ function init(mq) {
 
   const idmg = mq.pki.idmg
   _pathConsignation = new PathConsignation({idmg});
+
+  initIpfs('http://192.168.2.131:5001')
 }
 
 function on_connecter() {
@@ -52,25 +55,52 @@ async function publierFichierSftp(message, rk, opts) {
 
     const localPath = _pathConsignation.trouverPathLocal(fuuid)
     debug("Fichier local a publier sur SSH : %s", localPath)
-    // const localPath = '/var/opt/millegrilles/consignation/grosfichiers/z8VwJ/R6/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2'
-    // const remotePath = './test1/soustest/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2'
+
     const remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid))
     debug("Path remote pour le fichier : %s", remotePath)
-    await putFichier(sftp, localPath, remotePath)
-    debug("Put fichier termine OK")
+
+    await putFichierSsh(sftp, localPath, remotePath)
+    debug("Put fichier ssh OK")
 
     if(properties && properties.replyTo) {
-      const reponse = {ok: true}
-      _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
+      _mq.transmettreReponse({ok: true}, properties.replyTo, properties.correlationId)
     }
 
   } catch(err) {
     console.error("ERROR publication.publierFichierSftp: Erreur publication fichier sur sftp : %O", err)
+    if(properties && properties.replyTo) {
+      _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
+    }
   }
 }
 
-async function publierFichierIpfs(message) {
+async function publierFichierIpfs(message, rk, opts) {
+  opts = opts || {}
+  try {
+    const {fuuid} = message
+    const properties = opts.properties || {}
 
+    const localPath = _pathConsignation.trouverPathLocal(fuuid)
+    debug("Fichier local a publier sur IPFS : %s", localPath)
+
+    const reponse = await addFichierIpfs(localPath)
+    debug("Put fichier ipfs OK : %O", reponse)
+    const reponseMq = {
+      ok: true,
+      hash: reponse.Hash,
+      size: reponse.Size
+    }
+
+    if(properties && properties.replyTo) {
+      _mq.transmettreReponse(reponseMq, properties.replyTo, properties.correlationId)
+    }
+
+  } catch(err) {
+    console.error("ERROR publication.publierFichierIpfs: Erreur publication fichier sur ipfs : %O", err)
+    if(properties && properties.replyTo) {
+      _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
+    }
+  }
 }
 
 async function publierFichierAwsS3(message) {
