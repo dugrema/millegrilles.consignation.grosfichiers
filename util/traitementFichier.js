@@ -138,6 +138,11 @@ class PathConsignation {
 
 }
 
+function trouverExtension(mimetype) {
+  var extension = MAP_MIMETYPE_EXTENSION[mimetype] || 'mgs2'
+  return '.' + extension
+}
+
 // const pathConsignation = new PathConsignation();
 
 class TraitementFichier {
@@ -504,4 +509,5 @@ module.exports = {
   TraitementFichier, PathConsignation,
   extraireTarFile, supprimerRepertoiresVides, supprimerFichiers,
   streamListeFichiers, getFichiersDomaine, getGrosFichiersHoraire,
+  trouverExtension,
 }

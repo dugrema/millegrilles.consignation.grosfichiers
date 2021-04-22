@@ -4,7 +4,7 @@ const fsPromises = require('fs/promises')
 const path = require('path')
 const S3 = require('aws-sdk/clients/s3')
 const { decrypterSymmetrique } = require('../util/cryptoUtils')
-// const { PathConsignation } = require('../util/traitementFichier')
+const { trouverExtension } = require('../util/traitementFichier')
 const { dechiffrerTemporaire } = require('../util/traitementMedia')
 
 const AWS_API_VERSION = '2006-03-01'
@@ -246,6 +246,7 @@ async function uploaderFichier(s3, message, pathFichier, bucketName, bucketDirfi
        nomFichier += '.mgs2'
      } else if(message.mimetype) {
        // TODO, mettre extension selon mimetype
+       nomFichier += trouverExtension(message.mimetype)
      }
   }
 

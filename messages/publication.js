@@ -90,9 +90,17 @@ async function publierFichierIpfs(message, rk, opts) {
   try {
     const {fuuid} = message
     const properties = opts.properties || {}
+    const securite = message.securite || '3.protege'
 
-    const localPath = _pathConsignation.trouverPathLocal(fuuid)
-    debug("Fichier local a publier sur IPFS : %s", localPath)
+    var localPath = _pathConsignation.trouverPathLocal(fuuid)
+    debug("Fichier local a publier sur SSH : %s", localPath)
+
+    if(securite === '1.public') {
+      // Dechiffrer le fichier public dans staging
+      const infoFichierPublic = await preparerStagingPublic(fuuid)
+      debug("Information fichier public : %O", infoFichierPublic)
+      localPath = infoFichierPublic.filePath
+    }
 
     const reponse = await addFichierIpfs(localPath)
     debug("Put fichier ipfs OK : %O", reponse)
@@ -119,12 +127,20 @@ async function publierFichierAwsS3(message, rk, opts) {
   const properties = opts.properties || {}
   try {
     const {fuuid, bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = message
+    const securite = message.securite || '3.protege'
 
     // Connecter AWS S3
     const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
 
-    const localPath = _pathConsignation.trouverPathLocal(fuuid)
+    var localPath = _pathConsignation.trouverPathLocal(fuuid)
     debug("Fichier local a publier sur IPFS : %s", localPath)
+
+    if(securite === '1.public') {
+      // Dechiffrer le fichier public dans staging
+      const infoFichierPublic = await preparerStagingPublic(fuuid)
+      debug("Information fichier public : %O", infoFichierPublic)
+      localPath = infoFichierPublic.filePath
+    }
 
     const progressCb = update => {
       debug("Progress S3 : %O", update)
