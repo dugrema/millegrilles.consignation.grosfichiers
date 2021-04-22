@@ -13,7 +13,8 @@ function init(mq) {
   const idmg = mq.pki.idmg
   _pathConsignation = new PathConsignation({idmg});
 
-  initIpfs('http://192.168.2.131:5001')
+  const ipfsHost = process.env.IPFS_HOST || 'http://ipfs:5001'
+  initIpfs(ipfsHost)
 }
 
 function on_connecter() {

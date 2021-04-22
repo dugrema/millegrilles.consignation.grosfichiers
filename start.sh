@@ -11,6 +11,7 @@ export SFTP_KEY=$CERT_FOLDER/pki.fichiers.sftp
 export WEB_CERT=$MG_MQ_CERTFILE
 export WEB_KEY=$MG_MQ_KEYFILE
 export MG_MQ_URL=amqps://$HOST:5673
+export IPFS_HOST=http://192.168.2.131:5001
 
 export PORT=3021
 
