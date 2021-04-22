@@ -4,6 +4,8 @@ const fs = require('fs');
 const {PathConsignation, TraitementFichier} = require('../util/traitementFichier')
 const {getDecipherPipe4fuuid} = require('../util/cryptoUtils')
 
+const STAGING_FILE_TIMEOUT_MSEC = 300000
+
 async function creerStreamDechiffrage(mq, req) {
   const fuuidFichier = req.params.fuuid
   debug("Creer stream dechiffrage, query : %O", req.query)
@@ -33,20 +35,20 @@ async function creerStreamDechiffrage(mq, req) {
 
   var cleChiffree, iv, fuuidEffectif = fuuidFichier, infoVideo = ''
 
-  if(req.query.preview) {
-    debug("Utiliser le preview pour extraction")
-    fuuidEffectif = reponsePermission['fuuid_preview']
-  } else if(req.query.video) {
-    const resolution = req.query.video
-    debug("Utiliser le video resolution %s pour extraction", resolution)
-    // Faire une requete pour trouver le video associe a la resolution
-    const domaineRequeteFichier = 'GrosFichiers.documentsParFuuid'
-    const infoFichier = await mq.transmettreRequete(domaineRequeteFichier, {fuuid: fuuidFichier})
-    debug("Information fichier video : %O", infoFichier)
-    infoVideo = infoFichier.versions[fuuidFichier].video[resolution]
-    fuuidEffectif = infoVideo.fuuid
-    debug("Fuuid effectif pour video %s : %s", resolution, fuuidEffectif)
-  }
+  // if(req.query.preview) {
+  //   debug("Utiliser le preview pour extraction")
+  //   fuuidEffectif = reponsePermission['fuuid_preview']
+  // } else if(req.query.video) {
+  //   const resolution = req.query.video
+  //   debug("Utiliser le video resolution %s pour extraction", resolution)
+  //   // Faire une requete pour trouver le video associe a la resolution
+  //   const domaineRequeteFichier = 'GrosFichiers.documentsParFuuid'
+  //   const infoFichier = await mq.transmettreRequete(domaineRequeteFichier, {fuuid: fuuidFichier})
+  //   debug("Information fichier video : %O", infoFichier)
+  //   infoVideo = infoFichier.versions[fuuidFichier].video[resolution]
+  //   fuuidEffectif = infoVideo.fuuid
+  //   debug("Fuuid effectif pour video %s : %s", resolution, fuuidEffectif)
+  // }
 
   var infoClePreview = reponseCle.cles[fuuidEffectif]
   cleChiffree = infoClePreview.cle
@@ -161,5 +163,5 @@ function cleanupStaging() {
 }
 
 module.exports = {
-  stagingFichier, cleanupStaging
+  stagingFichier, cleanupStaging, creerStreamDechiffrage,
 }
