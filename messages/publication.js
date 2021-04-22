@@ -133,7 +133,15 @@ async function publierFichierAwsS3(message, rk, opts) {
 	  //    Bucket: 'millegrilles'
     // }
 
-    return resultat
+    const reponseMq = {
+      ok: true,
+      ...resultat,
+    }
+
+    if(properties && properties.replyTo) {
+      _mq.transmettreReponse(reponseMq, properties.replyTo, properties.correlationId)
+    }
+
   } catch(err) {
     console.error("ERROR publication.publierFichierAwsS3: Erreur publication fichier sur AWS S3 : %O", err)
     if(properties && properties.replyTo) {
