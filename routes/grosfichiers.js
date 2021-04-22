@@ -8,6 +8,7 @@ const bodyParser = require('body-parser')
 const {PathConsignation, TraitementFichier} = require('../util/traitementFichier')
 const {getDecipherPipe4fuuid} = require('../util/cryptoUtils')
 const uploadFichier = require('./uploadFichier')
+const { stagingFichier: stagingPublic} = require('../util/publicStaging')
 
 // const throttle = require('@sitespeed.io/throttle');
 
@@ -19,8 +20,8 @@ function InitialiserGrosFichiers() {
 
   const bodyParserInstance = bodyParser.urlencoded({ extended: false })
 
-  router.get('^/fichiers/public/:fuuid', downloadFichierPublic, pipeReponse)
-  router.get('^/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
+  router.get('/fichiers/public/:fuuid', downloadFichierPublic, pipeReponse)
+  router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
   router.use(uploadFichier.init())
 
   // router.post('*', bodyParserInstance, downloadFichierLocalChiffre)
@@ -53,7 +54,7 @@ function InitialiserGrosFichiers() {
   // })
 
   // Activer nettoyage sur cedule des repertoires de staging
-  setInterval(cleanupStaging, 120000)
+  // setInterval(cleanupStaging, 120000)
 
   return router
 }
@@ -181,7 +182,7 @@ async function downloadFichierPublic(req, res, next) {
     const fuuidEffectif = infoStream.fuuidEffectif
 
     // Preparer le fichier dechiffre dans repertoire de staging
-    const infoFichierEffectif = await stagingFichier(pathConsignation, fuuidEffectif, infoStream)
+    const infoFichierEffectif = await stagingPublic(pathConsignation, fuuidEffectif, infoStream)
     res.stat = infoFichierEffectif.stat
     res.filePath = infoFichierEffectif.filePath
 
@@ -359,103 +360,103 @@ function readRangeHeader(range, totalLength) {
     }
 }
 
-async function stagingFichier(pathConsignation, fuuidEffectif, infoStream) {
-  // Staging de fichier public
-
-  // Verifier si le fichier existe deja
-  const pathFuuidLocal = pathConsignation.trouverPathLocal(fuuidEffectif, true)
-  const pathFuuidEffectif = path.join(pathConsignation.consignationPathDownloadStaging, fuuidEffectif)
-  var statFichier = await new Promise((resolve, reject) => {
-    // S'assurer que le path de staging existe
-    fs.mkdir(pathConsignation.consignationPathDownloadStaging, {recursive: true}, err=>{
-      if(err) return reject(err)
-      // Verifier si le fichier existe
-      fs.stat(pathFuuidEffectif, (err, stat)=>{
-        if(err) {
-          if(err.errno == -2) {
-            resolve(null)  // Le fichier n'existe pas, on va le creer
-          } else {
-            reject(err)
-          }
-        } else {
-          // Touch et retourner stat
-          const time = new Date()
-          fs.utimes(pathFuuidEffectif, time, time, err=>{
-            if(err) {
-              debug("Erreur touch %s : %o", pathFuuidEffectif, err)
-              return
-            }
-            resolve({pathFuuidLocal, filePath: pathFuuidEffectif, stat})
-          })
-        }
-      })
-    })
-  })
-
-  // Verifier si on a toute l'information
-  if(statFichier) return statFichier
-
-  // Le fichier n'existe pas, on le dechiffre dans staging
-  const outStream = fs.createWriteStream(pathFuuidEffectif, {flags: 'wx'})
-  return new Promise((resolve, reject)=>{
-    outStream.on('close', _=>{
-      fs.stat(pathFuuidEffectif, (err, stat)=>{
-        if(err) {
-          reject(err)
-        } else {
-          debug("Fin staging fichier %O", stat)
-          resolve({pathFuuidLocal, filePath: pathFuuidEffectif, stat})
-        }
-      })
-
-    })
-    outStream.on('error', err=>{
-      debug("Erreur staging fichier %s : %O", pathFuuidEffectif, err)
-      reject(err)
-    })
-
-    debug("Staging fichier %s", pathFuuidEffectif)
-    infoStream.decipherStream.writer.pipe(outStream)
-    var readStream = fs.createReadStream(pathFuuidLocal);
-    readStream.pipe(infoStream.decipherStream.reader)
-  })
-
-}
-
-function cleanupStaging() {
-  // Supprime les fichiers de staging en fonction de la derniere modification (touch)
-  const pathConsignation = new PathConsignation()
-  const pathDownloadStaging = pathConsignation.consignationPathDownloadStaging
-
-  // debug("Appel cleanupStagingDownload " + pathDownloadStaging)
-
-  fs.readdir(pathDownloadStaging, (err, files)=>{
-    if(err) {
-      if(err.code === 'ENOENT') return  // Repertoire n'existe pas
-      return console.error("cleanupStagingDownload ERROR: %O", err)
-    }
-
-    const expirationMs = new Date().getTime() - STAGING_FILE_TIMEOUT_MSEC
-
-    files.forEach(file=>{
-      const filePath = path.join(pathDownloadStaging, file)
-      fs.stat(filePath, (err, stat)=>{
-        if(err) {
-          if(err.code === 'ENOENT') return  // Repertoire n'existe pas
-          return console.error("cleanupStagingDownload ERROR: %O", err)
-        }
-
-        // debug("Info fichier %s: %O", filePath, stat)
-        if(stat.mtimeMs < expirationMs) {
-          debug("Cleanup fichier download staging %s", filePath)
-          fs.unlink(filePath, err=>{
-            if(err) debug("Erreur unlink fichier %O", err)
-          })
-        }
-      })
-    })
-
-  })
-}
+// async function stagingFichier(pathConsignation, fuuidEffectif, infoStream) {
+//   // Staging de fichier public
+//
+//   // Verifier si le fichier existe deja
+//   const pathFuuidLocal = pathConsignation.trouverPathLocal(fuuidEffectif, true)
+//   const pathFuuidEffectif = path.join(pathConsignation.consignationPathDownloadStaging, fuuidEffectif)
+//   var statFichier = await new Promise((resolve, reject) => {
+//     // S'assurer que le path de staging existe
+//     fs.mkdir(pathConsignation.consignationPathDownloadStaging, {recursive: true}, err=>{
+//       if(err) return reject(err)
+//       // Verifier si le fichier existe
+//       fs.stat(pathFuuidEffectif, (err, stat)=>{
+//         if(err) {
+//           if(err.errno == -2) {
+//             resolve(null)  // Le fichier n'existe pas, on va le creer
+//           } else {
+//             reject(err)
+//           }
+//         } else {
+//           // Touch et retourner stat
+//           const time = new Date()
+//           fs.utimes(pathFuuidEffectif, time, time, err=>{
+//             if(err) {
+//               debug("Erreur touch %s : %o", pathFuuidEffectif, err)
+//               return
+//             }
+//             resolve({pathFuuidLocal, filePath: pathFuuidEffectif, stat})
+//           })
+//         }
+//       })
+//     })
+//   })
+//
+//   // Verifier si on a toute l'information
+//   if(statFichier) return statFichier
+//
+//   // Le fichier n'existe pas, on le dechiffre dans staging
+//   const outStream = fs.createWriteStream(pathFuuidEffectif, {flags: 'wx'})
+//   return new Promise((resolve, reject)=>{
+//     outStream.on('close', _=>{
+//       fs.stat(pathFuuidEffectif, (err, stat)=>{
+//         if(err) {
+//           reject(err)
+//         } else {
+//           debug("Fin staging fichier %O", stat)
+//           resolve({pathFuuidLocal, filePath: pathFuuidEffectif, stat})
+//         }
+//       })
+//
+//     })
+//     outStream.on('error', err=>{
+//       debug("Erreur staging fichier %s : %O", pathFuuidEffectif, err)
+//       reject(err)
+//     })
+//
+//     debug("Staging fichier %s", pathFuuidEffectif)
+//     infoStream.decipherStream.writer.pipe(outStream)
+//     var readStream = fs.createReadStream(pathFuuidLocal);
+//     readStream.pipe(infoStream.decipherStream.reader)
+//   })
+//
+// }
+//
+// function cleanupStaging() {
+//   // Supprime les fichiers de staging en fonction de la derniere modification (touch)
+//   const pathConsignation = new PathConsignation()
+//   const pathDownloadStaging = pathConsignation.consignationPathDownloadStaging
+//
+//   // debug("Appel cleanupStagingDownload " + pathDownloadStaging)
+//
+//   fs.readdir(pathDownloadStaging, (err, files)=>{
+//     if(err) {
+//       if(err.code === 'ENOENT') return  // Repertoire n'existe pas
+//       return console.error("cleanupStagingDownload ERROR: %O", err)
+//     }
+//
+//     const expirationMs = new Date().getTime() - STAGING_FILE_TIMEOUT_MSEC
+//
+//     files.forEach(file=>{
+//       const filePath = path.join(pathDownloadStaging, file)
+//       fs.stat(filePath, (err, stat)=>{
+//         if(err) {
+//           if(err.code === 'ENOENT') return  // Repertoire n'existe pas
+//           return console.error("cleanupStagingDownload ERROR: %O", err)
+//         }
+//
+//         // debug("Info fichier %s: %O", filePath, stat)
+//         if(stat.mtimeMs < expirationMs) {
+//           debug("Cleanup fichier download staging %s", filePath)
+//           fs.unlink(filePath, err=>{
+//             if(err) debug("Erreur unlink fichier %O", err)
+//           })
+//         }
+//       })
+//     })
+//
+//   })
+// }
 
 module.exports = {InitialiserGrosFichiers};

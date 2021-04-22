@@ -9,10 +9,20 @@ const {InitialiserGrosFichiers} = require('../routes/grosfichiers');
 const {InitialiserBackup} = require('../routes/backup');
 const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki');
 const {PathConsignation} = require('../util/traitementFichier')
+const {cleanupStaging} = require('../util/publicStaging')
 
-function initialiser() {
+function initialiser(opts) {
+  opts = opts || {}
+  const middleware = opts.middleware
 
-  var app = express();
+  var app = express()
+
+  if(middleware) {
+    // Ajouter middleware a mettre en premier
+    middleware.forEach(item=>{
+      app.use(item)
+    })
+  }
 
   // Ajouter composant d'autorisation par certificat client SSL
   app.use(verificationCertificatSSL)
@@ -24,6 +34,7 @@ function initialiser() {
     //const rabbitMQ = req.fctRabbitMQParIdmg(idmg)
     // req.amqpdao = rabbitMQ  // Nouvelle approche
     req.pathConsignation = new PathConsignation({idmg})
+
     next()
   })
 
@@ -33,8 +44,8 @@ function initialiser() {
 
   app.use(express.static(path.join(__dirname, 'public')))
 
-  app.all('^/backup/*', InitialiserBackup())
-  app.all('^/fichiers/*', InitialiserGrosFichiers())
+  app.all('/backup/*', InitialiserBackup())
+  app.all('/fichiers/*', InitialiserGrosFichiers())
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {
@@ -47,6 +58,9 @@ function initialiser() {
     console.error("Erreur generique\n%O", err);
     res.sendStatus(err.status || 500);
   })
+
+  // Activer nettoyage sur cedule des repertoires de staging
+  setInterval(cleanupStaging, 300000)
 
   return app;
 }
