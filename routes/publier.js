@@ -8,7 +8,7 @@ const multer = require('multer')
 const {v4: uuidv4} = require('uuid')
 const readdirp = require('readdirp')
 const FormData = require('form-data')
-const { addRepertoire: ipfsPublish } = require('../util/ipfs')
+const { addRepertoire: ipfsPublish, getPins } = require('../util/ipfs')
 const { connecterSSH, preparerSftp, listerConsignation: _listerConsignation } = require('../util/ssh')
 const { preparerConnexionS3, addRepertoire: awss3Publish } = require('../util/awss3')
 
@@ -31,6 +31,7 @@ function init(mq, pathConsignation) {
 
   route.put('/publier/repertoire', multerMiddleware.array('files', 1000), publierRepertoire)
   route.post('/publier/listerConsignationSftp', bodyParserJson, listerConsignationSftp)
+  route.post('/publier/listerPinsIpfs', listerPinsIpfs)
 
   return route
 }
@@ -128,6 +129,18 @@ async function listerConsignationSftp(req, res, next) {
   }
 
   // res.send({ok: true})
+}
+
+async function listerPinsIpfs(req, res, next) {
+  debug('publier.listerPinsIpfs')
+
+  try {
+    res.status(200)
+    getPins(res)
+  } catch(err) {
+    console.error("ERROR publier.listerPinsIpfs %O", err)
+    res.sendStatus(500)
+  }
 }
 
 module.exports = {init}

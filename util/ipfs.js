@@ -6,6 +6,7 @@ const FormData = require('form-data')
 const PeerId = require('peer-id')
 const multibase = require('multibase')
 const streamBuffers = require('stream-buffers')
+const got = require('got')
 const path = require('path')
 const { preparerPublicationRepertoire } = require('./publierUtils')
 
@@ -236,4 +237,10 @@ function cbPreparerIpfs(entry, formData, pathStaging) {
   }
 }
 
-module.exports = {init, addFichier, addRepertoire, cbPreparerIpfs}
+function getPins(res) {
+  const url = _urlHost + '/pin/ls?stream=true'
+  const streamIpfs = got.stream.post(url).end()
+  streamIpfs.pipe(res)
+}
+
+module.exports = {init, addFichier, addRepertoire, cbPreparerIpfs, getPins}
