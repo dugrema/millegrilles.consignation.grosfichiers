@@ -6,6 +6,7 @@ const S3 = require('aws-sdk/clients/s3')
 const { decrypterSymmetrique } = require('../util/cryptoUtils')
 const { trouverExtension } = require('../util/traitementFichier')
 const { dechiffrerTemporaire } = require('../util/traitementMedia')
+const { preparerPublicationRepertoire } = require('./publierUtils')
 
 const AWS_API_VERSION = '2006-03-01'
 
@@ -261,10 +262,11 @@ async function uploaderFichier(s3, message, pathFichier, bucketName, bucketDirfi
   //     'nom_fichier': message.nom_fichier,
   //   }
   const metadata = {
-    uuid: message.uuid,
-    fuuid: message.fuuid,
     nom_fichier: nomFichier,
+    securite: message.securite || '3.protege',
   }
+  if(message.uuid) metadata.uuid = message.uuid
+  if(message.uuid) metadata.fuuid = message.fuuid
 
   const uploadParams = {
     Bucket: bucketName,
@@ -312,6 +314,28 @@ async function uploaderFichier(s3, message, pathFichier, bucketName, bucketDirfi
     }
   })
 
+}
+
+async function addRepertoire(s3, repertoire, bucketName, opts) {
+  opts = opts || {}
+  const repertoireRemote = opts.bucketDirfichier || ''
+
+  const listeFichiers = []
+  const cb = entry => cbPreparerAwsS3(entry, listeFichiers, repertoire, repertoireRemote)
+  const info = await preparerPublicationRepertoire(repertoire, cb)
+  debug("Info publication repertoire avec AWS S3 : %O, liste fichiers: %O", info, listeFichiers)
+
+  for await (const fichier of listeFichiers) {
+    debug("Traiter fichier : %O", fichier)
+    const params = {
+      nomFichier: path.basename(fichier.localPath),
+      securite: '1.public',
+    }
+    const remotePath = path.dirname(fichier.remotePath)
+    // await putFichier(sftp, fichier.localPath, fichier.remotePath)
+    // s3, message, pathFichier, bucketName, bucketDirfichier, opts
+    await uploaderFichier(s3, params, fichier.localPath, bucketName, remotePath, opts)
+  }
 }
 
 // async function publierAwsS3(mq, pathConsignation, routingKey, message, opts) {
@@ -406,5 +430,18 @@ async function uploaderFichier(s3, message, pathFichier, bucketName, bucketDirfi
 //   }
 // }
 
+function cbPreparerAwsS3(entry, listeFichiers, pathStaging, repertoireRemote) {
+  /* Sert a preparer l'upload d'un repertoire vers IPFS. Append a FormData. */
+  const pathRelatif = entry.fullPath.replace(pathStaging + '/', '')
 
-module.exports = {AWS_API_VERSION, preparerConnexionS3, uploaderFichier}
+  debug("Ajout path relatif : %s", pathRelatif)
+  if(entry.stats.isFile()) {
+    debug("Creer readStream fichier %s", entry.fullPath)
+    listeFichiers.push({
+      localPath: entry.fullPath,
+      remotePath: path.join(repertoireRemote, pathRelatif),
+    })
+  }
+}
+
+module.exports = {AWS_API_VERSION, preparerConnexionS3, uploaderFichier, addRepertoire}

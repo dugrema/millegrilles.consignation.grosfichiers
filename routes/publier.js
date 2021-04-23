@@ -9,6 +9,7 @@ const readdirp = require('readdirp')
 const FormData = require('form-data')
 const { addRepertoire: ipfsPublish } = require('../util/ipfs')
 const { connecterSSH, preparerSftp, addRepertoire: sshPublish } = require('../util/ssh')
+const { preparerConnexionS3, addRepertoire: awss3Publish } = require('../util/awss3')
 
 // const ipfsHost = process.env.IPFS_HOST || 'http://ipfs:5001'
 // initIpfs(ipfsHost)
@@ -69,7 +70,15 @@ async function publierRepertoire(req, res, next) {
       debug("Reponse publication ipfs %O", reponseIpfs)
     }
     if(req.body.publierAwsS3) {
-      debug("Publier repertoire avec AWS S3")
+      debug("Publier repertoire avec AWS S3 : %O", req.body.publierAwsS3)
+      const paramsAwsS3 = JSON.parse(req.body.publierAwsS3)
+
+      const {bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = paramsAwsS3
+
+      // Connecter AWS S3
+      const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
+      const reponse = await awss3Publish(s3, repTemporaire, bucketName, {bucketDirfichier})
+      debug("Fin upload AWS S3 : %O", reponse)
     }
 
     res.sendStatus(200)
