@@ -60,18 +60,20 @@ async function publierFichierSftp(message, rk, opts) {
     var localPath = _pathConsignation.trouverPathLocal(fuuid)
     debug("Fichier local a publier sur SSH : %s", localPath)
 
+    var mimetype = null
     if(securite === '1.public') {
       // Dechiffrer le fichier public dans staging
       const infoFichierPublic = await preparerStagingPublic(fuuid)
       debug("Information fichier public : %O", infoFichierPublic)
       localPath = infoFichierPublic.filePath
+      mimetype = message.mimetype
     }
 
     const conn = await connecterSSH(host, port, username)
     const sftp = await preparerSftp(conn)
     debug("Connexion SSH et SFTP OK")
 
-    const remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid, {mimetype: message.mimetype}))
+    const remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
     debug("Path remote pour le fichier : %s", remotePath)
 
     await putFichierSsh(sftp, localPath, remotePath)
@@ -184,8 +186,8 @@ async function preparerStagingPublic(fuuid) {
 
   const infoStream = await creerStreamDechiffrage(_mq, fuuid)
   if(infoStream.acces === '0.refuse') {
-    debug("Permission d'acces refuse en mode %s pour %s", niveauAcces, fuuid)
-    return res.sendStatus(403)  // Acces refuse
+    debug("Permission d'acces refuse en mode %s pour %s", infoStream.acces, fuuid)
+    throw new Error("Acces public refuse a " + fuuid)
   }
 
   // // Ajouter information de dechiffrage pour la reponse
