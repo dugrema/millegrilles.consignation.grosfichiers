@@ -45,7 +45,7 @@ async function init() {
   //   next()
   // })
 
-  const root = await initialiserApp({middleware})
+  const root = await initialiserApp({middleware, mq: instAmqpdao})
   const serverInstance = initialiserServer(root)
 
   // root.use(app)

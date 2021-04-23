@@ -1,19 +1,23 @@
 const debug = require('debug')('millegrilles:fichiers:app')
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
+var createError = require('http-errors')
+var express = require('express')
+var path = require('path')
+var cookieParser = require('cookie-parser')
 
 // var indexRouter = require('./routes/index');
-const {InitialiserGrosFichiers} = require('../routes/grosfichiers');
-const {InitialiserBackup} = require('../routes/backup');
-const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki');
+const {InitialiserGrosFichiers} = require('../routes/grosfichiers')
+const {InitialiserBackup} = require('../routes/backup')
+const {init: InitialiserPublier} = require('../routes/publier')
+const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki')
 const {PathConsignation} = require('../util/traitementFichier')
 const {cleanupStaging} = require('../util/publicStaging')
 
 function initialiser(opts) {
   opts = opts || {}
-  const middleware = opts.middleware
+  const middleware = opts.middleware,
+        mq = opts.mq,
+        idmg = opts.mq.pki.idmg
+  const pathConsignation = new PathConsignation({idmg})
 
   var app = express()
 
@@ -46,6 +50,7 @@ function initialiser(opts) {
 
   app.all('/backup/*', InitialiserBackup())
   app.all('/fichiers/*', InitialiserGrosFichiers())
+  app.all('/publier/*', InitialiserPublier(mq, pathConsignation))
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {
