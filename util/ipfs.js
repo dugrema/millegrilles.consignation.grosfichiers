@@ -49,47 +49,49 @@ async function addFichier(pathFichierLocal) {
   return responseData
 }
 
-// async function addRepertoire(req, res, next) {
-//
-//   try {
-//     const fichierTexte = fs.createReadStream('/home/mathieu/test.json')
-//
-//     // Faire un post vers l'API
-//     const data = new FormData()
-//
-//     var dirOptions = {
-//       filename: 'rep1',
-//       contentType: 'application/x-directory',
-//       knownLength: 0
-//     };
-//
-//     data.append('file', '', dirOptions)
-//
-//     const nomFichierTexte = ['rep1', 'test.json'].join('%2F')
-//
-//     data.append('file', fichierTexte, nomFichierTexte)
-//
-//     const response = await axios({
-//       method: 'POST',
-//       headers: {
-//         ...data.getHeaders(),
-//       },
-//       url: 'http://192.168.2.131:5001/api/v0/add',
-//       data,
-//     })
-//
-//     debug("Response : %O", response)
-//     const responseData = '[' + response.data.trim().split('\n') + ']'
-//
-//     return res.status(200).send(responseData)
-//   } catch(err) {
-//     debug("Erreur : %O", err)
-//     return res.sendStatus(500)
-//   }
-//
-//   return res.sendStatus(200)
-// }
-//
+async function addRepertoire(req, res, next) {
+
+  try {
+    const fichierTexte = fs.createReadStream('/home/mathieu/test.json')
+
+    // Faire un post vers l'API
+    const data = new FormData()
+
+    var dirOptions = {
+      filename: 'rep1',
+      contentType: 'application/x-directory',
+      knownLength: 0
+    };
+
+    data.append('file', '', dirOptions)
+
+    const nomFichierTexte = ['rep1', 'test.json'].join('%2F')
+
+    data.append('file', fichierTexte, nomFichierTexte)
+
+    const url = _urlHost + '/add'
+
+    const response = await axios({
+      method: 'POST',
+      headers: {
+        ...data.getHeaders(),
+      },
+      url,
+      data,
+    })
+
+    debug("Response : %O", response)
+    const responseData = '[' + response.data.trim().split('\n') + ']'
+
+    return res.status(200).send(responseData)
+  } catch(err) {
+    debug("Erreur : %O", err)
+    return res.sendStatus(500)
+  }
+
+  return res.sendStatus(200)
+}
+
 // async function creerKey(req, res, next) {
 //   try {
 //     // Creer une cle privee, chiffrer et sauvegarder (e.g. maitre des cles)
@@ -200,4 +202,4 @@ function creerStreamFromString(sourceBytes) {
   return myReadableStreamBuffer
 }
 
-module.exports = {init, addFichier}
+module.exports = {init, addFichier, addRepertoire}

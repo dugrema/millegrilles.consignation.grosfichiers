@@ -4,6 +4,9 @@ const path = require('path')
 const fsPromises = require('fs/promises')
 const multer = require('multer')
 const {v4: uuidv4} = require('uuid')
+const readdirp = require('readdirp')
+const FormData = require('form-data')
+// const {} = require('../util/ipfs')
 
 var _mq = null,
     _pathConsignation = null
@@ -42,10 +45,64 @@ async function publierRepertoire(req, res, next) {
     debug("Deplacer fichier %s", filePath)
     await fsPromises.rename(file.path, filePath)
   }
-
   debug("Structure de repertoire recree sous %s", repTemporaire)
 
+  // Demarrer publication selon methodes demandees
+  if(req.body.publierSsh) {
+    debug("Publier repertoire avec SSH")
+  }
+  if(req.body.publierIpfs) {
+    debug("Publier repertoire avec IPFS")
+    const formData = new FormData()
+    const cb = entry => cbPreparerIpfs(entry, formData, repTemporaire)
+    const info = await preparerPublicationRepertoire(repTemporaire, cb)
+    debug("Info publication repertoire avec IPFS : %O, FormData: %O", info, formData)
+  }
+  if(req.body.publierAwsS3) {
+    debug("Publier repertoire avec AWS S3")
+  }
+
   res.sendStatus(200)
+}
+
+async function preparerPublicationRepertoire(pathRepertoire, cbCommandeHandler) {
+  /*
+    Prepare l'information et commandes pour publier un repertoire
+    - pathRepertoire : repertoire a publier (base exclue de la publication)
+    - cbCommandeHandler : fonction (stat)=>{...} invoquee sur chaque entree du repertoire
+    Retourne : {bytesTotal}
+  */
+  var bytesTotal = 0
+  const params = {
+    alwaysStat: true,
+    type: 'files_directories',
+  }
+  for await(const entry of readdirp(pathRepertoire, params)) {
+    // const stat = await fsPromises.stat(entry.fullPath)
+    debug("Entry readdirp : %O", entry)
+    const stats = entry.stats
+    await cbCommandeHandler(entry)
+    if(stats.isFile()) {
+      bytesTotal += stats.size
+    }
+  }
+  return {bytesTotal}
+}
+
+function cbPreparerIpfs(entry, formData, pathStaging) {
+  /* Sert a preparer l'upload d'un repertoire vers IPFS. Append a FormData. */
+  const pathRelatif = encodeURIComponent(entry.fullPath.replace(pathStaging, ''))
+  debug("Ajout path relatif : %s", pathRelatif)
+  if(entry.stats.isFile()) {
+    formData.append('file', entry.fullPath, pathRelatif)
+  } else if(entry.stats.isDirectory()) {
+    var dirOptions = {
+      filename: pathRelatif,
+      contentType: 'application/x-directory',
+      knownLength: 0
+    }
+    formData.append('file', '', dirOptions)
+  }
 }
 
 module.exports = {init}
