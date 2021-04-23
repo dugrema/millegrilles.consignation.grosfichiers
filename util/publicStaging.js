@@ -1,10 +1,14 @@
 const debug = require('debug')('millegrilles:fichiers:grosfichiers')
 const path = require('path');
 const fs = require('fs');
+const fsPromises = require('fs/promises')
 const {PathConsignation, TraitementFichier} = require('../util/traitementFichier')
 const {getDecipherPipe4fuuid} = require('../util/cryptoUtils')
+const readdirp = require('readdirp')
 
-const STAGING_FILE_TIMEOUT_MSEC = 300000
+const DOWNLOAD_STAGING_FILE_TIMEOUT_MSEC = 30 * 60 * 1000,    // 30 mins
+      UPLOAD_STAGING_FILE_TIMEOUT_MSEC = 1 * 60 * 60 * 1000,  // 1 heure
+      UPLOAD_STAGING_FOLDER_TIMEOUT_MSEC = 1 * 60 * 60 * 1000 // 1 heure
 
 async function creerStreamDechiffrage(mq, fuuidFichier) {
   debug("Creer stream dechiffrage : %s", fuuidFichier)
@@ -125,40 +129,58 @@ async function stagingFichier(pathConsignation, fuuidEffectif, infoStream) {
 
 }
 
-function cleanupStaging() {
+async function cleanupStaging() {
   // Supprime les fichiers de staging en fonction de la derniere modification (touch)
   const pathConsignation = new PathConsignation()
   const pathDownloadStaging = pathConsignation.consignationPathDownloadStaging
+  const pathUploadStaging = pathConsignation.consignationPathUploadStaging
 
   // debug("Appel cleanupStagingDownload " + pathDownloadStaging)
+  const params = {
+    alwaysStat: true,
+    type: 'files_directories',
+    depth: 0,
+  }
 
-  fs.readdir(pathDownloadStaging, (err, files)=>{
-    if(err) {
-      if(err.code === 'ENOENT') return  // Repertoire n'existe pas
-      return console.error("cleanupStagingDownload ERROR: %O", err)
+  const expirationMs = new Date().getTime() - DOWNLOAD_STAGING_FILE_TIMEOUT_MSEC
+  for await(const entry of readdirp(pathDownloadStaging, params)) {
+    const stats = entry.stats
+
+    try {
+      // debug("Info fichier %s: %O", filePath, stat)
+      if(stats.mtimeMs < expirationMs) {
+        debug("Cleanup fichier download staging %s", entry.fullPath)
+        await fsPromises.unlink(entry.fullPath)
+      }
+    } catch(err) {
+      console.error("ERROR publicStaging.cleanupStaing %O", err)
     }
 
-    const expirationMs = new Date().getTime() - STAGING_FILE_TIMEOUT_MSEC
+  }
 
-    files.forEach(file=>{
-      const filePath = path.join(pathDownloadStaging, file)
-      fs.stat(filePath, (err, stat)=>{
-        if(err) {
-          if(err.code === 'ENOENT') return  // Repertoire n'existe pas
-          return console.error("cleanupStagingDownload ERROR: %O", err)
+  const expirationUploadFileMs = new Date().getTime() - UPLOAD_STAGING_FILE_TIMEOUT_MSEC
+  const expirationUploadFolderMs = new Date().getTime() - UPLOAD_STAGING_FOLDER_TIMEOUT_MSEC
+  for await(const entry of readdirp(pathUploadStaging, params)) {
+    const stats = entry.stats
+    // debug("Info fichier %s: %O", filePath, stat)
+    try {
+      if(stats.isDirectory()) {
+        if(stats.mtimeMs < expirationUploadFolderMs) {
+          debug("Cleanup directory upload staging %s", entry.fullPath)
+          await fsPromises.rm(entry.fullPath, {recursive: true})
         }
-
-        // debug("Info fichier %s: %O", filePath, stat)
-        if(stat.mtimeMs < expirationMs) {
-          debug("Cleanup fichier download staging %s", filePath)
-          fs.unlink(filePath, err=>{
-            if(err) debug("Erreur unlink fichier %O", err)
-          })
+      } else if(stats.isFile()) {
+        if(stats.mtimeMs < expirationUploadFileMs) {
+          debug("Cleanup fichier upload staging %s", entry.fullPath)
+          await fsPromises.unlink(entry.fullPath)
         }
-      })
-    })
-
-  })
+      }
+    } catch(err) {
+      if( ! ['ENOENT'].includes(err.code) ) {
+        console.error("ERROR publicStaging.cleanupStaing %O", err)
+      }
+    }
+  }
 }
 
 module.exports = {

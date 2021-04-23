@@ -65,7 +65,7 @@ function initialiser(opts) {
   })
 
   // Activer nettoyage sur cedule des repertoires de staging
-  setInterval(cleanupStaging, 300000)
+  setInterval(cleanupStaging, 5 * 60 * 1000)  // Cleanup aux 5 minutes
 
   return app;
 }
