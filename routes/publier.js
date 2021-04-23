@@ -68,19 +68,32 @@ async function publierRepertoire(req, res, next) {
     }
     if(req.body.publierIpfs) {
       debug("Publier repertoire avec IPFS")
-      const reponseIpfs = await ipfsPublish(repTemporaire)
-      debug("Reponse publication ipfs %O", reponseIpfs)
+      const paramsIpfs = JSON.parse(req.body.publierIpfs)
+      const commande = {
+        ...paramsIpfs,
+        repertoireStaging: repTemporaire,
+      }
+      const domaineAction = 'commande.fichiers.publierRepertoireIpfs'
+      _mq.transmettreCommande(domaineAction, commande, {nowait: true})
+      debug("Commande publier IPFS emise")
     }
     if(req.body.publierAwsS3) {
       debug("Publier repertoire avec AWS S3 : %O", req.body.publierAwsS3)
+      // const {bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = paramsAwsS3
+      //
+      // // Connecter AWS S3
+      // const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
+      // const reponse = await awss3Publish(s3, repTemporaire, bucketName, {bucketDirfichier})
+      // debug("Fin upload AWS S3 : %O", reponse)
+
       const paramsAwsS3 = JSON.parse(req.body.publierAwsS3)
-
-      const {bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = paramsAwsS3
-
-      // Connecter AWS S3
-      const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
-      const reponse = await awss3Publish(s3, repTemporaire, bucketName, {bucketDirfichier})
-      debug("Fin upload AWS S3 : %O", reponse)
+      const commande = {
+        ...paramsAwsS3,
+        repertoireStaging: repTemporaire,
+      }
+      const domaineAction = 'commande.fichiers.publierRepertoireAwsS3'
+      _mq.transmettreCommande(domaineAction, commande, {nowait: true})
+      debug("Commande publier AWS S3 emise")
     }
 
     res.sendStatus(200)

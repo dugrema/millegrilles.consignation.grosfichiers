@@ -209,8 +209,13 @@ async function publierRepertoireSftp(message, rk, opts) {
     const conn = await connecterSSH(host, port, username)
     const sftp = await preparerSftp(conn)
     const reponseSsh = await putRepertoireSsh(sftp, repertoireStaging, {repertoireRemote})
+
+    // Emettre evenement de publication
+
   } catch(err) {
     console.error('ERROR publication.publierRepertoireSftp %O', err)
+    // Emettre evenement d'echec de publication
+
   } finally {
     if(message.uploadUnique) {
       // Supprimer le repertoire de staging
@@ -221,10 +226,44 @@ async function publierRepertoireSftp(message, rk, opts) {
 
 async function publierRepertoireIpfs(message, rk, opts) {
   debug("Publier repertoire ipfs")
+  const {repertoireStaging} = message
+  try {
+    const reponseIpfs = await putRepertoireIpfs(repertoireStaging)
+    debug("Publication IPFS : %O", reponseIpfs)
+    // Emettre evenement de publication
+
+  } catch(err) {
+    console.error('ERROR publication.publierRepertoireSftp %O', err)
+    // Emettre evenement d'echec de publication
+
+  } finally {
+    if(message.uploadUnique) {
+      // Supprimer le repertoire de staging
+      await fsPromises.rm(repertoireStaging, {recursive: true})
+    }
+  }
 }
 
 async function publierRepertoireAwsS3(message, rk, opts) {
   debug("Publier repertoire aws s3")
+  const {repertoireStaging, bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = message
+
+  try {
+    // Connecter AWS S3
+    const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
+    const reponse = await putRepertoireAwsS3(s3, repertoireStaging, bucketName, {bucketDirfichier})
+    debug("Fin upload AWS S3 : %O", reponse)
+    // Emettre evenement de publication
+
+  } catch(err) {
+    console.error('ERROR publication.publierRepertoireSftp %O', err)
+    // Emettre evenement d'echec de publication
+  } finally {
+    if(message.uploadUnique) {
+      // Supprimer le repertoire de staging
+      await fsPromises.rm(repertoireStaging, {recursive: true})
+    }
+  }
 }
 
 module.exports = {init, on_connecter, getPublicKey}
