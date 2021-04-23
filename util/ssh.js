@@ -164,4 +164,44 @@ function getPublicKey() {
   return reponse
 }
 
-module.exports = {getPublicKey, connecterSSH, preparerSftp, putFichier, addRepertoire}
+async function listerConsignation(sftp, repertoire, opts) {
+  opts = opts || {}
+  debug("ssh.listerConsignation %s", repertoire)
+
+  const list = await new Promise((resolve, reject)=>{
+    sftp.readdir(repertoire, (err, list)=>{
+      if(err) return reject(err)
+      resolve(list)
+    })
+  })
+
+  // Mapper la liste, conserver uniquement les fuuids (fichiers, enlever extension)
+  var fuuids = list.filter(item=>item.attrs.isFile()).map(item=>{
+    return path.parse(item.filename).name
+  })
+  if(opts.res && fuuids && fuuids.length > 0) {
+    debug("FUUIDS : %O", fuuids)
+    fuuids.forEach(fuuid=>{
+      opts.res.write(fuuid + '\n')
+    })
+  }
+
+  // Parcourir recursivement tous les repertoires
+  const directories = list.filter(item=>item.attrs.isDirectory())
+  for await (const directory of directories) {
+    const subDirectory = path.join(repertoire, directory.filename)
+    const list = await listerConsignation(sftp, subDirectory, opts)
+    if(list) {
+      fuuids = [...fuuids, ...list]
+    }
+  }
+
+  if(!opts.res) {
+    return fuuids
+  }
+}
+
+module.exports = {
+  getPublicKey, connecterSSH, preparerSftp, putFichier, addRepertoire,
+  listerConsignation,
+}
