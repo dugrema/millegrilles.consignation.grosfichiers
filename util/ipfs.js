@@ -7,6 +7,7 @@ const PeerId = require('peer-id')
 const multibase = require('multibase')
 const streamBuffers = require('stream-buffers')
 const path = require('path')
+const { preparerPublicationRepertoire } = require('./publierUtils')
 
 const CRLF = '\r\n'
 // const URL_HOST = 'http://192.168.2.131:5001/api/v0'
@@ -49,7 +50,7 @@ async function addFichier(pathFichierLocal) {
   return responseData
 }
 
-async function addRepertoire(formData) {
+async function addRepertoire(repertoire) {
 
   // const fichierTexte = fs.createReadStream('/home/mathieu/test.json')
   //
@@ -67,6 +68,13 @@ async function addRepertoire(formData) {
   // const nomFichierTexte = ['rep1', 'test.json'].join('%2F')
   //
   // data.append('file', fichierTexte, nomFichierTexte)
+
+  const formData = new FormData()
+  const cb = entry => cbPreparerIpfs(entry, formData, repertoire)
+  const info = await preparerPublicationRepertoire(repertoire, cb)
+  debug("Info publication repertoire avec IPFS : %O, FormData: %O", info, formData)
+  //const resultat = await ipfsPublish(formData)
+  //debug("Resultat publication IPFS : %O", resultat)
 
   // Lancer publication - TODO: mettre message sur Q operations longues
   // const reponse = await ipfsPublish(formData)

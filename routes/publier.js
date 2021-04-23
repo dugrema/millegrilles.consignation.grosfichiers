@@ -7,7 +7,7 @@ const multer = require('multer')
 const {v4: uuidv4} = require('uuid')
 const readdirp = require('readdirp')
 const FormData = require('form-data')
-const { init: initIpfs, addRepertoire: ipfsPublish, cbPreparerIpfs} = require('../util/ipfs')
+const { addRepertoire: ipfsPublish } = require('../util/ipfs')
 
 // const ipfsHost = process.env.IPFS_HOST || 'http://ipfs:5001'
 // initIpfs(ipfsHost)
@@ -58,12 +58,8 @@ async function publierRepertoire(req, res, next) {
     }
     if(req.body.publierIpfs) {
       debug("Publier repertoire avec IPFS")
-      const formData = new FormData()
-      const cb = entry => cbPreparerIpfs(entry, formData, repTemporaire)
-      const info = await preparerPublicationRepertoire(repTemporaire, cb)
-      debug("Info publication repertoire avec IPFS : %O, FormData: %O", info, formData)
-      const resultat = await ipfsPublish(formData)
-      debug("Resultat publication IPFS : %O", resultat)
+      const reponseIpfs = await ipfsPublish(repTemporaire)
+      debug("Reponse publication ipfs %O", reponseIpfs)
     }
     if(req.body.publierAwsS3) {
       debug("Publier repertoire avec AWS S3")
@@ -75,30 +71,5 @@ async function publierRepertoire(req, res, next) {
     res.sendStatus(500)
   }
 }
-
-async function preparerPublicationRepertoire(pathRepertoire, cbCommandeHandler) {
-  /*
-    Prepare l'information et commandes pour publier un repertoire
-    - pathRepertoire : repertoire a publier (base exclue de la publication)
-    - cbCommandeHandler : fonction (stat)=>{...} invoquee sur chaque entree du repertoire
-    Retourne : {bytesTotal}
-  */
-  var bytesTotal = 0
-  const params = {
-    alwaysStat: true,
-    type: 'files_directories',
-  }
-  for await(const entry of readdirp(pathRepertoire, params)) {
-    // const stat = await fsPromises.stat(entry.fullPath)
-    debug("Entry readdirp : %O", entry)
-    const stats = entry.stats
-    await cbCommandeHandler(entry)
-    if(stats.isFile()) {
-      bytesTotal += stats.size
-    }
-  }
-  return {bytesTotal}
-}
-
 
 module.exports = {init}
