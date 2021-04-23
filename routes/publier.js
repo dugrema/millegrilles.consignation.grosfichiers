@@ -30,7 +30,7 @@ function init(mq, pathConsignation) {
   const route = express.Router()
 
   route.put('/publier/repertoire', multerMiddleware.array('files', 1000), publierRepertoire)
-  route.post('/publier/listerConsignation', bodyParserJson, listerConsignation)
+  route.post('/publier/listerConsignationSftp', bodyParserJson, listerConsignationSftp)
 
   return route
 }
@@ -107,7 +107,7 @@ async function publierRepertoire(req, res, next) {
   }
 }
 
-async function listerConsignation(req, res, next) {
+async function listerConsignationSftp(req, res, next) {
   debug("publier.listerConsignation : %O", req.body)
 
   const {host, port, username, repertoireRemote} = req.body
