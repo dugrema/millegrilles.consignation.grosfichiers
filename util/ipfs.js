@@ -49,47 +49,48 @@ async function addFichier(pathFichierLocal) {
   return responseData
 }
 
-async function addRepertoire(req, res, next) {
+async function addRepertoire(formData) {
 
+  // const fichierTexte = fs.createReadStream('/home/mathieu/test.json')
+  //
+  // // Faire un post vers l'API
+  // const data = new FormData()
+  //
+  // var dirOptions = {
+  //   filename: 'rep1',
+  //   contentType: 'application/x-directory',
+  //   knownLength: 0
+  // };
+  //
+  // data.append('file', '', dirOptions)
+  //
+  // const nomFichierTexte = ['rep1', 'test.json'].join('%2F')
+  //
+  // data.append('file', fichierTexte, nomFichierTexte)
+
+  const url = _urlHost + '/add'
+  debug("POST vers ipfs : %s", url)
+
+  const response = await axios({
+    method: 'POST',
+    headers: {
+      ...formData.getHeaders(),
+    },
+    url,
+    data: formData,
+  })
+
+  var responseData = response.data
   try {
-    const fichierTexte = fs.createReadStream('/home/mathieu/test.json')
-
-    // Faire un post vers l'API
-    const data = new FormData()
-
-    var dirOptions = {
-      filename: 'rep1',
-      contentType: 'application/x-directory',
-      knownLength: 0
-    };
-
-    data.append('file', '', dirOptions)
-
-    const nomFichierTexte = ['rep1', 'test.json'].join('%2F')
-
-    data.append('file', fichierTexte, nomFichierTexte)
-
-    const url = _urlHost + '/add'
-
-    const response = await axios({
-      method: 'POST',
-      headers: {
-        ...data.getHeaders(),
-      },
-      url,
-      data,
-    })
-
-    debug("Response : %O", response)
-    const responseData = '[' + response.data.trim().split('\n') + ']'
-
-    return res.status(200).send(responseData)
+    if(typeof(responseData) === 'string') {
+      responseData = JSON.parse('[' + response.data.trim().split('\n') + ']')
+    }
   } catch(err) {
-    debug("Erreur : %O", err)
-    return res.sendStatus(500)
+    console.error("ERROR ipfs.addRepertoire: Reponse data string non parseable : %O", err)
   }
+  debug("Response : %O", responseData)
 
-  return res.sendStatus(200)
+  return responseData
 }
 
 // async function creerKey(req, res, next) {
