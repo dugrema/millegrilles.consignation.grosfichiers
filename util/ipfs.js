@@ -68,6 +68,8 @@ async function addRepertoire(formData) {
   //
   // data.append('file', fichierTexte, nomFichierTexte)
 
+  // Lancer publication - TODO: mettre message sur Q operations longues
+  // const reponse = await ipfsPublish(formData)
   const url = _urlHost + '/add'
   debug("POST vers ipfs : %s", url)
 
@@ -88,9 +90,14 @@ async function addRepertoire(formData) {
   } catch(err) {
     console.error("ERROR ipfs.addRepertoire: Reponse data string non parseable : %O", err)
   }
+
   debug("Response : %O", responseData)
 
-  return responseData
+  // Trouver le CID - le repertoire temp est le seul sans / (path racine)
+  const cidRepertoire = responseData.filter(item=>item.Name.indexOf('/')===-1)[0].Hash
+  debug("CID repertoire : %s", cidRepertoire)
+
+  return {fichiers: responseData, cid: cidRepertoire}
 }
 
 // async function creerKey(req, res, next) {
@@ -203,4 +210,22 @@ function creerStreamFromString(sourceBytes) {
   return myReadableStreamBuffer
 }
 
-module.exports = {init, addFichier, addRepertoire}
+function cbPreparerIpfs(entry, formData, pathStaging) {
+  /* Sert a preparer l'upload d'un repertoire vers IPFS. Append a FormData. */
+  const pathRelatifBase = path.dirname(pathStaging)
+  const pathRelatif = encodeURIComponent(entry.fullPath.replace(pathRelatifBase, ''))
+  debug("Ajout path relatif : %s", pathRelatif)
+  if(entry.stats.isFile()) {
+    debug("Creer readStream fichier %s", entry.fullPath)
+    formData.append('file', fs.createReadStream(entry.fullPath), pathRelatif)
+  } else if(entry.stats.isDirectory()) {
+    var dirOptions = {
+      filename: pathRelatif,
+      contentType: 'application/x-directory',
+      knownLength: 0
+    }
+    formData.append('file', '', dirOptions)
+  }
+}
+
+module.exports = {init, addFichier, addRepertoire, cbPreparerIpfs}
