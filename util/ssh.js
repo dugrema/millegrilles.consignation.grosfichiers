@@ -6,6 +6,7 @@ const ssh2_streams = require('ssh2-streams')
 const multibase = require('multibase')
 const fs = require('fs')
 const path = require('path')
+const { preparerPublicationRepertoire } = require('./publierUtils')
 
 // Charger la cle privee utilisee pour se connecter par sftp
 const _privateKeyPath = process.env.SFTP_KEY || '/run/secrets/pki.fichiers.key'
@@ -119,6 +120,35 @@ async function putFichier(sftp, localPath, remotePath, opts) {
 
 }
 
+async function addRepertoire(sftp, repertoire, opts) {
+  opts = opts || {}
+  const repertoireRemote = opts.repertoireRemote || ''
+
+  const listeFichiers = []
+  const cb = entry => cbPreparerSsh(entry, listeFichiers, repertoire, repertoireRemote)
+  const info = await preparerPublicationRepertoire(repertoire, cb)
+  debug("Info publication repertoire avec SSH : %O, liste fichiers: %O", info, listeFichiers)
+
+  for await (const fichier of listeFichiers) {
+    debug("Traiter fichier : %O", fichier)
+    await putFichier(sftp, fichier.localPath, fichier.remotePath)
+  }
+}
+
+function cbPreparerSsh(entry, listeFichiers, pathStaging, repertoireRemote) {
+  /* Sert a preparer l'upload d'un repertoire vers IPFS. Append a FormData. */
+  const pathRelatif = entry.fullPath.replace(pathStaging + '/', '')
+
+  debug("Ajout path relatif : %s", pathRelatif)
+  if(entry.stats.isFile()) {
+    debug("Creer readStream fichier %s", entry.fullPath)
+    listeFichiers.push({
+      localPath: entry.fullPath,
+      remotePath: path.join(repertoireRemote, pathRelatif),
+    })
+  }
+}
+
 function getPublicKey() {
   const parseKey = ssh2_streams.utils.parseKey
   const privateKeyParsed = parseKey(_privateKey)[0]
@@ -134,4 +164,4 @@ function getPublicKey() {
   return reponse
 }
 
-module.exports = {getPublicKey, connecterSSH, preparerSftp, putFichier}
+module.exports = {getPublicKey, connecterSSH, preparerSftp, putFichier, addRepertoire}

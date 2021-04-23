@@ -8,6 +8,7 @@ const {v4: uuidv4} = require('uuid')
 const readdirp = require('readdirp')
 const FormData = require('form-data')
 const { addRepertoire: ipfsPublish } = require('../util/ipfs')
+const { connecterSSH, preparerSftp, addRepertoire: sshPublish } = require('../util/ssh')
 
 // const ipfsHost = process.env.IPFS_HOST || 'http://ipfs:5001'
 // initIpfs(ipfsHost)
@@ -54,7 +55,13 @@ async function publierRepertoire(req, res, next) {
 
     // Demarrer publication selon methodes demandees
     if(req.body.publierSsh) {
-      debug("Publier repertoire avec SSH")
+      debug("Publier repertoire avec SSH : %O", req.body.publierSsh)
+      const paramsSsh = JSON.parse(req.body.publierSsh)
+      const {host, port, username, repertoireRemote} = paramsSsh
+      const conn = await connecterSSH(host, port, username)
+      const sftp = await preparerSftp(conn)
+      const reponseSsh = await sshPublish(sftp, repTemporaire, {repertoireRemote})
+      debug("Reponse publication ipfs %O", reponseSsh)
     }
     if(req.body.publierIpfs) {
       debug("Publier repertoire avec IPFS")
