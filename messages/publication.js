@@ -3,7 +3,7 @@ const path = require('path')
 const fsPromises = require('fs/promises')
 const { PathConsignation } = require('../util/traitementFichier')
 const { getPublicKey, connecterSSH, preparerSftp, putFichier: putFichierSsh, addRepertoire: putRepertoireSsh } = require('../util/ssh')
-const { init: initIpfs, addFichier: addFichierIpfs, addRepertoire: putRepertoireIpfs } = require('../util/ipfs')
+const { init: initIpfs, addFichier: addFichierIpfs, addRepertoire: putRepertoireIpfs, publishName: publishIpns } = require('../util/ipfs')
 const { preparerConnexionS3, uploaderFichier: putFichierAwsS3, addRepertoire: putRepertoireAwsS3 } = require('../util/awss3')
 const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../util/publicStaging')
 
@@ -28,6 +28,7 @@ function on_connecter() {
   _ajouterCb('commande.fichiers.publierRepertoireSftp', publierRepertoireSftp)
   _ajouterCb('commande.fichiers.publierRepertoireIpfs', publierRepertoireIpfs)
   _ajouterCb('commande.fichiers.publierRepertoireAwsS3', publierRepertoireAwsS3)
+  _ajouterCb('commande.fichiers.publierIpns', publierIpns)
 }
 
 function _ajouterCb(rk, cb, opts) {
@@ -266,6 +267,12 @@ async function publierRepertoireAwsS3(message, rk, opts) {
       await fsPromises.rm(repertoireStaging, {recursive: true})
     }
   }
+}
+
+async function publierIpns(message, rk, opts) {
+  debug("Publier cle ipns")
+  const {cid, keyName} = message
+  await publishIpns(cid, keyName)
 }
 
 module.exports = {init, on_connecter, getPublicKey}

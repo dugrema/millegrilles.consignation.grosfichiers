@@ -51,31 +51,13 @@ async function addFichier(pathFichierLocal) {
   return responseData
 }
 
-async function addRepertoire(repertoire) {
-
-  // const fichierTexte = fs.createReadStream('/home/mathieu/test.json')
-  //
-  // // Faire un post vers l'API
-  // const data = new FormData()
-  //
-  // var dirOptions = {
-  //   filename: 'rep1',
-  //   contentType: 'application/x-directory',
-  //   knownLength: 0
-  // };
-  //
-  // data.append('file', '', dirOptions)
-  //
-  // const nomFichierTexte = ['rep1', 'test.json'].join('%2F')
-  //
-  // data.append('file', fichierTexte, nomFichierTexte)
+async function addRepertoire(repertoire, opts) {
+  opts = opts || {}
 
   const formData = new FormData()
   const cb = entry => cbPreparerIpfs(entry, formData, repertoire)
   const info = await preparerPublicationRepertoire(repertoire, cb)
   debug("Info publication repertoire avec IPFS : %O, FormData: %O", info, formData)
-  //const resultat = await ipfsPublish(formData)
-  //debug("Resultat publication IPFS : %O", resultat)
 
   // Lancer publication - TODO: mettre message sur Q operations longues
   // const reponse = await ipfsPublish(formData)
@@ -105,6 +87,11 @@ async function addRepertoire(repertoire) {
   // Trouver le CID - le repertoire temp est le seul sans / (path racine)
   const cidRepertoire = responseData.filter(item=>item.Name.indexOf('/')===-1)[0].Hash
   debug("CID repertoire : %s", cidRepertoire)
+
+  // Si on a un cle, la mettre a jour
+  if(opts.ipnsKeyName) {
+    await publishName(cidRepertoire, opts.ipnsKeyName)
+  }
 
   return {fichiers: responseData, cid: cidRepertoire}
 }
@@ -167,28 +154,35 @@ async function addRepertoire(repertoire) {
 //     res.sendStatus(500)
 //   }
 // }
-//
-// async function publishName(req, res, next) {
-//
-//   // const cidPublier = 'QmPbUVmHccqr1cTB99XV2K1spqiU9iugQbeTAVKQewxU3V'
-//   const cidPublier = 'QmTsJMQmMS9yamQFhbZ79k4aA6dfQpShePSEyx1WZHbwKA'
-//   try {
-//
-//     var pathPublier = '%2Fipfs%2F' + cidPublier
-//
-//     const reponse = await axios({
-//       method: 'POST',
-//       url: URL_HOST + '/name/publish?arg=' + pathPublier + '&lifetime=5m&key=test4'
-//     })
-//     debug("Reponse : %O", reponse)
-//
-//     return res.status(200).send(reponse.data)
-//   } catch(err) {
-//     debug("Erreur : %O", err)
-//     return res.sendStatus(500)
-//   }
-//
-// }
+
+async function publishName(cid, keyName) {
+  // const cidPublier = 'QmPbUVmHccqr1cTB99XV2K1spqiU9iugQbeTAVKQewxU3V'
+  // const cidPublier = 'QmTsJMQmMS9yamQFhbZ79k4aA6dfQpShePSEyx1WZHbwKA'
+  var pathPublier = encodeURIComponent('/ipfs/' + cid)
+
+  // Publier avec lifetime de 3 jours - cles actives vont etre republiees a tous les jours
+  try {
+    const reponse = await axios({
+      method: 'POST',
+      url: _urlHost + '/name/publish?arg=' + pathPublier + '&lifetime=50h&ttl=30s&key=' + keyName
+    })
+    debug("Reponse : %O", reponse)
+    return reponse
+  } catch(err) {
+    const reponse = err.response
+    debug("Reponse status %d", reponse.status)
+    if(reponse.status === 500) {
+      // Verifier si on a un cle manquante
+      const codeReponse = reponse.data.Code
+      if(codeReponse === 0) {
+        debug("Cle %s manquante", keyName)
+        throw new Error(`Cle ${keyName} manquante`)
+      }
+    }
+    throw new Error(reponse.data.Message)
+  }
+
+}
 
 function creerStreamFromBytes(sourceBytes) {
   var myReadableStreamBuffer = new streamBuffers.ReadableStreamBuffer({
@@ -243,4 +237,4 @@ function getPins(res) {
   streamIpfs.pipe(res)
 }
 
-module.exports = {init, addFichier, addRepertoire, cbPreparerIpfs, getPins}
+module.exports = {init, addFichier, addRepertoire, cbPreparerIpfs, getPins, publishName}
