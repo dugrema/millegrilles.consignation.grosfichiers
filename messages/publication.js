@@ -133,11 +133,11 @@ async function publierFichierAwsS3(message, rk, opts) {
   opts = opts || {}
   const properties = opts.properties || {}
   try {
-    const {fuuid, bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = message
+    const {fuuid, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre, bucketName, bucketDirfichier} = message
     const securite = message.securite || '3.protege'
 
     // Connecter AWS S3
-    const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
+    const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre)
 
     var localPath = _pathConsignation.trouverPathLocal(fuuid)
     debug("Fichier local a publier sur AWS S3 : %s", localPath)
@@ -249,11 +249,11 @@ async function publierRepertoireIpfs(message, rk, opts) {
 
 async function publierRepertoireAwsS3(message, rk, opts) {
   debug("Publier repertoire aws s3")
-  const {repertoireStaging, bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = message
+  const {repertoireStaging, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre, bucketName, bucketDirfichier} = message
 
   try {
     // Connecter AWS S3
-    const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
+    const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre)
     const reponse = await putRepertoireAwsS3(s3, repertoireStaging, bucketName, {bucketDirfichier})
     debug("Fin upload AWS S3 : %O", reponse)
     // Emettre evenement de publication

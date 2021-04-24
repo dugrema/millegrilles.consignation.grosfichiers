@@ -2,16 +2,39 @@ const debug = require('debug')('millegrilles:fichiers:awss3')
 const fs = require('fs')
 const fsPromises = require('fs/promises')
 const path = require('path')
+const multibase = require('multibase')
 const S3 = require('aws-sdk/clients/s3')
+const { pki: nodePki } = require('node-forge')
 const { decrypterSymmetrique } = require('../util/cryptoUtils')
 const { trouverExtension } = require('../util/traitementFichier')
 const { dechiffrerTemporaire } = require('../util/traitementMedia')
 const { preparerPublicationRepertoire } = require('./publierUtils')
+const { hacher } = require('@dugrema/millegrilles.common/lib/hachage')
+const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.common/lib/chiffrage')
 
 const AWS_API_VERSION = '2006-03-01'
 
-function preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey) {
+async function preparerConnexionS3(mq, bucketRegion, credentialsAccessKeyId, secretKeyInfo) {
   /** Prepare connexion avec Amazon Web Services S3 **/
+  debug("Preparer connexion : %s, credsSecret chiffre : %O", bucketRegion, secretKeyInfo)
+
+  // // Dechiffrer la cle secrete AWS S3 (secretAccessKey)
+  // const credsBytes = multibase.decode(secretKeyInfo.secretAccessKey)
+  // const hachage_bytes = await hacher(credsBytes, {encoding: 'base58btc'})
+  // const requeteCle = {
+  //   liste_hachage_bytes: [hachage_bytes],
+  //   permission: secretKeyInfo.permission,
+  // }
+  // const domaineActionCle = 'MaitreDesCles.dechiffrage'
+  // const reponseDemandeCle = await mq.transmettreRequete(
+  //   domaineActionCle, requeteCle, {attacherCertificat: true})
+  // const infoCleRechiffree = reponseDemandeCle.cles[hachage_bytes]
+  // const secretAccessKey = await dechiffrerDocument(
+  //   credsBytes, infoCleRechiffree, mq.pki.cleForge, {nojson: true})
+  const permission = secretKeyInfo.permission
+  const secretAccessKey = await dechiffrerDocumentAvecMq(
+    mq, secretKeyInfo.secretAccessKey, {permission, nojson: true})
+
   let configurationAws = {
     apiVersion: AWS_API_VERSION,
     region: bucketRegion,

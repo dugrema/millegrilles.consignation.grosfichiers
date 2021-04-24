@@ -32,7 +32,7 @@ function init(mq, pathConsignation) {
   route.put('/publier/repertoire', multerMiddleware.array('files', 1000), publierRepertoire)
   route.post('/publier/listerConsignationSftp', bodyParserJson, listerConsignationSftp)
   route.post('/publier/listerPinsIpfs', listerPinsIpfs)
-  route.post('/publier/listerConsignationAwsS3', listerConsignationAwsS3)
+  route.post('/publier/listerConsignationAwsS3', bodyParserJson, listerConsignationAwsS3)
 
   return route
 }
@@ -145,10 +145,11 @@ async function listerPinsIpfs(req, res, next) {
 }
 
 async function listerConsignationAwsS3(req, res, next) {
-  debug("publier.listerConsignationAwsS3")
+  debug("publier.listerConsignationAwsS3 %O", req.body)
 
-  const {bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = req.body
-  const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
+  const {bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre, permission, bucketName, bucketDirfichier} = JSON.parse(req.body.data)
+  const secretKeyInfo = {secretAccessKey: secretAccessKey_chiffre, permission}
+  const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretKeyInfo)
 
   // On va streamer la reponse
   try {
