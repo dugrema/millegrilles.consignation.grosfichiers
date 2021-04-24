@@ -176,13 +176,18 @@ async function listerConsignation(sftp, repertoire, opts) {
   })
 
   // Mapper la liste, conserver uniquement les fuuids (fichiers, enlever extension)
-  var fuuids = list.filter(item=>item.attrs.isFile()).map(item=>{
-    return path.parse(item.filename).name
-  })
-  if(opts.res && fuuids && fuuids.length > 0) {
-    debug("FUUIDS : %O", fuuids)
-    fuuids.forEach(fuuid=>{
-      opts.res.write(fuuid + '\n')
+  var infoFichiers = list.filter(item=>item.attrs.isFile())
+  // .map(item=>{
+  //   return path.parse(item.filename).name
+  // })
+  if(opts.res && infoFichiers && infoFichiers.length > 0) {
+    debug("Info Fichiers : %O", infoFichiers)
+    infoFichiers.forEach(item=>{
+      const infoFichier = {
+        fuuid: path.parse(item.filename).name,
+        ...item,
+      }
+      opts.res.write(JSON.stringify(infoFichier) + '\n')
     })
   }
 
