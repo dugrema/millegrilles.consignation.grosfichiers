@@ -9,7 +9,7 @@ const path = require('path')
 const { preparerPublicationRepertoire } = require('./publierUtils')
 
 // Charger la cle privee utilisee pour se connecter par sftp
-const _privateKeyPath = process.env.SFTP_KEY || '/run/secrets/pki.fichiers.key'
+const _privateKeyPath = process.env.SFTP_KEY || '/run/secrets/pki.fichiers.sftp'
 const _privateKey = fs.readFileSync(_privateKeyPath)
 
 async function connecterSSH(host, port, username) {
