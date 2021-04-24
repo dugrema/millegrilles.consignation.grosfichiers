@@ -128,43 +128,52 @@ function preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessK
 //
 // }
 
-// function listerFichiers(s3, paramsListing, fichiers) {
-//   return new Promise( (resolve, reject)=>{
-//     s3.listObjectsV2(paramsListing, async (err, data)=>{
-//       if(err) {
-//         console.error("aws.listerFichiers: Erreur demande liste fichiers");
-//         return reject(err)
-//       } else {
-//         // console.log("Listing fichiers bucket " + paramsListing.Bucket);
-//         for(let idx in data.Contents) {
-//           let contents = data.Contents[idx];
-//
-//           let keyInfo = contents.Key.split('/');
-//           let nomFichier = keyInfo[keyInfo.length-1];
-//           let fuuid = nomFichier.split('.')[0];
-//
-//           if(fuuid && fuuid !== '') {
-//             // console.log(contents);
-//             // console.log('fuuid: ' + fuuid);
-//
-//             if(fichiers[fuuid]) {
-//               // console.log("Fichier " + fuuid + " existe deja");
-//               delete fichiers[fuuid];
-//             }
-//           }
-//         }
-//
-//         if(data.IsTruncated) {
-//           // console.debug("Continuer listing");
-//           paramsListing.ContinuationToken = data.NextContinuationToken;
-//           await listerFichiers(s3, paramsListing, fichiers);
-//         } else {
-//           promiseRR.resolve();  // Listing termine
-//         }
-//       }
-//     })
-//   })
-// }
+// listerFichiers(s3, paramsListing, fichiers) {
+async function listerConsignation(s3, bucketName, repertoire, opts) {
+  opts = opts || {}
+  const res = opts.res  // OutputStream (optionnel)
+
+  const paramsListing = {
+    Bucket: bucketName,
+    MaxKeys: 1000,
+    Prefix: repertoire,
+  }
+  if(opts.ContinuationToken) paramsListing.ContinuationToken = opts.ContinuationToken
+
+  debug("awss3.listerConsignation: Faire lecture AWS S3 sous %s / %s", bucketName, repertoire)
+  const data = await new Promise ((resolve, reject) => {
+    s3.listObjectsV2(paramsListing, async (err, data)=>{
+      if(err) {
+        console.error("awss3.listerConsignation: Erreur demande liste fichiers")
+        return reject(err)
+      }
+      resolve(data)
+    })
+  })
+
+  // console.log("Listing fichiers bucket " + paramsListing.Bucket);
+  for await (const contents of data.Contents) {
+    // debug("Contents : %O", contents)
+    const pathFichier = path.parse(contents.Key)
+    // debug("Path fichier : %s", pathFichier)
+    const fuuid = pathFichier.name
+    // debug("Fuuid : %s", fuuid)
+    const contentFichier = {
+      ...contents,
+      fuuid,
+    }
+    if(res) {
+      res.write(JSON.stringify(contentFichier) + '\n')
+    }
+  }
+
+  if(data.IsTruncated) {
+    // debug("Continuer listing");
+    opts.ContinuationToken = data.NextContinuationToken
+    await listerConsignation(s3, bucketName, repertoire, opts)
+  }
+
+}
 
 // async function executerUploadFichier(
 //   mq, s3, pathConsignation, infoConsignationWebNoeud, reponseDechiffrageFichier, message,
@@ -444,4 +453,7 @@ function cbPreparerAwsS3(entry, listeFichiers, pathStaging, repertoireRemote) {
   }
 }
 
-module.exports = {AWS_API_VERSION, preparerConnexionS3, uploaderFichier, addRepertoire}
+module.exports = {
+  AWS_API_VERSION, preparerConnexionS3, uploaderFichier, addRepertoire,
+  listerConsignation,
+}

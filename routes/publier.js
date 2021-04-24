@@ -9,8 +9,8 @@ const {v4: uuidv4} = require('uuid')
 const readdirp = require('readdirp')
 const FormData = require('form-data')
 const { addRepertoire: ipfsPublish, getPins } = require('../util/ipfs')
-const { connecterSSH, preparerSftp, listerConsignation: _listerConsignation } = require('../util/ssh')
-const { preparerConnexionS3, addRepertoire: awss3Publish } = require('../util/awss3')
+const { connecterSSH, preparerSftp, listerConsignation: _listerConsignationSftp } = require('../util/ssh')
+const { preparerConnexionS3, addRepertoire: awss3Publish, listerConsignation: _listerConsignationAwsS3 } = require('../util/awss3')
 
 // const ipfsHost = process.env.IPFS_HOST || 'http://ipfs:5001'
 // initIpfs(ipfsHost)
@@ -32,6 +32,7 @@ function init(mq, pathConsignation) {
   route.put('/publier/repertoire', multerMiddleware.array('files', 1000), publierRepertoire)
   route.post('/publier/listerConsignationSftp', bodyParserJson, listerConsignationSftp)
   route.post('/publier/listerPinsIpfs', listerPinsIpfs)
+  route.post('/publier/listerConsignationAwsS3', listerConsignationAwsS3)
 
   return route
 }
@@ -120,7 +121,7 @@ async function listerConsignationSftp(req, res, next) {
   // On va streamer la reponse
   try {
     res.status(200)
-    await _listerConsignation(sftp, repertoireRemote, {res})
+    await _listerConsignationSftp(sftp, repertoireRemote, {res})
   } catch(err) {
     console.error("ERROR publier.listerConsignation %O", err)
     res.send("!!!ERR!!!")
@@ -140,6 +141,24 @@ async function listerPinsIpfs(req, res, next) {
   } catch(err) {
     console.error("ERROR publier.listerPinsIpfs %O", err)
     res.sendStatus(500)
+  }
+}
+
+async function listerConsignationAwsS3(req, res, next) {
+  debug("publier.listerConsignationAwsS3")
+
+  const {bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = req.body
+  const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
+
+  // On va streamer la reponse
+  try {
+    res.status(200)
+    await _listerConsignationAwsS3(s3, bucketName, bucketDirfichier, {res})
+  } catch(err) {
+    console.error("ERROR publier.listerConsignationAwsS3 %O", err)
+    res.send("!!!ERR!!!")
+  } finally {
+    res.end()
   }
 }
 

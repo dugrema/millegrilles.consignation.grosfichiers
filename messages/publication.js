@@ -139,7 +139,7 @@ async function publierFichierAwsS3(message, rk, opts) {
     const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
 
     var localPath = _pathConsignation.trouverPathLocal(fuuid)
-    debug("Fichier local a publier sur IPFS : %s", localPath)
+    debug("Fichier local a publier sur AWS S3 : %s", localPath)
 
     if(securite === '1.public') {
       // Dechiffrer le fichier public dans staging
