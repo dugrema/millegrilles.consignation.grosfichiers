@@ -104,7 +104,7 @@ async function publierFichierSftp(message, rk, opts) {
             total_bytes: total,
             complete: false,
           }
-          const domaineActionConfirmation = 'evenement.fichiers.publierFichierSftp'
+          const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
           _mq.emettreEvenement(confirmation, domaineActionConfirmation)
         }
       }
@@ -123,7 +123,7 @@ async function publierFichierSftp(message, rk, opts) {
       cdn_id: cdnId,
       complete: true,
     }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichierSftp'
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
   } catch(err) {
@@ -140,7 +140,7 @@ async function publierFichierSftp(message, rk, opts) {
       err: ''+err,
       stack: JSON.stringify(err.stack),
     }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichierSftp'
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
   }
 }
