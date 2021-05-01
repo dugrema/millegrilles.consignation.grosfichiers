@@ -9,6 +9,8 @@ const streamBuffers = require('stream-buffers')
 const got = require('got')
 const path = require('path')
 const { preparerPublicationRepertoire } = require('./publierUtils')
+const { chiffrerDocument } = require('@dugrema/millegrilles.common/lib/chiffrage')
+const { getCertificatsChiffrage } = require('./cryptoUtils')
 
 const CRLF = '\r\n'
 // const URL_HOST = 'http://192.168.2.131:5001/api/v0'
@@ -237,4 +239,68 @@ function getPins(res) {
   streamIpfs.pipe(res)
 }
 
-module.exports = {init, addFichier, addRepertoire, cbPreparerIpfs, getPins, publishName}
+async function creerCleIpns(mq, nomCle) {
+  // Creer une cle privee, chiffrer et sauvegarder (e.g. maitre des cles)
+
+  // Generates a new Peer ID, complete with public/private keypair
+  // See https://github.com/libp2p/js-peer-id
+  const peerId = await PeerId.create({ keyType: 'ed25519' })
+  // debug("Peer ID : %O", peerId)
+  debug("Nouvelle cle IPNS, pub key : %s", peerId.toB58String())
+
+  const jsonContent = peerId.toJSON()
+  // debug("JSON Content cle ipns : %O", jsonContent)
+
+  // Chiffrer la cle, transmettre au maitre des cles
+  const certificatsChiffrage = await getCertificatsChiffrage(mq)
+  const identificateurs_document = {type: 'ipns', nom: nomCle}
+  const {ciphertext, commandeMaitrecles} = await chiffrerDocument(
+    jsonContent, 'Publication', certificatsChiffrage, identificateurs_document)
+  debug("Cle IPNS, commande maitre des cles : %O", commandeMaitrecles)
+
+  const cleRechargee = await PeerId.createFromJSON(jsonContent)
+  // debug("Cle rechargee : %O", cleRechargee)
+  const cleBytes = Buffer.from(jsonContent.privKey, 'base64')
+  const cleStream = creerStreamFromBytes(cleBytes)
+
+  const nomCleEncoded = encodeURIComponent(nomCle)
+
+  // debug("Cle Bytes : %O", cleBytes)
+  const data = new FormData()
+  data.append('key', cleStream, nomCleEncoded)
+  try {
+    const reponseCle = await axios({
+      method: 'POST',
+      url: _urlHost + '/key/import?arg=' + nomCleEncoded,
+      headers: {
+        ...data.getHeaders()
+      },
+      data
+    })
+    debug("Reponse axios : %O", reponseCle.data)
+
+    // Transmettre commande maitre des cles
+    const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
+    await mq.transmettreCommande(domaineActionCles, commandeMaitrecles)
+    const cleId = reponseCle.data.Id
+
+    const reponse = { cleId, cle_chiffree: ciphertext}
+    return reponse
+
+  } catch(err) {
+    const response = err.response
+    if(response && response.status === 500 && response.data.Code === 0) {
+      // OK, la cle existe deja
+      return {err: response.data, message: 'La cle existe deja'}
+    }
+
+    // Autre type d'erreur
+    throw err
+  }
+}
+
+module.exports = {
+  init, addFichier, addRepertoire,
+  cbPreparerIpfs, getPins, publishName,
+  creerCleIpns,
+}

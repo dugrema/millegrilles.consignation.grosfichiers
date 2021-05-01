@@ -232,7 +232,15 @@ async function creerOutputstreamChiffrage(certificatsPem, identificateurs_docume
   return transformStream
 }
 
+async function getCertificatsChiffrage(mq) {
+  const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
+  const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
+  const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
+  return clesPubliques
+}
+
 module.exports = {
   decrypter, getDecipherPipe4fuuid, decrypterSymmetrique, decrypterGCM,
   gcmStreamReaderFactory, chargerCleDechiffrage, creerOutputstreamChiffrage,
+  getCertificatsChiffrage,
 }

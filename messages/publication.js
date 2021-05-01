@@ -3,7 +3,12 @@ const path = require('path')
 const fsPromises = require('fs/promises')
 const { PathConsignation } = require('../util/traitementFichier')
 const { getPublicKey, connecterSSH, preparerSftp, putFichier: putFichierSsh, addRepertoire: putRepertoireSsh } = require('../util/ssh')
-const { init: initIpfs, addFichier: addFichierIpfs, addRepertoire: putRepertoireIpfs, publishName: publishIpns } = require('../util/ipfs')
+const { init: initIpfs,
+        addFichier: addFichierIpfs,
+        addRepertoire: putRepertoireIpfs,
+        publishName: publishIpns,
+        creerCleIpns: _creerCleIpns,
+      } = require('../util/ipfs')
 const { preparerConnexionS3, uploaderFichier: putFichierAwsS3, addRepertoire: putRepertoireAwsS3 } = require('../util/awss3')
 const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../util/publicStaging')
 
@@ -21,14 +26,20 @@ function init(mq) {
 }
 
 function on_connecter() {
-  _ajouterCb('commande.fichiers.publierFichierSftp', publierFichierSftp)
-  _ajouterCb('commande.fichiers.publierFichierIpfs', publierFichierIpfs)
-  _ajouterCb('commande.fichiers.publierFichierAwsS3', publierFichierAwsS3)
+  // Commandes SSH/SFTP
   _ajouterCb('requete.fichiers.getPublicKeySsh', getPublicKeySsh, {direct: true})
+  _ajouterCb('commande.fichiers.publierFichierSftp', publierFichierSftp)
   _ajouterCb('commande.fichiers.publierRepertoireSftp', publierRepertoireSftp)
-  _ajouterCb('commande.fichiers.publierRepertoireIpfs', publierRepertoireIpfs)
+
+  // Commandes AWS S3
+  _ajouterCb('commande.fichiers.publierFichierAwsS3', publierFichierAwsS3)
   _ajouterCb('commande.fichiers.publierRepertoireAwsS3', publierRepertoireAwsS3)
+
+  // Commandes IPFS
+  _ajouterCb('commande.fichiers.publierFichierIpfs', publierFichierIpfs)
+  _ajouterCb('commande.fichiers.publierRepertoireIpfs', publierRepertoireIpfs)
   _ajouterCb('commande.fichiers.publierIpns', publierIpns)
+  _ajouterCb('commande.fichiers.creerCleIpns', creerCleIpns)
 }
 
 function _ajouterCb(rk, cb, opts) {
@@ -277,6 +288,31 @@ async function publierIpns(message, rk, opts) {
   debug("Publier cle ipns")
   const {cid, keyName} = message
   await publishIpns(cid, keyName)
+}
+
+async function creerCleIpns(commande, rk, opts) {
+  try {
+    // Creer une cle privee, chiffrer et sauvegarder (e.g. maitre des cles)
+    const {nom: nomCle} = commande
+    const reponse = await _creerCleIpns(_mq, nomCle)
+    repondre(reponse, opts.properties)
+  } catch(err) {
+    // Emettre evenement d'echec
+    emettreErreur(err, opts.properties)
+  }
+}
+
+function repondre(reponse, properties) {
+  _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
+}
+
+function emettreErreur(erreur, properties) {
+  debug("TODO Emettre echec : %O", erreur)
+  const message = {err: ''+erreur}
+  if(erreur.stack) {
+    message.stack = JSON.stringify(erreur.stack)
+  }
+  _mq.transmettreReponse(message, properties.replyTo, properties.correlationId)
 }
 
 module.exports = {init, on_connecter, getPublicKey}
