@@ -63,10 +63,10 @@ function getPublicKeySsh(message, rk, opts) {
 
 async function publierFichierSftp(message, rk, opts) {
   opts = opts || {}
+  const {host, port, username, fuuid, cdn_id: cdnId} = message
+  const properties = opts.properties || {}
   try {
-    const {host, port, username, fuuid} = message
     const basedir = message.basedir || './'
-    const properties = opts.properties || {}
     const securite = message.securite || '3.protege'
 
     var localPath = _pathConsignation.trouverPathLocal(fuuid)
@@ -88,18 +88,60 @@ async function publierFichierSftp(message, rk, opts) {
     const remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
     debug("Path remote pour le fichier : %s", remotePath)
 
-    await putFichierSsh(sftp, localPath, remotePath)
+    var dernierEvent = 0
+    const intervalPublish = 2000
+    const optsPut = {
+      progressCb: (current, _, total) => {
+        debug("SFTP progres cb : %s/%s", current, total)
+        // Throttle evenements, toutes les 2 secondes
+        const epochCourant = new Date().getTime()
+        if(epochCourant-intervalPublish > dernierEvent) {
+          dernierEvent = epochCourant  // Update date pour throttle
+          const confirmation = {
+            fuuid,
+            cdn_id: cdnId,
+            current_bytes: current,
+            total_bytes: total,
+            complete: false,
+          }
+          const domaineActionConfirmation = 'evenement.fichiers.publierFichierSftp'
+          _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+        }
+      }
+    }
+
+    await putFichierSsh(sftp, localPath, remotePath, optsPut)
     debug("Put fichier ssh OK")
 
     if(properties && properties.replyTo) {
       _mq.transmettreReponse({ok: true}, properties.replyTo, properties.correlationId)
     }
 
+    // Emettre evenement de publication
+    const confirmation = {
+      fuuid,
+      cdn_id: cdnId,
+      complete: true,
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichierSftp'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+
   } catch(err) {
     console.error("ERROR publication.publierFichierSftp: Erreur publication fichier sur sftp : %O", err)
     if(properties && properties.replyTo) {
       _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
     }
+
+    // Emettre evenement de publication
+    const confirmation = {
+      fuuid,
+      cdn_id: cdnId,
+      complete: false,
+      err: ''+err,
+      stack: JSON.stringify(err.stack),
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichierSftp'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
   }
 }
 
