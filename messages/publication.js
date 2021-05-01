@@ -148,10 +148,11 @@ async function publierFichierSftp(message, rk, opts) {
 
 async function publierFichierIpfs(message, rk, opts) {
   opts = opts || {}
+  const {fuuid, cdn_id: cdnId} = message
+  const securite = message.securite || '3.protege'
+  const properties = opts.properties || {}
+
   try {
-    const {fuuid} = message
-    const properties = opts.properties || {}
-    const securite = message.securite || '3.protege'
 
     var localPath = _pathConsignation.trouverPathLocal(fuuid)
     debug("Fichier local a publier sur SSH : %s", localPath)
@@ -175,11 +176,33 @@ async function publierFichierIpfs(message, rk, opts) {
       _mq.transmettreReponse(reponseMq, properties.replyTo, properties.correlationId)
     }
 
+    // Emettre evenement de publication
+    const confirmation = {
+      fuuid,
+      cdn_id: cdnId,
+      complete: true,
+      securite,
+      cid: reponse.Hash,
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+
   } catch(err) {
     console.error("ERROR publication.publierFichierIpfs: Erreur publication fichier sur ipfs : %O", err)
     if(properties && properties.replyTo) {
       _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
     }
+
+    // Emettre evenement de publication
+    const confirmation = {
+      fuuid,
+      cdn_id: cdnId,
+      complete: false,
+      err: ''+err,
+      stack: JSON.stringify(err.stack),
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
   }
 }
 
