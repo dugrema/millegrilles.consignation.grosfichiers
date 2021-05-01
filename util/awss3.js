@@ -298,7 +298,7 @@ async function uploaderFichier(s3, message, pathFichier, bucketName, bucketDirfi
     securite: message.securite || '3.protege',
   }
   if(message.uuid) metadata.uuid = message.uuid
-  if(message.uuid) metadata.fuuid = message.fuuid
+  if(message.fuuid) metadata.fuuid = message.fuuid
 
   const uploadParams = {
     Bucket: bucketName,

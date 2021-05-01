@@ -208,11 +208,13 @@ async function publierFichierIpfs(message, rk, opts) {
 
 async function publierFichierAwsS3(message, rk, opts) {
   opts = opts || {}
+  const {
+    fuuid, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre,
+    permission, bucketName, bucketDirfichier, cdn_id: cdnId} = message
+  const securite = message.securite || '3.protege'
   const properties = opts.properties || {}
-  try {
-    const {fuuid, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre, permission, bucketName, bucketDirfichier} = message
-    const securite = message.securite || '3.protege'
 
+  try {
     // Connecter AWS S3
     const secretKeyInfo = {secretAccessKey: secretAccessKey_chiffre, permission}
     const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretKeyInfo)
@@ -228,12 +230,35 @@ async function publierFichierAwsS3(message, rk, opts) {
       localPath = infoFichierPublic.filePath
     }
 
-    const progressCb = update => {
-      debug("Progress S3 : %O", update)
+    var dernierEvent = 0
+    const intervalPublish = 1000
+    const optsPut = {
+      progressCb: update => {
+        //   loaded: 8174,
+        //   total: 8174,
+        //   part: 1,
+        //   key: 'QME8SjhaCFySD9qBt1AikQ1U7WxieJY2xDg2JCMczJST/public/89122e80-4227-11eb-a00c-0bb29e75acbf'
+
+        debug("AWS S3 progres cb : %O", update)
+        // Throttle evenements, toutes les 2 secondes
+        const epochCourant = new Date().getTime()
+        if(epochCourant-intervalPublish > dernierEvent) {
+          dernierEvent = epochCourant  // Update date pour throttle
+          const confirmation = {
+            fuuid,
+            cdn_id: cdnId,
+            // current_bytes: current,
+            // total_bytes: total,
+            complete: false,
+          }
+          const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+          _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+        }
+      }
     }
 
     debug("Debut upload AWS S3 %s vers %s", fuuid, bucketName)
-    const resultat = await putFichierAwsS3(s3, message, localPath, bucketName, bucketDirfichier, {progressCb})
+    const resultat = await putFichierAwsS3(s3, message, localPath, bucketName, bucketDirfichier, optsPut)
     debug("Resultat upload S3 : %O", resultat)
     // Resultat:
     // {
@@ -253,11 +278,32 @@ async function publierFichierAwsS3(message, rk, opts) {
       _mq.transmettreReponse(reponseMq, properties.replyTo, properties.correlationId)
     }
 
+    // Emettre evenement de publication
+    const confirmation = {
+      fuuid,
+      cdn_id: cdnId,
+      complete: true,
+      securite,
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+
   } catch(err) {
     console.error("ERROR publication.publierFichierAwsS3: Erreur publication fichier sur AWS S3 : %O", err)
     if(properties && properties.replyTo) {
       _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
     }
+
+    // Emettre evenement de publication
+    const confirmation = {
+      fuuid,
+      cdn_id: cdnId,
+      complete: false,
+      err: ''+err,
+      stack: JSON.stringify(err.stack),
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
   }
 }
 
