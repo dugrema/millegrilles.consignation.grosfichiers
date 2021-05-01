@@ -65,9 +65,9 @@ async function publierFichierSftp(message, rk, opts) {
   opts = opts || {}
   const {host, port, username, fuuid, cdn_id: cdnId} = message
   const properties = opts.properties || {}
+  const securite = message.securite || '3.protege'
   try {
     const basedir = message.basedir || './'
-    const securite = message.securite || '3.protege'
 
     var localPath = _pathConsignation.trouverPathLocal(fuuid)
     debug("Fichier local a publier sur SSH : %s", localPath)
@@ -122,6 +122,7 @@ async function publierFichierSftp(message, rk, opts) {
       fuuid,
       cdn_id: cdnId,
       complete: true,
+      securite,
     }
     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
