@@ -258,7 +258,11 @@ async function publierFichierAwsS3(message, rk, opts) {
     }
 
     debug("Debut upload AWS S3 %s vers %s", fuuid, bucketName)
-    const resultat = await putFichierAwsS3(s3, message, localPath, bucketName, bucketDirfichier, optsPut)
+    let bucketDirfichierEtendu = bucketDirfichier
+    if(securite === '1.public') {
+      bucketDirfichierEtendu = bucketDirfichier + '/public'
+    }
+    const resultat = await putFichierAwsS3(s3, message, localPath, bucketName, bucketDirfichierEtendu, optsPut)
     debug("Resultat upload S3 : %O", resultat)
     // Resultat:
     // {
