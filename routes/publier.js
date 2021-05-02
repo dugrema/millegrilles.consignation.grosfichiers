@@ -47,8 +47,10 @@ async function publierRepertoire(req, res, next) {
     const repTemporaire = _pathConsignation.consignationPathUploadStaging + '/' + uuidRepTemporaire
     debug("Recreer structure de repertoire sous %s", repTemporaire)
 
+    const pathMimetypes = {}
     for(let idx in req.files) {
       const file = req.files[idx]
+      pathMimetypes[file.originalname] = file.mimetype
       const filePath = path.join(repTemporaire, file.originalname)
       const fileDir = path.dirname(filePath)
 
@@ -62,10 +64,15 @@ async function publierRepertoire(req, res, next) {
 
     // Extraire information des methodes de publication
     const cdns = JSON.parse(req.body.cdns)
+    const maxAge = req.body.max_age || 86400,
+          contentEncoding = req.body.content_encoding || null
 
     // Demarrer publication selon methodes demandees
     for await (const cdn of cdns) {
-      const commande = {...cdn, repertoireStaging: repTemporaire}
+      const commande = {
+        ...cdn, contentEncoding, maxAge, pathMimetypes,
+        repertoireStaging: repTemporaire,
+      }
       if(cdn.type_cdn === 'sftp') {
         debug("Publier repertoire avec SFTP : %O", cdn)
         const domaineAction = 'commande.fichiers.publierRepertoireSftp'

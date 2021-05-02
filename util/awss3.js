@@ -299,6 +299,10 @@ async function uploaderFichier(s3, message, pathFichier, bucketName, bucketDirfi
   }
   if(message.uuid) metadata.uuid = message.uuid
   if(message.fuuid) metadata.fuuid = message.fuuid
+  var cacheControl = 'public, max-age=604800, immutable'
+  if(message.maxAge !== undefined) {
+    cacheControl = 'public, max-age=' + message.maxAge
+  }
 
   const uploadParams = {
     Bucket: bucketName,
@@ -306,8 +310,12 @@ async function uploaderFichier(s3, message, pathFichier, bucketName, bucketDirfi
     Body: fileStream,
     ACL: 'public-read',
     ContentType: message.mimetype || 'application/octet-stream',
-    CacheControl: 'public, max-age=604800, immutable',
+    CacheControl: cacheControl,
     Metadata: metadata,
+  }
+
+  if(message.contentEncoding) {
+    uploadParams.ContentEncoding = message.contentEncoding
   }
 
   if(nomFichier) {
@@ -357,12 +365,23 @@ async function addRepertoire(s3, repertoire, bucketName, opts) {
   const info = await preparerPublicationRepertoire(repertoire, cb)
   debug("Info publication repertoire avec AWS S3 : %O, liste fichiers: %O", info, listeFichiers)
 
+  const message = opts.message || {}
+  const pathMimetypes = message.pathMimetypes || {}
+  const maxAge = message.maxAge
+  debug("Path mimetypes : %O", pathMimetypes)
+
   for await (const fichier of listeFichiers) {
     debug("Traiter fichier : %O", fichier)
+    const originalname = fichier.localPath.replace(repertoire + '/', '')
+    const mimetype = pathMimetypes[originalname]
+    debug("Mimetype pour nom original %s = %s", originalname, mimetype)
     const params = {
       nomFichier: path.basename(fichier.localPath),
       securite: '1.public',
     }
+    if(mimetype) params.mimetype = mimetype
+    if(maxAge) params.maxAge = maxAge
+    if(message.contentEncoding) params.contentEncoding = message.contentEncoding
     const remotePath = path.dirname(fichier.remotePath)
     // await putFichier(sftp, fichier.localPath, fichier.remotePath)
     // s3, message, pathFichier, bucketName, bucketDirfichier, opts
