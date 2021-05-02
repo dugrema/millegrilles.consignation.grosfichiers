@@ -175,10 +175,11 @@ async function publishName(cid, keyName) {
     const reponse = err.response
     if(reponse) {
       if(reponse.status === 500) {
-        debug("Reponse status %d", reponse.status)
+        debug("ipfs.publishName Reponse status %d\n%O", reponse.status, reponse.data)
         // Verifier si on a un cle manquante
-        const codeReponse = reponse.data.Code
-        if(codeReponse === 0) {
+        const codeReponse = reponse.data.Code,
+              messageReponse = reponse.data.Message
+        if(codeReponse === 0 && messageReponse.indexOf('no key')>-1) {
           debug("Cle %s manquante", keyName)
           const errManquante = new Error(`Cle ${keyName} manquante`)
           errManquante.code = 404

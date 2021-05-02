@@ -216,6 +216,10 @@ async function publierFichierIpfs(message, rk, opts) {
 }
 
 async function publierFichierIpns(message, rk, opts) {
+  const cdns = JSON.parse(message.cdns)
+  const cdnIds = cdns.map(item=>item.cdn_id)
+  const identificateur_document = JSON.parse(message.identificateur_document)
+  const securite = message.securite
   try {
     debug("publication.publierFichierIpns %O", message)
 
@@ -225,10 +229,12 @@ async function publierFichierIpns(message, rk, opts) {
     debug("Put fichier ipfs OK : %O", reponseCid)
     const cid = reponseCid.Hash,
           keyName = message.ipns_key_name
+    var reponseIpns = null
     try {
-      const reponseIpns = await publishIpns(cid, keyName)
+      reponseIpns = await publishIpns(cid, keyName)
       debug("Put fichier ipns OK")
     } catch(err) {
+      debug("erreur publication ipns, cle manquante ou autre erreur %O", err)
       if(err.code === 404) {
         // On doit importer la cle
         const permission = JSON.parse(message.permission)
@@ -238,7 +244,7 @@ async function publierFichierIpns(message, rk, opts) {
         await importerCleIpns(keyName, cleJson)
 
         // Tenter a nouveau de publier la ressource
-        const reponseIpns = await publishIpns(cid, keyName)
+        reponseIpns = await publishIpns(cid, keyName)
         debug("Put fichier ipns OK")
 
       } else {
@@ -254,19 +260,26 @@ async function publierFichierIpns(message, rk, opts) {
     // Emettre evenement de publication
     const ipns_key_hash = reponseIpns.data.Name
     const confirmation = {
-      //cdn_id: cdnId,
-
-      // identificateurs_document: {section_id, type_section: page, etc.}
-
+      cdn_ids: cdnIds,
+      identificateur_document,
       complete: true,
-      // securite,
-      hash: cid,
+      securite,
+      cid,
       ipns_id: ipns_key_hash,
     }
     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
   } catch(err) {
     console.error("ERROR publication.publierFichierIpns %O", err)
+    const messageErreur = {
+      cdn_ids: cdnIds,
+      identificateur_document,
+      complete: false,
+      err: ''+err,
+      stack: JSON.stringify(err.stack),
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(messageErreur, domaineActionConfirmation)
   }
 
 }
