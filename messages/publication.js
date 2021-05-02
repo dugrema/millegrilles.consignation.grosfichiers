@@ -87,9 +87,9 @@ async function publierFichierSftp(message, rk, opts) {
 
     var remotePath = null
     if(securite === '1.public') {
-      remotePath = path.join(basedir, 'public', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+      remotePath = path.join(basedir, 'fichiers', 'public', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
     } else {
-      remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+      remotePath = path.join(basedir, 'fichiers', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
     }
     debug("Path remote pour le fichier : %s", remotePath)
 

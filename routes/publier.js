@@ -60,46 +60,30 @@ async function publierRepertoire(req, res, next) {
     }
     debug("Structure de repertoire recree sous %s", repTemporaire)
 
-    // Demarrer publication selon methodes demandees
-    if(req.body.publierSsh) {
-      debug("Publier repertoire avec SSH : %O", req.body.publierSsh)
-      const paramsSsh = JSON.parse(req.body.publierSsh)
-      const commande = {
-        ...paramsSsh,
-        repertoireStaging: repTemporaire,
-      }
-      const domaineAction = 'commande.fichiers.publierRepertoireSftp'
-      _mq.transmettreCommande(domaineAction, commande, {nowait: true})
-      debug("Commande publier SSH emise")
-    }
-    if(req.body.publierIpfs) {
-      debug("Publier repertoire avec IPFS")
-      const paramsIpfs = JSON.parse(req.body.publierIpfs)
-      const commande = {
-        ...paramsIpfs,
-        repertoireStaging: repTemporaire,
-      }
-      const domaineAction = 'commande.fichiers.publierRepertoireIpfs'
-      _mq.transmettreCommande(domaineAction, commande, {nowait: true})
-      debug("Commande publier IPFS emise")
-    }
-    if(req.body.publierAwsS3) {
-      debug("Publier repertoire avec AWS S3 : %O", req.body.publierAwsS3)
-      // const {bucketRegion, credentialsAccessKeyId, secretAccessKey, bucketName, bucketDirfichier} = paramsAwsS3
-      //
-      // // Connecter AWS S3
-      // const s3 = await preparerConnexionS3(bucketRegion, credentialsAccessKeyId, secretAccessKey)
-      // const reponse = await awss3Publish(s3, repTemporaire, bucketName, {bucketDirfichier})
-      // debug("Fin upload AWS S3 : %O", reponse)
+    // Extraire information des methodes de publication
+    const cdns = JSON.parse(req.body.cdns)
 
-      const paramsAwsS3 = JSON.parse(req.body.publierAwsS3)
-      const commande = {
-        ...paramsAwsS3,
-        repertoireStaging: repTemporaire,
+    // Demarrer publication selon methodes demandees
+    for await (const cdn of cdns) {
+      const commande = {...cdn, repertoireStaging: repTemporaire}
+      if(cdn.type_cdn === 'sftp') {
+        debug("Publier repertoire avec SFTP : %O", cdn)
+        const domaineAction = 'commande.fichiers.publierRepertoireSftp'
+        _mq.transmettreCommande(domaineAction, commande, {nowait: true})
+        debug("Commande publier SFTP emise")
       }
-      const domaineAction = 'commande.fichiers.publierRepertoireAwsS3'
-      _mq.transmettreCommande(domaineAction, commande, {nowait: true})
-      debug("Commande publier AWS S3 emise")
+      if(cdn.type_cdn === 'ipfs') {
+        debug("Publier repertoire avec IPFS")
+        const domaineAction = 'commande.fichiers.publierRepertoireIpfs'
+        _mq.transmettreCommande(domaineAction, commande, {nowait: true})
+        debug("Commande publier IPFS emise")
+      }
+      if(cdn.type_cdn === 'awss3') {
+        debug("Publier repertoire avec AWS S3 : %O", cdn)
+        const domaineAction = 'commande.fichiers.publierRepertoireAwsS3'
+        _mq.transmettreCommande(domaineAction, commande, {nowait: true})
+        debug("Commande publier AWS S3 emise")
+      }
     }
 
     res.sendStatus(200)
