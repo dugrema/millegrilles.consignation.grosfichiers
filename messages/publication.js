@@ -85,7 +85,12 @@ async function publierFichierSftp(message, rk, opts) {
     const sftp = await preparerSftp(conn)
     debug("Connexion SSH et SFTP OK")
 
-    const remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+    var remotePath = null
+    if(securite === '1.public') {
+      remotePath = path.join(basedir, 'public', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+    } else {
+      remotePath = path.join(basedir, _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+    }
     debug("Path remote pour le fichier : %s", remotePath)
 
     var dernierEvent = 0
