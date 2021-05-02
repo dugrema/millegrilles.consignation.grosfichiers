@@ -1,6 +1,7 @@
 const debug = require('debug')('millegrilles:fichiers:publication')
 const path = require('path')
 const fsPromises = require('fs/promises')
+const multibase = require('multibase')
 const { PathConsignation } = require('../util/traitementFichier')
 const { getPublicKey, connecterSSH, preparerSftp, putFichier: putFichierSsh, addRepertoire: putRepertoireSsh } = require('../util/ssh')
 const { init: initIpfs,
@@ -8,9 +9,11 @@ const { init: initIpfs,
         addRepertoire: putRepertoireIpfs,
         publishName: publishIpns,
         creerCleIpns: _creerCleIpns,
+        importerCleIpns,
       } = require('../util/ipfs')
 const { preparerConnexionS3, uploaderFichier: putFichierAwsS3, addRepertoire: putRepertoireAwsS3 } = require('../util/awss3')
 const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../util/publicStaging')
+const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.common/lib/chiffrage')
 
 var _mq = null,
     _pathConsignation = null
@@ -37,6 +40,7 @@ function on_connecter() {
 
   // Commandes IPFS
   _ajouterCb('commande.fichiers.publierFichierIpfs', publierFichierIpfs)
+  _ajouterCb('commande.fichiers.publierFichierIpns', publierFichierIpns)
   _ajouterCb('commande.fichiers.publierRepertoireIpfs', publierRepertoireIpfs)
   _ajouterCb('commande.fichiers.publierIpns', publierIpns)
   _ajouterCb('commande.fichiers.creerCleIpns', creerCleIpns)
@@ -209,6 +213,62 @@ async function publierFichierIpfs(message, rk, opts) {
     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
   }
+}
+
+async function publierFichierIpns(message, rk, opts) {
+  try {
+    debug("publication.publierFichierIpns %O", message)
+
+    const localPath = message.fichier.path
+
+    const reponseCid = await addFichierIpfs(localPath)
+    debug("Put fichier ipfs OK : %O", reponseCid)
+    const cid = reponseCid.Hash,
+          keyName = message.ipns_key_name
+    try {
+      const reponseIpns = await publishIpns(cid, keyName)
+      debug("Put fichier ipns OK")
+    } catch(err) {
+      if(err.code === 404) {
+        // On doit importer la cle
+        const permission = JSON.parse(message.permission)
+        // const ipnsKeyBytes = multibase.decode(message.ipns_key)
+        const cleJson = await dechiffrerDocumentAvecMq(
+          _mq, message.ipns_key, {permission})
+        await importerCleIpns(keyName, cleJson)
+
+        // Tenter a nouveau de publier la ressource
+        const reponseIpns = await publishIpns(cid, keyName)
+        debug("Put fichier ipns OK")
+
+      } else {
+        throw err
+      }
+    }
+    // const reponseMq = {
+    //   ok: true,
+    //   hash: reponse.Hash,
+    //   size: reponse.Size
+    // }
+
+    // Emettre evenement de publication
+    const ipns_key_hash = reponseIpns.data.Name
+    const confirmation = {
+      //cdn_id: cdnId,
+
+      // identificateurs_document: {section_id, type_section: page, etc.}
+
+      complete: true,
+      // securite,
+      hash: cid,
+      ipns_id: ipns_key_hash,
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+  } catch(err) {
+    console.error("ERROR publication.publierFichierIpns %O", err)
+  }
+
 }
 
 async function publierFichierAwsS3(message, rk, opts) {

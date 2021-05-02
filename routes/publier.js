@@ -30,6 +30,7 @@ function init(mq, pathConsignation) {
   const route = express.Router()
 
   route.put('/publier/repertoire', multerMiddleware.array('files', 1000), publierRepertoire)
+  route.put('/publier/fichierIpns', multerMiddleware.array('files', 1), publierFichierIpns)
   route.post('/publier/listerConsignationSftp', bodyParserJson, listerConsignationSftp)
   route.post('/publier/listerPinsIpfs', listerPinsIpfs)
   route.post('/publier/listerConsignationAwsS3', bodyParserJson, listerConsignationAwsS3)
@@ -152,6 +153,22 @@ async function listerConsignationAwsS3(req, res, next) {
   } finally {
     res.end()
   }
+}
+
+async function publierFichierIpns(req, res, next) {
+  debug("publier.publierFichierIpns\n%O\nfichiers: %O", req.body, req.files)
+
+  const fichier = req.files[0]
+  const commande = {
+    ...req.body, fichier,
+  }
+
+  debug("Publier fichier avec IPFS")
+  const domaineAction = 'commande.fichiers.publierFichierIpns'
+  _mq.transmettreCommande(domaineAction, commande, {nowait: true})
+  debug("Commande publier IPFS emise")
+
+  res.sendStatus(200)
 }
 
 module.exports = {init}

@@ -166,22 +166,29 @@ async function publishName(cid, keyName) {
   try {
     const reponse = await axios({
       method: 'POST',
-      url: _urlHost + '/name/publish?arg=' + pathPublier + '&lifetime=50h&ttl=30s&key=' + keyName
+      url: _urlHost + '/name/publish?arg=' + pathPublier + '&lifetime=25h&ttl=60s&key=' + keyName,
+      timeout: 240000,  // 4 minutes max
     })
     debug("Reponse : %O", reponse)
     return reponse
   } catch(err) {
     const reponse = err.response
-    debug("Reponse status %d", reponse.status)
-    if(reponse.status === 500) {
-      // Verifier si on a un cle manquante
-      const codeReponse = reponse.data.Code
-      if(codeReponse === 0) {
-        debug("Cle %s manquante", keyName)
-        throw new Error(`Cle ${keyName} manquante`)
+    if(reponse) {
+      if(reponse.status === 500) {
+        debug("Reponse status %d", reponse.status)
+        // Verifier si on a un cle manquante
+        const codeReponse = reponse.data.Code
+        if(codeReponse === 0) {
+          debug("Cle %s manquante", keyName)
+          const errManquante = new Error(`Cle ${keyName} manquante`)
+          errManquante.code = 404
+          errManquante.keyName = keyName
+          throw errManquante
+        }
       }
+      throw new Error(reponse.data.Message)
     }
-    throw new Error(reponse.data.Message)
+    throw err
   }
 
 }
@@ -299,8 +306,39 @@ async function creerCleIpns(mq, nomCle) {
   }
 }
 
+async function importerCleIpns(nomCle, cleJson) {
+  const cleBytes = Buffer.from(cleJson.privKey, 'base64')
+  const cleStream = creerStreamFromBytes(cleBytes)
+  const nomCleEncoded = encodeURIComponent(nomCle)
+
+  const data = new FormData()
+  data.append('key', cleStream, nomCleEncoded)
+  try {
+    const reponseCle = await axios({
+      method: 'POST',
+      url: _urlHost + '/key/import?arg=' + nomCleEncoded,
+      headers: {
+        ...data.getHeaders()
+      },
+      data
+    })
+    debug("Reponse axios : %O", reponseCle.data)
+    return reponseCle.data
+
+  } catch(err) {
+    const response = err.response
+    if(response && response.status === 500 && response.data.Code === 0) {
+      // OK, la cle existe deja
+      return {err: response.data, message: 'La cle existe deja'}
+    }
+
+    // Autre type d'erreur
+    throw err
+  }
+}
+
 module.exports = {
   init, addFichier, addRepertoire,
   cbPreparerIpfs, getPins, publishName,
-  creerCleIpns,
+  creerCleIpns, importerCleIpns,
 }
