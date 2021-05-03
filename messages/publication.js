@@ -334,11 +334,17 @@ async function publierFichierAwsS3(message, rk, opts) {
     }
 
     debug("Debut upload AWS S3 %s vers %s", fuuid, bucketName)
-    let bucketDirfichierEtendu = bucketDirfichier
+    // let bucketDirfichierEtendu = bucketDirfichier
+    // if(securite === '1.public') {
+    //   bucketDirfichierEtendu = bucketDirfichier + '/public'
+    // }
+    var remotePath = null
     if(securite === '1.public') {
-      bucketDirfichierEtendu = bucketDirfichier + '/public'
+      remotePath = path.join(bucketDirfichier, 'fichiers', 'public')
+    } else {
+      remotePath = path.join(bucketDirfichier, 'fichiers')
     }
-    const resultat = await putFichierAwsS3(s3, message, localPath, bucketName, bucketDirfichierEtendu, optsPut)
+    const resultat = await putFichierAwsS3(s3, message, localPath, bucketName, remotePath, optsPut)
     debug("Resultat upload S3 : %O", resultat)
     // Resultat:
     // {
