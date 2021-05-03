@@ -70,6 +70,7 @@ async function publierFichierSftp(message, rk, opts) {
   const {host, port, username, fuuid, cdn_id: cdnId} = message
   const properties = opts.properties || {}
   const securite = message.securite || '3.protege'
+  const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
   try {
     const basedir = message.basedir || './'
 
@@ -107,7 +108,7 @@ async function publierFichierSftp(message, rk, opts) {
         if(epochCourant-intervalPublish > dernierEvent) {
           dernierEvent = epochCourant  // Update date pour throttle
           const confirmation = {
-            fuuid,
+            identificateur_document,
             cdn_id: cdnId,
             current_bytes: current,
             total_bytes: total,
@@ -128,7 +129,7 @@ async function publierFichierSftp(message, rk, opts) {
 
     // Emettre evenement de publication
     const confirmation = {
-      fuuid,
+      identificateur_document,
       cdn_id: cdnId,
       complete: true,
       securite,
@@ -144,7 +145,7 @@ async function publierFichierSftp(message, rk, opts) {
 
     // Emettre evenement de publication
     const confirmation = {
-      fuuid,
+      identificateur_document,
       cdn_id: cdnId,
       complete: false,
       err: ''+err,
@@ -160,6 +161,7 @@ async function publierFichierIpfs(message, rk, opts) {
   const {fuuid, cdn_id: cdnId} = message
   const securite = message.securite || '3.protege'
   const properties = opts.properties || {}
+  const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
 
   try {
 
@@ -187,7 +189,7 @@ async function publierFichierIpfs(message, rk, opts) {
 
     // Emettre evenement de publication
     const confirmation = {
-      fuuid,
+      identificateur_document,
       cdn_id: cdnId,
       complete: true,
       securite,
@@ -204,7 +206,7 @@ async function publierFichierIpfs(message, rk, opts) {
 
     // Emettre evenement de publication
     const confirmation = {
-      fuuid,
+      identificateur_document,
       cdn_id: cdnId,
       complete: false,
       err: ''+err,
@@ -251,11 +253,6 @@ async function publierFichierIpns(message, rk, opts) {
         throw err
       }
     }
-    // const reponseMq = {
-    //   ok: true,
-    //   hash: reponse.Hash,
-    //   size: reponse.Size
-    // }
 
     // Emettre evenement de publication
     const ipns_key_hash = reponseIpns.data.Name
@@ -291,6 +288,7 @@ async function publierFichierAwsS3(message, rk, opts) {
     permission, bucketName, bucketDirfichier, cdn_id: cdnId} = message
   const securite = message.securite || '3.protege'
   const properties = opts.properties || {}
+  const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
 
   try {
     // Connecter AWS S3
@@ -323,7 +321,7 @@ async function publierFichierAwsS3(message, rk, opts) {
         if(epochCourant-intervalPublish > dernierEvent) {
           dernierEvent = epochCourant  // Update date pour throttle
           const confirmation = {
-            fuuid,
+            identificateur_document,
             cdn_id: cdnId,
             // current_bytes: current,
             // total_bytes: total,
@@ -362,7 +360,7 @@ async function publierFichierAwsS3(message, rk, opts) {
 
     // Emettre evenement de publication
     const confirmation = {
-      fuuid,
+      identificateur_document,
       cdn_id: cdnId,
       complete: true,
       securite,
@@ -378,7 +376,7 @@ async function publierFichierAwsS3(message, rk, opts) {
 
     // Emettre evenement de publication
     const confirmation = {
-      fuuid,
+      identificateur_document,
       cdn_id: cdnId,
       complete: false,
       err: ''+err,
@@ -413,19 +411,35 @@ async function preparerStagingPublic(fuuid) {
 }
 
 async function publierRepertoireSftp(message, rk, opts) {
-  const {host, port, username, repertoireStaging, repertoireRemote} = message
+  const {host, port, username, repertoireStaging, repertoireRemote, identificateur_document, cdn_id, securite} = message
   try {
-    debug("Publier repertoire sftp")
+    debug("Publier repertoire sftp\n%O", message)
     const conn = await connecterSSH(host, port, username)
     const sftp = await preparerSftp(conn)
     const reponseSsh = await putRepertoireSsh(sftp, repertoireStaging, {repertoireRemote})
 
     // Emettre evenement de publication
+    const confirmation = {
+      identificateur_document,
+      cdn_id,
+      complete: true,
+      securite,
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
   } catch(err) {
     console.error('ERROR publication.publierRepertoireSftp %O', err)
     // Emettre evenement d'echec de publication
-
+    const confirmation = {
+      identificateur_document,
+      cdn_id,
+      complete: false,
+      err: ''+err,
+      stack: JSON.stringify(err.stack),
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
   } finally {
     if(message.uploadUnique) {
       // Supprimer le repertoire de staging
@@ -436,15 +450,35 @@ async function publierRepertoireSftp(message, rk, opts) {
 
 async function publierRepertoireIpfs(message, rk, opts) {
   debug("Publier repertoire ipfs")
-  const {repertoireStaging} = message
+  const {repertoireStaging, identificateur_document, cdn_id, securite} = message
   try {
     const reponseIpfs = await putRepertoireIpfs(repertoireStaging)
     debug("Publication IPFS : %O", reponseIpfs)
+
     // Emettre evenement de publication
+    const confirmation = {
+      identificateur_document,
+      cdn_id,
+      complete: true,
+      securite,
+      ...reponseIpfs,
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
   } catch(err) {
     console.error('ERROR publication.publierRepertoireSftp %O', err)
-    // Emettre evenement d'echec de publication
+
+    // Emettre evenement de publication
+    const confirmation = {
+      identificateur_document,
+      cdn_id,
+      complete: false,
+      err: ''+err,
+      stack: JSON.stringify(err.stack),
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
   } finally {
     if(message.uploadUnique) {
@@ -458,7 +492,8 @@ async function publierRepertoireAwsS3(message, rk, opts) {
   debug("Publier repertoire aws s3 : %O", message)
   const {
     repertoireStaging, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre,
-    permission, bucketName, bucketDirfichier } = message
+    permission, bucketName, bucketDirfichier,
+    identificateur_document, cdn_id, securite } = message
 
   try {
     // Connecter AWS S3
@@ -467,11 +502,31 @@ async function publierRepertoireAwsS3(message, rk, opts) {
     // const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre)
     const reponse = await putRepertoireAwsS3(s3, repertoireStaging, bucketName, {bucketDirfichier, message})
     debug("Fin upload AWS S3 : %O", reponse)
+
     // Emettre evenement de publication
+    const confirmation = {
+      identificateur_document,
+      cdn_id,
+      complete: true,
+      securite,
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
   } catch(err) {
     console.error('ERROR publication.publierRepertoireSftp %O', err)
+
     // Emettre evenement d'echec de publication
+    const confirmation = {
+      identificateur_document,
+      cdn_id,
+      complete: false,
+      err: ''+err,
+      stack: JSON.stringify(err.stack),
+    }
+    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+
   } finally {
     if(message.uploadUnique) {
       // Supprimer le repertoire de staging

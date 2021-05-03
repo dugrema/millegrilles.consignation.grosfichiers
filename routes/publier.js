@@ -65,13 +65,16 @@ async function publierRepertoire(req, res, next) {
 
     // Extraire information des methodes de publication
     const cdns = JSON.parse(req.body.cdns)
+    const identificateur_document = JSON.parse(req.body.identificateur_document)
     const maxAge = req.body.max_age || 86400,
-          contentEncoding = req.body.content_encoding || null
+          contentEncoding = req.body.content_encoding,
+          securite = req.body.securite
 
     // Demarrer publication selon methodes demandees
     for await (const cdn of cdns) {
       const commande = {
         ...cdn, contentEncoding, maxAge, pathMimetypes,
+        identificateur_document, securite,
         repertoireStaging: repTemporaire,
       }
       if(cdn.type_cdn === 'sftp') {
