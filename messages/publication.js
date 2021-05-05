@@ -419,10 +419,10 @@ async function preparerStagingPublic(fuuid) {
 }
 
 async function publierRepertoireSftp(message, rk, opts) {
-  const {host, port, username, repertoireStaging, repertoireRemote, identificateur_document, cdn_id, securite} = message
+  const {host, port, username, repertoireStaging, repertoireRemote, identificateur_document, cdn_id, securite, keyType} = message
   try {
     debug("Publier repertoire sftp\n%O", message)
-    const conn = await connecterSSH(host, port, username)
+    const conn = await connecterSSH(host, port, username, {keyType})
     const sftp = await preparerSftp(conn)
     const reponseSsh = await putRepertoireSsh(sftp, repertoireStaging, {repertoireRemote})
 
