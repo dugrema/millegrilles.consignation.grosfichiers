@@ -8,17 +8,29 @@ const fs = require('fs')
 const path = require('path')
 const { preparerPublicationRepertoire } = require('./publierUtils')
 
-// Charger la cle privee utilisee pour se connecter par sftp
-const _privateKeyPath = process.env.SFTP_KEY || '/run/secrets/pki.fichiers.sftp'
-const _privateKey = fs.readFileSync(_privateKeyPath)
+// Charger les cles privees utilisees pour se connecter par sftp
+// Ed25519 est prefere, RSA comme fallback
+const _privateEd25519KeyPath = process.env.SFTP_ED25519_KEY || '/run/secrets/sftp.ed25519.key.pem'
+const _privateEd25519Key = fs.readFileSync(_privateEd25519KeyPath)
+const _privateRsaKeyPath = process.env.SFTP_RSA_KEY || '/run/secrets/sftp.rsa.key.pem'
+const _privateRsaKey = fs.readFileSync(_privateRsaKeyPath)
+// const _privateKeyCombinees = [_privateEd25519Key, _privateRsaKey].join('\n')
 
-async function connecterSSH(host, port, username) {
-  debug("Connecter SSH sur %s:%d avec username %s", host, port, username)
+async function connecterSSH(host, port, username, opts) {
+  opts = opts || {}
+  debug("Connecter SSH sur %s:%d avec username %s (opts: %O)", host, port, username, opts)
+
+  var privateKey = _privateEd25519Key
+  if(opts.keyType === 'rsa') {
+    privateKey = _privateRsaKey
+    debug("!!!CLE RSA \n%s", privateKey)
+  }
+
   const conn = new Client()
   await new Promise((resolve, reject)=>{
     conn.on('ready', resolve)
     conn.on('error', reject)
-    conn.connect({host, port, username, privateKey: _privateKey})
+    conn.connect({host, port, username, privateKey})
   })
   return conn
 }
@@ -149,9 +161,14 @@ function cbPreparerSsh(entry, listeFichiers, pathStaging, repertoireRemote) {
   }
 }
 
-function getPublicKey() {
+function getPublicKey(opts) {
+  opts = opts || {}
+
+  var privateKey = _privateEd25519Key
+  if(opts.keyType === 'rsa') privateKey = _privateRsaKey
+
   const parseKey = ssh2_streams.utils.parseKey
-  const privateKeyParsed = parseKey(_privateKey)[0]
+  const privateKeyParsed = parseKey(privateKey)[0]
 
   const publicKeyBytes = privateKeyParsed.getPublicSSH()
   const publicKeyBuffer = Buffer.from(publicKeyBytes, 'binary')
@@ -159,7 +176,7 @@ function getPublicKey() {
   publicKeyb64 = String.fromCharCode.apply(null, publicKeyb64).slice(1)
   debug("Public Key\n%s", publicKeyb64)
 
-  const reponse = [privateKeyParsed.type, publicKeyb64, 'fichiers'].join(' ')
+  const reponse = [privateKeyParsed.type, publicKeyb64, 'fichiers@millegrilles'].join(' ')
 
   return reponse
 }

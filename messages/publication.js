@@ -59,9 +59,10 @@ function getPublicKeySsh(message, rk, opts) {
   opts = opts || {}
   const properties = opts.properties || {}
   debug("publication.getPublicKey (replyTo: %s)", properties.replyTo)
-  const clePublique = getPublicKey()
+  const clePubliqueEd2559 = getPublicKey()
+  const clePubliqueRsa = getPublicKey({keyType: 'rsa'})
 
-  const reponse = {clePublique}
+  const reponse = {clePubliqueEd2559, clePubliqueRsa}
   _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
 }
 
@@ -71,6 +72,7 @@ async function publierFichierSftp(message, rk, opts) {
   const properties = opts.properties || {}
   const securite = message.securite || '3.protege'
   const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
+  const keyType = message.keyType || 'ed25519'
   try {
     const basedir = message.basedir || './'
 
@@ -86,7 +88,7 @@ async function publierFichierSftp(message, rk, opts) {
       mimetype = message.mimetype
     }
 
-    const conn = await connecterSSH(host, port, username)
+    const conn = await connecterSSH(host, port, username, {keyType})
     const sftp = await preparerSftp(conn)
     debug("Connexion SSH et SFTP OK")
 
