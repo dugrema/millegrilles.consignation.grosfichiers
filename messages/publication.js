@@ -59,10 +59,10 @@ function getPublicKeySsh(message, rk, opts) {
   opts = opts || {}
   const properties = opts.properties || {}
   debug("publication.getPublicKey (replyTo: %s)", properties.replyTo)
-  const clePubliqueEd2559 = getPublicKey()
+  const clePubliqueEd25519 = getPublicKey()
   const clePubliqueRsa = getPublicKey({keyType: 'rsa'})
 
-  const reponse = {clePubliqueEd2559, clePubliqueRsa}
+  const reponse = {clePubliqueEd25519, clePubliqueRsa}
   _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
 }
 
