@@ -23,7 +23,6 @@ async function connecterSSH(host, port, username, opts) {
   var privateKey = _privateEd25519Key
   if(opts.keyType === 'rsa') {
     privateKey = _privateRsaKey
-    debug("!!!CLE RSA \n%s", privateKey)
   }
 
   const conn = new Client()
