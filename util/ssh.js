@@ -16,9 +16,23 @@ const _privateRsaKeyPath = process.env.SFTP_RSA_KEY || '/run/secrets/sftp.rsa.ke
 const _privateRsaKey = fs.readFileSync(_privateRsaKeyPath)
 // const _privateKeyCombinees = [_privateEd25519Key, _privateRsaKey].join('\n')
 
+// Creer un pool de connexions a reutiliser
+const _poolConnexions = {},
+      CONNEXION_TIMEOUT = 10 * 60 * 1000  // 10 minutes
+
+const _intervalEntretienConnexions = setInterval(entretienConnexions, CONNEXION_TIMEOUT/2)
+
 async function connecterSSH(host, port, username, opts) {
   opts = opts || {}
   debug("Connecter SSH sur %s:%d avec username %s (opts: %O)", host, port, username, opts)
+
+  const connexionName = username + '@' + host + ':' + port
+  const connectionPool = _poolConnexions[connexionName]
+  if(connectionPool) {
+    debug("Utilisation connexion SSH du pool : %O", connectionPool)
+    connectionPool.dernierAcces = new Date().getTime()
+    return connectionPool.connexion
+  }
 
   var privateKey = _privateEd25519Key
   if(opts.keyType === 'rsa') {
@@ -27,17 +41,37 @@ async function connecterSSH(host, port, username, opts) {
 
   const conn = new Client()
   await new Promise((resolve, reject)=>{
-    conn.on('ready', resolve)
+    conn.on('ready', _=>{
+      const objetPool = {
+        dernierAcces: new Date().getTime(),
+        connexion: conn,
+      }
+      _poolConnexions[connexionName] = objetPool
+      conn.pool = objetPool
+      resolve()
+    })
     conn.on('error', reject)
+    conn.on('end', _=>{
+      debug("Connexion %s fermee, nettoyage pool", connexionName)
+      delete _poolConnexions[connexionName]
+    })
     conn.connect({host, port, username, privateKey})
   })
   return conn
 }
 
 function preparerSftp(conn) {
+  const objetPool = conn.pool
+  if(objetPool && objetPool.sftp) return objetPool.sftp
+
   return new Promise((resolve, reject)=>{
     conn.sftp((err, sftp)=>{
       if(err) return reject(err)
+
+      if(objetPool) {
+        objetPool.sftp = sftp
+      }
+
       return resolve(sftp)
     })
   })
@@ -220,6 +254,25 @@ async function listerConsignation(sftp, repertoire, opts) {
   if(!opts.res) {
     return fuuids
   }
+}
+
+async function entretienConnexions() {
+  debug("Entretien connexions SFTP : %O", _poolConnexions)
+  // Fermer les connexion inactives depuis plus longtemps que le timeout
+  const poolIds = [...Object.keys(_poolConnexions)]
+  const dateExpiration = new Date().getTime() - CONNEXION_TIMEOUT
+  poolIds.forEach(poolId=>{
+    const objetPool = _poolConnexions[poolId]
+    if(objetPool.dernierAcces < dateExpiration) {
+      debug("Fermer connexion SFTP %s", poolId)
+      delete _poolConnexions[poolId]
+      try {
+        objetPool.connexion.end()
+      } catch(err) {
+        console.error("ERROR ssh.entretienConnexions %O", err)
+      }
+    }
+  })
 }
 
 module.exports = {
