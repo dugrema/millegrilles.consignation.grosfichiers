@@ -12,7 +12,8 @@ const { preparerPublicationRepertoire } = require('./publierUtils')
 const { chiffrerDocument } = require('@dugrema/millegrilles.common/lib/chiffrage')
 const { getCertificatsChiffrage } = require('./cryptoUtils')
 
-const CRLF = '\r\n'
+const CRLF = '\r\n',
+      MAX_CONTENT_LENGTH = 1 * 1024 * 1024 * 1024  // 1 GB max (upload axios vers IPFS)
 // const URL_HOST = 'http://192.168.2.131:5001/api/v0'
 
 var _urlHost = 'http://ipfs:5001'
@@ -32,11 +33,15 @@ async function addFichier(pathFichierLocal) {
   const url = _urlHost + '/add'
   debug("ipfs.addFichier %s", url)
 
+  //
+
   const response = await axios({
     method: 'POST',
     headers: {
       ...data.getHeaders(),
     },
+    // maxContentLength: MAX_CONTENT_LENGTH,
+    maxBodyLength: MAX_CONTENT_LENGTH,
     url,
     data,
   })
