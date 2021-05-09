@@ -282,34 +282,51 @@ async function creerCleIpns(mq, nomCle) {
   const data = new FormData()
   data.append('key', cleStream, nomCleEncoded)
   try {
-    const reponseCle = await axios({
-      method: 'POST',
-      url: _urlHost + '/key/import?arg=' + nomCleEncoded,
-      headers: {
-        ...data.getHeaders()
-      },
-      data
-    })
-    debug("Reponse axios : %O", reponseCle.data)
-
-    // Transmettre commande maitre des cles
-    const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
-    await mq.transmettreCommande(domaineActionCles, commandeMaitrecles)
-    const cleId = reponseCle.data.Id
-
-    const reponse = { cleId, cle_chiffree: ciphertext}
-    return reponse
-
+    return await importerCle(mq, nomCleEncoded, data, commandeMaitrecles, ciphertext)
   } catch(err) {
     const response = err.response
     if(response && response.status === 500 && response.data.Code === 0) {
-      // OK, la cle existe deja
+      // OK, la cle existe deja. Supprimer et tenter a nouveau
+      debug("Supprimer cle IPNS %s", nomCleEncoded)
+      const reponse = await axios({
+        method: 'POST',
+        url: _urlHost + '/key/rm?arg=' + nomCleEncoded
+      })
+      debug("Cle IPNS supprimee %s : %O", nomCleEncoded, reponse.data)
+
+      try {
+        return await importerCle(mq, nomCleEncoded, data, commandeMaitrecles, ciphertext)
+      } catch(err) {
+        console.error("ERROR ipfs.creerCleIpns : 2e tentative de creation cle echec : %O", err)
+      }
       return {err: response.data, message: 'La cle existe deja'}
     }
 
     // Autre type d'erreur
     throw err
   }
+}
+
+async function importerCle(mq, nomCleEncoded, data, commandeMaitrecles, ciphertext) {
+  debug("Importer nouvelle cle %s", nomCleEncoded)
+  const reponseCle = await axios({
+    method: 'POST',
+    url: _urlHost + '/key/import?arg=' + nomCleEncoded,
+    headers: {
+      ...data.getHeaders()
+    },
+    timeout: 3000,
+    data
+  })
+  debug("Reponse axios : %O", reponseCle.data)
+
+  // Transmettre commande maitre des cles
+  const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
+  await mq.transmettreCommande(domaineActionCles, commandeMaitrecles)
+  const cleId = reponseCle.data.Id
+
+  const reponse = { cleId, cle_chiffree: ciphertext}
+  return reponse
 }
 
 async function importerCleIpns(nomCle, cleJson) {
@@ -326,6 +343,7 @@ async function importerCleIpns(nomCle, cleJson) {
       headers: {
         ...data.getHeaders()
       },
+      timeout: 3000,
       data
     })
     debug("Reponse axios : %O", reponseCle.data)
