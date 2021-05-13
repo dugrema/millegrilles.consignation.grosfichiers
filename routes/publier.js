@@ -68,7 +68,8 @@ async function publierRepertoire(req, res, next) {
     const identificateur_document = JSON.parse(req.body.identificateur_document)
     const maxAge = req.body.max_age || 86400,
           contentEncoding = req.body.content_encoding,
-          securite = req.body.securite
+          securite = req.body.securite,
+          fichierUnique = req.body.fichier_unique
 
     // Demarrer publication selon methodes demandees
     for await (const cdn of cdns) {
@@ -84,7 +85,12 @@ async function publierRepertoire(req, res, next) {
         debug("Commande publier SFTP emise")
       }
       if(cdn.type_cdn === 'ipfs') {
-        debug("Publier repertoire avec IPFS")
+        if(fichierUnique) {
+          const file = req.files[0]
+          const filePath = path.join(repTemporaire, file.originalname)
+          commande.fichierUnique = filePath
+        }
+        debug("Publier repertoire avec IPFS : %O", commande)
         const domaineAction = 'commande.fichiers.publierRepertoireIpfs'
         _mq.transmettreCommande(domaineAction, commande, {nowait: true})
         debug("Commande publier IPFS emise")

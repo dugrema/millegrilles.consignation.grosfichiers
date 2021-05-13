@@ -474,22 +474,49 @@ function publierVitrineSftp(message, rk, opts) {
 }
 
 async function publierRepertoireIpfs(message, rk, opts) {
-  debug("Publier repertoire ipfs")
+  debug("Publier repertoire ipfs : %O", message)
   const {repertoireStaging, identificateur_document, cdn_id, securite} = message
   try {
-    const reponseIpfs = await putRepertoireIpfs(repertoireStaging)
-    debug("Publication IPFS : %O", reponseIpfs)
+    if(message.fichierUnique) {
+      debug("Publier fichier %s", message.fichierUnique)
 
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id,
-      complete: true,
-      securite,
-      ...reponseIpfs,
+      const reponse = await addFichierIpfs(message.fichierUnique)
+      debug("Put fichier ipfs OK : %O", reponse)
+      const reponseMq = {
+        ok: true,
+        hash: reponse.Hash,
+        size: reponse.Size
+      }
+
+      // Emettre evenement de publication
+      const confirmation = {
+        identificateur_document,
+        cdn_id,
+        complete: true,
+        // securite,
+        cid: reponse.Hash,
+        ...reponse,
+      }
+
+      const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+      _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+
+    } else {
+      const reponseIpfs = await putRepertoireIpfs(repertoireStaging)
+      debug("Publication IPFS : %O", reponseIpfs)
+
+      // Emettre evenement de publication
+      const confirmation = {
+        identificateur_document,
+        cdn_id,
+        complete: true,
+        securite,
+        ...reponseIpfs,
+      }
+
+      const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+      _mq.emettreEvenement(confirmation, domaineActionConfirmation)
     }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
   } catch(err) {
     console.error('ERROR publication.publierRepertoireSftp %O', err)
