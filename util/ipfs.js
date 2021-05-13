@@ -23,7 +23,8 @@ function init(urlHost) {
   _urlHost = urlHost + '/api/v0'
 }
 
-async function addFichier(pathFichierLocal) {
+async function addFichier(pathFichierLocal, opts) {
+  opts = opts || {}
   const readStream = fs.createReadStream(pathFichierLocal)
 
   // Faire un post vers l'API
@@ -53,6 +54,12 @@ async function addFichier(pathFichierLocal) {
     responseData = JSON.parse(responseData)
   } catch(err) {
     debug("reponse deja json")
+  }
+
+  // Si on a une cle, la mettre a jour
+  debug("Add fichier info : %O, response data : %O", opts, responseData)
+  if(opts.ipnsKeyName) {
+    await publishName(responseData.Hash, opts.ipnsKeyName)
   }
 
   return responseData
@@ -96,9 +103,10 @@ async function addRepertoire(repertoire, opts) {
   const cidRepertoire = responseData.filter(item=>item.Name.indexOf('/')===-1)[0].Hash
   debug("CID repertoire : %s", cidRepertoire)
 
-  // Si on a un cle, la mettre a jour
-  if(opts.ipnsKeyName) {
-    await publishName(cidRepertoire, opts.ipnsKeyName)
+  // Si on a une cle, la mettre a jour
+  const ipnsKeyName = opts.ipnsKeyName || opts.ipns_key_name
+  if(ipnsKeyName) {
+    await publishName(cidRepertoire, ipnsKeyName)
   }
 
   return {fichiers: responseData, cid: cidRepertoire}
@@ -167,7 +175,7 @@ async function publishName(cid, keyName) {
   // const cidPublier = 'QmPbUVmHccqr1cTB99XV2K1spqiU9iugQbeTAVKQewxU3V'
   // const cidPublier = 'QmTsJMQmMS9yamQFhbZ79k4aA6dfQpShePSEyx1WZHbwKA'
   var pathPublier = encodeURIComponent('/ipfs/' + cid)
-
+  debug("ipfs.publishName Publier %s = %s ", keyName, pathPublier)
   // Publier avec lifetime de 3 jours - cles actives vont etre republiees a tous les jours
   try {
     const reponse = await axios({
@@ -175,7 +183,7 @@ async function publishName(cid, keyName) {
       url: _urlHost + '/name/publish?arg=' + pathPublier + '&lifetime=25h&ttl=60s&key=' + keyName,
       timeout: 240000,  // 4 minutes max
     })
-    debug("Reponse : %O", reponse)
+    debug("ipfs.publishName Reponse : %O", reponse)
     return reponse
   } catch(err) {
     const reponse = err.response

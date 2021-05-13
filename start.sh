@@ -23,7 +23,7 @@ export PORT=3021
 # export DEBUG=millegrilles:messages:*,millegrilles:fichiers:traitementMedia
 # export DEBUG=millegrilles:fichiers:transformationsVideo,millegrilles:messages:*,millegrilles:fichiers:traitementMedia
 export DEBUG=millegrilles:fichiers:publication,millegrilles:fichiers:ssh,millegrilles:fichiers:ipfs,millegrilles:fichiers:awss3,\
-millegrilles:fichiers:publier
+millegrilles:fichiers:publier,millegrilles:fichiers:ipfs
 
 # export SERVER_TYPE=https
 

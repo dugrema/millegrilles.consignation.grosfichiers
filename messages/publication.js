@@ -476,11 +476,18 @@ function publierVitrineSftp(message, rk, opts) {
 async function publierRepertoireIpfs(message, rk, opts) {
   debug("Publier repertoire ipfs : %O", message)
   const {repertoireStaging, identificateur_document, cdn_id, securite} = message
+
+  const ipnsKeyName = message.ipns_key_name
+  const optsCommande = {
+    ...opts,
+    ipnsKeyName
+  }
+
   try {
     if(message.fichierUnique) {
       debug("Publier fichier %s", message.fichierUnique)
 
-      const reponse = await addFichierIpfs(message.fichierUnique)
+      const reponse = await addFichierIpfs(message.fichierUnique, optsCommande)
       debug("Put fichier ipfs OK : %O", reponse)
       const reponseMq = {
         ok: true,
@@ -502,7 +509,7 @@ async function publierRepertoireIpfs(message, rk, opts) {
       _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
     } else {
-      const reponseIpfs = await putRepertoireIpfs(repertoireStaging)
+      const reponseIpfs = await putRepertoireIpfs(repertoireStaging, optsCommande)
       debug("Publication IPFS : %O", reponseIpfs)
 
       // Emettre evenement de publication
@@ -548,6 +555,7 @@ function publierVitrineIpfs(message, rk, opts) {
 
     // Ajouter repertoire source
     repertoireStaging: pathVitrine,
+    ipnsKeyName: message.ipns_key_name,
   }
   debug("Publier vitrine IPFS : %O", configurationPublication)
   return publierRepertoireIpfs(configurationPublication, rk, opts)
