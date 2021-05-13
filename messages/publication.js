@@ -16,7 +16,8 @@ const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../ut
 const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.common/lib/chiffrage')
 
 var _mq = null,
-    _pathConsignation = null
+    _pathConsignation = null,
+    _repertoireCodeWebapps = process.env.WEBAPPS_SRC_FOLDER
 
 function init(mq) {
   _mq = mq
@@ -33,15 +34,18 @@ function on_connecter() {
   _ajouterCb('requete.fichiers.getPublicKeySsh', getPublicKeySsh, {direct: true})
   _ajouterCb('commande.fichiers.publierFichierSftp', publierFichierSftp)
   _ajouterCb('commande.fichiers.publierRepertoireSftp', publierRepertoireSftp)
+  _ajouterCb('commande.fichiers.publierVitrineSftp', publierVitrineSftp)
 
   // Commandes AWS S3
   _ajouterCb('commande.fichiers.publierFichierAwsS3', publierFichierAwsS3)
   _ajouterCb('commande.fichiers.publierRepertoireAwsS3', publierRepertoireAwsS3)
+  _ajouterCb('commande.fichiers.publierVitrineAwsS3', publierVitrineAwsS3)
 
   // Commandes IPFS
   _ajouterCb('commande.fichiers.publierFichierIpfs', publierFichierIpfs)
   _ajouterCb('commande.fichiers.publierFichierIpns', publierFichierIpns)
   _ajouterCb('commande.fichiers.publierRepertoireIpfs', publierRepertoireIpfs)
+  _ajouterCb('commande.fichiers.publierVitrineIpfs', publierVitrineIpfs)
   _ajouterCb('commande.fichiers.publierIpns', publierIpns)
   _ajouterCb('commande.fichiers.creerCleIpns', creerCleIpns)
 }
@@ -456,6 +460,19 @@ async function publierRepertoireSftp(message, rk, opts) {
   }
 }
 
+function publierVitrineSftp(message, rk, opts) {
+  // Va publier le code de vitrine via SFTP
+  const pathVitrine = path.join(_repertoireCodeWebapps, 'vitrine')
+  const configurationPublication = {
+    ...message,
+
+    // Ajouter repertoire source
+    repertoireStaging: pathVitrine,
+  }
+  debug("Publier vitrine : %O", configurationPublication)
+  return publierRepertoireSftp(configurationPublication, rk, opts)
+}
+
 async function publierRepertoireIpfs(message, rk, opts) {
   debug("Publier repertoire ipfs")
   const {repertoireStaging, identificateur_document, cdn_id, securite} = message
@@ -494,6 +511,19 @@ async function publierRepertoireIpfs(message, rk, opts) {
       await fsPromises.rm(repertoireStaging, {recursive: true})
     }
   }
+}
+
+function publierVitrineIpfs(message, rk, opts) {
+  // Va publier le code de vitrine via SFTP
+  const pathVitrine = path.join(_repertoireCodeWebapps, 'vitrine')
+  const configurationPublication = {
+    ...message,
+
+    // Ajouter repertoire source
+    repertoireStaging: pathVitrine,
+  }
+  debug("Publier vitrine IPFS : %O", configurationPublication)
+  return publierRepertoireIpfs(configurationPublication, rk, opts)
 }
 
 async function publierRepertoireAwsS3(message, rk, opts) {
@@ -541,6 +571,18 @@ async function publierRepertoireAwsS3(message, rk, opts) {
       await fsPromises.rm(repertoireStaging, {recursive: true})
     }
   }
+}
+
+function publierVitrineAwsS3(message, rk, opts) {
+  // Va publier le code de vitrine via SFTP
+  const pathVitrine = path.join(_repertoireCodeWebapps, 'vitrine')
+  const configurationPublication = {
+    ...message,
+
+    // Ajouter repertoire source
+    repertoireStaging: pathVitrine,
+  }
+  return publierRepertoireAwsS3(message, rk, opts)
 }
 
 async function publierIpns(message, rk, opts) {

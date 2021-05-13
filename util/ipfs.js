@@ -76,6 +76,7 @@ async function addRepertoire(repertoire, opts) {
     headers: {
       ...formData.getHeaders(),
     },
+    maxBodyLength: MAX_CONTENT_LENGTH,
     url,
     data: formData,
   })

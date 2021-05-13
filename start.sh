@@ -14,6 +14,9 @@ export WEB_KEY=$MG_MQ_KEYFILE
 export MG_MQ_URL=amqps://$HOST:5673
 export IPFS_HOST=http://192.168.2.131:5001
 
+# Path ou les apps web (Vitrine, Place) sont copiees
+export WEBAPPS_SRC_FOLDER=/var/opt/millegrilles/nginx/html
+
 export PORT=3021
 
 # export DEBUG=millegrilles:fichiers:transformationsVideo,millegrilles:fichiers:cryptoUtils,millegrilles:fichiers:uploadFichier
