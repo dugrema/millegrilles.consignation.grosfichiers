@@ -562,7 +562,7 @@ function publierVitrineIpfs(message, rk, opts) {
 }
 
 async function publierRepertoireAwsS3(message, rk, opts) {
-  debug("Publier repertoire aws s3 : %O", message)
+  debug("publication.publierVitrineIpfs Publier vitrine vers AWS S3 : %O", message)
   const {
     repertoireStaging, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre,
     permission, bucketName, bucketDirfichier,
@@ -574,7 +574,7 @@ async function publierRepertoireAwsS3(message, rk, opts) {
     const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretKeyInfo)
     // const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre)
     const reponse = await putRepertoireAwsS3(s3, repertoireStaging, bucketName, {bucketDirfichier, message})
-    debug("Fin upload AWS S3 : %O", reponse)
+    debug("publication.publierVitrineIpfs Fin upload AWS S3 : %O", reponse)
 
     // Emettre evenement de publication
     const confirmation = {
@@ -616,8 +616,11 @@ function publierVitrineAwsS3(message, rk, opts) {
 
     // Ajouter repertoire source
     repertoireStaging: pathVitrine,
+    maxAge: 0,
+    chunkImmutable: true,  // fichiers avec .chunk. vont etre mis en cache public immutable maxAge 1 an
   }
-  return publierRepertoireAwsS3(message, rk, opts)
+  debug("Publier vitrine sur AWS S3 : %O", configurationPublication)
+  return publierRepertoireAwsS3(configurationPublication, rk, opts)
 }
 
 async function publierIpns(message, rk, opts) {

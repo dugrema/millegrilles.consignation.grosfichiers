@@ -143,6 +143,19 @@ function trouverExtension(mimetype) {
   return '.' + extension
 }
 
+function trouverMimetype(nomfichier) {
+  try {
+    var extname = path.extname(nomfichier.toLowerCase())
+    extname = extname.slice(1)  // Enlever '.' de l'extension
+    console.debug("!!! traitementFichier.trouverMimetype extension de %s = %s", nomfichier, extname)
+    const mimetype = MAP_EXTENSION_MIMETYPE[extname] || 'application/octet-stream'
+    return mimetype
+  } catch(err) {
+    console.error("ERROR traitementFichier.trouverMimetype %O", err)
+  }
+  return 'application/octet-stream'
+}
+
 // const pathConsignation = new PathConsignation();
 
 class TraitementFichier {
@@ -509,5 +522,5 @@ module.exports = {
   TraitementFichier, PathConsignation,
   extraireTarFile, supprimerRepertoiresVides, supprimerFichiers,
   streamListeFichiers, getFichiersDomaine, getGrosFichiersHoraire,
-  trouverExtension,
+  trouverExtension, trouverMimetype,
 }

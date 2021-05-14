@@ -6,7 +6,7 @@ const multibase = require('multibase')
 const S3 = require('aws-sdk/clients/s3')
 const { pki: nodePki } = require('node-forge')
 const { decrypterSymmetrique } = require('../util/cryptoUtils')
-const { trouverExtension } = require('../util/traitementFichier')
+const { trouverExtension, trouverMimetype } = require('../util/traitementFichier')
 const { dechiffrerTemporaire } = require('../util/traitementMedia')
 const { preparerPublicationRepertoire } = require('./publierUtils')
 const { hacher } = require('@dugrema/millegrilles.common/lib/hachage')
@@ -301,24 +301,31 @@ async function uploaderFichier(s3, message, pathFichier, bucketName, bucketDirfi
   if(message.fuuid) metadata.fuuid = message.fuuid
   var cacheControl = 'public, max-age=604800, immutable'
   if(message.maxAge !== undefined) {
-    cacheControl = 'public, max-age=' + message.maxAge
+    const maxAge = message.maxAge
+    cacheControl = 'public, max-age=' + maxAge
   }
+
+  const contentType = message.mimetype
 
   const uploadParams = {
     Bucket: bucketName,
     Key: pathSurServeur,
     Body: fileStream,
     ACL: 'public-read',
-    ContentType: message.mimetype || 'application/octet-stream',
+    // ContentType: message.mimetype || 'application/octet-stream',
     CacheControl: cacheControl,
     Metadata: metadata,
+  }
+
+  if(contentType) {
+    uploadParams.ContentType = contentType
   }
 
   if(message.contentEncoding) {
     uploadParams.ContentEncoding = message.contentEncoding
   }
 
-  if(nomFichier) {
+  if(nomFichier && (opts.download || message.download) ) {
     uploadParams.ContentDisposition = 'attachment; filename="' + nomFichier + '"'
   }
 
@@ -367,20 +374,30 @@ async function addRepertoire(s3, repertoire, bucketName, opts) {
 
   const message = opts.message || {}
   const pathMimetypes = message.pathMimetypes || {}
-  const maxAge = message.maxAge
   debug("Path mimetypes : %O", pathMimetypes)
+
+  const chunkImmutable = message.chunkImmutable
 
   for await (const fichier of listeFichiers) {
     debug("Traiter fichier : %O", fichier)
     const originalname = fichier.localPath.replace(repertoire + '/', '')
-    const mimetype = pathMimetypes[originalname]
+    var mimetype = pathMimetypes[originalname]
     debug("Mimetype pour nom original %s = %s", originalname, mimetype)
+    if(!mimetype) {
+      // Tenter de fournir le mimetype. Defaut = application/octet-stream
+      mimetype = trouverMimetype(originalname)
+      debug("Mimetype identifie pour extension de %s = %s", originalname, mimetype)
+    }
     const params = {
       nomFichier: path.basename(fichier.localPath),
       securite: '1.public',
+      mimetype,
     }
-    if(mimetype) params.mimetype = mimetype
-    if(maxAge) params.maxAge = maxAge
+    if(chunkImmutable && originalname.indexOf('.chunk.') > -1) {
+      // Aucuns params de maxAge, va faire public immutable maxAge 1 an
+    } else if(message.maxAge !== undefined) {
+      params.maxAge = message.maxAge
+    }
     if(message.contentEncoding) params.contentEncoding = message.contentEncoding
     const remotePath = path.dirname(fichier.remotePath)
     // await putFichier(sftp, fichier.localPath, fichier.remotePath)
