@@ -72,6 +72,8 @@ function getPublicKeySsh(message, rk, opts) {
 
 async function publierFichierSftp(message, rk, opts) {
   opts = opts || {}
+  debug("publication.publierFichierSftp : %O (opts: %O)", message, opts)
+
   const {host, port, username, fuuid, cdn_id: cdnId} = message
   const properties = opts.properties || {}
   const securite = message.securite || '3.protege'
@@ -90,6 +92,8 @@ async function publierFichierSftp(message, rk, opts) {
       debug("Information fichier public : %O", infoFichierPublic)
       localPath = infoFichierPublic.filePath
       mimetype = message.mimetype
+    } else {
+      throw new Error("FICHIER PAS PUBLIC : message: %O, opts: %O", message, opts)
     }
 
     const conn = await connecterSSH(host, port, username, {keyType})
@@ -99,6 +103,11 @@ async function publierFichierSftp(message, rk, opts) {
     var remotePath = null
     if(securite === '1.public') {
       remotePath = path.join(basedir, 'fichiers', 'public', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+      if(remotePath.endsWith('.mgs2')) {
+        // Pas suppose arriver, diag
+        debug("ERREUR publication.publierFichierSftp fichier public (mimetype: %s) avec ext mgs2 %O (props: %O)", mimetype, message, opts)
+        throw new Error("Erreur fichier public avec .mgs2")
+      }
     } else {
       remotePath = path.join(basedir, 'fichiers', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
     }
