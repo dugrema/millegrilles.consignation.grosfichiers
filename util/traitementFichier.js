@@ -139,7 +139,7 @@ class PathConsignation {
 }
 
 function trouverExtension(mimetype) {
-  var extension = MAP_MIMETYPE_EXTENSION[mimetype] || 'mgs2'
+  var extension = MAP_MIMETYPE_EXTENSION[mimetype] || 'bin'
   return '.' + extension
 }
 
