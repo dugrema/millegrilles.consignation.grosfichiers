@@ -34,20 +34,24 @@ async function probeVideo(input, opts) {
   // upscaling ou augmentation bitrate
   const bitrate = infoVideo.bit_rate,
         height = infoVideo.height,
+        width = infoVideo.witdh,
         nb_frames = infoVideo.nb_frames !== 'N/A'?infoVideo.nb_frames:null
 
-  // debug("Trouve : taille %d, bitrate %d", height, bitrate)
+  debug("Trouve : taille %dx%d, bitrate %d", width, height, bitrate)
 
-  const tailleEncoding = [2160, 1440, 1080, 720, 480, 360, 240].filter(item=>{
+  const heightEncoding = [2160, 1440, 1080, 720, 480, 360, 240].filter(item=>{
     return item <= height && item <= maxHeight
   })[0]
   const bitRateEncoding = [1200000, 1000000, 750000, 600000, 500000, 400000, 200000].filter(item=>{
     return item <= bitrate && item <= maxBitrate
   })[0]
 
-  // debug("Information pour encodage : height %d, bit rate %d", tailleEncoding, bitRateEncoding)
+  // Calculer width
+  const widthEncoding = Math.round(width * heightEncoding / height)
 
-  return {height: tailleEncoding, bitrate: bitRateEncoding, nb_frames, raw: infoVideo}
+  debug("Information pour encodage : taille %dx%d, bit rate %d", widthEncoding, heightEncoding, bitRateEncoding)
+
+  return {height: heightEncoding, width: widthEncoding, bitrate: bitRateEncoding, nb_frames, raw: infoVideo}
 }
 
 async function transcoderVideo(streamFactory, outputStream, opts) {
@@ -55,6 +59,7 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
 
   var   videoBitrate = opts.videoBitrate || 500000
         height = opts.height || 480
+        width = opts.width || 854
 
   const videoCodec = opts.videoCodec || 'libx264',
         audioCodec = opts.audioCodec || 'aac',
@@ -97,7 +102,7 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
   debug("Debut passe 1")
   var fichierInputTmp = null  //, fichierOutputTmp = null
   try {
-    const videoOpts = { videoBitrate, height, videoCodec }
+    const videoOpts = { videoBitrate, height, width, videoCodec }
     const optsTranscodage = {
       progressCb: progressHook,
       tmpDir: tmpDir.path,
@@ -159,8 +164,10 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
       input = path.join(tmpDir.path, 'input.dat')
       fichierInputTmp = await extraireFichierTemporaire(input, streamFactory())
       // input = fichierInputTmp.path
-      debug("Fichier temporaire input pret: %s", input)
+      debug("Fichier temporaire input pret: %s, videoOps: %O", input, videoOpts)
 
+      // Recommencer passe 1 et faire passe 2
+      await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
       await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
     }
     debug("Passe 2 terminee, transferer le fichier output")
@@ -193,6 +200,7 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
 
   const videoBitrate = videoOpts.videoBitrate,
         height = videoOpts.height,
+        width = videoOpts.width || '?',
         videoCodec = videoOpts.videoCodec
 
   const audioCodec = audioOpts.audioCodec,
@@ -204,10 +212,10 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
 
   const ffmpegProcessCmd = new FFmpeg(source, {niceness: 10})
     .withVideoBitrate(''+Math.floor(videoBitrate/1000)+'k')
-    .withSize('?x' + height)
+    .withSize(''+ width + 'x' + height)
     .videoCodec(videoCodec)
 
-  var passlog = path.join(tmpDir, 'ffmpeg2pass-')
+  var passlog = path.join(tmpDir, 'ffmpeg2pass')
   if(passe === 1) {
     // Passe 1, desactiver traitement stream audio
     ffmpegProcessCmd
@@ -227,8 +235,8 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
   }
 
   const processPromise = new Promise((resolve, reject)=>{
-    ffmpegProcessCmd.on('error', function(err) {
-      console.error('ERROR - transformationsVideo.transcoderPasse: %O\nInfo params: %O', err, ffmpegProcessCmd)
+    ffmpegProcessCmd.on('error', function(err, stdout, stderr) {
+      console.error('ERROR - transformationsVideo.transcoderPasse: %O\nstderr: %O\nInfo params: %O', err, stderr, ffmpegProcessCmd)
       reject(err);
     })
     ffmpegProcessCmd.on('end', function(filenames) {
