@@ -1,4 +1,4 @@
-const debug = require('debug')('millegrilles:fichiers:grosfichiers')
+const debug = require('debug')('millegrilles:fichiers:publicStaging')
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs/promises')
@@ -10,13 +10,19 @@ const DOWNLOAD_STAGING_FILE_TIMEOUT_MSEC = 30 * 60 * 1000,    // 30 mins
       UPLOAD_STAGING_FILE_TIMEOUT_MSEC = 1 * 60 * 60 * 1000,  // 1 heure
       UPLOAD_STAGING_FOLDER_TIMEOUT_MSEC = 1 * 60 * 60 * 1000 // 1 heure
 
-async function creerStreamDechiffrage(mq, fuuidFichier) {
+async function creerStreamDechiffrage(mq, fuuidFichier, opts) {
+  opts = opts || {}
   debug("Creer stream dechiffrage : %s", fuuidFichier)
 
   // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
   const chainePem = mq.pki.chainePEM
-  const domaineActionDemandePermission = 'GrosFichiers.demandePermissionDechiffragePublic',
-        requetePermission = {fuuid: fuuidFichier}
+  let domaineActionDemandePermission
+  if(opts.prive) {
+    domaineActionDemandePermission = 'GrosFichiers.demandePermissionDechiffragePrive'
+  } else {
+    domaineActionDemandePermission = 'GrosFichiers.demandePermissionDechiffragePublic'
+  }
+  const requetePermission = {fuuid: fuuidFichier}
   const reponsePermission = await mq.transmettreRequete(domaineActionDemandePermission, requetePermission)
 
   debug("Reponse permission access a %s:\n%O", fuuidFichier, reponsePermission)

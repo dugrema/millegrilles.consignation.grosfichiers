@@ -1,4 +1,4 @@
-const debug = require('debug')('millegrilles:fichiers:grosfichiers')
+const debug = require('debug')('millegrilles:fichiers:routeGrosfichiers')
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -21,6 +21,7 @@ function InitialiserGrosFichiers() {
   const bodyParserInstance = bodyParser.urlencoded({ extended: false })
 
   router.get('/fichiers/public/:fuuid', downloadFichierPublic, pipeReponse)
+  router.get('/fichiers/video/:fuuid', downloadVideoPrive, pipeReponse)
   router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
   router.use(uploadFichier.init())
 
@@ -200,6 +201,101 @@ async function downloadFichierPublic(req, res, next) {
   res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
   res.setHeader('fuuid', res.fuuid)
   res.setHeader('securite', '1.public')
+  res.setHeader('Last-Modified', res.stat.mtime)
+
+  const range = req.headers.range
+  if(range) {
+    console.debug("Range request : %s, taille fichier %s", range, res.stat.size)
+    const infoRange = readRangeHeader(range, res.stat.size)
+    res.range = infoRange
+  }
+
+  next()
+}
+
+async function downloadVideoPrive(req, res, next) {
+  debug("downloadVideoPrive methode:" + req.method + ": " + req.url);
+  debug("Headers : %O\nAutorisation: %o", req.headers, req.autorisationMillegrille);
+
+  const fuuid = req.params.fuuid
+  res.fuuid = fuuid
+
+  debug("downloadVideoPrive Fuuid : %s", fuuid)
+
+  // Verifier si le fichier existe
+  const idmg = req.autorisationMillegrille.idmg;
+  const pathConsignation = new PathConsignation({idmg})
+  res.filePath = pathConsignation.trouverPathLocal(res.fuuid, true);
+
+  try {
+    const stat = await new Promise((resolve, reject)=>{
+      fs.stat(res.filePath, (err, stat)=>{
+        if(err) {
+          if(err.errno == -2) return reject(404)
+          console.error(err);
+          return reject(500)
+        }
+        resolve(stat)
+      })
+    })
+    res.stat = stat
+  } catch(statusCode) {
+    // console.error("Erreur acces fichier %s", statusCode)
+    return res.sendStatus(statusCode)
+  }
+
+  // Verifier si l'acces est en mode chiffre (protege) ou dechiffre (public, prive)
+
+  // if(encrypted && ['1.public', '2.prive'].includes(niveauAcces)) {
+
+  // Le fichier est chiffre mais le niveau d'acces de l'usager ne supporte
+  debug("Verifier si permission d'acces en mode prive pour video %s", req.url)
+  var amqpdao = req.amqpdao
+
+  // pas le mode chiffre. Demander une permission de dechiffrage au domaine
+  // et dechiffrer le fichier au vol si permis.
+  try {
+    const infoStream = await creerStreamDechiffrage(amqpdao, req.params.fuuid, {prive: true})
+
+    debug("Information stream : %O", infoStream)
+
+    if(infoStream.acces === '0.refuse') {
+      debug("Permission d'acces refuse en mode prive pour %s", req.url)
+      return res.sendStatus(403)  // Acces refuse
+    }
+
+    // Ajouter information de dechiffrage pour la reponse
+    res.decipherStream = infoStream.decipherStream
+    res.permission = infoStream.permission
+    res.fuuid = infoStream.fuuidEffectif
+
+    const fuuidEffectif = infoStream.fuuidEffectif
+
+    // Preparer le fichier dechiffre dans repertoire de staging
+    const infoFichierEffectif = await stagingPublic(pathConsignation, fuuidEffectif, infoStream)
+    res.stat = infoFichierEffectif.stat
+    res.filePath = infoFichierEffectif.filePath
+
+    // Ajouter information de header pour slicing (HTTP 206)
+    res.setHeader('Content-Length', res.stat.size)
+    res.setHeader('Accept-Ranges', 'bytes')
+
+    // res.setHeader('Content-Length', res.tailleFichier)
+    // var mimetype = res.permission['mimetype'] || 'video/mp4'
+    // res.setHeader('Content-Type', mimetype)
+
+  } catch(err) {
+    console.error("Erreur traitement dechiffrage stream pour %s:\n%O", req.url, err)
+    debug("Permission d'acces refuse en mode %s pour %s", niveauAcces, req.url)
+    return res.sendStatus(403)  // Acces refuse
+  }
+
+  debug("Info idmg: %s, stat fichier: %s", idmg, pathConsignation);
+
+  // Cache control public, permet de faire un cache via proxy (nginx)
+  res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
+  res.setHeader('fuuid', res.fuuid)
+  res.setHeader('securite', '2.prive')
   res.setHeader('Last-Modified', res.stat.mtime)
 
   const range = req.headers.range
