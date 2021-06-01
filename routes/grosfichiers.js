@@ -259,8 +259,9 @@ async function downloadVideoPrive(req, res, next) {
 
     debug("Information stream : %O", infoStream)
 
-    if(infoStream.acces === '0.refuse') {
-      debug("Permission d'acces refuse en mode prive pour %s", req.url)
+    const permission = infoStream.permission || {}
+    if(infoStream.acces === '0.refuse' || !permission.mimetype.startsWith('video/')) {
+      debug("Permission d'acces refuse pour video en mode prive pour %s", req.url)
       return res.sendStatus(403)  // Acces refuse
     }
 
@@ -281,8 +282,8 @@ async function downloadVideoPrive(req, res, next) {
     res.setHeader('Accept-Ranges', 'bytes')
 
     // res.setHeader('Content-Length', res.tailleFichier)
-    // var mimetype = res.permission['mimetype'] || 'video/mp4'
-    // res.setHeader('Content-Type', mimetype)
+    var mimetype = res.permission.mimetype
+    res.setHeader('Content-Type', mimetype)
 
   } catch(err) {
     console.error("Erreur traitement dechiffrage stream pour %s:\n%O", req.url, err)
