@@ -25,6 +25,7 @@ export PORT=3021
 #export DEBUG=millegrilles:fichiers:publication,millegrilles:fichiers:ssh,millegrilles:fichiers:ipfs,millegrilles:fichiers:awss3,\
 #millegrilles:fichiers:publier,millegrilles:fichiers:ipfs
 # export DEBUG=millegrilles.fichiers.routeGrosfichiers,millegrilles.fichiers.publicStaging
+# export DEBUG=millegrilles:fichiers:uploadFichier
 
 # export SERVER_TYPE=https
 

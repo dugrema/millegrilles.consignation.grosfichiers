@@ -21,10 +21,20 @@ function init(pathConsignation) {
 
 function verifierNiveauPrive(req, res, next) {
   // S'assurer que l'usager est au moins logge avec le niveau prive
-  if(!req.autorisationMillegrille.prive) {
-    return res.sendStatus(403)
+  debug('!!! REQ verifierNiveauPrive : %O', req.headers)
+  if(req.autorisationMillegrille.prive) {
+    // OK
+    return next()
+  } else if(req.headers.verified === 'SUCCESS') {
+    const dns = req.headers.dn.split(',').reduce((acc, item)=>{
+      const kv = item.split('=')
+      acc[kv[0]] = kv[1]
+    }, {})
+    const ou = dns['OU']
+    if( ['web_protege'].includes(ou) ) return next()
   }
-  next()
+
+  return res.sendStatus(403)
 }
 
 async function traiterUpload(req, res) {
