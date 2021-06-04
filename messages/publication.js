@@ -85,16 +85,20 @@ async function publierFichierSftp(message, rk, opts) {
     var localPath = _pathConsignation.trouverPathLocal(fuuid)
     debug("Fichier local a publier sur SSH : %s", localPath)
 
-    var mimetype = null
+    var mimetype = message.mimetype
     if(securite === '1.public') {
       // Dechiffrer le fichier public dans staging
       const infoFichierPublic = await preparerStagingPublic(fuuid)
       debug("Information fichier public : %O", infoFichierPublic)
       localPath = infoFichierPublic.filePath
-      mimetype = message.mimetype
-    } else {
-      throw new Error("FICHIER PAS PUBLIC : message: %O, opts: %O", message, opts)
+    } else if(securite === '2.prive' && mimetype.startsWith('video/')) {
+      const infoFichierStream = await preparerStagingStream(fuuid)
+      debug("Information fichier stream : %O", infoFichierStream)
+      localPath = infoFichierStream.filePath
     }
+    // else {
+    //   throw new Error("FICHIER PAS PUBLIC : message: %O, opts: %O", message, opts)
+    // }
 
     const conn = await connecterSSH(host, port, username, {keyType})
     const sftp = await preparerSftp(conn)
@@ -103,6 +107,13 @@ async function publierFichierSftp(message, rk, opts) {
     var remotePath = null
     if(securite === '1.public') {
       remotePath = path.join(basedir, 'fichiers', 'public', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+      if(remotePath.endsWith('.mgs2')) {
+        // Pas suppose arriver, diag
+        debug("ERREUR publication.publierFichierSftp fichier public (mimetype: %s) avec ext mgs2 %O (props: %O)", mimetype, message, opts)
+        throw new Error("Erreur fichier public avec .mgs2")
+      }
+    } else if(securite === '2.prive' && mimetype.startsWith('video/')) {
+      remotePath = path.join(basedir, 'fichiers', 'stream', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
       if(remotePath.endsWith('.mgs2')) {
         // Pas suppose arriver, diag
         debug("ERREUR publication.publierFichierSftp fichier public (mimetype: %s) avec ext mgs2 %O (props: %O)", mimetype, message, opts)
@@ -428,6 +439,18 @@ async function preparerStagingPublic(fuuid) {
   const infoFichierEffectif = await stagingPublic(_pathConsignation, fuuid, infoStream)
   //res.stat = infoFichierEffectif.stat
   //res.filePath = infoFichierEffectif.filePath
+  return infoFichierEffectif
+}
+
+async function preparerStagingStream(fuuid) {
+  const infoStream = await creerStreamDechiffrage(_mq, fuuid, {prive: true})
+  if(infoStream.acces === '0.refuse') {
+    debug("Permission d'acces refuse en mode %s pour %s", infoStream.acces, fuuid)
+    throw new Error("Acces public refuse a " + fuuid)
+  }
+
+  // Preparer le fichier dechiffre dans repertoire de staging
+  const infoFichierEffectif = await stagingPublic(_pathConsignation, fuuid, infoStream)
   return infoFichierEffectif
 }
 
