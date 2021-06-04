@@ -120,7 +120,7 @@ async function publierFichierSftp(message, rk, opts) {
         throw new Error("Erreur fichier public avec .mgs2")
       }
     } else {
-      remotePath = path.join(basedir, 'fichiers', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+      remotePath = path.join(basedir, 'fichiers', _pathConsignation.trouverPathRelatif(fuuid))
     }
     debug("Path remote pour le fichier : %s", remotePath)
 
