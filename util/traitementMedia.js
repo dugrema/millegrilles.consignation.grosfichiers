@@ -1,6 +1,6 @@
 const debug = require('debug')('millegrilles:fichiers:traitementMedia')
 const tmp = require('tmp-promise')
-const uuidv1 = require('uuid/v1')
+const {v1: uuidv1} = require('uuid')
 const path = require('path')
 const fs = require('fs')
 const fsPromises = require('fs/promises')

@@ -1,7 +1,7 @@
 const debug = require('debug')('millegrilles:messages:crypto')
 const path = require('path');
 const fs = require('fs');
-const uuidv1 = require('uuid/v1');
+const {v1: uuidv1} = require('uuid');
 const crypto = require('crypto');
 const forge = require('node-forge');
 const { decrypter } = require('../util/cryptoUtils.js');
