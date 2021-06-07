@@ -50,7 +50,7 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
     pathPreviewImageTmp = await tmp.file({
       mode: 0o600,
       postfix: '.' + message.extension,
-      dir: pathConsignation.consignationPathUploadStaging, // Meme drive que storage pour rename
+      // dir: pathConsignation.consignationPathUploadStaging, // Meme drive que storage pour rename
     })
 
     // Trouver fichier original crypte    const pathFichierChiffre = this.pathConsignation.trouverPathLocal(fuuid, true);
@@ -210,7 +210,7 @@ async function transcoderVideo(mq, pathConsignation, message, opts) {
     pathVideoDestTmp = await tmp.file({
       mode: 0o600,
       postfix: '.mp4',
-      dir: pathConsignation.consignationPathUploadStaging, // Meme drive que storage pour rename
+      // dir: pathConsignation.consignationPathUploadStaging, // Meme drive que storage pour rename
     })
 
     await new Promise((resolve, reject)=>{
