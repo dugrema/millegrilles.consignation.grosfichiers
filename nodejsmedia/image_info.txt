@@ -2,7 +2,7 @@ REPO=docker.maceroc.com
 DOCKERHUB_REPO=dugremat
 NAME=nodejsmedia
 BRANCH=14
-BUILD=11
+BUILD=12
 ARCH_SUPPORTEES=( x86_64 armv7l aarch64 )
 
 VERSION=${BRANCH}_$BUILD
