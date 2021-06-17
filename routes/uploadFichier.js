@@ -12,9 +12,12 @@ function init(pathConsignation) {
   const route = express()
 
   // Operations d'upload
-  route.put('/fichiers/:correlation/:position', verifierNiveauPrive, traiterUpload)
-  route.post('/fichiers/:correlation', verifierNiveauPrive, bodyParser.json(), traiterPostUpload)
-  route.delete('/fichiers/:correlation', verifierNiveauPrive, traiterDeleteUpload)
+  // TODO : pour 1.43, downgrade verif a public (upload via web grosfichiers)
+  //        remettre verification privee quand ce sera approprie, avec nouvelle
+  //        methode de verification
+  route.put('/fichiers/:correlation/:position', verifierNiveauPublic, traiterUpload)
+  route.post('/fichiers/:correlation', verifierNiveauPublic, bodyParser.json(), traiterPostUpload)
+  route.delete('/fichiers/:correlation', verifierNiveauPublic, traiterDeleteUpload)
 
   return route
 }
@@ -34,6 +37,14 @@ function verifierNiveauPrive(req, res, next) {
     if( ['web_protege'].includes(ou) ) return next()
   }
 
+  return res.sendStatus(403)
+}
+
+function verifierNiveauPublic(req, res, next) {
+  // S'assurer que l'usager est au moins logge avec le niveau prive
+  if(req.autorisationMillegrille.public) {
+    return next()
+  }
   return res.sendStatus(403)
 }
 
