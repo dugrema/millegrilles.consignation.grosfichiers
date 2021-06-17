@@ -21,7 +21,7 @@ function InitialiserGrosFichiers() {
   const bodyParserInstance = bodyParser.urlencoded({ extended: false })
 
   router.get('/fichiers/public/:fuuid', downloadFichierPublic, pipeReponse)
-  router.get('/fichiers/video/:fuuid', downloadVideoPrive, pipeReponse)
+  router.get('/fichiers/stream/:fuuid', downloadVideoPrive, pipeReponse)
   router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
   router.use(uploadFichier.init())
 
