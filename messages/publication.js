@@ -3,7 +3,11 @@ const path = require('path')
 const fsPromises = require('fs/promises')
 const multibase = require('multibase')
 const { PathConsignation } = require('../util/traitementFichier')
-const { getPublicKey, connecterSSH, preparerSftp, putFichier: putFichierSsh, addRepertoire: putRepertoireSsh } = require('../util/ssh')
+const {
+  getPublicKey, connecterSSH, preparerSftp,
+  putFichier: putFichierSsh,
+  addRepertoire: putRepertoireSsh
+} = require('../util/ssh')
 const { init: initIpfs,
         addFichier: addFichierIpfs,
         addRepertoire: putRepertoireIpfs,

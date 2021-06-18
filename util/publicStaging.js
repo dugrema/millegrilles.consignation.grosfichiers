@@ -123,7 +123,12 @@ async function stagingFichier(pathConsignation, fuuidEffectif, infoStream) {
 
     })
     outStream.on('error', err=>{
-      debug("Erreur staging fichier %s : %O", pathFuuidEffectif, err)
+      debug("publicStaging.stagingFichier Erreur staging fichier %s : %O", pathFuuidEffectif, err)
+      reject(err)
+    })
+
+    infoStream.decipherStream.writer.on('error', err=>{
+      debug("Erreur lecture fichier chiffre : %O", err)
       reject(err)
     })
 
@@ -131,6 +136,10 @@ async function stagingFichier(pathConsignation, fuuidEffectif, infoStream) {
     infoStream.decipherStream.writer.pipe(outStream)
     var readStream = fs.createReadStream(pathFuuidLocal);
     readStream.pipe(infoStream.decipherStream.reader)
+    readStream.on('error', err=>{
+      console.error("publicStaging.stagingFichier Erreur traitement ficheir %s : %O", pathFuuidEffectif, err)
+      reject(err)
+    })
   })
 
 }

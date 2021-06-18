@@ -77,34 +77,6 @@ function preparerSftp(conn) {
   })
 }
 
-// async function getFichier(req, res, next) {
-//   const conn = req.sshConnection
-//   try {
-//     // const sftp = await new Promise((resolve, reject)=>{
-//     //   conn.sftp((err, sftp)=>{
-//     //     if(err) return reject(err)
-//     //     return resolve(sftp)
-//     //   })
-//     // })
-//     //
-//     // debug("SFTP ok")
-//     const sftp = req.sftp
-//     // Lire fichier
-//     await new Promise((resolve, reject)=>{
-//       sftp.fastGet('test.txt', './test.txt', err=>{
-//         if(err) return reject(err)
-//         resolve()
-//       })
-//     })
-//
-//     return res.sendStatus(200)
-//   } catch(err) {
-//     debug("ERR sftp : %O", err)
-//     return res.sendStatus(500)
-//   }
-//
-// }
-
 function mkdir(sftp, resolve, reject, reps) {
   // Condition de fin de recursion
   if(reps.length === 0) return resolve()
