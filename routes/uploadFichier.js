@@ -34,7 +34,7 @@ function verifierNiveauPrive(req, res, next) {
       acc[kv[0]] = kv[1]
     }, {})
     const ou = dns['OU']
-    if( ['web_protege'].includes(ou) ) return next()
+    if( ['web_protege', 'prive'].includes(ou) ) return next()
   }
 
   return res.sendStatus(403)
