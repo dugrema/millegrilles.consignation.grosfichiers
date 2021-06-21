@@ -23,6 +23,14 @@ function InitialiserGrosFichiers() {
   router.get('/fichiers/public/:fuuid', downloadFichierPublic, pipeReponse)
   router.get('/fichiers/stream/:fuuid', downloadVideoPrive, pipeReponse)
   router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
+
+  // Path fichiers_transfert. Comportement identique a /fichiers, utilise
+  // pour faire une authentification systeme avec cert SSL (en amont,
+  // deja valide rendu ici)
+  router.get('/fichiers_transfert/public/:fuuid', downloadFichierPublic, pipeReponse)
+  router.get('/fichiers_transfert/stream/:fuuid', downloadVideoPrive, pipeReponse)
+  router.get('/fichiers_transfert/:fuuid', downloadFichierLocal, pipeReponse)
+
   router.use(uploadFichier.init())
 
   return router

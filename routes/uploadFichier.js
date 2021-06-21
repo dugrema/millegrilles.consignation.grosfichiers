@@ -19,6 +19,11 @@ function init(pathConsignation) {
   route.post('/fichiers/:correlation', verifierNiveauPublic, bodyParser.json(), traiterPostUpload)
   route.delete('/fichiers/:correlation', verifierNiveauPublic, traiterDeleteUpload)
 
+  // Path utilise pour communication entre systemes. Validation ssl client (en amont, deja faite)
+  route.put('/fichiers_transfert/:correlation/:position', verifierNiveauPublic, traiterUpload)
+  route.post('/fichiers_transfert/:correlation', verifierNiveauPublic, bodyParser.json(), traiterPostUpload)
+  route.delete('/fichiers_transfert/:correlation', verifierNiveauPublic, traiterDeleteUpload)
+
   return route
 }
 

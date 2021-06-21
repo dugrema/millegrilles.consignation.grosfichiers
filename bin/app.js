@@ -49,7 +49,9 @@ function initialiser(opts) {
   app.use(express.static(path.join(__dirname, 'public')))
 
   app.all('/backup/*', InitialiserBackup())
-  app.all('/fichiers/*', InitialiserGrosFichiers())
+  const traitementGrosFichiers = InitialiserGrosFichiers()
+  app.all('/fichiers/*', traitementGrosFichiers)
+  app.all('/fichiers_transfert/*', traitementGrosFichiers)
   app.all('/publier/*', InitialiserPublier(mq, pathConsignation))
 
   // catch 404 and forward to error handler

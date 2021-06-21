@@ -485,7 +485,7 @@ function verificationCertificatSSL(req, res, next) {
   }
 
   const typeCertificat = peerCertificate.subject.OU;
-  if( typeCertificat === 'nginx' ) {
+  if( ['nginx', 'prive', 'monitor'].includes(typeCertificat) ) {
     debug("Certificat nginx, valider l'autorisation d'acces via headers/contenu\nHeaders\n%O",
       req.headers)
 
@@ -500,7 +500,12 @@ function verificationCertificatSSL(req, res, next) {
       // Le certificat n'a pas ete fourni en mode "client ssl", il faut aller chercher dans
       // le contenu des headers et valider la signature avant de proceder
       const certificatsHeader = req.headers.certificat
-      if(!certificatsHeader && userAuthentifie) {
+      if(!certificatsHeader) {
+        if(!userAuthentifie) {
+          // Usager n'est pas authentifie. Refuser l'acces
+          return res.sendStatus(403)
+        }
+
         debug("Requete url:%s aucun certificat SSL fourni, verifier si acces prive ou public", req.url)
         const idmg = peerCertificate.subject.O
 
