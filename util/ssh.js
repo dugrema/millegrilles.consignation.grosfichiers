@@ -24,9 +24,10 @@ const _intervalEntretienConnexions = setInterval(entretienConnexions, CONNEXION_
 
 async function connecterSSH(host, port, username, opts) {
   opts = opts || {}
-  debug("Connecter SSH sur %s:%d avec username %s (opts: %O)", host, port, username, opts)
-
   const connexionName = username + '@' + host + ':' + port
+
+  debug("Connecter SSH sur %s (opts: %O)", connexionName, opts)
+
   const connectionPool = _poolConnexions[connexionName]
   if(connectionPool) {
     debug("Utilisation connexion SSH du pool : %O", connectionPool)
@@ -38,10 +39,12 @@ async function connecterSSH(host, port, username, opts) {
   if(opts.keyType === 'rsa') {
     privateKey = _privateRsaKey
   }
+  // debug("!!! SECRET !!! Utilisation cle %s", privateKey)
 
   const conn = new Client()
   await new Promise((resolve, reject)=>{
     conn.on('ready', _=>{
+      debug("Connexion ssh ready")
       const objetPool = {
         dernierAcces: new Date().getTime(),
         connexion: conn,
@@ -50,12 +53,19 @@ async function connecterSSH(host, port, username, opts) {
       conn.pool = objetPool
       resolve()
     })
-    conn.on('error', reject)
+    conn.on('error', err=>{
+      // debug("Connexion ssh error : %O", err)
+      reject(err)
+    })
     conn.on('end', _=>{
       debug("Connexion %s fermee, nettoyage pool", connexionName)
       delete _poolConnexions[connexionName]
     })
-    conn.connect({host, port, username, privateKey})
+    conn.connect({
+      host, port, username, privateKey,
+      readyTimeout: 60000,  // 60s, regle probleme sur login hostgator
+      // debug,
+   })
   })
   return conn
 }
