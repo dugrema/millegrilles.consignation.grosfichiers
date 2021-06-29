@@ -19,15 +19,7 @@ export WEBAPPS_SRC_FOLDER=/var/opt/millegrilles/nginx/html
 
 export PORT=3021
 
-# export DEBUG=millegrilles:fichiers:transformationsVideo,millegrilles:fichiers:cryptoUtils,millegrilles:fichiers:uploadFichier
-# export DEBUG=millegrilles:messages:*,millegrilles:fichiers:traitementMedia
-# export DEBUG=millegrilles:fichiers:transformationsVideo,millegrilles:messages:*,millegrilles:fichiers:traitementMedia
-#export DEBUG=millegrilles:fichiers:publication,millegrilles:fichiers:ssh,millegrilles:fichiers:ipfs,millegrilles:fichiers:awss3,\
-#millegrilles:fichiers:publier,millegrilles:fichiers:ipfs
-# export DEBUG=millegrilles.fichiers.routeGrosfichiers,millegrilles.fichiers.publicStaging
-# export DEBUG=millegrilles:fichiers:uploadFichier
-export DEBUG=millegrilles:fichiers:routeGrosfichiers,millegrilles:utilpki,millegrilles:fichiers:uploadFichier,\
-millegrilles:fichiers:publicStaging
+# export DEBUG=millegrilles:fichiers:transformationsVideo
 
 # export SERVER_TYPE=https
 
