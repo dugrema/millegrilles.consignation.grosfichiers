@@ -40,12 +40,52 @@ class GenerateurMedia {
 
 }
 
-function genererPreviewImage(mq, pathConsignation, message) {
-  const fctConversion = traitementMedia.genererPreviewImage
-  return _genererPreview(mq, pathConsignation, message, fctConversion)
-    .catch(err=>{
-      console.error("media.genererPreviewImage ERROR fuuid %s: %O", message.fuuid, err)
-    })
+async function genererPreviewImage(mq, pathConsignation, message) {
+  // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
+  var opts = {}
+  // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
+  var hachageFichier = message.hachage
+  if(message.version_courante) {
+    // C'est une retransmission
+    hachageFichier = message.version_courante.hachage
+  }
+  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
+
+  const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
+
+  debug("Debut generation preview")
+  const resultatConversion = await traitementMedia.genererPreviewImage(mq, pathConsignation, message, optsConversion)
+  debug("Fin traitement preview, resultat : %O", resultatConversion)
+
+  const {metadataImage, nbFrames, conversions} = resultatConversion
+
+  // Extraire information d'images converties sous un dict
+  let resultatPreview = null  // Utiliser poster (legacy)
+  const images = {}
+  for(let idx in conversions) {
+    const conversion = conversions[idx]
+    const resultat = {...conversion.informationImage}
+    const cle = resultat.cle
+    delete resultat.cle
+    images[cle] = resultat
+  }
+
+  // Transmettre transaction preview
+  // const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
+  const domaineActionAssocier = 'GrosFichiers.associerConversions'
+  const transactionAssocier = {
+    uuid: message.uuid,
+    fuuid: message.fuuid,
+    images,
+    width: metadataImage.width,
+    height: metadataImage.height,
+    mimetype: metadataImage['mime type'],
+  }
+  if(nbFrames > 1) transactionAssocier.anime = true
+
+  debug("Transaction associer images converties : %O", transactionAssocier)
+
+  await mq.transmettreTransactionFormattee(transactionAssocier, domaineActionAssocier)
 }
 
 function genererPreviewVideo(mq, pathConsignation, message) {
@@ -75,50 +115,50 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
     // C'est une retransmission
     hachageFichier = message.version_courante.hachage
   }
-  const liste_hachage_bytes = [hachageFichier]
+  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
 
-  // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
-  // const chainePem = mq.pki.getChainePems()
-  const domaineAction = 'MaitreDesCles.dechiffrage'
-  const requete = {liste_hachage_bytes}
-  debug("Nouvelle requete dechiffrage cle a transmettre : %O", requete)
-  const reponseCle = await mq.transmettreRequete(domaineAction, requete)
-  if(reponseCle.acces !== '1.permis') {
-    return {err: reponseCle.acces, msg: `Erreur dechiffrage cle pour generer preview de ${message.fuuid}`}
-  }
-  debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
-
-  // Dechiffrer cle recue
-  const informationCle = reponseCle.cles[hachageFichier]
-  const cleChiffree = informationCle.cle
-  const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
-
-  // Demander cles publiques pour chiffrer preview
-  const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
-  const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
-  const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
-
-  opts = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
+  const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
 
   debug("Debut generation preview")
-  const resultatPreview = await fctConversion(mq, pathConsignation, message, opts)
-  debug("Fin traitement preview, resultat : %O", resultatPreview)
+  const resultatConversion = await fctConversion(mq, pathConsignation, message, optsConversion)
+  debug("Fin traitement preview, resultat : %O", resultatConversion)
 
-  // Transmettre transaction info chiffrage
-  const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
-  const commandeMaitreCles = resultatPreview.commandeMaitreCles
-  commandeMaitreCles.identificateurs_document = {
-    attachement_fuuid: message.fuuid,
-    type: 'preview',
+  // // Transmettre transaction info chiffrage
+  // const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
+  // const commandeMaitreCles = resultatPreview.commandeMaitreCles
+  // commandeMaitreCles.identificateurs_document = {
+  //   attachement_fuuid: message.fuuid,
+  //   type: 'preview',
+  // }
+  // await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
+
+  // Extraire information d'images converties sous un dict
+  let resultatPreview = null  // Utiliser poster (legacy)
+  const images = {}
+  for(let idx in resultatConversion) {
+    const resultat = {...resultatConversion[idx]}
+    const cle = resultat.cle
+    delete resultat.cle
+    images[cle] = resultat
+
+    if(cle === 'poster') {
+      resultatPreview = {
+        hachage_bytes: resultat.hachage,
+        mimetype: resultat.mimetype,
+        extension: 'jpg',
+      }
+    }
   }
 
-  await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
-
   // Transmettre transaction preview
-  const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
+  // const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
+  const domaineActionAssocier = 'GrosFichiers.associerConversions'
   const transactionAssocierPreview = {
     uuid: message.uuid,
     fuuid: message.fuuid,
+
+    images,
+
     mimetype_preview: resultatPreview.mimetype,
     fuuid_preview: resultatPreview.hachage_preview,
     extension_preview: resultatPreview.extension,
@@ -132,6 +172,33 @@ async function _genererPreview(mq, pathConsignation, message, fctConversion) {
 
   mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
 
+}
+
+async function recupererCle(mq, hachageFichier) {
+  const liste_hachage_bytes = [hachageFichier]
+
+  // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
+  // const chainePem = mq.pki.getChainePems()
+  const domaineAction = 'MaitreDesCles.dechiffrage'
+  const requete = {liste_hachage_bytes}
+  debug("Nouvelle requete dechiffrage cle a transmettre : %O", requete)
+  const reponseCle = await mq.transmettreRequete(domaineAction, requete)
+  if(reponseCle.acces !== '1.permis') {
+    return {err: reponseCle.acces, msg: `Erreur dechiffrage cle pour generer preview de ${hachageFichier}`}
+  }
+  debug("Reponse cle re-chiffree pour fichier : %O", reponseCle)
+
+  // Dechiffrer cle recue
+  const informationCle = reponseCle.cles[hachageFichier]
+  const cleChiffree = informationCle.cle
+  const cleDechiffree = await mq.pki.decrypterAsymetrique(cleChiffree)
+
+  // Demander cles publiques pour chiffrer preview
+  const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
+  const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
+  const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
+
+  return {cleDechiffree, informationCle, clesPubliques}
 }
 
 module.exports = {GenerateurMedia}

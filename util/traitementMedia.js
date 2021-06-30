@@ -46,46 +46,49 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
       pathPreviewImageTmp = null, extension = null
   try {
 
-    const fuuidPreviewImage = uuidv1()
-    pathPreviewImageTmp = await tmp.file({
-      mode: 0o600,
-      postfix: '.' + message.extension,
-      // dir: pathConsignation.consignationPathUploadStaging, // Meme drive que storage pour rename
-    })
+    // const fuuidPreviewImage = uuidv1()
+    // pathPreviewImageTmp = await tmp.file({
+    //   mode: 0o600,
+    //   postfix: '.' + message.extension,
+    //   // dir: pathConsignation.consignationPathUploadStaging, // Meme drive que storage pour rename
+    // })
 
     // Trouver fichier original crypte    const pathFichierChiffre = this.pathConsignation.trouverPathLocal(fuuid, true);
     fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, message.extension, opts.cleSymmetrique, opts.metaCle)
     fichierSource = fichierSrcTmp.path
 
-    fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.' + message.extension })
-    fichierDestination = fichierDstTmp.path
+    // fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.' + message.extension })
+    // fichierDestination = fichierDstTmp.path
 
     debug("Fichier (dechiffre) %s pour generer preview image", fichierSource)
-    var resultatConversion = await fctConversion(fichierSource, fichierDestination)
+    var resultatConversion = await fctConversion(
+      fichierSource, fichierDestination, {...opts, mq, chiffrerTemporaire, deplacerVersStorage: _deplacerVersStorage, pathConsignation, fuuid})
     debug("Resultat conversion : %O", resultatConversion)
     // const mimetypePreviewImage = resultatConversion.mimetype
 
-    var resultatChiffrage = {}
-    if(fichierDstTmp) {
-      // Chiffrer preview
-      debug("Chiffrer preview de %s vers %s", fichierDstTmp, pathPreviewImageTmp.path)
-      resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathPreviewImageTmp.path, opts.clesPubliques)
-      debug("Resultat chiffrage preview image : %O", resultatChiffrage)
-    } else {
-      extension = resultatConversion.extension
-    }
+    // var resultatChiffrage = {}
+    // if(fichierDstTmp) {
+    //   // Chiffrer preview
+    //   debug("Chiffrer preview de %s vers %s", fichierDstTmp, pathPreviewImageTmp.path)
+    //   resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathPreviewImageTmp.path, opts.clesPubliques)
+    //   debug("Resultat chiffrage preview image : %O", resultatChiffrage)
+    // } else {
+    //   extension = resultatConversion.extension
+    // }
+    //
+    // // Calculer hachage fichier
+    // // const hachage = await calculerHachageFichier(pathPreviewImage)
+    // // debug("Hachage nouveau preview/thumbnail : %s", hachage)
+    // await _deplacerVersStorage(pathConsignation, resultatChiffrage, pathPreviewImageTmp)
 
-    // Calculer hachage fichier
-    // const hachage = await calculerHachageFichier(pathPreviewImage)
-    // debug("Hachage nouveau preview/thumbnail : %s", hachage)
-    await _deplacerVersStorage(pathConsignation, resultatChiffrage, pathPreviewImageTmp)
+    // return {
+    //   extension,
+    //   hachage_preview: resultatChiffrage.meta.hachage_bytes,
+    //   ...resultatConversion,
+    //   ...resultatChiffrage
+    // }
 
-    return {
-      extension,
-      hachage_preview: resultatChiffrage.meta.hachage_bytes,
-      ...resultatConversion,
-      ...resultatChiffrage
-    }
+    return resultatConversion
 
   } finally {
     // Effacer le fichier temporaire
@@ -113,53 +116,34 @@ async function dechiffrerTemporaire(pathConsignation, fuuid, extension, cleSymme
   const decryptedPath = tmpDecrypted.path
 
   // Decrypter
-  // var resultatsDecryptage = await decrypteur.decrypter(
-  //   pathFichierChiffre, decryptedPath, cleSymmetrique, iv, {cleFormat: 'hex'})
-
   await decrypterGCM(pathFichierChiffre, decryptedPath, cleSymmetrique, metaCle.iv, metaCle.tag, opts)
 
   return tmpDecrypted
 }
 
-async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques) {
+async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques, opts) {
+  opts = opts || {}
 
   const writeStream = fs.createWriteStream(fichierDst);
 
+  const identificateurs_document = opts.identificateurs_document || {}
+
   // Creer cipher
   const cipher = await mq.pki.creerCipherChiffrageAsymmetrique(
-    clesPubliques, 'GrosFichiers', {}
+    clesPubliques, 'GrosFichiers', identificateurs_document
   )
-  // const cipher = infoChiffrage.cipher,
-  //       iv = infoChiffrage.iv,
-  //       clesChiffrees = infoChiffrage.certClesChiffrees
-
-  // debug("Info chipher : iv:%s, cles:\n%O", iv, clesChiffrees)
 
   return new Promise((resolve, reject)=>{
     const s = fs.ReadStream(fichierSrc)
     var tailleFichier = 0
-    // var ivInsere = false
     s.on('data', data => {
-      // if(!ivInsere) {
-      //   // Inserer le IV au debut du fichier
-      //   ivInsere = true
-      //   debug("Inserer IV : %O", iv)
-      //   const ivBuffer = new Buffer(iv, 'base64')
-      //   const contenuCrypte = cipher.update(ivBuffer);
-      //   tailleFichier += contenuCrypte.length
-      //   writeStream.write(contenuCrypte)
-      // }
       const contenuCrypte = cipher.update(data);
       tailleFichier += contenuCrypte.length
       writeStream.write(contenuCrypte)
-
-      // writeStream.write(data)
     })
     s.on('end', async _ => {
       const informationChiffrage = await cipher.finish()
       console.debug("Information chiffrage fichier : %O", informationChiffrage)
-      // tailleFichier += contenuCrypte.length
-      // writeStream.write(contenuCrypte)
       writeStream.close()
       return resolve({
         tailleFichier,
@@ -279,12 +263,8 @@ function _transmettreTransactionVideoTranscode(mq, transaction) {
 
 // Extraction de thumbnail et preview pour images
 //   - pathImageSrc : path de l'image source dechiffree
-async function traiterImage(pathImageSrc, pathImageDst) {
-  await transformationImages.genererPreviewImage(pathImageSrc, pathImageDst)
-  return {
-    mimetype: 'image/jpeg',
-    extension: 'jpg',
-  }
+function traiterImage(pathImageSrc, pathImageDst, opts) {
+  return transformationImages.genererPreviewImage(pathImageSrc, pathImageDst, opts)
 }
 
 // Extraction de thumbnail, preview et recodage des videos pour le web
