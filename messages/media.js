@@ -85,7 +85,10 @@ async function genererPreviewImage(mq, pathConsignation, message) {
 
   debug("Transaction associer images converties : %O", transactionAssocier)
 
-  await mq.transmettreTransactionFormattee(transactionAssocier, domaineActionAssocier)
+  mq.transmettreTransactionFormattee(transactionAssocier, domaineActionAssocier)
+    .catch(err=>{
+      console.error("ERROR media.genererPreviewImage Erreur association conversions d'image : %O", err)
+    })
 }
 
 function genererPreviewVideo(mq, pathConsignation, message) {
