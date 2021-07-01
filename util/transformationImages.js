@@ -7,42 +7,6 @@ const crypto = require('crypto')
 const multibase = require('multibase')
 const FFmpeg = require('fluent-ffmpeg')
 
-// async function genererThumbnail(sourcePath, opts) {
-//   // Preparer fichier destination decrypte
-//   // Aussi preparer un fichier tmp pour le thumbnail
-//   var base64Content;
-//   await tmp.file({ mode: 0o600, postfix: '.jpg' }).then(async o => {
-//
-//     try {
-//       const thumbnailPath = o.path;
-//       // Convertir l'image - si c'est un gif anime, le fait de mettre [0]
-//       // prend la premiere image de l'animation pour faire le thumbnail.
-//
-//       // L'image est ramenee sur 128px, et croppee au milieu pour ratio 1:1
-//       await _imConvertPromise([
-//         sourcePath+'[0]',
-//         '-strip',
-//         '-resize', '128x128^',
-//         '-gravity', 'center',
-//         '-extent', '128x128',
-//         '-quality', '25',
-//         thumbnailPath
-//       ])
-//
-//       // Lire le fichier converti en memoire pour transformer en base64
-//       base64Content = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
-//       // console.debug("Thumbnail b64 genere")
-//     } catch(err) {
-//       console.error("Erreur creation thumbnail : %O", err)
-//     } finally {
-//       // Effacer le fichier temporaire
-//       o.cleanup()
-//     }
-//   })
-//
-//   return base64Content;
-// }
-
 async function preparerBase64(sourcePath, opts) {
   // Lire le fichier converti en memoire pour transformer en base64
   const fichierBuffer = Buffer.from(await fs.promises.readFile(sourcePath))
@@ -237,10 +201,13 @@ async function determinerConversionsImages(sourcePath) {
     'poster': {ext: 'jpg', resolution: 240, params: ['-strip', '-resize', ratioInverse?'240x420>':'420x240>', '-quality', '60']},
   }
 
-  if(valRef > 720) {
+  if(valRef >= 1080) {
+    conversions['image/webp;1080'] = {ext: 'webp', resolution: 1080, params: ['-strip', '-resize', ratioInverse?'1080x1920'+operationResize:'1920x1080'+operationResize, '-quality', quality]}
+  }
+  if(valRef >= 720) {
     conversions['image/webp;720'] = {ext: 'webp', resolution: 720, params: ['-strip', '-resize', ratioInverse?'720x1280'+operationResize:'1280x720'+operationResize, '-quality', quality]}
   }
-  if(valRef > 480) {
+  if(valRef >= 480) {
     conversions['image/webp;480'] = {ext: 'webp', resolution: 480, params: ['-strip', '-resize', ratioInverse?'480x854'+operationResize:'854x480'+operationResize, '-quality', quality]}
     conversions['image/jpeg;480'] = {ext: 'jpg', resolution: 480, params: ['-strip', '-resize', ratioInverse?'480x854'+operationResize:'854x480'+operationResize, '-quality', quality]}
   }
