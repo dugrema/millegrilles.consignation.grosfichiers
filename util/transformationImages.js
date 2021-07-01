@@ -14,63 +14,77 @@ async function preparerBase64(sourcePath, opts) {
   return base64Content
 }
 
-async function genererThumbnailVideo(sourcePath, opts) {
+async function genererPosterVideo(sourcePath, opts) {
   // Preparer fichier destination decrypte
   // Aussi preparer un fichier tmp pour le thumbnail
+  const {mq, chiffrerTemporaire, deplacerVersStorage, clesPubliques, pathConsignation, fuuid} = opts
+
   var base64Content, metadata;
-  await tmp.file({ mode: 0o600, postfix: '.jpg' }).then(async o => {
+  const tmpFile = await tmp.file({ mode: 0o600, postfix: '.jpg' })
 
-    try {
-      const previewPath = o.path;
-      // Extraire une image du video
-      metadata = await genererPreviewVideoPromise(sourcePath, previewPath);
+  try {
+    const snapshotPath = tmpFile.path
 
-      // Prendre le preview genere et creer le thumbnail
-      await tmp.file({ mode: 0o600, postfix: '.jpg' }).then(async tbtmp => {
-        const thumbnailPath = tbtmp.path;
+    // Extraire une image du video
+    metadata = await genererSnapshotVideoPromise(sourcePath, snapshotPath);
 
-        try {
-          await _imConvertPromise([previewPath, '-thumbnail', '200x150>', '-quality', '50', thumbnailPath]);
+    // Prendre le snapshot genere et creer les images converties en formats
+    const {metadataImage, conversions} = await determinerConversionsPoster(snapshotPath)
+    debug("Information de conversion d'images du video : medataImage %O\nconversions %O", metadataImage, conversions)
 
-          // Lire le fichier converti en memoire pour transformer en base64
-          base64Content = new Buffer.from(await fs.promises.readFile(thumbnailPath)).toString("base64");
-        } catch(err) {
-          console.error("Erreur creation thumbnail video")
-          console.error(err);
-        } finally {
-          tbtmp.cleanup();
-        }
+    // Effectuer les conversions pour tous les formats
+    const promisesChiffrage = await convertir(
+      mq, chiffrerTemporaire, deplacerVersStorage, clesPubliques, sourcePath, pathConsignation, fuuid, conversions)
 
-      })
+    // Recuperer l'information de chaque image convertie
+    // Note : un echec sur une promise indique que la cle de chiffrage
+    //        n'a PAS ete conservee.
+    const chiffrageComplete = await Promise.all(promisesChiffrage)
+    debug("Information de chiffrage complete : %O", chiffrageComplete)
 
-    } catch(err) {
-      console.error("Erreur creation thumbnail video")
-      console.error(err);
-    } finally {
-      // Effacer le fichier temporaire
-      o.cleanup();
-    }
-  })
+    return {metadataImage, conversions: chiffrageComplete}
 
-  return {base64Content, metadata};
+  } catch(err) {
+    console.error("ERROR transformationImages.genererPosterVideo Erreur creation thumbnail video : %O", err)
+  } finally {
+    // Effacer le fichier temporaire
+    tmpFile.cleanup()
+  }
+
 }
 
-async function genererPreview(sourcePath, destinationPath, opts) {
-  await _imConvertPromise([sourcePath+'[0]', '-resize', '720x540>', destinationPath]);
-}
+// async function genererPreview(sourcePath, destinationPath, opts) {
+//   await _imConvertPromise([sourcePath+'[0]', '-resize', '720x540>', destinationPath]);
+// }
 
-async function genererPreviewImage(sourcePath, destinationPath, opts) {
+async function genererConversionsImage(sourcePath, opts) {
   debug("genererPreviewImage avec %s", sourcePath)
+  const {mq, chiffrerTemporaire, deplacerVersStorage, clesPubliques, pathConsignation, fuuid} = opts
+
   // const b64Thumbnail = await genererThumbnail(sourcePath)
   //debug("Thumbnail genere en base64\n%s", b64Thumbnail)
-  const {mq, chiffrerTemporaire, deplacerVersStorage, clesPubliques, pathConsignation} = opts
-
   const {metadataImage, nbFrames, conversions} = await determinerConversionsImages(sourcePath)
   debug("Information de conversion d'images : %O", conversions)
 
+  // Effectuer les conversions pour tous les formats
+  const promisesChiffrage = await convertir(
+    mq, chiffrerTemporaire, deplacerVersStorage, clesPubliques, sourcePath, pathConsignation, fuuid, conversions)
+
+  // Recuperer l'information de chaque image convertie
+  // Note : un echec sur une promise indique que la cle de chiffrage
+  //        n'a PAS ete conservee.
+  const chiffrageComplete = await Promise.all(promisesChiffrage)
+  debug("Information de chiffrage complete : %O", chiffrageComplete)
+
+  return {metadataImage, nbFrames, conversions: chiffrageComplete}
+}
+
+async function convertir(mq, chiffrerTemporaire, deplacerVersStorage, clesPubliques, sourcePath, pathConsignation, fuuid, conversions) {
+  // NOTE : bloque sur les conversions mais retourne une liste de promises
+  //        qui servent a confirmer la reception des cles de chiffrage de chaque
+  //        image convertie.
   const promisesChiffrage = []
 
-  // Effectuer les conversions pour tous les formats
   for(let cle in conversions) {
     const cp = conversions[cle]
     debug("Executer conversion %s, %O", cle, cp)
@@ -91,9 +105,9 @@ async function genererPreviewImage(sourcePath, destinationPath, opts) {
       debug("Information meta image convertie params %O : %O", cp, metaConversion)
 
       // Chiffrer le resultat, conserver information pour transactions maitre des cles
-      const resultatChiffrage = await opts.chiffrerTemporaire(
+      const resultatChiffrage = await chiffrerTemporaire(
         mq, fichierTmp.path, fichierChiffreTmp.path, clesPubliques, {
-          identificateurs_document: {type: 'image', fuuid_reference: opts.fuuid}
+          identificateurs_document: {type: 'image', fuuid_reference: fuuid}
         })
 
       let data = null
@@ -141,15 +155,9 @@ async function genererPreviewImage(sourcePath, destinationPath, opts) {
       fichierTmp.cleanup()  // Supprimer fichier tmp non chiffre
     })
     promisesChiffrage.push(promiseChiffrage)
-
   }
 
-  const chiffrageComplete = await Promise.all(promisesChiffrage)
-  debug("Information de chiffrage complete : %O", chiffrageComplete)
-
-  // await _imConvertPromise([sourcePath+'[0]', '-resize', '720x540>', '-quality', '50', destinationPath]);
-
-  return {metadataImage, nbFrames, conversions: chiffrageComplete}
+  return promisesChiffrage
 }
 
 async function determinerConversionsImages(sourcePath) {
@@ -215,6 +223,79 @@ async function determinerConversionsImages(sourcePath) {
   return {metadataImage, nbFrames, conversions}
 }
 
+async function determinerConversionsPoster(sourcePath, opts) {
+  opts = opts || {}
+
+  let ratioInverse = false,
+      operationResize = '>',
+      quality = '60',
+      valRef = null,
+      valAutre = null
+
+  let metadataImage = null, nbFrames = null
+  try {
+    nbFrames = await readIdentifyFrames(sourcePath)
+    debug("Image nb frames : %d", nbFrames)
+
+    metadataImage = await readIdentify(sourcePath)
+    debug("Metadata image chargee : %O", metadataImage)
+
+    const {width, height} = metadataImage
+    const mimetype = metadataImage['mime type']
+    quality = metadataImage.quality
+    if(quality && quality < 0.60) {
+      quality = ''+Math.round(quality * 100)
+    } else {
+      quality = '60'
+    }
+
+    if(width < height) {
+      // Ratio inverse
+      ratioInverse = true
+    }
+
+    // Definir valeur de reference pour la resolution (selon le ratio)
+    valRef = ratioInverse?width:height
+    valAutre = Math.round(valRef * (16/9))
+
+  } catch(err) {
+    debug("Erreur preparation image, aucune meta-information : %O", err)
+    const info = await readMetadata(sourcePath)
+    debug("Information metadata exif : %O", info)
+  }
+
+  const conversions = {
+    // Thumbnail : L'image est ramenee sur 128px, et croppee au milieu pour ratio 1:1
+    'thumb': {ext: 'jpg', resolution: 128, params: ['-strip', '-resize', '128x128^', '-gravity', 'center', '-extent', '128x128', '-quality', '25']},
+    // Poster, utilise pour afficher dans un coin d'ecran/preview
+    'poster': {ext: 'jpg', resolution: 240, params: ['-strip', '-resize', ratioInverse?'240x420>':'420x240>', '-quality', '60']},
+  }
+
+  // Generer une version "pleine grandeur" en jpeg et webp
+  // Peut agir comme poster avant le demarrage du video
+  if(valRef >= 360) {
+    var geometrie = null
+    if(ratioInverse) {
+      geometrie = valRef + 'x' + valAutre + operationResize
+    } else {
+      geometrie = valAutre + 'x' + valRef + operationResize
+    }
+
+    conversions['image/webp;' + valRef] = {
+      ext: 'webp',
+      resolution: valRef,
+      params: ['-strip', '-resize', geometrie, '-quality', quality]
+    }
+    conversions['image/jpeg;' + valRef] = {
+      ext: 'jpg',
+      resolution: valRef,
+      params: ['-strip', '-resize', geometrie, '-quality', quality]
+    }
+  }
+
+  return {metadataImage, nbFrames, conversions}
+}
+
 
 function _imConvertPromise(params) {
   return new Promise((resolve, reject) => {
@@ -228,8 +309,7 @@ function _imConvertPromise(params) {
   });
 }
 
-async function genererPreviewVideo(sourcePath, previewPath) {
-  var dataVideo;
+function genererSnapshotVideoPromise(sourcePath, previewPath) {
   return new Promise((resolve, reject) => {
     debug("Extraire preview du video %s vers %s", sourcePath, previewPath)
 
@@ -243,6 +323,7 @@ async function genererPreviewVideo(sourcePath, previewPath) {
 
     debug("Fichier preview demande %s, temporaire : %s", nomFichierDemande, nomFichierPreview)
 
+    var dataVideo = null
     new FFmpeg({ source: sourcePath, priority: 10, })
       .on('error', function(err) {
           console.error('An error occurred: ' + err.message);
@@ -274,7 +355,7 @@ async function genererPreviewVideo(sourcePath, previewPath) {
           timestamps: ['2%'],   // Prendre snapshot a 2% du debut du video
           filename: nomFichierPreview,
           folder: folderPreview,
-          size: '640x?',
+          // size: '640x?',
         },
         '/'
       );
@@ -342,6 +423,5 @@ function readIdentifyFrames(filepath) {
 }
 
 module.exports = {
-  genererThumbnailVideo, genererPreview, genererPreviewImage,
-  genererPreviewVideo, genererVideoMp4_480p
+  genererConversionsImage, genererPosterVideo, genererVideoMp4_480p
 }

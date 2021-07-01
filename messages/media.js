@@ -91,13 +91,61 @@ async function genererPreviewImage(mq, pathConsignation, message) {
     })
 }
 
-function genererPreviewVideo(mq, pathConsignation, message) {
-  const fctConversion = traitementMedia.genererPreviewVideo
-  return _genererPreview(mq, pathConsignation, message, fctConversion)
-    .catch(err=>{
-      console.error("media.genererPreviewVideo ERROR fuuid %s: %O", message.fuuid, err)
-    })
+async function genererPreviewVideo(mq, pathConsignation, message) {
+  // const fctConversion = traitementMedia.genererPreviewVideo
+  // return _genererPreview(mq, pathConsignation, message, fctConversion)
+  //   .catch(err=>{
+  //     console.error("media.genererPreviewVideo ERROR fuuid %s: %O", message.fuuid, err)
+  //   })
 
+  // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
+  var opts = {}
+  // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
+  var hachageFichier = message.hachage
+  if(message.version_courante) {
+    // C'est une retransmission
+    hachageFichier = message.version_courante.hachage
+  }
+  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
+
+  const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
+
+  debug("Debut generation preview")
+  const resultatConversion = await traitementMedia.genererPreviewVideo(mq, pathConsignation, message, optsConversion)
+  debug("Fin traitement preview, resultat : %O", resultatConversion)
+
+  const {metadataImage, nbFrames, conversions} = resultatConversion
+
+  // Extraire information d'images converties sous un dict
+  let resultatPreview = null  // Utiliser poster (legacy)
+  const images = {}
+  for(let idx in conversions) {
+    const conversion = conversions[idx]
+    const resultat = {...conversion.informationImage}
+    const cle = resultat.cle
+    delete resultat.cle
+    images[cle] = resultat
+  }
+
+  // Transmettre transaction preview
+  // const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
+  const domaineActionAssocier = 'GrosFichiers.associerConversions'
+  const transactionAssocier = {
+    uuid: message.uuid,
+    fuuid: message.fuuid,
+    images,
+    width: metadataImage.width,
+    height: metadataImage.height,
+    // mimetype: metadataImage['mime type'],
+  }
+  if(nbFrames > 1) transactionAssocier.anime = true
+
+  debug("Transaction associer images converties : %O", transactionAssocier)
+
+  mq.transmettreTransactionFormattee(transactionAssocier, domaineActionAssocier)
+    .catch(err=>{
+      console.error("ERROR media.genererPreviewImage Erreur association conversions d'image : %O", err)
+    })
 }
 
 function _traiterCommandeTranscodage(mq, pathConsignation, message) {

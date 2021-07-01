@@ -12,15 +12,6 @@ const transformationImages = require('./transformationImages')
 
 const { calculerHachageFichier } = require('./utilitairesHachage')
 
-// const decrypteur = new Decrypteur()
-
-// const crypto = require('crypto');
-// const im = require('imagemagick');
-// const { DecrypterFichier, decrypterCleSecrete, getDecipherPipe4fuuid } = require('./crypto.js')
-// const { Decrypteur } = require('../util/cryptoUtils.js');
-// const {PathConsignation} = require('../util/traitementFichier');
-// const transformationImages = require('../util/transformationImages');
-
 function genererPreviewImage(mq, pathConsignation, message, opts) {
   if(!opts) opts = {}
   const fctConversion = traiterImage
@@ -46,47 +37,14 @@ async function _genererPreview(mq, pathConsignation, message, opts, fctConversio
       pathPreviewImageTmp = null, extension = null
   try {
 
-    // const fuuidPreviewImage = uuidv1()
-    // pathPreviewImageTmp = await tmp.file({
-    //   mode: 0o600,
-    //   postfix: '.' + message.extension,
-    //   // dir: pathConsignation.consignationPathUploadStaging, // Meme drive que storage pour rename
-    // })
-
     // Trouver fichier original crypte    const pathFichierChiffre = this.pathConsignation.trouverPathLocal(fuuid, true);
     fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, message.extension, opts.cleSymmetrique, opts.metaCle)
     fichierSource = fichierSrcTmp.path
 
-    // fichierDstTmp = await tmp.file({ mode: 0o600, postfix: '.' + message.extension })
-    // fichierDestination = fichierDstTmp.path
-
     debug("Fichier (dechiffre) %s pour generer preview image", fichierSource)
     var resultatConversion = await fctConversion(
-      fichierSource, fichierDestination, {...opts, mq, chiffrerTemporaire, deplacerVersStorage: _deplacerVersStorage, pathConsignation, fuuid})
+      fichierSource, {...opts, mq, chiffrerTemporaire, deplacerVersStorage: _deplacerVersStorage, pathConsignation, fuuid})
     debug("Resultat conversion : %O", resultatConversion)
-    // const mimetypePreviewImage = resultatConversion.mimetype
-
-    // var resultatChiffrage = {}
-    // if(fichierDstTmp) {
-    //   // Chiffrer preview
-    //   debug("Chiffrer preview de %s vers %s", fichierDstTmp, pathPreviewImageTmp.path)
-    //   resultatChiffrage = await chiffrerTemporaire(mq, fichierDstTmp.path, pathPreviewImageTmp.path, opts.clesPubliques)
-    //   debug("Resultat chiffrage preview image : %O", resultatChiffrage)
-    // } else {
-    //   extension = resultatConversion.extension
-    // }
-    //
-    // // Calculer hachage fichier
-    // // const hachage = await calculerHachageFichier(pathPreviewImage)
-    // // debug("Hachage nouveau preview/thumbnail : %s", hachage)
-    // await _deplacerVersStorage(pathConsignation, resultatChiffrage, pathPreviewImageTmp)
-
-    // return {
-    //   extension,
-    //   hachage_preview: resultatChiffrage.meta.hachage_bytes,
-    //   ...resultatConversion,
-    //   ...resultatChiffrage
-    // }
 
     return resultatConversion
 
@@ -254,27 +212,19 @@ function _transmettreTransactionPreview(mq, transaction) {
 }
 
 function _transmettreTransactionVideoTranscode(mq, transaction) {
-  //function _transmettreTransactionVideoTranscode(fuuid, resultat) {
   const domaineTransaction = 'GrosFichiers.associerVideo';
   mq.transmettreTransactionFormattee(transaction, domaineTransaction);
-  // const transaction = {fuuid, ...resultat}
-  // this.mq.transmettreTransactionFormattee(transaction, domaineTransaction);
 }
 
 // Extraction de thumbnail et preview pour images
 //   - pathImageSrc : path de l'image source dechiffree
-function traiterImage(pathImageSrc, pathImageDst, opts) {
-  return transformationImages.genererPreviewImage(pathImageSrc, pathImageDst, opts)
+function traiterImage(pathImageSrc, opts) {
+  return transformationImages.genererConversionsImage(pathImageSrc, opts)
 }
 
 // Extraction de thumbnail, preview et recodage des videos pour le web
-async function traiterVideo(pathImageSrc, pathImageDst) {
-  const dataVideo = await transformationImages.genererPreviewVideo(pathImageSrc, pathImageDst)
-  return {
-    mimetype: 'image/jpeg',
-    extension: 'jpg',
-    dataVideo,
-  }
+function traiterVideo(pathImageSrc, opts) {
+  return transformationImages.genererPosterVideo(pathImageSrc, opts)
 }
 
 async function _deplacerVersStorage(pathConsignation, resultatChiffrage, pathPreviewImageTmp) {
