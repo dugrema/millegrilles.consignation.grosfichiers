@@ -8,6 +8,27 @@ const FFmpeg = require('fluent-ffmpeg')
 const { chargerCleDechiffrage, creerOutputstreamChiffrage } = require('./cryptoUtils')
 const { gcmStreamReaderFactory } = require('../util/cryptoUtils')
 
+const PROFILS_TRANSCODAGE = {
+  webm: {
+    videoBitrate: 1000000,
+    height: 720,
+    videoCodec: 'libvpx-vp9',
+    audioCodec: 'libopus',
+    audioBitrate: '128k',
+    format: 'webm',
+    videoCodecName: 'vp9',
+  },
+  mp4: {
+    videoBitrate: 250000,
+    height: 240,
+    videoCodec: 'libx264',
+    audioCodec: 'aac',
+    audioBitrate: '64k',
+    format: 'mp4',
+    videoCodecName: 'h264',
+  }
+}
+
 async function probeVideo(input, opts) {
   opts = opts || {}
   const maxHeight = opts.maxHeight || 720,
@@ -34,7 +55,7 @@ async function probeVideo(input, opts) {
   // upscaling ou augmentation bitrate
   const bitrate = infoVideo.bit_rate,
         height = infoVideo.height,
-        width = infoVideo.witdh,
+        width = infoVideo.width,
         nb_frames = infoVideo.nb_frames !== 'N/A'?infoVideo.nb_frames:null
 
   debug("Trouve : taille %dx%d, bitrate %d", width, height, bitrate)
@@ -42,7 +63,7 @@ async function probeVideo(input, opts) {
   const heightEncoding = [2160, 1440, 1080, 720, 480, 360, 240].filter(item=>{
     return item <= height && item <= maxHeight
   })[0]
-  const bitRateEncoding = [1200000, 1000000, 750000, 600000, 500000, 400000, 200000].filter(item=>{
+  const bitRateEncoding = [8000000, 4000000, 2000000, 1000000, 500000, 250000].filter(item=>{
     return item <= bitrate && item <= maxBitrate
   })[0]
 
@@ -72,9 +93,10 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
   input.close()
   videoBitrate = videoInfo.bitrate
   height = videoInfo.height
+  width = videoInfo.width
 
   // videoBitrate = '' + (videoBitrate / 1000) + 'k'
-  debug('Utilisation video bitrate : %s', videoBitrate)
+  debug('Utilisation video bitrate : %s, format %dx%d', videoBitrate, width, height)
 
   // Tenter transcodage avec un stream - fallback sur fichier direct
   // Va etre utilise avec un decipher sur fichiers .mgs2
@@ -285,20 +307,20 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
       height = message.height
 
   try {
+    const profil = getProfilTranscodage(message)
+    if(!profil) {
+      console.error("traiterCommandeTranscodage profil non trouvable : %O", message)
+      throw new Error("Profil inconnue pour parametres fournis " + JSON.stringify(message))
+    }
+    videoBitrate = profil.videoBitrate
+    height = profil.height
+
     // Transmettre evenement debut de transcodage
     mq.emettreEvenement({fuuid, mimetype, videoBitrate, height}, `evenement.fichiers.${fuuid}.transcodageDebut`)
     mq.emettreEvenement({fuuid, mimetype, videoBitrate, height}, `evenement.fichiers.${fuuid}.transcodageDebut`, {exchange: '2.prive'})
 
     const cleInfo = await chargerCleDechiffrage(mq, fuuid)
     debug("Cle dechiffrage : %O", cleInfo)
-
-    const profil = getProfilTranscodage(message)
-    if(!profil) {
-      console.error("traiterCommandeTranscodage profil non trouvable : %O", message)
-      throw new Error("Profil inconnue pour parametres fournis " + JSON.stringify(message))
-    }
-    videoBitrate = profil.bitrate
-    height = profil.height
 
     const progressCb = progress => {
       progressUpdate(mq, {fuuid, mimetype, videoBitrate, height}, progress)
@@ -390,35 +412,43 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
 }
 
 function getProfilTranscodage(params) {
-  const profils = {
-    webm: {
-      videoBitrate: 750000,
-      height: 720,
-      videoCodec: 'libvpx-vp9',
-      audioCodec: 'libopus',
-      audioBitrate: '64k',
-      format: 'webm',
-      videoCodecName: 'vp9',
-    },
-    mp4: {
-      videoBitrate: 600000,
-      height: 480,
-      videoCodec: 'libx264',
-      audioCodec: 'aac',
-      audioBitrate: '64k',
-      format: 'mp4',
-      videoCodecName: 'h264',
-    }
-  }
-
   let profil = null
+
+  // Exemple de params pour un profil complet
+  // videoBitrate: 1000000,
+  // height: 720,
+  // videoCodec: 'libvpx-vp9',
+  // audioCodec: 'libopus',
+  // audioBitrate: '128k',
+  // format: 'webm',
+  // videoCodecName: 'vp9',
+
+  // Verifier si on a toute l'information de transcodate inclus dans les params
   switch(params.mimetype) {
     case 'video/webm':
-      profil = {...profils.webm, ...params}
+      profil = {...PROFILS_TRANSCODAGE.webm, ...params}
       break
     case 'video/mp4':
-      profil = {...profils.mp4, ...params}
+      profil = {...PROFILS_TRANSCODAGE.mp4, ...params}
       break
+  }
+
+  // Note : le mimetype a deja inclus l'information de codecVideo (webm === VP9, mp4 === h264)
+
+  // Mapping codec audio
+  if(params.bitrateVideo) {
+    profil.videoBitrate = params.bitrateVideo
+  }
+  if(params.bitrateAudio) {
+    profil.audioBitrate = params.audioBitrate
+  }
+  if(params.resolutionVideo) {
+    profil.height = params.resolutionVideo
+  }
+  if(params.codecAudio === 'aac') {
+    profil.audioCodec = 'aac'
+  } else if(params.codecAudio === 'opus') {
+    profil.audioCodec = 'libopus'
   }
 
   return profil
