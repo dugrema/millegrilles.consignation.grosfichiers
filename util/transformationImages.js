@@ -19,14 +19,14 @@ async function genererPosterVideo(sourcePath, opts) {
   // Aussi preparer un fichier tmp pour le thumbnail
   const {mq, chiffrerTemporaire, deplacerVersStorage, clesPubliques, pathConsignation, fuuid} = opts
 
-  var base64Content, metadata;
   const tmpFile = await tmp.file({ mode: 0o600, postfix: '.jpg' })
 
   try {
     const snapshotPath = tmpFile.path
 
     // Extraire une image du video
-    metadata = await genererSnapshotVideoPromise(sourcePath, snapshotPath);
+    const metadata = await genererSnapshotVideoPromise(sourcePath, snapshotPath)
+    debug("Metadata video : %O", metadata)
 
     // Prendre le snapshot genere et creer les images converties en formats
     const {metadataImage, conversions} = await determinerConversionsPoster(snapshotPath)
@@ -42,7 +42,7 @@ async function genererPosterVideo(sourcePath, opts) {
     const chiffrageComplete = await Promise.all(promisesChiffrage)
     debug("Information de chiffrage complete : %O", chiffrageComplete)
 
-    return {metadataImage, conversions: chiffrageComplete}
+    return {metadataImage, metadataVideo: metadata, conversions: chiffrageComplete}
 
   } catch(err) {
     console.error("ERROR transformationImages.genererPosterVideo Erreur creation thumbnail video : %O", err)
@@ -343,10 +343,10 @@ function genererSnapshotVideoPromise(sourcePath, previewPath) {
           // Rename
           fs.rename(path.join(folderPreview, nomFichierPreview), previewPath, err=>{
             if(err) return reject(err)
-            resolve({data_video: dataVideo})
+            resolve(dataVideo)
           })
         } else {
-          resolve({data_video: dataVideo})
+          resolve(dataVideo)
         }
       })
       .takeScreenshots(

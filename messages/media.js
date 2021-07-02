@@ -92,12 +92,6 @@ async function genererPreviewImage(mq, pathConsignation, message) {
 }
 
 async function genererPreviewVideo(mq, pathConsignation, message) {
-  // const fctConversion = traitementMedia.genererPreviewVideo
-  // return _genererPreview(mq, pathConsignation, message, fctConversion)
-  //   .catch(err=>{
-  //     console.error("media.genererPreviewVideo ERROR fuuid %s: %O", message.fuuid, err)
-  //   })
-
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
   var opts = {}
   // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
@@ -114,7 +108,7 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
   const resultatConversion = await traitementMedia.genererPreviewVideo(mq, pathConsignation, message, optsConversion)
   debug("Fin traitement preview, resultat : %O", resultatConversion)
 
-  const {metadataImage, nbFrames, conversions} = resultatConversion
+  const {metadataImage, metadataVideo, nbFrames, conversions} = resultatConversion
 
   // Extraire information d'images converties sous un dict
   let resultatPreview = null  // Utiliser poster (legacy)
@@ -137,6 +131,7 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
     width: metadataImage.width,
     height: metadataImage.height,
     // mimetype: metadataImage['mime type'],
+    metadata: metadataVideo,
   }
   if(nbFrames > 1) transactionAssocier.anime = true
 
@@ -155,75 +150,66 @@ function _traiterCommandeTranscodage(mq, pathConsignation, message) {
     })
 }
 
-async function _genererPreview(mq, pathConsignation, message, fctConversion) {
-  debug("Commande genererPreviewImage recue : %O", message)
-
-  // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
-  var opts = {}
-  // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
-  var hachageFichier = message.hachage
-  if(message.version_courante) {
-    // C'est une retransmission
-    hachageFichier = message.version_courante.hachage
-  }
-  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
-
-  const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
-
-  debug("Debut generation preview")
-  const resultatConversion = await fctConversion(mq, pathConsignation, message, optsConversion)
-  debug("Fin traitement preview, resultat : %O", resultatConversion)
-
-  // // Transmettre transaction info chiffrage
-  // const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
-  // const commandeMaitreCles = resultatPreview.commandeMaitreCles
-  // commandeMaitreCles.identificateurs_document = {
-  //   attachement_fuuid: message.fuuid,
-  //   type: 'preview',
-  // }
-  // await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
-
-  // Extraire information d'images converties sous un dict
-  let resultatPreview = null  // Utiliser poster (legacy)
-  const images = {}
-  for(let idx in resultatConversion) {
-    const resultat = {...resultatConversion[idx]}
-    const cle = resultat.cle
-    delete resultat.cle
-    images[cle] = resultat
-
-    if(cle === 'poster') {
-      resultatPreview = {
-        hachage_bytes: resultat.hachage,
-        mimetype: resultat.mimetype,
-        extension: 'jpg',
-      }
-    }
-  }
-
-  // Transmettre transaction preview
-  // const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
-  const domaineActionAssocier = 'GrosFichiers.associerConversions'
-  const transactionAssocierPreview = {
-    uuid: message.uuid,
-    fuuid: message.fuuid,
-
-    images,
-
-    mimetype_preview: resultatPreview.mimetype,
-    fuuid_preview: resultatPreview.hachage_preview,
-    extension_preview: resultatPreview.extension,
-    hachage_preview: resultatPreview.hachage_preview,
-  }
-
-  if(resultatPreview.dataVideo) {
-    transactionAssocierPreview.data_video = resultatPreview.dataVideo['data_video']
-  }
-  debug("Transaction associer preview : %O", transactionAssocierPreview)
-
-  mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
-
-}
+// async function _genererPreview(mq, pathConsignation, message, fctConversion) {
+//   debug("Commande genererPreviewImage recue : %O", message)
+//
+//   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
+//   var opts = {}
+//   // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
+//   var hachageFichier = message.hachage
+//   if(message.version_courante) {
+//     // C'est une retransmission
+//     hachageFichier = message.version_courante.hachage
+//   }
+//   const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
+//
+//   const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
+//
+//   debug("Debut generation preview")
+//   const resultatConversion = await fctConversion(mq, pathConsignation, message, optsConversion)
+//   debug("Fin traitement preview, resultat : %O", resultatConversion)
+//
+//   // Extraire information d'images converties sous un dict
+//   let resultatPreview = null  // Utiliser poster (legacy)
+//   const images = {}
+//   for(let idx in resultatConversion) {
+//     const resultat = {...resultatConversion[idx]}
+//     const cle = resultat.cle
+//     delete resultat.cle
+//     images[cle] = resultat
+//
+//     if(cle === 'poster') {
+//       resultatPreview = {
+//         hachage_bytes: resultat.hachage,
+//         mimetype: resultat.mimetype,
+//         extension: 'jpg',
+//       }
+//     }
+//   }
+//
+//   // Transmettre transaction preview
+//   // const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
+//   const domaineActionAssocier = 'GrosFichiers.associerConversions'
+//   const transactionAssocierPreview = {
+//     uuid: message.uuid,
+//     fuuid: message.fuuid,
+//
+//     images,
+//
+//     mimetype_preview: resultatPreview.mimetype,
+//     fuuid_preview: resultatPreview.hachage_preview,
+//     extension_preview: resultatPreview.extension,
+//     hachage_preview: resultatPreview.hachage_preview,
+//   }
+//
+//   if(resultatPreview.dataVideo) {
+//     transactionAssocierPreview.data_video = resultatPreview.dataVideo['data_video']
+//   }
+//   debug("Transaction associer preview : %O", transactionAssocierPreview)
+//
+//   mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
+//
+// }
 
 async function recupererCle(mq, hachageFichier) {
   const liste_hachage_bytes = [hachageFichier]
