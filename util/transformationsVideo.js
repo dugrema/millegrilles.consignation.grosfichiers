@@ -247,7 +247,13 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
     ffmpegProcessCmd
       .audioCodec(audioCodec)
       .audioBitrate(audioBitrate)
-      .outputOptions(['-pass', '2', '-movflags', 'faststart', '-passlogfile', passlog])
+      .outputOptions([
+        '-pass', '2',
+        '-movflags', 'faststart',
+        '-metadata', 'COM.APPLE.QUICKTIME.LOCATION.ISO6709=', 
+        '-metadata', 'location=',
+        '-metadata', 'location-eng=',
+        '-passlogfile', passlog])
   } else {
     throw new Error("Passe doit etre 1 ou 2 (passe=%O)", passe)
   }
