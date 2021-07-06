@@ -130,8 +130,12 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
       tmpDir: tmpDir.path,
     }
 
+    let stopFct = null, ok = false  // Sert a arreter ffmpeg si probleme avec nodejs (e.g. CTRL-C/restart container)
     try {
-      await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
+      const transcodageVideo = transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
+      stopFct = transcodageVideo.stop
+      await transcodageVideo.promise // Attendre fin
+      ok = true
     } catch(err) {
       // Verifier si on a une erreur de streaming (e.g. video .mov n'est pas
       // supporte en streaming)
@@ -149,7 +153,14 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
       // input = fichierInputTmp.path
       debug("Fichier temporaire input pret: %s", input)
 
-      await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
+      ok = false
+      const transcodageVideo = transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
+      stopFct = transcodageVideo.stop
+      await transcodageVideo.promise // Attendre fin
+      ok = true
+
+    } finally {
+      if(!ok && stopFct) stopFct()  // Forcer l'arret du processus
     }
     debug("Passe 1 terminee, debut passe 2")
 
@@ -170,7 +181,11 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
     debug("Fichier temporaire output : %s", destinationPath)
 
     try {
-      await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
+      ok = false
+      const transcodageVideo = transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
+      stopFct = transcodageVideo.stop
+      await transcodageVideo.promise // Attendre fin
+      ok = true
     } catch(err) {
       // Verifier si on a une erreur de streaming (e.g. video .mov n'est pas
       // supporte en streaming)
@@ -189,8 +204,20 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
       debug("Fichier temporaire input pret: %s, videoOps: %O", input, videoOpts)
 
       // Recommencer passe 1 et faire passe 2
-      await transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
-      await transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
+      ok = false
+      let transcodageVideo = transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
+      stopFct = transcodageVideo.stop
+      await transcodageVideo.promise // Attendre fin
+      ok = true
+
+      ok = false
+      transcodageVideo = transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
+      stopFct = transcodageVideo.stop
+      await transcodageVideo.promise // Attendre fin
+      ok = true
+
+    } finally {
+      if(!ok && stopFct) stopFct()  // Forcer l'arret du processus
     }
     debug("Passe 2 terminee, transferer le fichier output")
 
@@ -220,6 +247,9 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
   audioOpts = audioOpts || {}  // Non-utilise pour passe 1
   opts = opts || {}
 
+  const nbThreads = opts.threads || 12,   // 4 = 1 core
+        nbCores = opts.cores || Math.floor(nbThreads/4)
+
   const videoBitrate = videoOpts.videoBitrate,
         height = videoOpts.height,
         width = videoOpts.width || '?',
@@ -241,7 +271,13 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
   if(passe === 1) {
     // Passe 1, desactiver traitement stream audio
     ffmpegProcessCmd
-      .outputOptions(['-an', '-f', 'null', '-pass', '1', '-passlogfile', passlog])
+      .outputOptions([
+        '-an',
+        '-f', 'null',
+        '-pass', '1',
+        '-threads', ''+nbThreads,
+        '-passlogfile', passlog
+      ])
   } else if(passe === 2) {
     debug("Audio info : %O, format %s", audioOpts, format)
     ffmpegProcessCmd
@@ -249,8 +285,11 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
       .audioBitrate(audioBitrate)
       .outputOptions([
         '-pass', '2',
+        '-threads', ''+nbThreads,
+        '-slices', ''+nbThreads,
+        '-cpu-used', ''+nbCores,
         '-movflags', 'faststart',
-        '-metadata', 'COM.APPLE.QUICKTIME.LOCATION.ISO6709=', 
+        '-metadata', 'COM.APPLE.QUICKTIME.LOCATION.ISO6709=',
         '-metadata', 'location=',
         '-metadata', 'location-eng=',
         '-passlogfile', passlog])
@@ -281,7 +320,21 @@ function transcoderPasse(passe, source, destinationPath, videoOpts, audioOpts, o
       .saveToFile(destinationPath)
   }
 
-  return processPromise
+  return {
+    promise: processPromise,
+    stop: ffmpegProcessCmd => {stopCommand(ffmpegProcessCmd)}
+  }
+}
+
+async function stopCommand(commandeFfmpeg) {
+  // Send custom signals
+  const fct = async () => {
+    commandeFfmpeg.kill('SIGSTOP')
+    setTimeout( () => {
+      commandeFfmpeg.kill('SIGCONT')
+    }, 5000)
+  }
+  await fct
 }
 
 async function extraireFichierTemporaire(fichierPath, inputStream) {

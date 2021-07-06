@@ -1,5 +1,5 @@
 const debug = require('debug')('millegrilles:messages:media')
-const {PathConsignation} = require('../util/traitementFichier');
+const {PathConsignation} = require('../util/traitementFichier')
 const traitementMedia = require('../util/traitementMedia.js')
 const { traiterCommandeTranscodage } = require('../util/transformationsVideo')
 
