@@ -21,7 +21,8 @@ async function init() {
   instPki.initialiserPkiPEMS(certPems)
 
   // Connecter a MilleGrilles avec AMQP DAO
-  const amqpdao = new MilleGrillesAmqpDAO(instPki)
+  const nomsQCustom = ['image', 'video']
+  const amqpdao = new MilleGrillesAmqpDAO(instPki, {nomsQCustom})
   const mqConnectionUrl = process.env.MG_MQ_URL;
   await amqpdao.connect(mqConnectionUrl)
 

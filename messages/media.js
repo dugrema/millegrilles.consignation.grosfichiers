@@ -24,17 +24,26 @@ class GenerateurMedia {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message)=>{return genererPreviewImage(this.mq, this.pathConsignation, message)},
       ['commande.fichiers.genererPreviewImage'],
-      {operationLongue: true}
+      {
+        // operationLongue: true,
+        qCustom: 'image',
+      }
     )
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message)=>{return genererPreviewVideo(this.mq, this.pathConsignation, message)},
       ['commande.fichiers.genererPreviewVideo'],
-      {operationLongue: true}
+      {
+        // operationLongue: true,
+        qCustom: 'image',
+      }
     )
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message)=>{return _traiterCommandeTranscodage(this.mq, this.pathConsignation, message)},
       ['commande.fichiers.transcoderVideo'],
-      {operationLongue: true}
+      {
+        // operationLongue: true,
+        qCustom: 'video',
+      }
     )
   }
 
