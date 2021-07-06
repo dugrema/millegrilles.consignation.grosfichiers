@@ -47,13 +47,13 @@ async function genererPreviewImage(mq, pathConsignation, message) {
   var hachageFichier = message.hachage
   if(message.version_courante) {
     // C'est une retransmission
-    hachageFichier = message.version_courante.hachage
+    hachageFichier = message.version_courante.hachage || message.version_courante.fuuid
   }
   const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
 
   const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
 
-  debug("Debut generation preview")
+  debug("Debut generation preview %O", message)
   const resultatConversion = await traitementMedia.genererPreviewImage(mq, pathConsignation, message, optsConversion)
   debug("Fin traitement preview, resultat : %O", resultatConversion)
 
