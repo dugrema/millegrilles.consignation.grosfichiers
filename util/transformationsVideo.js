@@ -55,18 +55,18 @@ async function probeVideo(input, opts) {
   // upscaling ou augmentation bitrate
   const bitrate = infoVideo.bit_rate,
         raw = infoVideo.raw || {},
-        height = infoVideo.height || raw.height,
-        width = infoVideo.width || raw.width,
+        height = raw.height || infoVideo.height,
+        width = raw.width || infoVideo.width,
         nb_frames = infoVideo.nb_frames !== 'N/A'?infoVideo.nb_frames:null
 
   debug("Trouve : taille %dx%d, bitrate %d", width, height, bitrate)
 
-  const heightEncoding = [2160, 1440, 1080, 720, 480, 360, 240].filter(item=>{
+  let heightEncoding = [2160, 1440, 1080, 720, 480, 360, 240].filter(item=>{
     return item <= height && item <= maxHeight
-  }).pop() || 240
-  const bitRateEncoding = [8000000, 4000000, 2000000, 1000000, 500000, 250000].filter(item=>{
+  }).shift() || 240
+  let bitRateEncoding = [8000000, 4000000, 2000000, 1000000, 500000, 250000].filter(item=>{
     return item <= bitrate && item <= maxBitrate
-  }).pop() || 250000
+  }).shift() || 250000
 
   // Calculer width
   const widthEncoding = Math.round(width * heightEncoding / height)
@@ -366,7 +366,7 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
   var fuuid = message.fuuid,
       mimetype = message.mimetype,
       videoBitrate = message.videoBitrate,
-      height = message.height
+      height = message.resolutionVideo || message.height
 
   try {
     const profil = getProfilTranscodage(message)
