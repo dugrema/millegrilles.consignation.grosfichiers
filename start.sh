@@ -19,7 +19,7 @@ export WEBAPPS_SRC_FOLDER=/var/opt/millegrilles/nginx/html
 
 export PORT=3021
 
-export DEBUG=millegrilles:common:amqpdao,millegrilles:common:routingKeyManager
+export DEBUG=millegrilles:common:server4
 
 # export SERVER_TYPE=https
 

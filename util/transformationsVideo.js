@@ -205,12 +205,14 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
 
       // Recommencer passe 1 et faire passe 2
       ok = false
+      passe = 1  // Pour progressCb
       let transcodageVideo = transcoderPasse(1, input, null, videoOpts, null, optsTranscodage)
       stopFct = transcodageVideo.stop
       await transcodageVideo.promise // Attendre fin
       ok = true
 
       ok = false
+      passe = 2  // Pour progressCb
       transcodageVideo = transcoderPasse(2, input, destinationPath, videoOpts, audioOpts, optsTranscodage)
       stopFct = transcodageVideo.stop
       await transcodageVideo.promise // Attendre fin
