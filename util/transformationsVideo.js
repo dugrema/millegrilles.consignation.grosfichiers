@@ -54,18 +54,19 @@ async function probeVideo(input, opts) {
   // Determiner le bitrate et la taille (verticale) du video pour eviter un
   // upscaling ou augmentation bitrate
   const bitrate = infoVideo.bit_rate,
-        height = infoVideo.height,
-        width = infoVideo.width,
+        raw = infoVideo.raw || {},
+        height = infoVideo.height || raw.height,
+        width = infoVideo.width || raw.width,
         nb_frames = infoVideo.nb_frames !== 'N/A'?infoVideo.nb_frames:null
 
   debug("Trouve : taille %dx%d, bitrate %d", width, height, bitrate)
 
   const heightEncoding = [2160, 1440, 1080, 720, 480, 360, 240].filter(item=>{
     return item <= height && item <= maxHeight
-  })[0]
+  }).pop() || 240
   const bitRateEncoding = [8000000, 4000000, 2000000, 1000000, 500000, 250000].filter(item=>{
     return item <= bitrate && item <= maxBitrate
-  })[0]
+  }).pop() || 250000
 
   // Calculer width
   const widthEncoding = Math.round(width * heightEncoding / height)
@@ -92,11 +93,11 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
   var videoInfo = await probeVideo(input, {maxBitrate: videoBitrate, maxHeight: height})
   input.close()
   videoBitrate = videoInfo.bitrate
-  height = videoInfo.height
+  height = videoInfo.height || height
   width = videoInfo.width
 
   // videoBitrate = '' + (videoBitrate / 1000) + 'k'
-  debug('Utilisation video bitrate : %s, format %dx%d', videoBitrate, width, height)
+  debug('Utilisation video bitrate : %s, format %dx%d\nInfo: %O', videoBitrate, width, height, videoInfo)
 
   // Tenter transcodage avec un stream - fallback sur fichier direct
   // Va etre utilise avec un decipher sur fichiers .mgs2
