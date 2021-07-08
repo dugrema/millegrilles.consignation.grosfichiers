@@ -56,10 +56,14 @@ function on_connecter() {
 
 function _ajouterCb(rk, cb, opts) {
   opts = opts || {}
+
+  let paramsSup = {}
+  if(!opts.direct) paramsSup.qCustom = 'publication'
+
   _mq.routingKeyManager.addRoutingKeyCallback(
     (routingKey, message, opts)=>{return cb(message, routingKey, opts)},
     [rk],
-    {operationLongue: !opts.direct}
+    paramsSup
   )
 }
 

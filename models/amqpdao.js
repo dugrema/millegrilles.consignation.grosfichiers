@@ -21,7 +21,7 @@ async function init() {
   instPki.initialiserPkiPEMS(certPems)
 
   // Connecter a MilleGrilles avec AMQP DAO
-  const nomsQCustom = ['image', 'video']
+  const nomsQCustom = ['image', 'video', 'publication']
   const amqpdao = new MilleGrillesAmqpDAO(instPki, {nomsQCustom})
   const mqConnectionUrl = process.env.MG_MQ_URL;
   await amqpdao.connect(mqConnectionUrl)
@@ -46,14 +46,14 @@ async function initialiserRabbitMQ(rabbitMQ) {
   // const {TorrentMessages} = require('../messages/torrent');
   // rabbitMQ.enregistrerListenerConnexion(new TorrentMessages(rabbitMQ));
 
-  const {DecrypterFichier} = require('../messages/crypto');
-  rabbitMQ.enregistrerListenerConnexion(new DecrypterFichier(rabbitMQ));
+  // const {DecrypterFichier} = require('../messages/crypto');
+  // rabbitMQ.enregistrerListenerConnexion(new DecrypterFichier(rabbitMQ));
 
   const {GenerateurMedia} = require('../messages/media');
   rabbitMQ.enregistrerListenerConnexion(new GenerateurMedia(rabbitMQ));
 
-  const {PublicateurAWS} = require('../messages/aws');
-  rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
+  // const {PublicateurAWS} = require('../messages/aws');
+  // rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
 
   const {GestionnaireMessagesBackup} = require('../messages/backup')
   rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ))
