@@ -1,4 +1,4 @@
-FROM docker.maceroc.com/nodejsmedia:16_0
+FROM docker.maceroc.com/nodejsmedia:16_1
 
 # Create app directory
 WORKDIR /usr/src/app
