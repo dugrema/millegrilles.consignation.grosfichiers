@@ -14,6 +14,8 @@ export WEB_KEY=$MG_MQ_KEYFILE
 export MG_MQ_URL=amqps://$HOST:5673
 export IPFS_HOST=http://192.168.2.131:5001
 
+export MG_REDIS_HOST=$HOST
+
 # Path ou les apps web (Vitrine, Place) sont copiees
 export WEBAPPS_SRC_FOLDER=/var/opt/millegrilles/nginx/html
 

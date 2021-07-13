@@ -2,7 +2,8 @@
 
 const debug = require('debug')('millegrilles:www')
 const express = require('express')
-const logger = require('morgan');
+const logger = require('morgan')
+const redis = require("redis")
 
 const {initialiser: initialiserServer} = require('./server')
 const {initialiser: initialiserApp} = require('./app');
@@ -10,8 +11,16 @@ const amqpdao = require('../models/amqpdao')
 
 async function init() {
 
+  // Preparer client redis (cache)
+  const redisHost = process.env.MG_REDIS_HOST || 'redis',
+        redisPortStr = process.env.MG_REDIS_PORT || '6379'
+  const redisClient = redis.createClient({
+    host: redisHost,
+    port: Number(redisPortStr),
+  })
+
   // Connexion AMQ
-  const {amqpdao: instAmqpdao} = await amqpdao.init()
+  const {amqpdao: instAmqpdao} = await amqpdao.init({redisClient})
   const idmg = instAmqpdao.pki.idmg
 
   debug("Initialisation serveur IDMG : %s", idmg)

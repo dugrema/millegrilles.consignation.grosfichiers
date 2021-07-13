@@ -2,7 +2,8 @@ const debug = require('debug')('millegrilles:fichiers:amqpdao')
 const fs = require('fs')
 const {MilleGrillesPKI, MilleGrillesAmqpDAO} = require('@dugrema/millegrilles.common')
 
-async function init() {
+async function init(opts) {
+  opts = opts || {}
 
   // Preparer certificats
   const certPem = fs.readFileSync(process.env.MG_MQ_CERTFILE).toString('utf-8')
@@ -19,6 +20,11 @@ async function init() {
   // Charger PKI
   const instPki = new MilleGrillesPKI()
   instPki.initialiserPkiPEMS(certPems)
+
+  if(opts.redisClient) {
+    // Injecter le redisClient dans pki
+    instPki.redisClient = opts.redisClient
+  }
 
   // Connecter a MilleGrilles avec AMQP DAO
   const nomsQCustom = ['image', 'video', 'publication']
