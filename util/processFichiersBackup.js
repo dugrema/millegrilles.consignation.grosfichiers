@@ -48,7 +48,7 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
           fs.rmdir(repertoireSnapshot, {recursive: true}, err=>{
             if(err) {
               console.error("Erreur suppression snapshot sous %s : %O", repertoireSnapshot, err)
-              return reject(err)
+              // return reject(err)
             }
             resolve()
           })
