@@ -350,7 +350,7 @@ async function streamListeFichiers(req, res, next) {
 
     // Creer une archive .tar de backup avec les repertoires de fichiers
     // horaire, archive et instantanne
-    debug("streamListeFichiers: Creer archive utilisant path %s", pathBackup)
+    debug("streamListeFichiers: Creer archive utilisant path %s, fichiers: %O", pathBackup, fichiers)
 
     const downloadFileName = 'backup.tar'
 
@@ -402,10 +402,10 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
   const filterHoraire = [
     `${domaine}_catalogue_*.json.xz`,
     `${domaine}_transactions_*.jsonl.xz`,
-    `${domaine}_transactions_*.jsonl.xz.mgs1`,
+    `${domaine}_transactions_*.jsonl.xz.mgs2`,
     `${domaine}.*_catalogue_*.json.xz`,
     `${domaine}.*_transactions_*.jsonl.xz`,
-    `${domaine}.*_transactions_*.jsonl.xz.mgs1`,
+    `${domaine}.*_transactions_*.jsonl.xz.mgs2`,
   ]
   var fileFilter = []
   if( ! opts.exclureHoraire ) {
@@ -436,15 +436,17 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
       // debug(entry)
 
       // Extraire le type de fichier (catalogue, transaction, fichier) et date
-      const nomFichierParts = entry.basename.split('_')
+      const nomFichierParts = path.parse(entry.basename).name.split('_')
+
+      debug("Nom fichier parts test : %O", nomFichierParts)
       var sousdomaine = '', typeFichier = '', dateFichier = ''
 
-      if(nomFichierParts.length === 3) {
+      if(nomFichierParts.length === 2) {
         sousdomaine = nomFichierParts[0]
         dateFichier = nomFichierParts[1]
         if(dateFichier.length === 4) typeFichier = 'annuel'
         if(dateFichier.length === 8) typeFichier = 'quotidien'
-      } else if(nomFichierParts.length === 4) {
+      } else if(nomFichierParts.length === 3) {
         sousdomaine = nomFichierParts[0]
         typeFichier = nomFichierParts[1]
         dateFichier = nomFichierParts[2]
