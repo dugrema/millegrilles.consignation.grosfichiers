@@ -34,7 +34,7 @@ class TraitementFichierBackup {
   // PUT pour un fichier de backup
   async traiterPutBackup(req) {
 
-    debug("Body PUT traiterPutBackup : %O", req.body)
+    debug("Body PUT traiterPutBackup : %O, files: %O", req.body, req.files)
 
     const pathConsignation = new PathConsignation({idmg: req.autorisationMillegrille.idmg})
 

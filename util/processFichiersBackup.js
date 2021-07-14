@@ -21,7 +21,7 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
     // Charger le fichier de catalogue pour obtenir information de domaine, heure
     const catalogue = await chargerLzma(fichierCatalogue.path)
 
-    debug("Catalogue backup a traiter : %O", catalogue)
+    debug("Catalogue backup a traiter : %O, commande maitre des cles : %O", catalogue, fichierMaitrecles)
 
     const erreurValidation = await validerBackup(amqpdao, catalogue, fichierTransactions, fichierMaitrecles)
 
