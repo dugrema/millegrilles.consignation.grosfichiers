@@ -22,7 +22,7 @@ export WEBAPPS_SRC_FOLDER=/var/opt/millegrilles/nginx/html
 export PORT=3021
 
 export DEBUG=millegrilles:common:server4,\
-millegrilles:util:processFichiersBackup,millegrilles:fichiers:traitementFichier
+millegrilles:util:processFichiersBackup,millegrilles:fichiers:traitementFichier,millegrilles:util:restaurationBackup
 
 # export SERVER_TYPE=https
 

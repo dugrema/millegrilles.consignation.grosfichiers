@@ -422,7 +422,7 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
 
   debug("Setings fichiers : %O", settings)
 
-  return new Promise((resolve, reject)=>{
+  const promiseLecture = new Promise((resolve, reject)=>{
     // const fichiersCatalogue = [];
     // const fichiersTransactions = [];
 
@@ -472,9 +472,52 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
       resolve(fichiersBackup);
     });
 
-  });
+  })
 
-  if(err) throw err;
+  const promiseSnapshot = new Promise(async (resolve, reject)=>{
+    const pathSnapshotDir = path.join(pathRepertoireBackup, 'domaines', domaine, 'snapshot')
+    const transactionsName = path.join(pathSnapshotDir, 'transactions.jsonl.xz.mgs2')
+    const catalogueName = path.join(pathSnapshotDir, 'catalogue.json.xz')
+    let promiseFichierTransactions = fsPromises.stat(transactionsName)
+    let promiseFichierCatalogue = fsPromises.stat(catalogueName)
+    try {
+      const [fichierTransactions, fichierCatalogue] = await Promise.all([promiseFichierTransactions, promiseFichierCatalogue])
+      debug("Info fichiers snapshot transaction %O\ncatalogue: %O", fichierTransactions, fichierCatalogue)
+      const entreeBackupCatalogue = {
+        path: path.join('domaines', domaine, 'snapshot', 'catalogue.json.xz'),
+        fullpath: catalogueName,
+        basename: 'catalogue.json.xz',
+        sousdomaine: domaine,
+        typeFichier: 'snapshot_catalogue',
+        dateFichier: 'SNAPSHOT'
+      }
+      const entreeBackupTransactions = {
+        path: path.join('domaines', domaine, 'snapshot', 'transactions.jsonl.xz.mgs2'),
+        fullpath: transactionsName,
+        basename: 'transactions.jsonl.xz.mgs2',
+        sousdomaine: domaine,
+        typeFichier: 'snapshot_transactions',
+        dateFichier: 'SNAPSHOT'
+      }
+      const infoFichiersSnapshot = [
+        entreeBackupCatalogue, entreeBackupTransactions
+      ]
+      resolve(infoFichiersSnapshot)
+    } catch(err) {
+      debug("Aucun snapshot pour domaine %s sous %s", domaine, pathSnapshotDir)
+      resolve()
+    }
+  })
+
+  // Attendre resultats
+  let [fichiersBackup, resultatSnapshot] = await Promise.all([promiseLecture, promiseSnapshot])
+
+  // Injecter snapshot dans liste fichiersBackup
+  fichiersBackup = [...fichiersBackup, ...resultatSnapshot]
+
+  debug("Fichiers backup pour restauration de %s : %O", domaine, fichiersBackup)
+
+  return fichiersBackup
 }
 
 async function getGrosFichiersHoraire(pathRepertoireBackup) {
