@@ -37,7 +37,7 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
       debug("Backup mode snapshot")
       repertoireDestination = pathConsignation.trouverPathBackupSnapshot(catalogue.domaine)
       nouveauPathCatalogue = path.join(repertoireDestination, 'catalogue.json.xz')
-      nouveauPathTransactions = path.join(repertoireDestination, 'transactions.jsonl.xz.mgs1')
+      nouveauPathTransactions = path.join(repertoireDestination, 'transactions.jsonl.xz.mgs2')
     } else {
       repertoireDestination = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
       nouveauPathCatalogue = path.join(repertoireDestination, nomFichierCatalogue)

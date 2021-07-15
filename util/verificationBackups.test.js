@@ -12,7 +12,7 @@ function pathConsignation(repertoire) {
     trouverPathBackupDomaine: domaine=>{return repertoire},
     trouverPathBackupHoraire: domaine=>{return path.join(repertoire, 'horaire')},
     consignationPathBackup: repertoire,
-    trouverPathFuuidExistant: fuuid=>{return path.join(repertoire, fuuid + '.mgs1')}
+    trouverPathFuuidExistant: fuuid=>{return path.join(repertoire, fuuid + '.mgs2')}
   }
 }
 

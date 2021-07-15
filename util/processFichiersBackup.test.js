@@ -14,7 +14,7 @@ const pathConsignation = {
   trouverPathBackupHoraire: domaine=>{return path.join(tmpdir.name, 'horaire')},
   trouverPathBackupSnapshot: domaine=>{return path.join(tmpdir.name, 'snapshot')},
   // consignationPathBackup: tmpdir.name,
-  trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid + '.mgs1')}
+  trouverPathFuuidExistant: fuuid=>{return path.join(tmpdir.name, fuuid + '.mgs2')}
 }
 
 describe('processFichiersBackup', ()=>{
@@ -145,7 +145,7 @@ describe('processFichiersBackup', ()=>{
 
     const infoCatalogue = fs.statSync(path.join(tmpdir.name, 'snapshot/catalogue.json.xz'))
     expect(infoCatalogue).toBeDefined()
-    const infoTransaction = fs.statSync(path.join(tmpdir.name, 'snapshot/transactions.jsonl.xz.mgs1'))
+    const infoTransaction = fs.statSync(path.join(tmpdir.name, 'snapshot/transactions.jsonl.xz.mgs2'))
     expect(infoTransaction).toBeDefined()
 
     expect(resultat['ok']).toBe(true)
@@ -171,7 +171,7 @@ describe('processFichiersBackup', ()=>{
     // Inserer fichiers dummy pour verifier override
     fs.mkdirSync(path.join(tmpdir.name, 'snapshot/'))
     creerFichierDummy(path.join(tmpdir.name, 'snapshot/catalogue.json.xz'), 'catalogue dummy')
-    creerFichierDummy(path.join(tmpdir.name, 'snapshot/transactions.jsonl.xz.mgs1'), 'transactions dummy')
+    creerFichierDummy(path.join(tmpdir.name, 'snapshot/transactions.jsonl.xz.mgs2'), 'transactions dummy')
 
     // Premier snapshot
     fichiersTransactions = {
@@ -185,7 +185,7 @@ describe('processFichiersBackup', ()=>{
     const resultat1 = await processFichiersBackup.traiterFichiersBackup(amqpdao, pathConsignation, fichiersTransactions, fichierCatalogue)
     console.info("Resultat hachage : %O", resultat1)
     expect(fs.statSync(path.join(tmpdir.name, 'snapshot/catalogue.json.xz'))).toBeDefined()
-    expect(fs.statSync(path.join(tmpdir.name, 'snapshot/transactions.jsonl.xz.mgs1'))).toBeDefined()
+    expect(fs.statSync(path.join(tmpdir.name, 'snapshot/transactions.jsonl.xz.mgs2'))).toBeDefined()
     expect(resultat1['ok']).toBe(true)
 
     const catalogue2 = await processFichiersBackup.chargerLzma(path.join(tmpdir.name, 'snapshot/catalogue.json.xz'))

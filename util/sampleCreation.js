@@ -90,7 +90,7 @@ async function creerBackupHoraire(dateHeure, opts) {
   // console.debug("REP backup horaire : %s", rep)
 
   const transactions = 'contenu dummy sans importance. Date: ' + dateFormattee
-  const pathTransaction = await sauvegarderFichier(`${rep}/domaine.test_${dateFormattee}.jsonl.xz.mgs1`, transactions)
+  const pathTransaction = await sauvegarderFichier(`${rep}/domaine.test_${dateFormattee}.jsonl.xz.mgs2`, transactions)
 
   // console.debug("Path fichier transactions : %s", pathTransaction)
 
