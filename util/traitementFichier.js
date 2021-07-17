@@ -513,7 +513,9 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
   let [fichiersBackup, resultatSnapshot] = await Promise.all([promiseLecture, promiseSnapshot])
 
   // Injecter snapshot dans liste fichiersBackup
-  fichiersBackup = [...fichiersBackup, ...resultatSnapshot]
+  if(resultatSnapshot) {
+    fichiersBackup = [...fichiersBackup, ...resultatSnapshot]
+  }
 
   debug("Fichiers backup pour restauration de %s : %O", domaine, fichiersBackup)
 
