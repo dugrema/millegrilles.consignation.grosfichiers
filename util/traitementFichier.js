@@ -481,7 +481,7 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
   })
 
   const promiseSnapshot = new Promise(async (resolve, reject)=>{
-    const pathSnapshotDir = path.join(pathRepertoireBackup, 'domaines', domaine, 'snapshot')
+    const pathSnapshotDir = path.join(pathRepertoireBackup, domaine, 'snapshot')
     const transactionsName = path.join(pathSnapshotDir, 'transactions.jsonl.xz.mgs2')
     const catalogueName = path.join(pathSnapshotDir, 'catalogue.json.xz')
     let promiseFichierTransactions = fsPromises.stat(transactionsName)
@@ -490,7 +490,7 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
       const [fichierTransactions, fichierCatalogue] = await Promise.all([promiseFichierTransactions, promiseFichierCatalogue])
       debug("Info fichiers snapshot transaction %O\ncatalogue: %O", fichierTransactions, fichierCatalogue)
       const entreeBackupCatalogue = {
-        path: path.join('domaines', domaine, 'snapshot', 'catalogue.json.xz'),
+        path: path.join(domaine, 'snapshot', 'catalogue.json.xz'),
         fullpath: catalogueName,
         basename: 'catalogue.json.xz',
         sousdomaine: domaine,
@@ -498,7 +498,7 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
         dateFichier: 'SNAPSHOT'
       }
       const entreeBackupTransactions = {
-        path: path.join('domaines', domaine, 'snapshot', 'transactions.jsonl.xz.mgs2'),
+        path: path.join(domaine, 'snapshot', 'transactions.jsonl.xz.mgs2'),
         fullpath: transactionsName,
         basename: 'transactions.jsonl.xz.mgs2',
         sousdomaine: domaine,
