@@ -31,7 +31,7 @@ class RestaurateurBackup {
 
     const idmg = req.autorisationMillegrille.idmg
     const domaine = req.params.domaine
-    const pathRepertoireBackup = this.pathConsignation.consignationPathBackup
+    const pathRepertoireBackup = path.join(this.pathConsignation.consignationPathBackup, 'domaines')
     debug("restaurerDomaine, Path repertoire backup : %s\nparams : %O\nquery: %O",
       this.pathConsignation.consignationPathBackup, req.params, req.query)
 

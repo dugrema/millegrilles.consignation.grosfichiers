@@ -397,15 +397,11 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
   // Ajuster le filtre de fichiers
   const filterArchives = [
     `${domaine}_*.tar`,
-    `${domaine}.*_*.tar`,
   ]
   const filterHoraire = [
-    `${domaine}_catalogue_*.json.xz`,
-    `${domaine}_transactions_*.jsonl.xz`,
-    `${domaine}_transactions_*.jsonl.xz.mgs2`,
-    `${domaine}.*_catalogue_*.json.xz`,
-    `${domaine}.*_transactions_*.jsonl.xz`,
-    `${domaine}.*_transactions_*.jsonl.xz.mgs2`,
+    `${domaine}_*.json.xz`,
+    `${domaine}_*.jsonl.xz`,
+    `${domaine}_*.jsonl.xz.mgs2`,
   ]
   var fileFilter = []
   if( ! opts.exclureHoraire ) {
@@ -420,7 +416,8 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
     fileFilter,
   }
 
-  debug("Setings fichiers : %O", settings)
+  // const pathRepertoireDomaine = path.join(pathRepertoireBackup, domaine)
+  debug("Trouvers fichiers sous %s avec : %O", pathRepertoireBackup, settings)
 
   const promiseLecture = new Promise((resolve, reject)=>{
     // const fichiersCatalogue = [];
@@ -433,23 +430,30 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
       settings,
     )
     .on('data', entry=>{
-      // debug(entry)
+      debug(entry)
 
       // Extraire le type de fichier (catalogue, transaction, fichier) et date
-      const nomFichierParts = path.parse(entry.basename).name.split('_')
+      const splitPoint = entry.basename.split('.')
+      const baseName = splitPoint.shift()
+      const ext = splitPoint.join('.')
+      const nomFichierParts = baseName.split('_')
 
       debug("Nom fichier parts test : %O", nomFichierParts)
       var sousdomaine = '', typeFichier = '', dateFichier = ''
 
-      if(nomFichierParts.length === 2) {
+      if(ext.endsWith('.tar')) {
         sousdomaine = nomFichierParts[0]
-        dateFichier = nomFichierParts[1]
+        dateFichier = nomFichierParts[1].split('.')[0]
         if(dateFichier.length === 4) typeFichier = 'annuel'
         if(dateFichier.length === 8) typeFichier = 'quotidien'
-      } else if(nomFichierParts.length === 3) {
+      } else {
         sousdomaine = nomFichierParts[0]
-        typeFichier = nomFichierParts[1]
-        dateFichier = nomFichierParts[2]
+        dateFichier = nomFichierParts[1]
+        if(ext.indexOf('.jsonl') > -1) {
+          typeFichier = 'transactions'
+        } else {
+          typeFichier = 'catalogue'
+        }
       }
 
       if(typeFichier) {
@@ -457,6 +461,8 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
           ...entry,
           sousdomaine, typeFichier, dateFichier
         }
+
+        debug("Entree backup : %O", entreeBackup)
 
         fichiersBackup.push(entreeBackup)
       } else {
