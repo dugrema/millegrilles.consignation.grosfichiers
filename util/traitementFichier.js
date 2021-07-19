@@ -428,7 +428,7 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
   }
 
   // RE pour trouver domaine/sous-domaine, date et extension d'un fichier
-  const reMatchJson = /(?<Domaine>[0-9A-Z-a-z\.]+)\_(?<Date>[0-9]+)\.(?<Ext>json[\w\.]+)/
+  const reMatchJson = /(?<Domaine>[0-9A-Z-a-z\.]+)\_(?<Date>[0-9]+)\.(?<Ext>tar|json[\w\.]+)/
 
   // const pathRepertoireDomaine = path.join(pathRepertoireBackup, domaine)
   debug("Trouvers fichiers sous %s avec : %O", pathRepertoireBackup, settings)
