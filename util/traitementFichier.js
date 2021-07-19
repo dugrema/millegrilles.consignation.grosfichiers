@@ -399,13 +399,24 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
     `${domaine}_*.tar`,
   ]
   const filterHoraire = [
+    // Domaine simple
     `${domaine}_*.json.xz`,
     `${domaine}_*.jsonl.xz`,
     `${domaine}_*.jsonl.xz.mgs2`,
+
+    // Sous domaine
+    `${domaine}.*_*.json.xz`,
+    `${domaine}.*_*.jsonl.xz`,
+    `${domaine}.*_*.jsonl.xz.mgs2`,
+  ]
+  const filterSnapshot = [
+    'transactions.jsonl.xz',
+    'transactions.jsonl.xz.mgs2',
+    'catalogue.json.xz',
   ]
   var fileFilter = []
   if( ! opts.exclureHoraire ) {
-    fileFilter = [...fileFilter, ...filterHoraire]
+    fileFilter = [...fileFilter, ...filterHoraire, ...filterSnapshot]
   }
   if( ! opts.exclureArchives ) {
     fileFilter = [...fileFilter, ...filterArchives]
@@ -415,6 +426,9 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
     type: 'files',
     fileFilter,
   }
+
+  // RE pour trouver domaine/sous-domaine, date et extension d'un fichier
+  const reMatchJson = /(?<Domaine>[0-9A-Z-a-z\.]+)\_(?<Date>[0-9]+)\.(?<Ext>json[\w\.]+)/
 
   // const pathRepertoireDomaine = path.join(pathRepertoireBackup, domaine)
   debug("Trouvers fichiers sous %s avec : %O", pathRepertoireBackup, settings)
@@ -432,27 +446,34 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
     .on('data', entry=>{
       debug(entry)
 
+      // Filtrer les domaines autres (pour snapshot)
+      if(!entry.path.startsWith(domaine)) return
+
       // Extraire le type de fichier (catalogue, transaction, fichier) et date
-      const splitPoint = entry.basename.split('.')
-      const baseName = splitPoint.shift()
-      const ext = splitPoint.join('.')
-      const nomFichierParts = baseName.split('_')
+      const matchFichier = entry.basename.match(reMatchJson)
 
-      debug("Nom fichier parts test : %O", nomFichierParts)
-      var sousdomaine = '', typeFichier = '', dateFichier = ''
+      let sousdomaine, dateFichier, typeFichier
+      if(matchFichier) {
+        sousdomaine = matchFichier.groups.Domaine
+        dateFichier = matchFichier.groups.Date
+        const ext = matchFichier.groups.Ext
 
-      if(ext.endsWith('.tar')) {
-        sousdomaine = nomFichierParts[0]
-        dateFichier = nomFichierParts[1].split('.')[0]
-        if(dateFichier.length === 4) typeFichier = 'annuel'
-        if(dateFichier.length === 8) typeFichier = 'quotidien'
-      } else {
-        sousdomaine = nomFichierParts[0]
-        dateFichier = nomFichierParts[1]
-        if(ext.indexOf('.jsonl') > -1) {
-          typeFichier = 'transactions'
+        debug("Match fichier : %s (date: %s, ext: %s)", sousdomaine, dateFichier, ext)
+        if(ext === 'tar') {
+          if(dateFichier.length === 4) typeFichier = 'annuel'
+          if(dateFichier.length === 8) typeFichier = 'quotidien'
         } else {
-          typeFichier = 'catalogue'
+          if(ext.startsWith('jsonl')) {
+            typeFichier = 'transactions'
+          } else {
+            typeFichier = 'catalogue'
+          }
+        }
+      } else {
+        if(filterSnapshot.includes(entry.basename)) {
+          sousdomaine = domaine
+          typeFichier = 'snapshot'
+          dateFichier = 'SNAPSHOT-DOMAINE'
         }
       }
 
@@ -480,48 +501,48 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
 
   })
 
-  const promiseSnapshot = new Promise(async (resolve, reject)=>{
-    const pathSnapshotDir = path.join(pathRepertoireBackup, domaine, 'snapshot')
-    const transactionsName = path.join(pathSnapshotDir, 'transactions.jsonl.xz.mgs2')
-    const catalogueName = path.join(pathSnapshotDir, 'catalogue.json.xz')
-    let promiseFichierTransactions = fsPromises.stat(transactionsName)
-    let promiseFichierCatalogue = fsPromises.stat(catalogueName)
-    try {
-      const [fichierTransactions, fichierCatalogue] = await Promise.all([promiseFichierTransactions, promiseFichierCatalogue])
-      debug("Info fichiers snapshot transaction %O\ncatalogue: %O", fichierTransactions, fichierCatalogue)
-      const entreeBackupCatalogue = {
-        path: path.join(domaine, 'snapshot', 'catalogue.json.xz'),
-        fullpath: catalogueName,
-        basename: 'catalogue.json.xz',
-        sousdomaine: domaine,
-        typeFichier: 'snapshot_catalogue',
-        dateFichier: 'SNAPSHOT'
-      }
-      const entreeBackupTransactions = {
-        path: path.join(domaine, 'snapshot', 'transactions.jsonl.xz.mgs2'),
-        fullpath: transactionsName,
-        basename: 'transactions.jsonl.xz.mgs2',
-        sousdomaine: domaine,
-        typeFichier: 'snapshot_transactions',
-        dateFichier: 'SNAPSHOT'
-      }
-      const infoFichiersSnapshot = [
-        entreeBackupCatalogue, entreeBackupTransactions
-      ]
-      resolve(infoFichiersSnapshot)
-    } catch(err) {
-      debug("Aucun snapshot pour domaine %s sous %s", domaine, pathSnapshotDir)
-      resolve()
-    }
-  })
+  // const promiseSnapshot = new Promise(async (resolve, reject)=>{
+  //   const pathSnapshotDir = path.join(pathRepertoireBackup, domaine, 'snapshot')
+  //   const transactionsName = path.join(pathSnapshotDir, 'transactions.jsonl.xz.mgs2')
+  //   const catalogueName = path.join(pathSnapshotDir, 'catalogue.json.xz')
+  //   let promiseFichierTransactions = fsPromises.stat(transactionsName)
+  //   let promiseFichierCatalogue = fsPromises.stat(catalogueName)
+  //   try {
+  //     const [fichierTransactions, fichierCatalogue] = await Promise.all([promiseFichierTransactions, promiseFichierCatalogue])
+  //     debug("Info fichiers snapshot transaction %O\ncatalogue: %O", fichierTransactions, fichierCatalogue)
+  //     const entreeBackupCatalogue = {
+  //       path: path.join(domaine, 'snapshot', 'catalogue.json.xz'),
+  //       fullpath: catalogueName,
+  //       basename: 'catalogue.json.xz',
+  //       sousdomaine: domaine,
+  //       typeFichier: 'snapshot_catalogue',
+  //       dateFichier: 'SNAPSHOT'
+  //     }
+  //     const entreeBackupTransactions = {
+  //       path: path.join(domaine, 'snapshot', 'transactions.jsonl.xz.mgs2'),
+  //       fullpath: transactionsName,
+  //       basename: 'transactions.jsonl.xz.mgs2',
+  //       sousdomaine: domaine,
+  //       typeFichier: 'snapshot_transactions',
+  //       dateFichier: 'SNAPSHOT'
+  //     }
+  //     const infoFichiersSnapshot = [
+  //       entreeBackupCatalogue, entreeBackupTransactions
+  //     ]
+  //     resolve(infoFichiersSnapshot)
+  //   } catch(err) {
+  //     debug("Aucun snapshot pour domaine %s sous %s", domaine, pathSnapshotDir)
+  //     resolve()
+  //   }
+  // })
 
   // Attendre resultats
-  let [fichiersBackup, resultatSnapshot] = await Promise.all([promiseLecture, promiseSnapshot])
+  let [fichiersBackup] = await Promise.all([promiseLecture])
 
-  // Injecter snapshot dans liste fichiersBackup
-  if(resultatSnapshot) {
-    fichiersBackup = [...fichiersBackup, ...resultatSnapshot]
-  }
+  // // Injecter snapshot dans liste fichiersBackup
+  // if(resultatSnapshot) {
+  //   fichiersBackup = [...fichiersBackup, ...resultatSnapshot]
+  // }
 
   debug("Fichiers backup pour restauration de %s : %O", domaine, fichiersBackup)
 
