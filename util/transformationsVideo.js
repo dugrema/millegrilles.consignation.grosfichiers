@@ -32,7 +32,8 @@ const PROFILS_TRANSCODAGE = {
 async function probeVideo(input, opts) {
   opts = opts || {}
   const maxHeight = opts.maxHeight || 720,
-        maxBitrate = opts.maxBitrate || 750000
+        maxBitrate = opts.maxBitrate || 750000,
+        utiliserTailleOriginale = opts.utiliserTailleOriginale || false
 
   const resultat = await new Promise((resolve, reject)=>{
     if(input.on) {
@@ -61,10 +62,13 @@ async function probeVideo(input, opts) {
 
   debug("Trouve : taille %dx%d, bitrate %d", width, height, bitrate)
 
-  let heightEncoding = [2160, 1440, 1080, 720, 480, 360, 320, 240].filter(item=>{
-    return item <= height && item <= maxHeight
-  }).shift() || 240
-  let bitRateEncoding = [8000000, 4000000, 2000000, 1000000, 500000, 250000].filter(item=>{
+  let heightEncoding = height
+  if(!utiliserTailleOriginale) {
+    heightEncoding = [2160, 1440, 1080, 720, 480, 360, 320, 240].filter(item=>{
+      return item <= height && item <= maxHeight
+    }).shift() || 240
+  }
+  let bitRateEncoding = [8000000, 4000000, 3000000, 2000000, 1500000, 1000000, 500000, 250000].filter(item=>{
     return item <= bitrate && item <= maxBitrate
   }).shift() || 250000
 
@@ -73,7 +77,14 @@ async function probeVideo(input, opts) {
 
   debug("Information pour encodage : taille %dx%d, bit rate %d", widthEncoding, heightEncoding, bitRateEncoding)
 
-  return {height: heightEncoding, width: widthEncoding, bitrate: bitRateEncoding, nb_frames, raw: infoVideo}
+  return {
+    height: heightEncoding,
+    width: widthEncoding,
+    bitrate: bitRateEncoding,
+    original: {height, width},
+    nb_frames,
+    raw: infoVideo
+  }
 }
 
 async function transcoderVideo(streamFactory, outputStream, opts) {
@@ -81,7 +92,8 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
 
   var   videoBitrate = opts.videoBitrate || 250000
         height = opts.height || 240
-        width = opts.width || 427
+        width = opts.width || 427,
+        utiliserTailleOriginale = opts.utiliserTailleOriginale || false
 
   const videoCodec = opts.videoCodec || 'libx264',
         audioCodec = opts.audioCodec || 'aac',
@@ -90,7 +102,7 @@ async function transcoderVideo(streamFactory, outputStream, opts) {
         progressCb = opts.progressCb
 
   var input = streamFactory()
-  var videoInfo = await probeVideo(input, {maxBitrate: videoBitrate, maxHeight: height})
+  var videoInfo = await probeVideo(input, {maxBitrate: videoBitrate, maxHeight: height, utiliserTailleOriginale})
   input.close()
   videoBitrate = videoInfo.bitrate
   height = videoInfo.height || height
