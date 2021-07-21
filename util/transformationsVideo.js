@@ -61,7 +61,7 @@ async function probeVideo(input, opts) {
 
   debug("Trouve : taille %dx%d, bitrate %d", width, height, bitrate)
 
-  let heightEncoding = [2160, 1440, 1080, 720, 480, 360, 240].filter(item=>{
+  let heightEncoding = [2160, 1440, 1080, 720, 480, 360, 320, 240].filter(item=>{
     return item <= height && item <= maxHeight
   }).shift() || 240
   let bitRateEncoding = [8000000, 4000000, 2000000, 1000000, 500000, 250000].filter(item=>{
@@ -79,9 +79,9 @@ async function probeVideo(input, opts) {
 async function transcoderVideo(streamFactory, outputStream, opts) {
   if(!opts) opts = {}
 
-  var   videoBitrate = opts.videoBitrate || 500000
-        height = opts.height || 480
-        width = opts.width || 854
+  var   videoBitrate = opts.videoBitrate || 250000
+        height = opts.height || 240
+        width = opts.width || 427
 
   const videoCodec = opts.videoCodec || 'libx264',
         audioCodec = opts.audioCodec || 'aac',
