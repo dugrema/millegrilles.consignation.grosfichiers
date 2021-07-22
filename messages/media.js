@@ -90,7 +90,9 @@ async function genererPreviewImage(mq, pathConsignation, message) {
     height: metadataImage.height,
     mimetype: metadataImage['mime type'],
   }
-  if(nbFrames > 1) transactionAssocier.anime = true
+  // Determiner si on a une image animee (fichier avec plusieurs frames, sauf PDF (plusieurs pages))
+  const estPdf = transactionAssocier.mimetype === 'application/pdf'
+  if(!estPdf && nbFrames > 1) transactionAssocier.anime = true
 
   debug("Transaction associer images converties : %O", transactionAssocier)
 
@@ -142,7 +144,7 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
     // mimetype: metadataImage['mime type'],
     metadata: metadataVideo,
   }
-  if(nbFrames > 1) transactionAssocier.anime = true
+  transactionAssocier.anime = true
 
   debug("Transaction associer images converties : %O", transactionAssocier)
 
