@@ -4,6 +4,8 @@ const {v1: uuidv1} = require('uuid')
 const path = require('path')
 const fs = require('fs')
 const fsPromises = require('fs/promises')
+const pdfParse = require('pdf-parse')
+const axios = require('axios')
 
 const { decrypterGCM } = require('./cryptoUtils.js')
 const { creerCipher, creerDecipher } = require('@dugrema/millegrilles.common/lib/chiffrage')
@@ -227,6 +229,48 @@ function traiterVideo(pathImageSrc, opts) {
   return transformationImages.genererPosterVideo(pathImageSrc, opts)
 }
 
+async function indexerDocument(mq, pathConsignation, message, optsConversion) {
+  const documentFichier = message.doc
+  const {cleSymmetrique, metaCle} = optsConversion
+  const {fuuid, uuid: uuidFichier} = message
+  const fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, 'pdf', cleSymmetrique, metaCle)
+  try {
+    debug("indexerDocument fichier tmp : %O", fichierSrcTmp)
+    const dataBuffer = await fsPromises.readFile(fichierSrcTmp.path)
+    const data = await pdfParse(dataBuffer)
+
+    const docIndex = {
+      ...documentFichier,
+      contenu: data.text,
+    }
+
+    const rep = await axios({
+      method: 'PUT',
+      url: 'http://mg-dev4:9200/grosfichiers/_doc/' + uuidFichier,
+      data: docIndex,
+    })
+
+    debug("Reponse indexation fichier %s, %d = %O", fuuid, rep.status, rep.data)
+    if([200, 201].includes(rep.status)) {
+      // Emettre evenement pour indiquer la date de l'indexation
+      const info = {
+        uuid: uuidFichier, fuuid,
+        dateModification: documentFichier.modification,
+        result: rep.data.result,
+      }
+      mq.emettreEvenement(info, 'evenement.fichiers.indexationFichier')
+        .catch(err=>{
+          console.error('ERROR traitementMedia.indexerDocument Erreur emission evenement confirmation %O', err)
+        })
+    } else {
+      console.error("ERROR traitementMedia.indexerDocument traitement indexation PDF pour fichier %s %O", rep.status, rep.data)
+    }
+
+  } finally {
+    fichierSrcTmp.cleanup()
+  }
+}
+
 async function _deplacerVersStorage(pathConsignation, resultatChiffrage, pathPreviewImageTmp) {
   const hachage = resultatChiffrage.meta.hachage_bytes
   const pathPreviewImage = pathConsignation.trouverPathLocal(hachage)
@@ -252,5 +296,5 @@ async function _deplacerVersStorage(pathConsignation, resultatChiffrage, pathPre
 }
 
 module.exports = {
-  genererPreviewImage, genererPreviewVideo, transcoderVideo, dechiffrerTemporaire
+  genererPreviewImage, genererPreviewVideo, transcoderVideo, dechiffrerTemporaire, indexerDocument,
 }

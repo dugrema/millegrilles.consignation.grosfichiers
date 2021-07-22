@@ -45,6 +45,14 @@ class GenerateurMedia {
         qCustom: 'video',
       }
     )
+    this.mq.routingKeyManager.addRoutingKeyCallback(
+      (routingKey, message)=>{return _indexerDocumentContenu(this.mq, this.pathConsignation, message)},
+      ['commande.fichiers.indexerContenu'],
+      {
+        operationLongue: true,
+        // qCustom: 'operationLongue',
+      }
+    )
   }
 
 }
@@ -161,66 +169,13 @@ function _traiterCommandeTranscodage(mq, pathConsignation, message) {
     })
 }
 
-// async function _genererPreview(mq, pathConsignation, message, fctConversion) {
-//   debug("Commande genererPreviewImage recue : %O", message)
-//
-//   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
-//   var opts = {}
-//   // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
-//   var hachageFichier = message.hachage
-//   if(message.version_courante) {
-//     // C'est une retransmission
-//     hachageFichier = message.version_courante.hachage
-//   }
-//   const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
-//
-//   const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
-//
-//   debug("Debut generation preview")
-//   const resultatConversion = await fctConversion(mq, pathConsignation, message, optsConversion)
-//   debug("Fin traitement preview, resultat : %O", resultatConversion)
-//
-//   // Extraire information d'images converties sous un dict
-//   let resultatPreview = null  // Utiliser poster (legacy)
-//   const images = {}
-//   for(let idx in resultatConversion) {
-//     const resultat = {...resultatConversion[idx]}
-//     const cle = resultat.cle
-//     delete resultat.cle
-//     images[cle] = resultat
-//
-//     if(cle === 'poster') {
-//       resultatPreview = {
-//         hachage_bytes: resultat.hachage,
-//         mimetype: resultat.mimetype,
-//         extension: 'jpg',
-//       }
-//     }
-//   }
-//
-//   // Transmettre transaction preview
-//   // const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
-//   const domaineActionAssocier = 'GrosFichiers.associerConversions'
-//   const transactionAssocierPreview = {
-//     uuid: message.uuid,
-//     fuuid: message.fuuid,
-//
-//     images,
-//
-//     mimetype_preview: resultatPreview.mimetype,
-//     fuuid_preview: resultatPreview.hachage_preview,
-//     extension_preview: resultatPreview.extension,
-//     hachage_preview: resultatPreview.hachage_preview,
-//   }
-//
-//   if(resultatPreview.dataVideo) {
-//     transactionAssocierPreview.data_video = resultatPreview.dataVideo['data_video']
-//   }
-//   debug("Transaction associer preview : %O", transactionAssocierPreview)
-//
-//   mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
-//
-// }
+async function _indexerDocumentContenu(mq, pathConsignation, message) {
+  debug("Traitement _indexerDocumentContenu : %O", message)
+  const fuuid = message.fuuid
+  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, fuuid)
+  const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle}
+  await traitementMedia.indexerDocument(mq, pathConsignation, message, optsConversion)
+}
 
 async function recupererCle(mq, hachageFichier) {
   const liste_hachage_bytes = [hachageFichier]
