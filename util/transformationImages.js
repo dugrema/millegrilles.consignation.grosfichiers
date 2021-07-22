@@ -166,7 +166,7 @@ async function determinerConversionsImages(sourcePath) {
       quality = '86',
       valRef = null
 
-  let metadataImage = null, nbFrames = null
+  let metadataImage = null, nbFrames = null, estPdf = null
   try {
     nbFrames = await readIdentifyFrames(sourcePath)
     debug("Image nb frames : %d", nbFrames)
@@ -182,6 +182,9 @@ async function determinerConversionsImages(sourcePath) {
     } else {
       quality = '86'
     }
+
+    // Flag si c'est un PDF - conversions plus simples
+    estPdf = mimetype === 'application/pdf'
 
     if(width < height) {
       // Ratio inverse
@@ -206,7 +209,7 @@ async function determinerConversionsImages(sourcePath) {
     // Thumbnail : L'image est ramenee sur 128px, et croppee au milieu pour ratio 1:1
     'thumb': {ext: 'jpg', resolution: 128, params: ['-strip', '-resize', '128x128^', '-gravity', 'center', '-extent', '128x128', '-quality', '25']},
     // Poster, utilise pour afficher dans un coin d'ecran/preview
-    'poster': {ext: 'jpg', resolution: 240, params: ['-strip', '-resize', ratioInverse?'240x420>':'420x240>', '-quality', '60']},
+    'poster': {ext: 'jpg', resolution: 320, params: ['-strip', '-resize', ratioInverse?'320x569>':'569x320>', '-quality', '60']},
   }
 
   // Grandeur originale
@@ -215,27 +218,36 @@ async function determinerConversionsImages(sourcePath) {
   // }
 
   // Grandeur standard la plus pres de l'originale
-  if(valRef >= 2160) {
-    conversions['image/webp;2160'] = {ext: 'webp', resolution: 2160, params: ['-strip', '-resize', ratioInverse?'2160x3840'+operationResize:'3840x2160'+operationResize, '-quality', quality]}
-  } else if(valRef >= 1440) {
-    conversions['image/webp;1440'] = {ext: 'webp', resolution: 1440, params: ['-strip', '-resize', ratioInverse?'1440x2560'+operationResize:'2560x1440'+operationResize, '-quality', quality]}
-  } else if(valRef >= 1080) {
-    conversions['image/webp;1080'] = {ext: 'webp', resolution: 1080, params: ['-strip', '-resize', ratioInverse?'1080x1920'+operationResize:'1920x1080'+operationResize, '-quality', quality]}
-  } else if (![720, 480].includes(valRef)) {
-    // L'image est plus petite que 1080, generer une version avec grandeur originale.
-    // Couvre les case entre 240 et 1080. Seule exception, si res est 480 ou 720 (deja couvert)
-    let valAutre = Math.floor(valRef * 16 / 9)
-    conversions['image/webp;' + valRef] = {ext: 'webp', resolution: valRef, params: ['-strip', '-resize', ratioInverse?''+valRef+'x'+valAutre+operationResize:''+valAutre+'x'+valRef+operationResize, '-quality', quality]}
-  }
+  if(estPdf) {
+    // Ajouter format standard d'exportation des PDF. Resolution par defaut (auto) est 612x792 de large.
+    conversions['image/webp;612'] = {ext: 'webp', resolution: 612, params: ['-strip', '-quality', quality]}
 
-  if(valRef >= 720) {
-    conversions['image/webp;720'] = {ext: 'webp', resolution: 720, params: ['-strip', '-resize', ratioInverse?'720x1280'+operationResize:'1280x720'+operationResize, '-quality', quality]}
-  }
+    // Changer gravity pour north (haut de la page, avec titre)
+    conversions['thumb'] = {ext: 'jpg', resolution: 128, params: ['-strip', '-resize', '128x128^', '-gravity', 'north', '-extent', '128x128', '-quality', '25']}
+  } else {
+    // Image standard
+    if(valRef >= 2160) {
+      conversions['image/webp;2160'] = {ext: 'webp', resolution: 2160, params: ['-strip', '-resize', ratioInverse?'2160x3840'+operationResize:'3840x2160'+operationResize, '-quality', quality]}
+    } else if(valRef >= 1440) {
+      conversions['image/webp;1440'] = {ext: 'webp', resolution: 1440, params: ['-strip', '-resize', ratioInverse?'1440x2560'+operationResize:'2560x1440'+operationResize, '-quality', quality]}
+    } else if(valRef >= 1080) {
+      conversions['image/webp;1080'] = {ext: 'webp', resolution: 1080, params: ['-strip', '-resize', ratioInverse?'1080x1920'+operationResize:'1920x1080'+operationResize, '-quality', quality]}
+    } else if (![720, 480].includes(valRef)) {
+      // L'image est plus petite que 1080, generer une version avec grandeur originale.
+      // Couvre les case entre 240 et 1080. Seule exception, si res est 480 ou 720 (deja couvert)
+      let valAutre = Math.floor(valRef * 16 / 9)
+      conversions['image/webp;' + valRef] = {ext: 'webp', resolution: valRef, params: ['-strip', '-resize', ratioInverse?''+valRef+'x'+valAutre+operationResize:''+valAutre+'x'+valRef+operationResize, '-quality', quality]}
+    }
 
-  // Default fallback
-  if(valRef >= 480) {
-    conversions['image/webp;480'] = {ext: 'webp', resolution: 480, params: ['-strip', '-resize', ratioInverse?'480x854'+operationResize:'854x480'+operationResize, '-quality', quality]}
-    conversions['image/jpeg;480'] = {ext: 'jpg', resolution: 480, params: ['-strip', '-resize', ratioInverse?'480x854'+operationResize:'854x480'+operationResize, '-quality', quality]}
+    if(valRef >= 720) {
+      conversions['image/webp;720'] = {ext: 'webp', resolution: 720, params: ['-strip', '-resize', ratioInverse?'720x1280'+operationResize:'1280x720'+operationResize, '-quality', quality]}
+    }
+
+    // Default fallback
+    if(valRef >= 480) {
+      conversions['image/webp;480'] = {ext: 'webp', resolution: 480, params: ['-strip', '-resize', ratioInverse?'480x854'+operationResize:'854x480'+operationResize, '-quality', quality]}
+      conversions['image/jpeg;480'] = {ext: 'jpg', resolution: 480, params: ['-strip', '-resize', ratioInverse?'480x854'+operationResize:'854x480'+operationResize, '-quality', quality]}
+    }
   }
 
   return {metadataImage, nbFrames, conversions}
