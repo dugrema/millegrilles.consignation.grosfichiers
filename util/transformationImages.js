@@ -201,8 +201,6 @@ async function determinerConversionsImages(sourcePath) {
 
   } catch(err) {
     debug("Erreur preparation image, aucune meta-information : %O", err)
-    const info = await readMetadata(sourcePath)
-    debug("Information metadata exif : %O", info)
   }
 
   const conversions = {
@@ -290,8 +288,8 @@ async function determinerConversionsPoster(sourcePath, opts) {
 
   } catch(err) {
     debug("Erreur preparation image, aucune meta-information : %O", err)
-    const info = await readMetadata(sourcePath)
-    debug("Information metadata exif : %O", info)
+    //  const info = await readMetadata(sourcePath)
+    // debug("Information metadata exif : %O", info)
   }
 
   const conversions = {
