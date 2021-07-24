@@ -20,7 +20,7 @@ function decrypter(sourceCryptee, destination, cleSecreteDecryptee, iv, opts) {
 function decrypterGCM(sourceCryptee, destination, cleSecreteDecryptee, iv, tag, opts) {
   if(!opts) opts = {}
   const params = {sourceCryptee, destination, cleSecreteDecryptee, iv, tag, opts}
-  console.debug("DecrypterGCM params : %O", params)
+  // debug("DecrypterGCM params : %O", params)
 
   let cryptoStream = getDecipherPipe4fuuid(cleSecreteDecryptee, iv, {...opts, tag})
   return _decrypter(sourceCryptee, destination, cryptoStream, opts)
