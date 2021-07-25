@@ -114,10 +114,15 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
   var opts = {}
   // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
-  var hachageFichier = message.hachage
-  if(message.version_courante) {
-    // C'est une retransmission
-    hachageFichier = message.version_courante.hachage
+  const versionCourante = message.version_courante || {},
+        hachageFichier = message.fuuid || message.hachage || message.fuuid_v_courante || versionCourante.fuuid || versionCourante.hachage
+  // if(message.version_courante) {
+  //   // C'est une retransmission
+  //   hachageFichier = message.version_courante.hachage
+  // }
+  if(!hachageFichier) {
+    console.error("ERROR media.genererPreviewVideo Aucune information de fichier dans le message : %O", message)
+    return
   }
   const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
 
@@ -159,6 +164,7 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
   mq.transmettreTransactionFormattee(transactionAssocier, domaineActionAssocier)
     .catch(err=>{
       console.error("ERROR media.genererPreviewImage Erreur association conversions d'image : %O", err)
+      debug("ERROR media.genererPreviewImage Erreur association conversions d'image message %O", message)
     })
 }
 
