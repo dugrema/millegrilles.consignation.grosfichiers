@@ -231,8 +231,9 @@ function traiterVideo(pathImageSrc, opts) {
 
 async function indexerDocument(mq, pathConsignation, message, optsConversion) {
   const documentFichier = message.doc
-  const {cleSymmetrique, metaCle} = optsConversion
+  const {urlServeurIndex, cleSymmetrique, metaCle} = optsConversion
   const {fuuid, uuid: uuidFichier} = message
+
   const fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, 'pdf', cleSymmetrique, metaCle)
   try {
     debug("indexerDocument fichier tmp : %O", fichierSrcTmp)
@@ -246,7 +247,7 @@ async function indexerDocument(mq, pathConsignation, message, optsConversion) {
 
     const rep = await axios({
       method: 'PUT',
-      url: 'http://mg-dev4:9200/grosfichiers/_doc/' + uuidFichier,
+      url: urlServeurIndex + '/grosfichiers/_doc/' + uuidFichier,
       data: docIndex,
     })
 

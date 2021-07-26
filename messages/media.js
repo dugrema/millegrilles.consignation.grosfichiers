@@ -3,6 +3,8 @@ const {PathConsignation} = require('../util/traitementFichier')
 const traitementMedia = require('../util/traitementMedia.js')
 const { traiterCommandeTranscodage } = require('../util/transformationsVideo')
 
+const urlServeurIndex = process.env.urlServeurIndex || 'http://elasticsearch:9200'
+
 // Traitement d'images pour creer des thumbnails et preview
 class GenerateurMedia {
 
@@ -179,7 +181,7 @@ async function _indexerDocumentContenu(mq, pathConsignation, message) {
   debug("Traitement _indexerDocumentContenu : %O", message)
   const fuuid = message.fuuid
   const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, fuuid)
-  const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle}
+  const optsConversion = {urlServeurIndex, cleSymmetrique: cleDechiffree, metaCle: informationCle}
   await traitementMedia.indexerDocument(mq, pathConsignation, message, optsConversion)
 }
 
