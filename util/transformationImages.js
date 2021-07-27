@@ -90,12 +90,28 @@ async function convertir(mq, chiffrerTemporaire, deplacerVersStorage, clesPubliq
     debug("Executer conversion %s, %O", cle, cp)
     // Creer fichier temporaire avec la bonne extension
     const fichierTmp = await tmp.file({ mode: 0o600, postfix: '.' + cp.ext })
-    const paramsConversion = [sourcePath+'[0]', ...cp.params, fichierTmp.path]
+    let paramsConversion = [sourcePath+'[0]', ...cp.params, fichierTmp.path]
     try {
       await _imConvertPromise(paramsConversion)
     } catch(err) {
-      fichierTmp.cleanup()  // Supprimer fichier tmp non chiffre
-      throw err
+      console.error("ERROR transfomationImages.convertir fichierTmp %O", err)
+      if(cp.paramsFallback) {
+        paramsConversion = [sourcePath+'[0]', ...cp.paramsFallback, fichierTmp.path]
+        try {
+          await _imConvertPromise(paramsConversion)
+        } catch(err) {
+          console.error("ERROR transfomationImages.convertir Echec fallback %O", err)
+          try {
+            fichierTmp.cleanup()  // Supprimer fichier tmp non chiffre
+          } catch(err) {console.error("ERROR transfomationImages.convertir fichierTmp %O", err)}
+          continue  // Abandonner conversion
+        }
+      } else {
+        try {
+          fichierTmp.cleanup()  // Supprimer fichier tmp non chiffre
+        } catch(err) {console.error("ERROR transfomationImages.convertir fichierTmp %O", err)}
+        continue  // Abandonner conversion
+      }
     }
 
     // Creer promise pour continuer le traitement de chiffrage
@@ -205,9 +221,16 @@ async function determinerConversionsImages(sourcePath) {
 
   const conversions = {
     // Thumbnail : L'image est ramenee sur 128px, et croppee au milieu pour ratio 1:1
-    'thumb': {ext: 'jpg', resolution: 128, params: ['-strip', '-resize', '128x128^', '-gravity', 'center', '-extent', '128x128', '-quality', '25']},
+    'thumb': {
+      ext: 'jpg', resolution: 128,
+      params: ['-strip', '-resize', '128x128^', '-gravity', 'center', '-extent', '128x128', '-quality', '25']
+    },
     // Poster, utilise pour afficher dans un coin d'ecran/preview
-    'poster': {ext: 'jpg', resolution: 320, params: ['-strip', '-resize', ratioInverse?'320x569>':'569x320>', '-quality', '60']},
+    'poster': {
+      ext: 'jpg', resolution: 320,
+      params: ['-strip', '-resize', ratioInverse?'320x569>':'569x320>', '-quality', '60'],
+      paramsFallback: ['-strip', '-resize', '320x569', '-quality', '60'],
+    },
   }
 
   // Grandeur originale
@@ -218,7 +241,12 @@ async function determinerConversionsImages(sourcePath) {
   // Grandeur standard la plus pres de l'originale
   if(estPdf) {
     // Ajouter format standard d'exportation des PDF. Resolution par defaut (auto) est 612x792 de large.
-    conversions['image/webp;612'] = {ext: 'webp', resolution: 612, params: ['-strip', '-quality', quality]}
+    conversions['image/webp;612'] = {
+      ext: 'webp',
+      resolution: 612,
+      params: ['-strip', '-quality', quality],
+      paramsFallback: ['-strip', '-resize', '612x792', '-quality', quality],
+    }
 
     // Changer gravity pour north (haut de la page, avec titre)
     conversions['thumb'] = {ext: 'jpg', resolution: 128, params: ['-strip', '-resize', '128x128^', '-gravity', 'north', '-extent', '128x128', '-quality', '25']}
@@ -327,14 +355,13 @@ async function determinerConversionsPoster(sourcePath, opts) {
 
 function _imConvertPromise(params) {
   return new Promise((resolve, reject) => {
-    console.debug("Conversion")
-    console.debug(params)
+    console.debug("Conversion params : %O", params)
     im.convert(params,
       function(err, stdout){
-        if (err) reject(err);
-        resolve();
-      });
-  });
+        if (err) reject(err)
+        resolve()
+      })
+  })
 }
 
 function genererSnapshotVideoPromise(sourcePath, previewPath) {

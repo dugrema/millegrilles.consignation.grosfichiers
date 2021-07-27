@@ -86,7 +86,8 @@ async function genererPreviewImage(mq, pathConsignation, message) {
   const resultatConversion = await traitementMedia.genererPreviewImage(mq, pathConsignation, message, optsConversion)
   debug("Fin traitement preview, resultat : %O", resultatConversion)
 
-  const {metadataImage, nbFrames, conversions} = resultatConversion
+  const {nbFrames, conversions} = resultatConversion
+  const metadataImage = resultatConversion.metadataImage || {}
 
   // Extraire information d'images converties sous un dict
   let resultatPreview = null  // Utiliser poster (legacy)
