@@ -5,6 +5,9 @@ const { traiterCommandeTranscodage } = require('../util/transformationsVideo')
 
 const urlServeurIndex = process.env.urlServeurIndex || 'http://elasticsearch:9200'
 
+const EXPIRATION_MESSAGE_DEFAUT = 15 * 60 * 1000,  // 15 minutes en millisec
+      EXPIRATION_COMMANDE_TRANSCODAGE = 30 * 60 * 1000  // 30 minutes en millisec
+
 // Traitement d'images pour creer des thumbnails et preview
 class GenerateurMedia {
 
@@ -62,6 +65,13 @@ class GenerateurMedia {
 async function genererPreviewImage(mq, pathConsignation, message) {
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
   var opts = {}
+
+  // Verifier si la commande est expiree
+  if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
+    console.warn("WARN media.genererPreviewImage Commande expiree, on l'ignore : %O", message)
+    return
+  }
+
   // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
   var hachageFichier = message.hachage
   if(message.version_courante) {
@@ -115,6 +125,13 @@ async function genererPreviewImage(mq, pathConsignation, message) {
 async function genererPreviewVideo(mq, pathConsignation, message) {
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
   var opts = {}
+
+  // Verifier si la commande est expiree
+  if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
+    console.warn("WARN media.genererPreviewVideo Commande expiree, on l'ignore : %O", message)
+    return
+  }
+
   // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
   const versionCourante = message.version_courante || {},
         hachageFichier = message.fuuid || message.hachage || message.fuuid_v_courante || versionCourante.fuuid || versionCourante.hachage
@@ -171,6 +188,13 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
 }
 
 function _traiterCommandeTranscodage(mq, pathConsignation, message) {
+
+  // Verifier si la commande est expiree
+  if(mq.estExpire(message, {expiration: EXPIRATION_COMMANDE_TRANSCODAGE})) {
+    console.warn("WARN media.traiterCommandeTranscodage Commande expiree, on l'ignore : %O", message)
+    return
+  }
+
   return traiterCommandeTranscodage(mq, pathConsignation, message)
     .catch(err=>{
       console.error("media._traiterCommandeTranscodage ERROR %s: %O", message.fuuid, err)
@@ -179,6 +203,13 @@ function _traiterCommandeTranscodage(mq, pathConsignation, message) {
 
 async function _indexerDocumentContenu(mq, pathConsignation, message) {
   debug("Traitement _indexerDocumentContenu : %O", message)
+
+  // Verifier si la commande est expiree
+  if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
+    console.warn("WARN media.indexerDocumentContenu Commande expiree, on l'ignore : %O", message)
+    return
+  }
+
   const fuuid = message.fuuid
   const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, fuuid)
   const optsConversion = {urlServeurIndex, cleSymmetrique: cleDechiffree, metaCle: informationCle}

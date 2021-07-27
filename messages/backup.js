@@ -12,6 +12,8 @@ const { calculerHachageFichier, calculerHachageData } = require('../util/utilita
 const { genererBackupQuotidien, genererBackupAnnuel } = require('../util/processFichiersBackup')
 const { genererRapportVerification } = require('../util/verificationBackups')
 
+const EXPIRATION_MESSAGE_DEFAUT = 15 * 60 * 1000  // 15 minutes en millisec
+
 class GestionnaireMessagesBackup {
 
   constructor(mq) {
@@ -31,6 +33,11 @@ class GestionnaireMessagesBackup {
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
+        // Verifier si la commande est expiree
+        if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
+          console.warn("WARN backup.genererBackupQuotidien Commande expiree, on l'ignore : %O", message)
+          return
+        }
         return genererBackupQuotidien(this.mq, this.pathConsignation, message.catalogue, message.uuid_rapport)
       },
       ['commande.backup.genererBackupQuotidien'],
@@ -39,6 +46,11 @@ class GestionnaireMessagesBackup {
 
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
+        // Verifier si la commande est expiree
+        if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
+          console.warn("WARN backup.genererBackupAnnuel Commande expiree, on l'ignore : %O", message)
+          return
+        }
         return genererBackupAnnuel(this.mq, this.pathConsignation, message.catalogue, message.uuid_rapport)
       },
       ['commande.backup.genererBackupAnnuel'],
@@ -47,6 +59,11 @@ class GestionnaireMessagesBackup {
 
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
+        // Verifier si la commande est expiree
+        if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
+          console.warn("WARN backup.genererRapportVerification Commande expiree, on l'ignore : %O", message)
+          return
+        }
         return genererRapportVerification(
           this.mq, this.pathConsignation, message.domaine, message.uuid_rapport,
           {...opts, verification_hachage: true, verification_enchainement: true}
