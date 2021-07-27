@@ -2,6 +2,8 @@ const debug = require('debug')('millegrilles:fichiers:amqpdao')
 const fs = require('fs')
 const {MilleGrillesPKI, MilleGrillesAmqpDAO} = require('@dugrema/millegrilles.common')
 
+const EXPIRATION_MESSAGE_DEFAUT = 30 * 60 * 1000  // 15 minutes en millisec
+
 async function init(opts) {
   opts = opts || {}
 
@@ -27,8 +29,13 @@ async function init(opts) {
   }
 
   // Connecter a MilleGrilles avec AMQP DAO
-  const nomsQCustom = ['image', 'video', 'publication']
-  const amqpdao = new MilleGrillesAmqpDAO(instPki, {nomsQCustom})
+  // const nomsQCustom = ['image', 'video', 'publication']
+  const qCustom = {
+    'image': {ttl: EXPIRATION_MESSAGE_DEFAUT},
+    'video': {ttl: EXPIRATION_MESSAGE_DEFAUT},
+    'publication': {},
+  }
+  const amqpdao = new MilleGrillesAmqpDAO(instPki, {qCustom})
   const mqConnectionUrl = process.env.MG_MQ_URL;
   await amqpdao.connect(mqConnectionUrl)
 
