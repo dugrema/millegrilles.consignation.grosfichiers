@@ -34,7 +34,7 @@ class GestionnaireMessagesBackup {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
         // Verifier si la commande est expiree
-        if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
+        if(this.mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
           console.warn("WARN backup.genererBackupQuotidien Commande expiree, on l'ignore : %O", message)
           return
         }
@@ -47,7 +47,7 @@ class GestionnaireMessagesBackup {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
         // Verifier si la commande est expiree
-        if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
+        if(this.mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
           console.warn("WARN backup.genererBackupAnnuel Commande expiree, on l'ignore : %O", message)
           return
         }
@@ -60,7 +60,7 @@ class GestionnaireMessagesBackup {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message, opts) => {
         // Verifier si la commande est expiree
-        if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
+        if(this.mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
           console.warn("WARN backup.genererRapportVerification Commande expiree, on l'ignore : %O", message)
           return
         }
