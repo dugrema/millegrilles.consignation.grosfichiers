@@ -109,8 +109,7 @@ async function traiterUploadHoraire(req, res, next) {
       res.send(response)
   })
   .catch(err=>{
-    console.error("Erreur traitement fichier " + req.url)
-    console.error(err)
+    console.error("Erreur traitement fichier %s\n%O", req.url, err)
     res.sendStatus(500)
 
     // Tenter de supprimer les fichiers

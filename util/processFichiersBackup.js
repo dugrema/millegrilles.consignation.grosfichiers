@@ -1,5 +1,6 @@
 const debug = require('debug')('millegrilles:util:processFichiersBackup')
 const fs = require('fs')
+const fsPromises = require('fs/promises')
 const readdirp = require('readdirp')
 const path = require('path')
 const crypto = require('crypto');
@@ -48,27 +49,36 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
       repertoireDestination = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
       nouveauPathCatalogue = path.join(repertoireDestination, nomFichierCatalogue)
       nouveauPathTransactions = path.join(repertoireDestination, fichierTransactions.originalname)
-      cleanupSnapshot = () => {
-        return new Promise((resolve, reject)=>{
-          const repertoireSnapshot = pathConsignation.trouverPathBackupSnapshot(catalogue.domaine)
-          fs.rmdir(repertoireSnapshot, {recursive: true}, err=>{
-            if(err) {
-              console.error("Erreur suppression snapshot sous %s : %O", repertoireSnapshot, err)
-              // return reject(err)
-            }
-            resolve()
-          })
-        })
+      cleanupSnapshot = async () => {
+        const repertoireSnapshot = pathConsignation.trouverPathBackupSnapshot(catalogue.domaine)
+        try {
+          await fsPromises.rm(repertoireSnapshot, {recursive: true})
+        } catch(err) {
+          // ENONENT === fichier n'existe pas, c'est OK
+          if(err.code !== 'ENOENT') {
+            console.error("processFichiersBackup.traiterFichiersBackup Erreur suppression snapshot sous %s : %O", repertoireSnapshot, err)
+          }
+        }
+        // return new Promise((resolve, reject)=>{
+          // fs.rmdir(repertoireSnapshot, {recursive: true}, err=>{
+          //   if(err) {
+          //     console.error("Erreur suppression snapshot sous %s : %O", repertoireSnapshot, err)
+          //     // return reject(err)
+          //   }
+          //   resolve()
+          // })
+        // })
       }
     }
 
-    await new Promise((resolve, reject)=>{
-      // Creer tous les repertoires requis pour le backup
-      fs.mkdir(repertoireDestination, { recursive: true, mode: 0o770 }, (err)=>{
-        if(err) return reject(err)
-        resolve()
-      })
-    })
+    await fsPromises.mkdir(repertoireDestination, { recursive: true, mode: 0o770 })
+    // await new Promise((resolve, reject)=>{
+    //   // Creer tous les repertoires requis pour le backup
+    //   fs.mkdir(repertoireDestination, { recursive: true, mode: 0o770 }, (err)=>{
+    //     if(err) return reject(err)
+    //     resolve()
+    //   })
+    // })
 
     // Deplacer le fichier de catalogue du backup
     debug("Copier catalogue %s -> %s", pathFichierCatalogue, nouveauPathCatalogue)
@@ -326,13 +336,15 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
 
   try {
     const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(domaine)
-    await new Promise((resolve, reject)=>{
-      fs.rmdir(repertoireBackupHoraire, err=>{
-        if(err) return reject(err)
-        debug("Repertoire horaire supprime : %s", repertoireBackupHoraire)
-        resolve()
-      })
-    })
+    await fsPromises.rm(repertoireBackupHoraire, {recursive: true})
+    debug("Repertoire horaire supprime : %s", repertoireBackupHoraire)
+    // await new Promise((resolve, reject)=>{
+    //   fs.rmdir(repertoireBackupHoraire, err=>{
+    //     if(err) return reject(err)
+    //     debug("Repertoire horaire supprime : %s", repertoireBackupHoraire)
+    //     resolve()
+    //   })
+    // })
   } catch(err) {
     debug("Erreur suppression repertoire de backup horaire: %O", err)
   }
@@ -874,29 +886,61 @@ async function sauvegarderLzma(fichier, contenu) {
 
 async function deplacerFichier(src, dst) {
   debug("Deplacer fichier de %s a %s", src, dst)
-  return new Promise((resolve, reject) => {
-    fs.rename(src, dst, err=>{
-      if(err) {
-        if(err.code === 'EXDEV') {
-          // Rename non supporte, faire un copy et supprimer le fichier
-          fs.copyFile(src, dst, errCopy=>{
-            // Supprimer ancien fichier
-            fs.unlink(src, errUnlink=>{
-              if(errUnlink) {
-                console.error("Erreur deplacement, src non supprimee " + src)
-              }
-            })
-            if(errCopy) return reject(errCopy);
-            return resolve()
-          })
-        } else {
-         // Erreur irrecuperable
-          return reject(err)
+
+  // S'assurer que le fichier n'existe pas
+  let fichierExistant = null
+  try {
+    fichierExistant = await fsPromises.stat(dst)
+  } catch(err) {
+    // Ok, le fichier n'existe pas
+    // debug("Fichier n'existe pas %O", err)
+  }
+  if(fichierExistant) {
+    throw new Error(`Le fichier ${dst} existe deja`)
+  }
+
+  // Deplacer le fichier
+  try {
+    await fsPromises.rename(src, dst)
+  } catch(err) {
+    if(err.code === 'EXDEV') {
+      try {
+        await fsPromises.copyFile(src, dst)
+      } finally {
+        try {
+          await fsPromises.unlink(src)
+        } catch(err) {
+          console.warn("WARN processFichiersBackup.deplacerFichier Erreur deplacement, src non supprimee " + src)
         }
       }
-      resolve()
-    })
-  })
+    } else {
+      throw err
+    }
+  }
+
+  // return new Promise((resolve, reject) => {
+  //   fs.rename(src, dst, err=>{
+  //     if(err) {
+  //       if(err.code === 'EXDEV') {
+  //         // Rename non supporte, faire un copy et supprimer le fichier
+  //         fs.copyFile(src, dst, errCopy=>{
+  //           // Supprimer ancien fichier
+  //           fs.unlink(src, errUnlink=>{
+  //             if(errUnlink) {
+  //               console.error("Erreur deplacement, src non supprimee " + src)
+  //             }
+  //           })
+  //           if(errCopy) return reject(errCopy);
+  //           return resolve()
+  //         })
+  //       } else {
+  //        // Erreur irrecuperable
+  //         return reject(err)
+  //       }
+  //     }
+  //     resolve()
+  //   })
+  // })
 }
 
 async function rsyncBackupVersCopie(pathConsignation, domaine, pathDestination) {
@@ -1090,7 +1134,7 @@ function transmettreEvenementBackup(mq, typeEvenement, domaine, uuidRapport, inf
   }
 
   if(info) {
-    evenement_contenu.info = info
+    message.info = info
   }
 
   const routingKey = 'evenement.Backup.backupMaj'
