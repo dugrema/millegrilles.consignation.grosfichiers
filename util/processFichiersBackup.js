@@ -411,10 +411,11 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   // Faire liste des fichiers de catalogue et transactions a inclure dans le tar quotidien
   const fichiersInclure = []
 
-  if(!catalogue.fichiers_horaire) {
-    catalogue.fichiers_horaire = {}
+  // Bug, signature du catalogue est invalide -- toujours re-signer
+  // if(!catalogue.fichiers_horaire) {
+  //   catalogue.fichiers_horaire = {}
     delete catalogue['_signature']  // Forcer nouvelle signature
-  }
+  // }
 
   // Charger l'information de tous les catalogues horaire correspondants au
   // backup quotidien. Valide le hachage des fichiers de catalogue et de
