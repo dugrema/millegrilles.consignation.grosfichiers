@@ -82,8 +82,9 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
 
     // Deplacer le fichier de catalogue du backup
     debug("Copier catalogue %s -> %s", pathFichierCatalogue, nouveauPathCatalogue)
-    await deplacerFichier(pathFichierCatalogue, nouveauPathCatalogue)
-    await deplacerFichier(pathFichierTransactions, nouveauPathTransactions)
+    const ecraser = catalogue.snapshot?true:false
+    await deplacerFichier(pathFichierCatalogue, nouveauPathCatalogue, {ecraser})
+    await deplacerFichier(pathFichierTransactions, nouveauPathTransactions, {ecraser})
 
     if(cleanupSnapshot) await cleanupSnapshot()
 
@@ -885,13 +886,19 @@ async function sauvegarderLzma(fichier, contenu) {
   return promiseSauvegarde
 }
 
-async function deplacerFichier(src, dst) {
+async function deplacerFichier(src, dst, opts) {
+  opts = opts || {}
   debug("Deplacer fichier de %s a %s", src, dst)
 
   // S'assurer que le fichier n'existe pas
   let fichierExistant = null
   try {
     fichierExistant = await fsPromises.stat(dst)
+    if(opts.ecraser) {
+      // Supprimer le fichier existant
+      await fsPromises.unlink(dst)
+      fichierExistant = null
+    }
   } catch(err) {
     // Ok, le fichier n'existe pas
     // debug("Fichier n'existe pas %O", err)
