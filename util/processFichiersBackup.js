@@ -726,7 +726,7 @@ async function traiterBackupAnnuel(mq, pathConsignation, catalogue) {
   }
 
   // Sauvegarder journal quotidien, sauvegarder en format .json.xz
-  if( ! catalogue['_signature'] || catalogueAnnuelModifie ) {
+  // if( ! catalogue['_signature'] || catalogueAnnuelModifie ) {
     // Journal est dirty, on doit le re-signer
     debug("Regenerer signature du catalogue horaire, entete precedente : %O", catalogue['en-tete'])
 
@@ -735,7 +735,7 @@ async function traiterBackupAnnuel(mq, pathConsignation, catalogue) {
     delete catalogue['en-tete']
 
     mq.formatterTransaction(domaine, catalogue, {attacherCertificat: true})
-  }
+  // }
 
   // Sauvegarder journal annuel, sauvegarder en format .json.xz
   var resultat = await sauvegarderCatalogueAnnuel(pathConsignation, catalogue)
