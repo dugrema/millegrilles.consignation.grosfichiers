@@ -336,7 +336,7 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
 
   try {
     const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(domaine)
-    await fsPromises.rm(repertoireBackupHoraire, {recursive: true})
+    await fsPromises.rm(repertoireBackupHoraire) //, {recursive: true})
     debug("Repertoire horaire supprime : %s", repertoireBackupHoraire)
     // await new Promise((resolve, reject)=>{
     //   fs.rmdir(repertoireBackupHoraire, err=>{
