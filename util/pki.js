@@ -11,7 +11,7 @@ console.info("Repertoire temporaire certs : %s", REPERTOIRE_CERTS_TMP);
 
 const PEM_CERT_DEBUT = '-----BEGIN CERTIFICATE-----';
 const PEM_CERT_FIN = '-----END CERTIFICATE-----';
-const ROLES_PERMIS_SSL = ['web_protege', 'domaines', 'maitrecles', 'monitor', 'prive', 'backup']
+const ROLES_PERMIS_SSL = ['web_protege', 'domaines', 'maitrecles', 'monitor', 'prive', 'backup', 'Core']
 
 class PKIUtils {
   // Classe qui supporte des operations avec certificats et cles privees.
