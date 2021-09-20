@@ -17,4 +17,5 @@ COPY ./package*.json ./
 COPY ./ ./
 
 RUN rm -rf node_modules/@dugrema/millegrilles.common && \
-    npm i --production
+    npm i --production && \
+    rm -rf /root/.npm
