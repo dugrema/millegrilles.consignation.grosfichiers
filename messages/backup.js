@@ -9,7 +9,7 @@ const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprime
 const { TraitementFichierBackup } = require('../util/traitementBackup')
 const { RestaurateurBackup } = require('../util/restaurationBackup')
 const { calculerHachageFichier, calculerHachageData } = require('../util/utilitairesHachage')
-const { genererBackupQuotidien, genererBackupAnnuel } = require('../util/processFichiersBackup')
+const { genererBackupQuotidien } = require('../util/processFichiersBackup')
 const { genererRapportVerification } = require('../util/verificationBackups')
 
 const EXPIRATION_MESSAGE_DEFAUT = 15 * 60 * 1000  // 15 minutes en millisec

@@ -307,7 +307,8 @@ async function genererBackupQuotidien(mq, pathConsignation, catalogue, uuidRappo
 
       // Generer transaction pour journal mensuel. Inclue SHA512 et nom de l'archive quotidienne
       debug("Transmettre transaction informationArchive :\n%O", informationArchive)
-      const reponseMessageQuotidien = await mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveQuotidienneInfo')
+      const reponseMessageQuotidien = await mq.transmettreTransactionFormattee(
+        informationArchive, 'CoreBackup', {action: 'archiveQuotidienneInfo'})
       debug("Reponse transmission message horaire pour catalogue quotidien : %O", reponseMessageQuotidien)
 
       // Effacer les fichiers transferes dans l'archive quotidienne
@@ -349,52 +350,6 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
   } catch(err) {
     debug("Erreur suppression repertoire de backup horaire: %O", err)
   }
-}
-
-async function genererBackupAnnuel(mq, pathConsignation, catalogue, uuidRapport) {
-  debug("Generer backup annuel pour rapport %s : %O", uuidRapport, catalogue);
-
-  try {
-    // Evenement pour le rapport de backup
-    transmettreEvenementBackup(mq, 'backupAnnuelDebut', catalogue.domaine, uuidRapport)
-
-    const informationArchive = await traiterBackupAnnuel(mq, pathConsignation, catalogue)
-
-    if(informationArchive.fichiersInclure) {
-      debug("Journal annuel sauvegarde : %O", informationArchive)
-
-      delete informationArchive.catalogue
-      const { fichiersInclure, pathRepertoireBackup } = informationArchive
-      delete informationArchive.fichiersInclure // Pas necessaire pour la transaction
-      delete informationArchive.pathRepertoireBackup // Pas necessaire pour la transaction
-
-      // Finaliser le backup en retransmettant le journal comme transaction
-      // de backup annuel
-      await mq.transmettreEnveloppeTransaction(catalogue)
-
-      debug("Transmettre transaction avec information \n%O", informationArchive)
-      await mq.transmettreTransactionFormattee(informationArchive, 'Backup.archiveAnnuelleInfo')
-
-      // Nettoyage des fichiers
-      const domaine = catalogue.domaine
-      const pathArchivesQuotidiennes = pathConsignation.trouverPathBackupDomaine(domaine)
-      await supprimerFichiers(fichiersInclure, pathArchivesQuotidiennes, {noerror: true})
-
-    } else {
-      debug("Aucun fichiers quotidiens trouves pour le backup annuel")
-    }
-
-    // Evenement pour le rapport de backup
-    transmettreEvenementBackup(mq, 'backupAnnuelTermine', catalogue.domaine, uuidRapport)
-
-    return informationArchive
-
-  } catch (err) {
-    console.error("genererBackupAnnuel: Erreur creation backup annuel:\n%O", err)
-    // Evenement pour le rapport de backup
-    transmettreEvenementBackup(mq, 'backupAnnuelTermine', catalogue.domaine, uuidRapport, {err})
-  }
-
 }
 
 // Genere un fichier de backup quotidien qui correspond au catalogue
@@ -489,7 +444,7 @@ async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
     // const domaine = catalogue['en-tete'].domaine
     delete catalogue['en-tete']
     delete catalogue['_certificat']
-    catalogue = await mq.pki.formatterMessage(catalogue, 'Backup.catalogueQuotidienFinaliser', {attacherCertificat: true})
+    catalogue = await mq.pki.formatterMessage(catalogue, 'CoreBackup', {action: 'catalogueQuotidien', attacherCertificat: true})
   }
 
   var resultat = await sauvegarderCatalogueQuotidien(pathConsignation, catalogue)
@@ -1145,14 +1100,14 @@ function transmettreEvenementBackup(mq, typeEvenement, domaine, uuidRapport, inf
     message.info = info
   }
 
-  const routingKey = 'evenement.Backup.backupMaj'
+  const routingKey = 'evenement.backup.backupMaj'
 
   mq.emettreEvenement(message, routingKey)
 }
 
 module.exports = {
   traiterFichiersBackup, traiterFichiersApplication,
-  genererBackupQuotidien, genererBackupAnnuel, genererListeCatalogues,
+  genererBackupQuotidien, genererListeCatalogues,
   rsyncBackupVersCopie,
 
   sauvegarderFichiersApplication, rotationArchiveApplication,
