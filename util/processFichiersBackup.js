@@ -46,11 +46,11 @@ async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransacti
 
       nouveauPathTransactions = path.join(repertoireDestination, nomFichierTransactions)
     } else {
-      repertoireDestination = pathConsignation.trouverPathBackupHoraire(catalogue.domaine)
+      repertoireDestination = pathConsignation.trouverPathBackupHoraire(catalogue.domaine, catalogue.partition)
       nouveauPathCatalogue = path.join(repertoireDestination, nomFichierCatalogue)
       nouveauPathTransactions = path.join(repertoireDestination, fichierTransactions.originalname)
       cleanupSnapshot = async () => {
-        const repertoireSnapshot = pathConsignation.trouverPathBackupSnapshot(catalogue.domaine)
+        const repertoireSnapshot = pathConsignation.trouverPathBackupSnapshot(catalogue.domaine, catalogue.partition)
         try {
           await fsPromises.rm(repertoireSnapshot, {recursive: true})
         } catch(err) {
@@ -316,7 +316,7 @@ async function genererBackupQuotidien(mq, pathConsignation, catalogue, uuidRappo
 
       // Effacer les fichiers transferes dans l'archive quotidienne
       const fichiersASupprimer = fichiersInclure.filter(item=>item.startsWith('horaire/'))
-      await nettoyerRepertoireBackupHoraire(pathConsignation, catalogue.domaine, fichiersASupprimer)
+      await nettoyerRepertoireBackupHoraire(pathConsignation, catalogue.domaine, catalogue.partition, fichiersASupprimer)
     } else {
       debug("Aucun fichiers horaires trouves")
     }
@@ -333,14 +333,14 @@ async function genererBackupQuotidien(mq, pathConsignation, catalogue, uuidRappo
 
 }
 
-async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichiersASupprimer) {
+async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, partition, fichiersASupprimer) {
   debug("Supprimer fichiers backup %O", fichiersASupprimer)
 
-  const repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
+  const repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine, partition)
   await supprimerFichiers(fichiersASupprimer, repertoireBackup, {noerror: true})
 
   try {
-    const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(domaine)
+    const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(domaine, partition)
     await fsPromises.rm(repertoireBackupHoraire) //, {recursive: true})
     debug("Repertoire horaire supprime : %s", repertoireBackupHoraire)
     // await new Promise((resolve, reject)=>{
@@ -359,10 +359,10 @@ async function nettoyerRepertoireBackupHoraire(pathConsignation, domaine, fichie
 async function traiterBackupQuotidien(mq, pathConsignation, catalogue) {
   debug("traiterBackupQuotidien : catalogue \n%O", catalogue)
 
-  const {domaine, securite} = catalogue
+  const {domaine, partition, securite} = catalogue
   const jourBackup = new Date(catalogue.jour * 1000)
-  const repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine)
-  const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(domaine)
+  const repertoireBackup = pathConsignation.trouverPathBackupDomaine(domaine, partition)
+  const repertoireBackupHoraire = pathConsignation.trouverPathBackupHoraire(domaine, partition)
 
   const listeCataloguesHoraires = await genererListeCatalogues(repertoireBackupHoraire)
   debug("Liste de catalogues sous %s : %O", repertoireBackupHoraire, listeCataloguesHoraires)

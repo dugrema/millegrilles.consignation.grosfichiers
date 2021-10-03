@@ -95,16 +95,19 @@ class PathConsignation {
     return fichier;
   }
 
-  trouverPathBackupHoraire(domaine) {
-    return path.join(this.consignationPathBackup, 'domaines', domaine, 'horaire')
+  trouverPathBackupHoraire(domaine, partition) {
+    const partitionDomaine = partition?domaine + '.' + partition:domaine
+    return path.join(this.consignationPathBackup, 'domaines', partitionDomaine, 'horaire')
   }
 
-  trouverPathBackupSnapshot(domaine) {
-    return path.join(this.consignationPathBackup, 'domaines', domaine, 'snapshot')
+  trouverPathBackupSnapshot(domaine, partition) {
+    const partitionDomaine = partition?domaine + '.' + partition:domaine
+    return path.join(this.consignationPathBackup, 'domaines', partitionDomaine, 'snapshot')
   }
 
-  trouverPathBackupDomaine(domaine) {
-    return path.join(this.consignationPathBackup, 'domaines', domaine)
+  trouverPathBackupDomaine(domaine, partition) {
+    const partitionDomaine = partition?domaine + '.' + partition:domaine
+    return path.join(this.consignationPathBackup, 'domaines', partitionDomaine)
   }
 
   getPathBackupDomaines() {
