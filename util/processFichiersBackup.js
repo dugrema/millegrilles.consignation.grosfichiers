@@ -129,7 +129,10 @@ async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMai
     }
     try {
       //const reponseCle = await amqpdao.transmettreEnveloppeTransaction(transactionMaitreDesCles)
-      const reponseCle = await amqpdao.transmettreEnveloppeCommande(transactionMaitreDesCles, 'MaitreDesCles.sauvegarderCle')
+      const domaine = 'MaitreDesCles'
+      const action = 'sauvegarderCle'
+      const partition = transactionMaitreDesCles['en-tete'].partition
+      const reponseCle = await amqpdao.transmettreEnveloppeCommande(transactionMaitreDesCles, domaine, {action, partition})
       debug("Reponse sauvegarde cle de backup : %O", reponseCle)
     } catch(err) {
       debug("ERREUR validerBackup commande maitre des cles : %O", err)
