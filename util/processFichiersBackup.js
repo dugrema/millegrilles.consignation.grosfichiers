@@ -173,7 +173,10 @@ async function traiterFichiersApplication(
     chargerFichierJson(fichierMaitrecles)
     .then(transactionMaitreDesCles=>{
       debug("Transmettre cles du fichier de backup application : %O", transactionMaitreDesCles)
-      return amqpdao.transmettreEnveloppeCommande(transactionMaitreDesCles, 'MaitreDesCles.sauvegarderCle')
+      const domaine = 'MaitreDesCles'
+      const action = 'sauvegarderCle'
+      const partition = transactionMaitreDesCles['en-tete'].partition
+      return amqpdao.transmettreEnveloppeCommande(transactionMaitreDesCles, domaine, {action, partition})
     })
   )
 
