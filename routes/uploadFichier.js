@@ -113,6 +113,8 @@ async function traiterPostUpload(req, res, next) {
   // Trier en ordre numerique
   files.sort((a,b)=>{return a-b})
 
+  debug("Information fichier a uploader : %O", informationFichier)
+
   const commandeMaitreCles = informationFichier.commandeMaitrecles
   const transactionGrosFichiers = informationFichier.transactionGrosFichiers
   const hachage = commandeMaitreCles.hachage_bytes
@@ -145,7 +147,7 @@ async function traiterPostUpload(req, res, next) {
     debug("Fichier correlation %s OK\nhachage %s", correlation, hachage)
 
     // Transmettre la cle
-    debug("Transmettre commande cle pour le fichier")
+    debug("Transmettre commande cle pour le fichier: %O", commandeMaitreCles)
     await req.amqpdao.transmettreEnveloppeCommande(commandeMaitreCles)
 
     debug("Deplacer le fichier vers le storage permanent")
@@ -159,8 +161,8 @@ async function traiterPostUpload(req, res, next) {
       await fsPromises.unlink(pathOutput)
     }
 
-    debug("Transmettre transaction fichier")
-    const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeTransaction(transactionGrosFichiers)
+    debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
+    const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeCommande(transactionGrosFichiers)
     debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
 
     res.status(201).send(reponseGrosfichiers)

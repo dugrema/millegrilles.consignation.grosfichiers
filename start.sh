@@ -23,7 +23,7 @@ export PORT=3021
 
 export DEBUG=millegrilles:common:server4,\
 millegrilles:routes:backup,millegrilles:util:backup,millegrilles:util:processFichiersBackup,\
-millegrilles:util:restaurationBackup
+millegrilles:util:restaurationBackup,millegrilles:fichiers:uploadFichier
 
 # export SERVER_TYPE=https
 
