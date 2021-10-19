@@ -28,7 +28,7 @@ function genererPreviewVideo(mq, pathConsignation, message, opts) {
 
 async function _genererPreview(mq, pathConsignation, message, opts, fctConversion) {
 
-  const uuidDocument = message.uuid,
+  const uuidDocument = message.tuuid,
         fuuid = message.fuuid
 
   debug("Message genererPreviewImage uuid:%s/fuuid:%s, chiffre:%s", uuidDocument, fuuid, opts.iv?true:false);
@@ -89,6 +89,7 @@ async function chiffrerTemporaire(mq, fichierSrc, fichierDst, clesPubliques, opt
   const identificateurs_document = opts.identificateurs_document || {}
 
   // Creer cipher
+  debug("Cles publiques pour cipher : %O", clesPubliques)
   const cipher = await mq.pki.creerCipherChiffrageAsymmetrique(
     clesPubliques, 'GrosFichiers', identificateurs_document
   )

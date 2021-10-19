@@ -28,7 +28,7 @@ class GenerateurMedia {
   enregistrerChannel() {
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message)=>{return genererPreviewImage(this.mq, this.pathConsignation, message)},
-      ['commande.fichiers.genererPreviewImage'],
+      ['commande.fichiers.genererPosterImage'],
       {
         // operationLongue: true,
         qCustom: 'image',
@@ -36,7 +36,7 @@ class GenerateurMedia {
     )
     this.mq.routingKeyManager.addRoutingKeyCallback(
       (routingKey, message)=>{return genererPreviewVideo(this.mq, this.pathConsignation, message)},
-      ['commande.fichiers.genererPreviewVideo'],
+      ['commande.fichiers.genererPosterVideo'],
       {
         // operationLongue: true,
         qCustom: 'image',
@@ -66,6 +66,8 @@ async function genererPreviewImage(mq, pathConsignation, message) {
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
   var opts = {}
 
+  debug("GenererPreviewImage message recu : %O", message)
+
   // Verifier si la commande est expiree
   if(mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
     console.warn("WARN media.genererPreviewImage Commande expiree, on l'ignore : %O", message)
@@ -73,12 +75,12 @@ async function genererPreviewImage(mq, pathConsignation, message) {
   }
 
   // Transmettre demande cle et attendre retour sur l'autre Q (on bloque Q operations longues)
-  var hachageFichier = message.hachage
+  var hachageFichier = message.hachage || message.fuuid
   if(message.version_courante) {
     // C'est une retransmission
     hachageFichier = message.version_courante.hachage || message.version_courante.fuuid
   }
-  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
+  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier, message)
 
   const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
 
@@ -102,10 +104,10 @@ async function genererPreviewImage(mq, pathConsignation, message) {
 
   // Transmettre transaction preview
   // const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
-  const domaineActionAssocier = 'GrosFichiers.associerConversions'
+  // const domaineActionAssocier = 'GrosFichiers.associerConversions'
   const transactionAssocier = {
-    uuid: message.uuid,
-    fuuid: message.fuuid,
+    tuuid: message.tuuid,
+    fuuid: hachageFichier,  // message.fuuid,
     images,
     width: metadataImage.width,
     height: metadataImage.height,
@@ -117,7 +119,7 @@ async function genererPreviewImage(mq, pathConsignation, message) {
 
   debug("Transaction associer images converties : %O", transactionAssocier)
 
-  mq.transmettreTransactionFormattee(transactionAssocier, domaineActionAssocier)
+  mq.transmettreTransactionFormattee(transactionAssocier, 'GrosFichiers', {action: 'associerConversions'})
     .catch(err=>{
       console.error("ERROR media.genererPreviewImage Erreur association conversions d'image : %O", err)
     })
@@ -144,7 +146,7 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
     console.error("ERROR media.genererPreviewVideo Aucune information de fichier dans le message : %O", message)
     return
   }
-  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier)
+  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, hachageFichier, message)
 
   const optsConversion = {cleSymmetrique: cleDechiffree, metaCle: informationCle, clesPubliques}
 
@@ -169,7 +171,7 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
   // const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
   const domaineActionAssocier = 'GrosFichiers.associerConversions'
   const transactionAssocier = {
-    uuid: message.uuid,
+    tuuid: message.tuuid,
     fuuid: message.fuuid,
     images,
     width: metadataImage.width,
@@ -212,20 +214,22 @@ async function _indexerDocumentContenu(mq, pathConsignation, message) {
   }
 
   const fuuid = message.fuuid
-  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, fuuid)
+  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, fuuid, permission)
   const optsConversion = {urlServeurIndex, cleSymmetrique: cleDechiffree, metaCle: informationCle}
   await traitementMedia.indexerDocument(mq, pathConsignation, message, optsConversion)
 }
 
-async function recupererCle(mq, hachageFichier) {
+async function recupererCle(mq, hachageFichier, permission) {
   const liste_hachage_bytes = [hachageFichier]
 
   // Ajouter chaine de certificats pour indiquer avec quelle cle re-chiffrer le secret
   // const chainePem = mq.pki.getChainePems()
-  const domaineAction = 'MaitreDesCles.dechiffrage'
-  const requete = {liste_hachage_bytes}
+  const domaine = 'MaitreDesCles',
+        action = 'dechiffrage'
+  const requete = {liste_hachage_bytes, permission}
   debug("Nouvelle requete dechiffrage cle a transmettre : %O", requete)
-  const reponseCle = await mq.transmettreRequete(domaineAction, requete)
+  const reponseCle = await mq.transmettreRequete(domaine, requete, {action, ajouterCertificat: true, decoder: true})
+  debug("Reponse requete dechiffrage : %O", reponseCle)
   if(reponseCle.acces !== '1.permis') {
     return {err: reponseCle.acces, msg: `Erreur dechiffrage cle pour generer preview de ${hachageFichier}`}
   }
@@ -239,7 +243,7 @@ async function recupererCle(mq, hachageFichier) {
   // Demander cles publiques pour chiffrer preview
   const domaineActionClesPubliques = 'MaitreDesCles.certMaitreDesCles'
   const reponseClesPubliques = await mq.transmettreRequete(domaineActionClesPubliques, {})
-  const clesPubliques = [reponseClesPubliques.certificat, [reponseClesPubliques.certificat_millegrille]]
+  const clesPubliques = [reponseClesPubliques.certificat, [mq.pki.ca]]
 
   return {cleDechiffree, informationCle, clesPubliques}
 }
