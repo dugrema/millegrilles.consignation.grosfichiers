@@ -5,7 +5,7 @@ const tmpPromises = require('tmp-promise')
 const path = require('path')
 const multibase = require('multibase')
 const FFmpeg = require('fluent-ffmpeg')
-const { chargerCleDechiffrage, creerOutputstreamChiffrage } = require('./cryptoUtils')
+const { chargerCleDechiffrage, chargerCleDechiffragePermission, creerOutputstreamChiffrage } = require('./cryptoUtils')
 const { gcmStreamReaderFactory } = require('../util/cryptoUtils')
 
 const PROFILS_TRANSCODAGE = {
@@ -375,7 +375,8 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
   debug("Commande traiterCommandeTranscodage video recue : %O", message)
 
   // Verifier si le preview est sur une image chiffree - on va avoir une permission de dechiffrage
-  var fuuid = message.fuuid,
+  var tuuid = message.tuuid,
+      fuuid = message.fuuid,
       mimetype = message.mimetype,
       videoBitrate = message.videoBitrate,
       height = message.resolutionVideo || message.height
@@ -393,7 +394,7 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
     mq.emettreEvenement({fuuid, mimetype, videoBitrate, height}, `evenement.fichiers.${fuuid}.transcodageDebut`)
     mq.emettreEvenement({fuuid, mimetype, videoBitrate, height}, `evenement.fichiers.${fuuid}.transcodageDebut`, {exchange: '2.prive'})
 
-    const cleInfo = await chargerCleDechiffrage(mq, fuuid)
+    const cleInfo = await chargerCleDechiffragePermission(mq, fuuid, message)
     debug("Cle dechiffrage : %O", cleInfo)
 
     const progressCb = progress => {
@@ -453,17 +454,17 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
 
     // Transmettre transaction associer video transcode
     const transactionAssocierPreview = {
-      fuuid: fuuid,
+      tuuid, fuuid,
 
       mimetype: message.mimetype,
-      fuuidVideo: commandeMaitredescles.hachage_bytes,
+      fuuid_video: commandeMaitredescles.hachage_bytes,
       hachage: commandeMaitredescles.hachage_bytes,
 
       width: probeInfo.width,
       height: probeInfo.height,
       codec: profil.videoCodecName,
       bitrate: resultatTranscodage.video.videoBitrate,
-      tailleFichier: cipherOutputStream.byteCount,
+      taille_fichier: cipherOutputStream.byteCount,
     }
 
     debug("Transaction transcoder video : %O", transactionAssocierPreview)
@@ -475,11 +476,11 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
           actionCle = 'sauvegarderCle',
           partitionCle = commandeMaitredescles['_partition']
     delete commandeMaitredescles['_partition']
-    await mq.transmettreCommande(domaineCle, commandeMaitredescles, {action: actionCle, partition: partitionCle})
+    await mq.transmettreCommande(domaineCle, commandeMaitredescles, {action: actionCle, partition: partitionCle, ajouterCertificat: true})
 
     // Transmettre transaction pour associer le video au fuuid
     const domainePreview = 'GrosFichiers', actionPreview = 'associerVideo'
-    await mq.transmettreTransactionFormattee(transactionAssocierPreview, domainePreview, {action: actionPreview})
+    await mq.transmettreTransactionFormattee(transactionAssocierPreview, domainePreview, {action: actionPreview, ajouterCertificat: true})
   } catch(err) {
     console.error("transformationsVideo: Erreur transcodage : %O", err)
     mq.emettreEvenement({fuuid, mimetype, videoBitrate, height, err: ''+err}, `evenement.fichiers.${fuuid}.transcodageErreur`)
