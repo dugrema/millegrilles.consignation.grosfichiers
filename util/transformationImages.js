@@ -148,13 +148,12 @@ async function convertir(mq, chiffrerTemporaire, deplacerVersStorage, clesPubliq
       if(data) informationImage.data_chiffre = data
 
       // Transmettre transaction info chiffrage
-      const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
+      const domaine = 'MaitreDesCles'
+      const action = 'sauvegarderCle'
       const commandeMaitreCles = resultatChiffrage.commandeMaitreCles
-      // commandeMaitreCles.identificateurs_document = {
-      //   attachement_fuuid: message.fuuid,
-      //   type: 'preview',
-      // }
-      await mq.transmettreCommande(domaineActionCles, commandeMaitreCles)
+      const partition = commandeMaitreCles._partition
+      delete commandeMaitreCles._partition
+      await mq.transmettreCommande(domaine, commandeMaitreCles, {action: 'sauvegarderCle', partition})
 
       return {
         metaConversion,
