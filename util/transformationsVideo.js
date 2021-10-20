@@ -471,12 +471,15 @@ async function traiterCommandeTranscodage(mq, pathConsignation, message) {
     mq.emettreEvenement({fuuid, mimetype, videoBitrate, height}, `evenement.fichiers.${fuuid}.transcodageTermine`, {exchange: '2.prive'})
 
     // Transmettre commande maitre des cles
-    const domaineActionCles = 'MaitreDesCles.sauvegarderCle'
-    await mq.transmettreCommande(domaineActionCles, commandeMaitredescles)
+    const domaineCle = 'MaitreDesCles',
+          actionCle = 'sauvegarderCle',
+          partitionCle = commandeMaitredescles['_partition']
+    delete commandeMaitredescles['_partition']
+    await mq.transmettreCommande(domaineCle, commandeMaitredescles, {action: actionCle, partition: partitionCle})
 
     // Transmettre transaction pour associer le video au fuuid
-    const domaineActionAssocierPreview = 'GrosFichiers.associerVideo'
-    await mq.transmettreTransactionFormattee(transactionAssocierPreview, domaineActionAssocierPreview)
+    const domainePreview = 'GrosFichiers', actionPreview = 'associerVideo'
+    await mq.transmettreTransactionFormattee(transactionAssocierPreview, domainePreview, {action: actionPreview})
   } catch(err) {
     console.error("transformationsVideo: Erreur transcodage : %O", err)
     mq.emettreEvenement({fuuid, mimetype, videoBitrate, height, err: ''+err}, `evenement.fichiers.${fuuid}.transcodageErreur`)

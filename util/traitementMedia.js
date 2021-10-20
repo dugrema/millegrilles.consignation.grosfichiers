@@ -210,13 +210,13 @@ async function transcoderVideo(mq, pathConsignation, message, opts) {
 }
 
 function _transmettreTransactionPreview(mq, transaction) {
-  const domaineTransaction = 'GrosFichiers.associerThumbnail';
-  mq.transmettreTransactionFormattee(transaction, domaineTransaction);
+  const domaine = 'GrosFichiers', action = 'associerThumbnail'
+  mq.transmettreCommande(domaineTransaction, transaction, {action});
 }
 
 function _transmettreTransactionVideoTranscode(mq, transaction) {
-  const domaineTransaction = 'GrosFichiers.associerVideo';
-  mq.transmettreTransactionFormattee(transaction, domaineTransaction);
+  const domaineTransaction = 'GrosFichiers', action = 'associerVideo'
+  mq.transmettreTransactionFormattee(domaineTransaction, transaction, {action});
 }
 
 // Extraction de thumbnail et preview pour images
