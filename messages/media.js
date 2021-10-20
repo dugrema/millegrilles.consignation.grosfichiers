@@ -119,7 +119,7 @@ async function genererPreviewImage(mq, pathConsignation, message) {
 
   debug("Transaction associer images converties : %O", transactionAssocier)
 
-  mq.transmettreTransactionFormattee(transactionAssocier, 'GrosFichiers', {action: 'associerConversions'})
+  mq.transmettreTransactionFormattee(transactionAssocier, 'GrosFichiers', {action: 'associerConversions', ajouterCertificat: true})
     .catch(err=>{
       console.error("ERROR media.genererPreviewImage Erreur association conversions d'image : %O", err)
     })
@@ -169,7 +169,6 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
 
   // Transmettre transaction preview
   // const domaineActionAssocierPreview = 'GrosFichiers.associerPreview'
-  const domaineActionAssocier = 'GrosFichiers.associerConversions'
   const transactionAssocier = {
     tuuid: message.tuuid,
     fuuid: message.fuuid,
@@ -183,7 +182,7 @@ async function genererPreviewVideo(mq, pathConsignation, message) {
 
   debug("Transaction associer images converties : %O", transactionAssocier)
 
-  mq.transmettreTransactionFormattee(transactionAssocier, domaineActionAssocier)
+  mq.transmettreTransactionFormattee(transactionAssocier, 'GrosFichiers', {action: 'associerConversions', ajouterCertificat: true})
     .catch(err=>{
       console.error("ERROR media.genererPreviewImage Erreur association conversions d'image : %O", err)
       debug("ERROR media.genererPreviewImage Erreur association conversions d'image message %O", message)

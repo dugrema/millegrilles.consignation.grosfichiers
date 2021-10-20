@@ -11,6 +11,7 @@ const { decrypterGCM } = require('./cryptoUtils.js')
 const { creerCipher, creerDecipher } = require('@dugrema/millegrilles.common/lib/chiffrage')
 const { hacher } = require('@dugrema/millegrilles.common/lib/hachage')
 const transformationImages = require('./transformationImages')
+const MIMETYPE_EXT_MAP = require('@dugrema/millegrilles.common/lib/mimetype_ext.json')
 
 const { calculerHachageFichier } = require('./utilitairesHachage')
 
@@ -29,18 +30,22 @@ function genererPreviewVideo(mq, pathConsignation, message, opts) {
 async function _genererPreview(mq, pathConsignation, message, opts, fctConversion) {
 
   const uuidDocument = message.tuuid,
-        fuuid = message.fuuid
+        fuuid = message.fuuid,
+        mimetype = message.mimetype
+
+  // Determiner extension fichier original en fonction du mimetype
+  const extension = MIMETYPE_EXT_MAP[mimetype] || '.mov'
 
   debug("Message genererPreviewImage uuid:%s/fuuid:%s, chiffre:%s", uuidDocument, fuuid, opts.iv?true:false);
   // debug("Parametres dechiffrage : %O", opts)
 
   var fichierSource = null, fichierDestination = null,
       fichierSrcTmp = null, fichierDstTmp = null,
-      pathPreviewImageTmp = null, extension = null
+      pathPreviewImageTmp = null
   try {
 
     // Trouver fichier original crypte    const pathFichierChiffre = this.pathConsignation.trouverPathLocal(fuuid, true);
-    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, message.extension, opts.cleSymmetrique, opts.metaCle)
+    fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, extension, opts.cleSymmetrique, opts.metaCle)
     fichierSource = fichierSrcTmp.path
 
     debug("Fichier (dechiffre) %s pour generer preview image", fichierSource)
