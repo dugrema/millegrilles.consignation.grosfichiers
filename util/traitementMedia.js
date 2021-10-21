@@ -255,7 +255,7 @@ async function indexerDocument(mq, pathConsignation, message, optsConversion) {
 
     const rep = await axios({
       method: 'PUT',
-      url: urlServeurIndex + '/grosfichiers/_doc/' + tuuid,
+      url: urlServeurIndex + '/grosfichiers/_doc/' + fuuid,
       data: docIndex,
     })
 
