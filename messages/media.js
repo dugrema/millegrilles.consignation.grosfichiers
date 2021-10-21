@@ -3,7 +3,7 @@ const {PathConsignation} = require('../util/traitementFichier')
 const traitementMedia = require('../util/traitementMedia.js')
 const { traiterCommandeTranscodage } = require('../util/transformationsVideo')
 
-const urlServeurIndex = process.env.urlServeurIndex || 'http://elasticsearch:9200'
+const urlServeurIndex = process.env.MG_SERVEUR_INDEX_URL || 'http://elasticsearch:9200'
 
 const EXPIRATION_MESSAGE_DEFAUT = 15 * 60 * 1000,  // 15 minutes en millisec
       EXPIRATION_COMMANDE_TRANSCODAGE = 30 * 60 * 1000  // 30 minutes en millisec
@@ -213,7 +213,7 @@ async function _indexerDocumentContenu(mq, pathConsignation, message) {
   }
 
   const fuuid = message.fuuid
-  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, fuuid, permission)
+  const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, fuuid, message)
   const optsConversion = {urlServeurIndex, cleSymmetrique: cleDechiffree, metaCle: informationCle}
   await traitementMedia.indexerDocument(mq, pathConsignation, message, optsConversion)
 }

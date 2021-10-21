@@ -238,7 +238,7 @@ function traiterVideo(pathImageSrc, opts) {
 async function indexerDocument(mq, pathConsignation, message, optsConversion) {
   const documentFichier = message.doc
   const {urlServeurIndex, cleSymmetrique, metaCle} = optsConversion
-  const {fuuid, uuid: uuidFichier} = message
+  const {fuuid, tuuid} = message
 
   const fichierSrcTmp = await dechiffrerTemporaire(pathConsignation, fuuid, 'pdf', cleSymmetrique, metaCle)
   try {
@@ -251,9 +251,11 @@ async function indexerDocument(mq, pathConsignation, message, optsConversion) {
       contenu: data.text,
     }
 
+    debug("indexerDocument contenu : %O", docIndex)
+
     const rep = await axios({
       method: 'PUT',
-      url: urlServeurIndex + '/grosfichiers/_doc/' + uuidFichier,
+      url: urlServeurIndex + '/grosfichiers/_doc/' + tuuid,
       data: docIndex,
     })
 
@@ -261,7 +263,7 @@ async function indexerDocument(mq, pathConsignation, message, optsConversion) {
     if([200, 201].includes(rep.status)) {
       // Emettre evenement pour indiquer la date de l'indexation
       const info = {
-        uuid: uuidFichier, fuuid,
+        tuuid, fuuid,
         dateModification: documentFichier.modification,
         result: rep.data.result,
       }
