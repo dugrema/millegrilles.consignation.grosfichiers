@@ -5,13 +5,14 @@ const stringify = require('json-stable-stringify');
 const fs = require('fs');
 const path = require('path');
 const tmp = require('tmp');
+const {extraireExtensionsMillegrille} = require('@dugrema/millegrilles.common/lib/forgecommon')
 
 const REPERTOIRE_CERTS_TMP = tmp.dirSync().name;  //'/tmp/consignationfichiers.certs';
 console.info("Repertoire temporaire certs : %s", REPERTOIRE_CERTS_TMP);
 
 const PEM_CERT_DEBUT = '-----BEGIN CERTIFICATE-----';
 const PEM_CERT_FIN = '-----END CERTIFICATE-----';
-const ROLES_PERMIS_SSL = ['web_protege', 'domaines', 'maitrecles', 'monitor', 'prive', 'backup', 'core']
+// const ROLES_PERMIS_SSL = ['web_protege', 'domaines', 'maitrecles', 'monitor', 'prive', 'backup', 'core']
 
 class PKIUtils {
   // Classe qui supporte des operations avec certificats et cles privees.
@@ -568,10 +569,26 @@ function verificationCertificatSSL(req, res, next) {
     }
 
   }
-  else if( ! ROLES_PERMIS_SSL.includes(typeCertificat)) {
-    console.error("Nom 'OU' non supporte: " + typeCertificat);
-    res.sendStatus(403);  // Access denied
-    return;
+  else {
+    // Pas un usager (via nginx), verifier si c'est un serveur avec droit
+    // d'acces direct (instance prive, protege ou secure)
+
+    // Extraire certificat DER
+    const raw = peerCertificate.raw
+    const rawString = String.fromCharCode.apply(null, raw)
+    const asn1Obj = forge.asn1.fromDer(rawString)
+    const cert = forge.pki.certificateFromAsn1(asn1Obj)
+
+    // Verifier extensions (exchanges)
+    const extensions = extraireExtensionsMillegrille(cert)
+    const exchanges = extensions.niveauxSecurite
+    if(exchanges.includes('2.prive') || exchanges.includes('3.protege') || exchanges.includes('4.secure')) {
+      // Ok, certificat correct
+    } else {
+      console.error("Niveau de securite non supporte %O, acces refuse" + exchanges);
+      res.sendStatus(403);  // Access denied
+      return;
+    }
   }
 
   // Utilisation du issuer pour identifier le idmg -> dans le cas d'un XS,

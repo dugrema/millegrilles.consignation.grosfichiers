@@ -25,7 +25,7 @@ export DEBUG=millegrilles:common:server4,\
 millegrilles:routes:backup,millegrilles:util:backup,millegrilles:util:processFichiersBackup,\
 millegrilles:util:restaurationBackup,millegrilles:fichiers:uploadFichier,\
 millegrilles:messages:media,millegrilles:fichiers:traitementMedia,millegrilles:fichiers:transformationsVideo,\
-millegrilles:fichiers:cryptoUtils
+millegrilles:fichiers:cryptoUtils,millegrilles:utilpki
 
 # export SERVER_TYPE=https
 
