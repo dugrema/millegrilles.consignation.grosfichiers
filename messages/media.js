@@ -216,6 +216,13 @@ async function _indexerDocumentContenu(mq, pathConsignation, message) {
   const {cleDechiffree, informationCle, clesPubliques} = await recupererCle(mq, fuuid, message)
   const optsConversion = {urlServeurIndex, cleSymmetrique: cleDechiffree, metaCle: informationCle}
   await traitementMedia.indexerDocument(mq, pathConsignation, message, optsConversion)
+
+  const commandeResultat = { ok: true, fuuid }
+  await mq.transmettreCommande(
+    "GrosFichiers",
+    commandeResultat,
+    {action: 'confirmerFichierIndexe', ajouterCertificat: true, nowait: true}
+  )
 }
 
 async function recupererCle(mq, hachageFichier, permission) {
