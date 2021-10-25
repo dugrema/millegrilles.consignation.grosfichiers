@@ -12,10 +12,9 @@ class PkiMessages {
   }
 
   enregistrerChannel() {
-    this.fingerprint = transmettreCertificat(this.mq);
+    this.fingerprint = this.mq.pki.fingerprint  // transmettreCertificat(this.mq);
     this.routingKeys = [
-      'pki.requete.' + this.fingerprint,
-      'requete.pki.role.fichiers',
+      'requete.certificat.' + this.fingerprint
     ]
 
     const mq = this.mq;
@@ -28,11 +27,6 @@ class PkiMessages {
 }
 
 function transmettreCertificat(mq, routingKeys, message, opts) {
-  // console.debug("transmettreCertificat");
-  // console.debug(routingKeys);
-  // console.debug(message);
-  // console.debug(opts);
-
   var replyTo, correlationId;
   if(opts && opts.properties) {
     replyTo = opts.properties.replyTo;
@@ -48,7 +42,7 @@ function transmettreCertificat(mq, routingKeys, message, opts) {
   } else {
     let messageJSONStr = JSON.stringify(messageCertificat);
     mq._publish(
-      'pki.certificat.' + fingerprint, messageJSONStr
+      'evenement.certificat.infoCertificat', messageJSONStr
     );
   }
 

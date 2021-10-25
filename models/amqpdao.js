@@ -62,8 +62,8 @@ async function initialiserRabbitMQ(rabbitMQ) {
   // const {DecrypterFichier} = require('../messages/crypto');
   // rabbitMQ.enregistrerListenerConnexion(new DecrypterFichier(rabbitMQ));
 
-  const {GenerateurMedia} = require('../messages/media');
-  rabbitMQ.enregistrerListenerConnexion(new GenerateurMedia(rabbitMQ));
+  // const {GenerateurMedia} = require('../messages/media');
+  // rabbitMQ.enregistrerListenerConnexion(new GenerateurMedia(rabbitMQ));
 
   // const {PublicateurAWS} = require('../messages/aws');
   // rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
