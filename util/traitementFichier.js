@@ -12,7 +12,6 @@ const tmp = require('tmp-promise')
 const tar = require('tar')
 
 const { uuidToDate } = require('./UUIDUtils')
-const transformationImages = require('./transformationImages')
 const { pki, ValidateurSignature } = require('./pki')
 const { calculerHachageFichier } = require('./utilitairesHachage')
 

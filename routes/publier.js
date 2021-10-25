@@ -7,8 +7,8 @@ const fsPromises = require('fs/promises')
 const multer = require('multer')
 const {v4: uuidv4} = require('uuid')
 const readdirp = require('readdirp')
-const FormData = require('form-data')
-const { addRepertoire: ipfsPublish, getPins } = require('../util/ipfs')
+// const FormData = require('form-data')
+// const { addRepertoire: ipfsPublish, getPins } = require('../util/ipfs')
 const { connecterSSH, preparerSftp, listerConsignation: _listerConsignationSftp } = require('../util/ssh')
 const { preparerConnexionS3, addRepertoire: awss3Publish, listerConsignation: _listerConsignationAwsS3 } = require('../util/awss3')
 
@@ -30,9 +30,9 @@ function init(mq, pathConsignation) {
   const route = express.Router()
 
   route.put('/publier/repertoire', multerMiddleware.array('files', 1000), publierRepertoire)
-  route.put('/publier/fichierIpns', multerMiddleware.array('files', 1), publierFichierIpns)
+  // route.put('/publier/fichierIpns', multerMiddleware.array('files', 1), publierFichierIpns)
   route.post('/publier/listerConsignationSftp', bodyParserJson, listerConsignationSftp)
-  route.post('/publier/listerPinsIpfs', listerPinsIpfs)
+  // route.post('/publier/listerPinsIpfs', listerPinsIpfs)
   route.post('/publier/listerConsignationAwsS3', bodyParserJson, listerConsignationAwsS3)
 
   return route
@@ -84,17 +84,17 @@ async function publierRepertoire(req, res, next) {
         _mq.transmettreCommande(domaineAction, commande, {nowait: true})
         debug("Commande publier SFTP emise")
       }
-      if(cdn.type_cdn === 'ipfs') {
-        if(fichierUnique) {
-          const file = req.files[0]
-          const filePath = path.join(repTemporaire, file.originalname)
-          commande.fichierUnique = filePath
-        }
-        debug("Publier repertoire avec IPFS : %O", commande)
-        const domaineAction = 'commande.fichiers.publierRepertoireIpfs'
-        _mq.transmettreCommande(domaineAction, commande, {nowait: true})
-        debug("Commande publier IPFS emise")
-      }
+      // if(cdn.type_cdn === 'ipfs') {
+      //   if(fichierUnique) {
+      //     const file = req.files[0]
+      //     const filePath = path.join(repTemporaire, file.originalname)
+      //     commande.fichierUnique = filePath
+      //   }
+      //   debug("Publier repertoire avec IPFS : %O", commande)
+      //   const domaineAction = 'commande.fichiers.publierRepertoireIpfs'
+      //   _mq.transmettreCommande(domaineAction, commande, {nowait: true})
+      //   debug("Commande publier IPFS emise")
+      // }
       if(cdn.type_cdn === 'awss3') {
         debug("Publier repertoire avec AWS S3 : %O", cdn)
         const domaineAction = 'commande.fichiers.publierRepertoireAwsS3'
@@ -133,17 +133,17 @@ async function listerConsignationSftp(req, res, next) {
   // res.send({ok: true})
 }
 
-async function listerPinsIpfs(req, res, next) {
-  debug('publier.listerPinsIpfs')
-
-  try {
-    res.status(200)
-    getPins(res)
-  } catch(err) {
-    console.error("ERROR publier.listerPinsIpfs %O", err)
-    res.sendStatus(500)
-  }
-}
+// async function listerPinsIpfs(req, res, next) {
+//   debug('publier.listerPinsIpfs')
+//
+//   try {
+//     res.status(200)
+//     getPins(res)
+//   } catch(err) {
+//     console.error("ERROR publier.listerPinsIpfs %O", err)
+//     res.sendStatus(500)
+//   }
+// }
 
 async function listerConsignationAwsS3(req, res, next) {
   debug("publier.listerConsignationAwsS3 %O", req.body)
@@ -164,20 +164,20 @@ async function listerConsignationAwsS3(req, res, next) {
   }
 }
 
-async function publierFichierIpns(req, res, next) {
-  debug("publier.publierFichierIpns\n%O\nfichiers: %O", req.body, req.files)
-
-  const fichier = req.files[0]
-  const commande = {
-    ...req.body, fichier,
-  }
-
-  debug("Publier fichier avec IPFS")
-  const domaineAction = 'commande.fichiers.publierFichierIpns'
-  _mq.transmettreCommande(domaineAction, commande, {nowait: true})
-  debug("Commande publier IPFS emise")
-
-  res.sendStatus(200)
-}
+// async function publierFichierIpns(req, res, next) {
+//   debug("publier.publierFichierIpns\n%O\nfichiers: %O", req.body, req.files)
+//
+//   const fichier = req.files[0]
+//   const commande = {
+//     ...req.body, fichier,
+//   }
+//
+//   debug("Publier fichier avec IPFS")
+//   const domaineAction = 'commande.fichiers.publierFichierIpns'
+//   _mq.transmettreCommande(domaineAction, commande, {nowait: true})
+//   debug("Commande publier IPFS emise")
+//
+//   res.sendStatus(200)
+// }
 
 module.exports = {init}

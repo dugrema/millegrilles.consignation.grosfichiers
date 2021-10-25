@@ -1,4 +1,4 @@
-FROM docker.maceroc.com/nodejsmedia:16_2
+FROM node:16
 
 # Create app directory
 WORKDIR /usr/src/app
@@ -16,6 +16,5 @@ COPY ./package*.json ./
 # Api est l'application node back-end et front-end est l'application react
 COPY ./ ./
 
-RUN rm -rf node_modules/@dugrema/millegrilles.common && \
-    npm i --production && \
+RUN npm i --production && \
     rm -rf /root/.npm

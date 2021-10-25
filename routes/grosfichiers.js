@@ -5,7 +5,7 @@ const fs = require('fs');
 const multer = require('multer')
 const bodyParser = require('body-parser')
 
-const {PathConsignation, TraitementFichier} = require('../util/traitementFichier')
+const {PathConsignation} = require('../util/traitementFichier')
 const {getDecipherPipe4fuuid} = require('../util/cryptoUtils')
 const uploadFichier = require('./uploadFichier')
 const { stagingFichier: stagingPublic, creerStreamDechiffrage } = require('../util/publicStaging')
@@ -20,16 +20,16 @@ function InitialiserGrosFichiers() {
 
   const bodyParserInstance = bodyParser.urlencoded({ extended: false })
 
-  router.get('/fichiers/public/:fuuid', downloadFichierPublic, pipeReponse)
-  router.get('/fichiers/stream/:fuuid', downloadVideoPrive, pipeReponse)
+  // router.get('/fichiers/public/:fuuid', downloadFichierPublic, pipeReponse)
+  // router.get('/fichiers/stream/:fuuid', downloadVideoPrive, pipeReponse)
   router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
 
   // Path fichiers_transfert. Comportement identique a /fichiers, utilise
   // pour faire une authentification systeme avec cert SSL (en amont,
   // deja valide rendu ici)
-  router.get('/fichiers_transfert/public/:fuuid', downloadFichierPublic, pipeReponse)
-  router.get('/fichiers_transfert/stream/:fuuid', downloadVideoPrive, pipeReponse)
-  router.get('/fichiers_transfert/:fuuid', downloadFichierLocal, pipeReponse)
+  // router.get('/fichiers_transfert/public/:fuuid', downloadFichierPublic, pipeReponse)
+  // router.get('/fichiers_transfert/stream/:fuuid', downloadVideoPrive, pipeReponse)
+  // router.get('/fichiers_transfert/:fuuid', downloadFichierLocal, pipeReponse)
 
   router.use(uploadFichier.init())
 
@@ -37,7 +37,7 @@ function InitialiserGrosFichiers() {
 }
 
 async function downloadFichierLocal(req, res, next) {
-  debug("downloadFichierLocalChiffre methode:" + req.method + ": " + req.url);
+  debug("downloadFichierLocal methode:" + req.method + ": " + req.url);
   debug(req.headers);
   debug(req.autorisationMillegrille)
   // debug("PARAMS\n%O", req.params)

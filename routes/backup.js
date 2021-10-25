@@ -5,7 +5,7 @@ const fs = require('fs')
 const multer = require('multer')
 const bodyParser = require('body-parser')
 
-const {PathConsignation, streamListeFichiers} = require('../util/traitementFichier')
+const {PathConsignation} = require('../util/traitementFichier')
 const {
   TraitementFichierBackup, getListeDomaines, getListeApplications, getCataloguesDomaine,
   getListeFichiers, getFichier
@@ -73,7 +73,7 @@ function InitialiserBackup(fctRabbitMQParIdmg) {
   )
 
   // Path de download des fichiers de backup
-  router.get('/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
+  // router.get('/backup/restaurerDomaine/:domaine', restaurerDomaine, streamListeFichiers)
   router.head('/backup/application/:nomApplication', restaurerApplication)
   router.get('/backup/application/:nomApplication', restaurerApplication)
 

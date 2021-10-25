@@ -8,13 +8,13 @@ const {
   putFichier: putFichierSsh,
   addRepertoire: putRepertoireSsh
 } = require('../util/ssh')
-const { init: initIpfs,
-        addFichier: addFichierIpfs,
-        addRepertoire: putRepertoireIpfs,
-        publishName: publishIpns,
-        creerCleIpns: _creerCleIpns,
-        importerCleIpns,
-      } = require('../util/ipfs')
+// const { init: initIpfs,
+//         addFichier: addFichierIpfs,
+//         addRepertoire: putRepertoireIpfs,
+//         publishName: publishIpns,
+//         creerCleIpns: _creerCleIpns,
+//         importerCleIpns,
+//       } = require('../util/ipfs')
 const { preparerConnexionS3, uploaderFichier: putFichierAwsS3, addRepertoire: putRepertoireAwsS3 } = require('../util/awss3')
 const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../util/publicStaging')
 const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.common/lib/chiffrage')
@@ -29,8 +29,8 @@ function init(mq) {
   const idmg = mq.pki.idmg
   _pathConsignation = new PathConsignation({idmg});
 
-  const ipfsHost = process.env.IPFS_HOST || 'http://ipfs:5001'
-  initIpfs(ipfsHost)
+  // const ipfsHost = process.env.IPFS_HOST || 'http://ipfs:5001'
+  // initIpfs(ipfsHost)
 }
 
 function on_connecter() {
@@ -46,12 +46,12 @@ function on_connecter() {
   _ajouterCb('commande.fichiers.publierVitrineAwsS3', publierVitrineAwsS3)
 
   // Commandes IPFS
-  _ajouterCb('commande.fichiers.publierFichierIpfs', publierFichierIpfs)
-  _ajouterCb('commande.fichiers.publierFichierIpns', publierFichierIpns)
-  _ajouterCb('commande.fichiers.publierRepertoireIpfs', publierRepertoireIpfs)
-  _ajouterCb('commande.fichiers.publierVitrineIpfs', publierVitrineIpfs)
-  _ajouterCb('commande.fichiers.publierIpns', publierIpns)
-  _ajouterCb('commande.fichiers.creerCleIpns', creerCleIpns)
+  // _ajouterCb('commande.fichiers.publierFichierIpfs', publierFichierIpfs)
+  // _ajouterCb('commande.fichiers.publierFichierIpns', publierFichierIpns)
+  // _ajouterCb('commande.fichiers.publierRepertoireIpfs', publierRepertoireIpfs)
+  // _ajouterCb('commande.fichiers.publierVitrineIpfs', publierVitrineIpfs)
+  // _ajouterCb('commande.fichiers.publierIpns', publierIpns)
+  // _ajouterCb('commande.fichiers.creerCleIpns', creerCleIpns)
 }
 
 function _ajouterCb(rk, cb, opts) {
@@ -190,130 +190,130 @@ async function publierFichierSftp(message, rk, opts) {
   }
 }
 
-async function publierFichierIpfs(message, rk, opts) {
-  opts = opts || {}
-  const {fuuid, cdn_id: cdnId} = message
-  const securite = message.securite || '3.protege'
-  const properties = opts.properties || {}
-  const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
-
-  try {
-
-    var localPath = _pathConsignation.trouverPathLocal(fuuid)
-    debug("Fichier local a publier sur SSH : %s", localPath)
-
-    if(securite === '1.public') {
-      // Dechiffrer le fichier public dans staging
-      const infoFichierPublic = await preparerStagingPublic(fuuid)
-      debug("Information fichier public : %O", infoFichierPublic)
-      localPath = infoFichierPublic.filePath
-    }
-
-    const reponse = await addFichierIpfs(localPath)
-    debug("Put fichier ipfs OK : %O", reponse)
-    const reponseMq = {
-      ok: true,
-      hash: reponse.Hash,
-      size: reponse.Size
-    }
-
-    if(properties && properties.replyTo) {
-      _mq.transmettreReponse(reponseMq, properties.replyTo, properties.correlationId)
-    }
-
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id: cdnId,
-      complete: true,
-      securite,
-      cid: reponse.Hash,
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-
-  } catch(err) {
-    console.error("ERROR publication.publierFichierIpfs: Erreur publication fichier sur ipfs : %O", err)
-    if(properties && properties.replyTo) {
-      _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
-    }
-
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id: cdnId,
-      complete: false,
-      err: ''+err,
-      stack: JSON.stringify(err.stack),
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-  }
-}
-
-async function publierFichierIpns(message, rk, opts) {
-  const cdns = JSON.parse(message.cdns)
-  const cdnIds = cdns.map(item=>item.cdn_id)
-  const identificateur_document = JSON.parse(message.identificateur_document)
-  const securite = message.securite
-  try {
-    debug("publication.publierFichierIpns %O", message)
-
-    const localPath = message.fichier.path
-
-    const reponseCid = await addFichierIpfs(localPath)
-    debug("Put fichier ipfs OK : %O", reponseCid)
-    const cid = reponseCid.Hash,
-          keyName = message.ipns_key_name
-    var reponseIpns = null
-    try {
-      reponseIpns = await publishIpns(cid, keyName)
-      debug("Put fichier ipns OK")
-    } catch(err) {
-      debug("erreur publication ipns, cle manquante ou autre erreur %O", err)
-      if(err.code === 404) {
-        // On doit importer la cle
-        const permission = JSON.parse(message.permission)
-        // const ipnsKeyBytes = multibase.decode(message.ipns_key)
-        const cleJson = await dechiffrerDocumentAvecMq(
-          _mq, message.ipns_key, {permission})
-        await importerCleIpns(keyName, cleJson)
-
-        // Tenter a nouveau de publier la ressource
-        reponseIpns = await publishIpns(cid, keyName)
-        debug("Put fichier ipns OK")
-
-      } else {
-        throw err
-      }
-    }
-
-    // Emettre evenement de publication
-    const ipns_key_hash = reponseIpns.data.Name
-    const confirmation = {
-      cdn_ids: cdnIds,
-      identificateur_document,
-      complete: true,
-      securite,
-      cid,
-      ipns_id: ipns_key_hash,
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-  } catch(err) {
-    console.error("ERROR publication.publierFichierIpns %O", err)
-    const messageErreur = {
-      cdn_ids: cdnIds,
-      identificateur_document,
-      complete: false,
-      err: ''+err,
-      stack: JSON.stringify(err.stack),
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(messageErreur, domaineActionConfirmation)
-  }
-
-}
+// async function publierFichierIpfs(message, rk, opts) {
+//   opts = opts || {}
+//   const {fuuid, cdn_id: cdnId} = message
+//   const securite = message.securite || '3.protege'
+//   const properties = opts.properties || {}
+//   const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
+//
+//   try {
+//
+//     var localPath = _pathConsignation.trouverPathLocal(fuuid)
+//     debug("Fichier local a publier sur SSH : %s", localPath)
+//
+//     if(securite === '1.public') {
+//       // Dechiffrer le fichier public dans staging
+//       const infoFichierPublic = await preparerStagingPublic(fuuid)
+//       debug("Information fichier public : %O", infoFichierPublic)
+//       localPath = infoFichierPublic.filePath
+//     }
+//
+//     const reponse = await addFichierIpfs(localPath)
+//     debug("Put fichier ipfs OK : %O", reponse)
+//     const reponseMq = {
+//       ok: true,
+//       hash: reponse.Hash,
+//       size: reponse.Size
+//     }
+//
+//     if(properties && properties.replyTo) {
+//       _mq.transmettreReponse(reponseMq, properties.replyTo, properties.correlationId)
+//     }
+//
+//     // Emettre evenement de publication
+//     const confirmation = {
+//       identificateur_document,
+//       cdn_id: cdnId,
+//       complete: true,
+//       securite,
+//       cid: reponse.Hash,
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//
+//   } catch(err) {
+//     console.error("ERROR publication.publierFichierIpfs: Erreur publication fichier sur ipfs : %O", err)
+//     if(properties && properties.replyTo) {
+//       _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
+//     }
+//
+//     // Emettre evenement de publication
+//     const confirmation = {
+//       identificateur_document,
+//       cdn_id: cdnId,
+//       complete: false,
+//       err: ''+err,
+//       stack: JSON.stringify(err.stack),
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//   }
+// }
+//
+// async function publierFichierIpns(message, rk, opts) {
+//   const cdns = JSON.parse(message.cdns)
+//   const cdnIds = cdns.map(item=>item.cdn_id)
+//   const identificateur_document = JSON.parse(message.identificateur_document)
+//   const securite = message.securite
+//   try {
+//     debug("publication.publierFichierIpns %O", message)
+//
+//     const localPath = message.fichier.path
+//
+//     const reponseCid = await addFichierIpfs(localPath)
+//     debug("Put fichier ipfs OK : %O", reponseCid)
+//     const cid = reponseCid.Hash,
+//           keyName = message.ipns_key_name
+//     var reponseIpns = null
+//     try {
+//       reponseIpns = await publishIpns(cid, keyName)
+//       debug("Put fichier ipns OK")
+//     } catch(err) {
+//       debug("erreur publication ipns, cle manquante ou autre erreur %O", err)
+//       if(err.code === 404) {
+//         // On doit importer la cle
+//         const permission = JSON.parse(message.permission)
+//         // const ipnsKeyBytes = multibase.decode(message.ipns_key)
+//         const cleJson = await dechiffrerDocumentAvecMq(
+//           _mq, message.ipns_key, {permission})
+//         await importerCleIpns(keyName, cleJson)
+//
+//         // Tenter a nouveau de publier la ressource
+//         reponseIpns = await publishIpns(cid, keyName)
+//         debug("Put fichier ipns OK")
+//
+//       } else {
+//         throw err
+//       }
+//     }
+//
+//     // Emettre evenement de publication
+//     const ipns_key_hash = reponseIpns.data.Name
+//     const confirmation = {
+//       cdn_ids: cdnIds,
+//       identificateur_document,
+//       complete: true,
+//       securite,
+//       cid,
+//       ipns_id: ipns_key_hash,
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//   } catch(err) {
+//     console.error("ERROR publication.publierFichierIpns %O", err)
+//     const messageErreur = {
+//       cdn_ids: cdnIds,
+//       identificateur_document,
+//       complete: false,
+//       err: ''+err,
+//       stack: JSON.stringify(err.stack),
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(messageErreur, domaineActionConfirmation)
+//   }
+//
+// }
 
 async function publierFichierAwsS3(message, rk, opts) {
   opts = opts || {}
@@ -513,93 +513,93 @@ function publierVitrineSftp(message, rk, opts) {
   return publierRepertoireSftp(configurationPublication, rk, opts)
 }
 
-async function publierRepertoireIpfs(message, rk, opts) {
-  debug("Publier repertoire ipfs : %O", message)
-  const {repertoireStaging, identificateur_document, cdn_id, securite} = message
-
-  const ipnsKeyName = message.ipns_key_name
-  const optsCommande = {
-    ...opts,
-    ipnsKeyName
-  }
-
-  try {
-    if(message.fichierUnique) {
-      debug("Publier fichier %s", message.fichierUnique)
-
-      const reponse = await addFichierIpfs(message.fichierUnique, optsCommande)
-      debug("Put fichier ipfs OK : %O", reponse)
-      const reponseMq = {
-        ok: true,
-        hash: reponse.Hash,
-        size: reponse.Size
-      }
-
-      // Emettre evenement de publication
-      const confirmation = {
-        identificateur_document,
-        cdn_id,
-        complete: true,
-        // securite,
-        cid: reponse.Hash,
-        ...reponse,
-      }
-
-      const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-      _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-
-    } else {
-      const reponseIpfs = await putRepertoireIpfs(repertoireStaging, optsCommande)
-      debug("Publication IPFS : %O", reponseIpfs)
-
-      // Emettre evenement de publication
-      const confirmation = {
-        identificateur_document,
-        cdn_id,
-        complete: true,
-        securite,
-        ...reponseIpfs,
-      }
-
-      const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-      _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-    }
-
-  } catch(err) {
-    console.error('ERROR publication.publierRepertoireSftp %O', err)
-
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id,
-      complete: false,
-      err: ''+err,
-      stack: JSON.stringify(err.stack),
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-
-  } finally {
-    if(message.uploadUnique) {
-      // Supprimer le repertoire de staging
-      await fsPromises.rm(repertoireStaging, {recursive: true})
-    }
-  }
-}
-
-function publierVitrineIpfs(message, rk, opts) {
-  // Va publier le code de vitrine via SFTP
-  const pathVitrine = path.join(_repertoireCodeWebapps, 'vitrine')
-  const configurationPublication = {
-    ...message,
-
-    // Ajouter repertoire source
-    repertoireStaging: pathVitrine,
-    ipnsKeyName: message.ipns_key_name,
-  }
-  debug("Publier vitrine IPFS : %O", configurationPublication)
-  return publierRepertoireIpfs(configurationPublication, rk, opts)
-}
+// async function publierRepertoireIpfs(message, rk, opts) {
+//   debug("Publier repertoire ipfs : %O", message)
+//   const {repertoireStaging, identificateur_document, cdn_id, securite} = message
+//
+//   const ipnsKeyName = message.ipns_key_name
+//   const optsCommande = {
+//     ...opts,
+//     ipnsKeyName
+//   }
+//
+//   try {
+//     if(message.fichierUnique) {
+//       debug("Publier fichier %s", message.fichierUnique)
+//
+//       const reponse = await addFichierIpfs(message.fichierUnique, optsCommande)
+//       debug("Put fichier ipfs OK : %O", reponse)
+//       const reponseMq = {
+//         ok: true,
+//         hash: reponse.Hash,
+//         size: reponse.Size
+//       }
+//
+//       // Emettre evenement de publication
+//       const confirmation = {
+//         identificateur_document,
+//         cdn_id,
+//         complete: true,
+//         // securite,
+//         cid: reponse.Hash,
+//         ...reponse,
+//       }
+//
+//       const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//       _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//
+//     } else {
+//       const reponseIpfs = await putRepertoireIpfs(repertoireStaging, optsCommande)
+//       debug("Publication IPFS : %O", reponseIpfs)
+//
+//       // Emettre evenement de publication
+//       const confirmation = {
+//         identificateur_document,
+//         cdn_id,
+//         complete: true,
+//         securite,
+//         ...reponseIpfs,
+//       }
+//
+//       const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//       _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//     }
+//
+//   } catch(err) {
+//     console.error('ERROR publication.publierRepertoireSftp %O', err)
+//
+//     // Emettre evenement de publication
+//     const confirmation = {
+//       identificateur_document,
+//       cdn_id,
+//       complete: false,
+//       err: ''+err,
+//       stack: JSON.stringify(err.stack),
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//
+//   } finally {
+//     if(message.uploadUnique) {
+//       // Supprimer le repertoire de staging
+//       await fsPromises.rm(repertoireStaging, {recursive: true})
+//     }
+//   }
+// }
+//
+// function publierVitrineIpfs(message, rk, opts) {
+//   // Va publier le code de vitrine via SFTP
+//   const pathVitrine = path.join(_repertoireCodeWebapps, 'vitrine')
+//   const configurationPublication = {
+//     ...message,
+//
+//     // Ajouter repertoire source
+//     repertoireStaging: pathVitrine,
+//     ipnsKeyName: message.ipns_key_name,
+//   }
+//   debug("Publier vitrine IPFS : %O", configurationPublication)
+//   return publierRepertoireIpfs(configurationPublication, rk, opts)
+// }
 
 async function publierRepertoireAwsS3(message, rk, opts) {
   debug("publication.publierVitrineIpfs Publier vitrine vers AWS S3 : %O", message)
@@ -663,23 +663,23 @@ function publierVitrineAwsS3(message, rk, opts) {
   return publierRepertoireAwsS3(configurationPublication, rk, opts)
 }
 
-async function publierIpns(message, rk, opts) {
-  debug("Publier cle ipns")
-  const {cid, keyName} = message
-  await publishIpns(cid, keyName)
-}
-
-async function creerCleIpns(commande, rk, opts) {
-  try {
-    // Creer une cle privee, chiffrer et sauvegarder (e.g. maitre des cles)
-    const {nom: nomCle} = commande
-    const reponse = await _creerCleIpns(_mq, nomCle)
-    repondre(reponse, opts.properties)
-  } catch(err) {
-    // Emettre evenement d'echec
-    emettreErreur(err, opts.properties)
-  }
-}
+// async function publierIpns(message, rk, opts) {
+//   debug("Publier cle ipns")
+//   const {cid, keyName} = message
+//   await publishIpns(cid, keyName)
+// }
+//
+// async function creerCleIpns(commande, rk, opts) {
+//   try {
+//     // Creer une cle privee, chiffrer et sauvegarder (e.g. maitre des cles)
+//     const {nom: nomCle} = commande
+//     const reponse = await _creerCleIpns(_mq, nomCle)
+//     repondre(reponse, opts.properties)
+//   } catch(err) {
+//     // Emettre evenement d'echec
+//     emettreErreur(err, opts.properties)
+//   }
+// }
 
 function repondre(reponse, properties) {
   _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)

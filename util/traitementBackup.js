@@ -13,7 +13,6 @@ const tmp = require('tmp-promise')
 
 const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 const {uuidToDate} = require('./UUIDUtils')
-const transformationImages = require('./transformationImages')
 const {pki, ValidateurSignature} = require('./pki')
 const { calculerHachageFichier } = require('./utilitairesHachage')
 const {PathConsignation, extraireTarFile, supprimerFichiers, getFichiersDomaine} = require('./traitementFichier')
