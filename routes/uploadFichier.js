@@ -120,6 +120,7 @@ async function traiterPostUpload(req, res, next) {
   const hachage = commandeMaitreCles.hachage_bytes
   const pathOutput = path.join(pathCorrelation, hachage + '.mgs2')
   const writer = fs.createWriteStream(pathOutput)
+  debug("Upload Fichier, recu hachage: %s", hachage)
   const verificateurHachage = new VerificateurHachage(hachage)
 
   for(let idx in files) {
@@ -127,10 +128,13 @@ async function traiterPostUpload(req, res, next) {
     debug("Charger fichier %s position %d", correlation, file)
     const pathFichier = path.join(pathCorrelation, file + '.part')
     const fileReader = fs.createReadStream(pathFichier)
+
+    let total = 0
     fileReader.on('data', chunk=>{
       // Verifier hachage
       verificateurHachage.update(chunk)
       writer.write(chunk)
+      total += chunk.length
     })
 
     const promise = new Promise((resolve, reject)=>{
@@ -139,6 +143,7 @@ async function traiterPostUpload(req, res, next) {
     })
 
     await promise
+    debug("Taille fichier %s : %d", pathOutput, total)
   }
 
   // Verifier le hachage
@@ -161,11 +166,16 @@ async function traiterPostUpload(req, res, next) {
       await fsPromises.unlink(pathOutput)
     }
 
-    debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
-    const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeCommande(transactionGrosFichiers)
-    debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
+    if(transactionGrosFichiers) {
+      debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
+      const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeCommande(transactionGrosFichiers)
+      debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
 
-    res.status(201).send(reponseGrosfichiers)
+      res.status(201).send(reponseGrosfichiers)
+    } else {
+      // Transaction non inclue, retourner OK
+      res.sendStatus(200)
+    }
 
   } catch(err) {
     console.error("ERROR uploadFichier.traiterPostUpload: Erreur de verification du hachage : %O", err)
