@@ -9,8 +9,8 @@
   },
   "dependencies": {
     "@dugrema/millegrilles.common": "git+https://github.com/dugrema/millegrilles.common.nodejs.git#1.46",
-    "aws-sdk": "^2.1013.0",
-    "axios": "^0.23.0",
+    "aws-sdk": "^2.1014.0",
+    "axios": "^0.24.0",
     "debug": "~4.3.2",
     "express": "~4.17.1",
     "http-errors": "~1.8.0",
@@ -30,7 +30,7 @@
     "tar": "^6.1.11",
     "tar-parse": "0.0.2",
     "tmp": "^0.2.1",
-    "tmp-promise": "^3.0.2",
+    "tmp-promise": "^3.0.3",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
