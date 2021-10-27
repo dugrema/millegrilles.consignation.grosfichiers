@@ -103,15 +103,6 @@ async function traiterPostUpload(req, res, next) {
   const informationFichier = req.body
   debug("Traitement post %s upload %O", correlation, informationFichier)
 
-  var files = await readdirp.promise(pathCorrelation, {fileFilter: '*.part'})
-
-  // Convertir les noms de fichier en integer
-  files = files.map(file=>{
-    return Number(file.path.split('.')[0])
-  })
-
-  // Trier en ordre numerique
-  files.sort((a,b)=>{return a-b})
 
   debug("Information fichier a uploader : %O", informationFichier)
 
@@ -119,35 +110,75 @@ async function traiterPostUpload(req, res, next) {
   const transactionGrosFichiers = informationFichier.transactionGrosFichiers
   const hachage = commandeMaitreCles.hachage_bytes
   const pathOutput = path.join(pathCorrelation, hachage + '.mgs2')
-  const writer = fs.createWriteStream(pathOutput)
   debug("Upload Fichier, recu hachage: %s", hachage)
   const verificateurHachage = new VerificateurHachage(hachage)
 
-  for(let idx in files) {
-    const file = files[idx]
-    debug("Charger fichier %s position %d", correlation, file)
-    const pathFichier = path.join(pathCorrelation, file + '.part')
-    const fileReader = fs.createReadStream(pathFichier)
-
-    let total = 0
-    fileReader.on('data', chunk=>{
-      // Verifier hachage
-      verificateurHachage.update(chunk)
-      writer.write(chunk)
-      total += chunk.length
-    })
-
-    const promise = new Promise((resolve, reject)=>{
-      fileReader.on('end', _=>resolve())
-      fileReader.on('error', err=>reject(err))
-    })
-
-    await promise
-    debug("Taille fichier %s : %d", pathOutput, total)
-  }
 
   // Verifier le hachage
   try {
+    // Trouver le nombre de fichiers/parties
+    var files = await readdirp.promise(pathCorrelation, {fileFilter: '*.part'})
+    if(files.length === 0) {
+      // Aucuns fichiers trouves
+      return res.sendStatus(404)
+    } else if(files.length === 1) {
+      // Un seul fichier (0.part)
+      const file = files[0]
+
+      debug("Traiter 1 fichier uploade %O", file)
+
+      // Calculer hachage
+      const fileReader = fs.createReadStream(file.fullPath)
+      let total = 0
+      fileReader.on('data', chunk=>{
+        // Verifier hachage
+        verificateurHachage.update(chunk)
+        total += chunk.length
+      })
+      const promise = new Promise((resolve, reject)=>{
+        fileReader.on('end', _=>resolve())
+        fileReader.on('error', err=>reject(err))
+      })
+      await promise
+      debug("Taille fichier %s : %d", pathOutput, total)
+
+      // Renommer
+      await fsPromises.rename(file.fullPath, pathOutput)
+
+    } else {
+      // Reassembler les fichiers
+      const writer = fs.createWriteStream(pathOutput)
+      // Convertir les noms de fichier en integer
+      files = files.map(file=>{
+        return Number(file.path.split('.')[0])
+      })
+      // Trier en ordre numerique
+      files.sort((a,b)=>{return a-b})
+
+      for(let idx in files) {
+        const file = files[idx]
+        debug("Charger fichier %s position %d", correlation, file)
+        const pathFichier = path.join(pathCorrelation, file + '.part')
+        const fileReader = fs.createReadStream(pathFichier)
+
+        let total = 0
+        fileReader.on('data', chunk=>{
+          // Verifier hachage
+          verificateurHachage.update(chunk)
+          writer.write(chunk)
+          total += chunk.length
+        })
+
+        const promise = new Promise((resolve, reject)=>{
+          fileReader.on('end', _=>resolve())
+          fileReader.on('error', err=>reject(err))
+        })
+
+        await promise
+        debug("Taille fichier %s : %d", pathOutput, total)
+      }
+    }
+
     await verificateurHachage.verify()
     debug("Fichier correlation %s OK\nhachage %s", correlation, hachage)
 
