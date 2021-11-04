@@ -137,7 +137,7 @@ async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMai
     } catch(err) {
       debug("ERREUR validerBackup commande maitre des cles : %O", err)
       return {
-        err: 'Erreur transmission transaction maitre des cles',
+        err: `Erreur transmission transaction maitre des cles (fingerprint/partition: ${partition})`,
         err_msg: err,
         err_serveur: true,
       }
