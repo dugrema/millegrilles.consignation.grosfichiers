@@ -136,6 +136,8 @@ async function validerBackup(amqpdao, catalogue, fichierTransactions, fichierMai
       debug("Reponse sauvegarde cle de backup : %O", reponseCle)
     } catch(err) {
       debug("ERREUR validerBackup commande maitre des cles : %O", err)
+      let entete = transactionMaitreDesCles['en-tete']
+      let partition = entete?entete.partition:'N/D'
       return {
         err: `Erreur transmission transaction maitre des cles (fingerprint/partition: ${partition})`,
         err_msg: err,

@@ -41,54 +41,7 @@ class GestionnaireMessagesBackup {
         return genererBackupQuotidien(this.mq, this.pathConsignation, message.catalogue, message.uuid_rapport)
       },
       ['commande.backup.genererBackupQuotidien'],
-      {operationLongue: true}
-    )
-
-    this.mq.routingKeyManager.addRoutingKeyCallback(
-      (routingKey, message, opts) => {
-        // Verifier si la commande est expiree
-        if(this.mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
-          console.warn("WARN backup.genererBackupAnnuel Commande expiree, on l'ignore : %O", message)
-          return
-        }
-        return genererBackupAnnuel(this.mq, this.pathConsignation, message.catalogue, message.uuid_rapport)
-      },
-      ['commande.backup.genererBackupAnnuel'],
-      {operationLongue: true}
-    )
-
-    this.mq.routingKeyManager.addRoutingKeyCallback(
-      (routingKey, message, opts) => {
-        // Verifier si la commande est expiree
-        if(this.mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
-          console.warn("WARN backup.genererRapportVerification Commande expiree, on l'ignore : %O", message)
-          return
-        }
-        return genererRapportVerification(
-          this.mq, this.pathConsignation, message.domaine, message.uuid_rapport,
-          {...opts, verification_hachage: true, verification_enchainement: true}
-        )
-      },
-      ['commande.backup.verifierDomaine'],
-      {operationLongue: true}
-    )
-
-    this.mq.routingKeyManager.addRoutingKeyCallback(
-      (routingKey, message, opts) => {
-        throw new Error("commande.backup.prerarerStagingRestauration pas implemente")
-        // return this.prerarerStagingRestauration(routingKey, message, opts)
-      },
-      ['commande.backup.preparerStagingRestauration'],
-      {operationLongue: true}
-    )
-
-    this.mq.routingKeyManager.addRoutingKeyCallback(
-      (routingKey, message, opts) => {
-        throw new Error("commande.backup.restaurerGrosFichiers pas implemente")
-        // return this.restaurerGrosFichiers(routingKey, message, opts)
-      },
-      ['commande.backup.restaurerGrosFichiers'],
-      {operationLongue: true}
+      {qCustom: 'backup'}
     )
 
     // Ajouter messages suivants :

@@ -31,9 +31,8 @@ async function init(opts) {
   // Connecter a MilleGrilles avec AMQP DAO
   // const nomsQCustom = ['image', 'video', 'publication']
   const qCustom = {
-    'image': {ttl: EXPIRATION_MESSAGE_DEFAUT},
-    'video': {ttl: EXPIRATION_MESSAGE_DEFAUT},
-    'publication': {},
+    'backup': {name: 'fichiers/backup'},
+    'publication': {name: 'fichiers/publication'},
   }
   const amqpdao = new MilleGrillesAmqpDAO(instPki, {qCustom})
   const mqConnectionUrl = process.env.MG_MQ_URL;
