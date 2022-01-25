@@ -2,15 +2,10 @@ const debug = require('debug')('millegrilles:fichiers:awss3')
 const fs = require('fs')
 const fsPromises = require('fs/promises')
 const path = require('path')
-const multibase = require('multibase')
 const S3 = require('aws-sdk/clients/s3')
-const { pki: nodePki } = require('node-forge')
-const { decrypterSymmetrique } = require('../util/cryptoUtils')
 const { trouverExtension, trouverMimetype } = require('../util/traitementFichier')
-// const { dechiffrerTemporaire } = require('../util/traitementMedia')
 const { preparerPublicationRepertoire } = require('./publierUtils')
-const { hacher } = require('@dugrema/millegrilles.common/lib/hachage')
-const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.common/lib/chiffrage')
+const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.utiljs')
 
 const AWS_API_VERSION = '2006-03-01'
 

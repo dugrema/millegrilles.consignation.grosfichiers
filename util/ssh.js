@@ -1,7 +1,6 @@
 const debug = require('debug')('millegrilles:fichiers:ssh')
 // const express = require('express')
 const {Client} = require('ssh2')
-const { ssh, pki } = require('node-forge')
 const ssh2_streams = require('ssh2-streams')
 const multibase = require('multibase')
 const fs = require('fs')

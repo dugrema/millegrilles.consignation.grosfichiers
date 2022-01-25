@@ -1,16 +1,9 @@
 const debug = require('debug')('millegrilles:messages:backup')
-const fs = require('fs')
-const path = require('path')
-const tar = require('tar')
-const lzma = require('lzma-native')
 
-// const { spawn } = require('child_process');
-const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers} = require('../util/traitementFichier');
+const { TraitementFichier } = require('../util/traitementFichier');
 const { TraitementFichierBackup } = require('../util/traitementBackup')
 const { RestaurateurBackup } = require('../util/restaurationBackup')
-const { calculerHachageFichier, calculerHachageData } = require('../util/utilitairesHachage')
 const { genererBackupQuotidien } = require('../util/processFichiersBackup')
-const { genererRapportVerification } = require('../util/verificationBackups')
 
 const EXPIRATION_MESSAGE_DEFAUT = 15 * 60 * 1000  // 15 minutes en millisec
 

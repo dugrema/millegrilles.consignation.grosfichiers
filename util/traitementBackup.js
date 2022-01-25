@@ -2,25 +2,12 @@ const debug = require('debug')('millegrilles:util:backup')
 const fs = require('fs')
 const readdirp = require('readdirp')
 const path = require('path')
-const {v1: uuidv1} = require('uuid')
-const crypto = require('crypto')
-const lzma = require('lzma-native')
-const { spawn } = require('child_process')
-const readline = require('readline')
-const tar = require('tar')
-const moment = require('moment')
-const tmp = require('tmp-promise')
 
-const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
-const {uuidToDate} = require('./UUIDUtils')
-const {pki, ValidateurSignature} = require('./pki')
-const { calculerHachageFichier } = require('./utilitairesHachage')
-const {PathConsignation, extraireTarFile, supprimerFichiers, getFichiersDomaine} = require('./traitementFichier')
-const {traiterFichiersBackup, traiterGrosfichiers, traiterFichiersApplication} = require('./processFichiersBackup')
+const { formatterDateString } = require('@dugrema/millegrilles.utiljs')
+
+const { PathConsignation } = require('./traitementFichier')
+const {traiterFichiersBackup, traiterFichiersApplication} = require('./processFichiersBackup')
 const { parcourirDomaine } = require('./verificationBackups')
-
-const MAP_MIMETYPE_EXTENSION = require('./mimetype_ext.json')
-const MAP_EXTENSION_MIMETYPE = require('./ext_mimetype.json')
 
 class TraitementFichierBackup {
 

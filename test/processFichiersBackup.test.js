@@ -1,9 +1,9 @@
-const processFichiersBackup = require('./processFichiersBackup')
+const processFichiersBackup = require('../util/processFichiersBackup')
 const tmp = require('tmp')
 const path = require('path')
 const fs = require('fs')
 const tar = require('tar')
-const { calculerHachageFichier } = require('./utilitairesHachage')
+const { calculerHachageFichier } = require('../util/utilitairesHachage')
 
 var fichiersTmp = []
 

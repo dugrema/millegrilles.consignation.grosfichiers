@@ -3,16 +3,16 @@ const fs = require('fs')
 const fsPromises = require('fs/promises')
 const readdirp = require('readdirp')
 const path = require('path')
-const crypto = require('crypto');
 const lzma = require('lzma-native')
 const tar = require('tar')
 const parse = require('tar-parse')
-// const Rsync = require('rsync')
-const { hacherMessage } = require('@dugrema/millegrilles.common/lib/formatteurMessage')
-const { verifierMessage } = require('@dugrema/millegrilles.common/lib/validateurMessage')
+
+const { formatteurMessage } = require('@dugrema/millegrilles.utiljs')
+
 const { calculerHachageFichier, verifierHachageFichier } = require('./utilitairesHachage')
-const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
-const { supprimerFichiers, supprimerRepertoiresVides } = require('./traitementFichier')
+const { supprimerFichiers } = require('./traitementFichier')
+
+const { hacherMessage } = formatteurMessage
 
 async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransactions, fichierCatalogue, fichierMaitrecles) {
   // Meme repertoire pour toutes les transactions et catalogues horaire

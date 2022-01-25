@@ -1,8 +1,6 @@
 const debug = require('debug')('millegrilles:fichiers:app')
-var createError = require('http-errors')
 var express = require('express')
 var path = require('path')
-var cookieParser = require('cookie-parser')
 
 // var indexRouter = require('./routes/index');
 const {InitialiserGrosFichiers} = require('../routes/grosfichiers')
@@ -10,9 +8,9 @@ const {InitialiserBackup} = require('../routes/backup')
 const {init: InitialiserPublier} = require('../routes/publier')
 const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki')
 const {PathConsignation} = require('../util/traitementFichier')
-const {cleanupStaging} = require('../util/publicStaging')
 
 function initialiser(opts) {
+  debug("Initialiser app, opts : %O", opts)
   opts = opts || {}
   const middleware = opts.middleware,
         mq = opts.mq,
@@ -67,7 +65,7 @@ function initialiser(opts) {
   })
 
   // Activer nettoyage sur cedule des repertoires de staging
-  setInterval(cleanupStaging, 5 * 60 * 1000)  // Cleanup aux 5 minutes
+  //setInterval(cleanupStaging, 5 * 60 * 1000)  // Cleanup aux 5 minutes
 
   return app;
 }

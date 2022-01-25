@@ -1,14 +1,11 @@
 const debug = require('debug')('millegrilles:fichiers:routeGrosfichiers')
 const express = require('express');
-const path = require('path');
 const fs = require('fs');
-const multer = require('multer')
 const bodyParser = require('body-parser')
 
 const {PathConsignation} = require('../util/traitementFichier')
-const {getDecipherPipe4fuuid} = require('../util/cryptoUtils')
 const uploadFichier = require('./uploadFichier')
-const { stagingFichier: stagingPublic, creerStreamDechiffrage } = require('../util/publicStaging')
+// const { stagingFichier: stagingPublic, creerStreamDechiffrage } = require('../util/publicStaging')
 
 // const throttle = require('@sitespeed.io/throttle');
 

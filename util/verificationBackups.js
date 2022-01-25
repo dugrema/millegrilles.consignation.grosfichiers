@@ -5,14 +5,11 @@ const readdirp = require('readdirp')
 const parse = require('tar-parse')
 const lzma = require('lzma-native')
 
-const { PathConsignation } = require('../util/traitementFichier');
-const { genererListeCatalogues } = require('./processFichiersBackup')
-const { pki, ValidateurSignature } = require('./pki')
+// const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
+// const { hacherMessage } = require('@dugrema/millegrilles.common/lib/formatteurMessage')
+const { formatterDateString, hacherMessage } = require('@dugrema/millegrilles.utiljs')
+
 const { calculerHachageFichier, calculerHachageStream } = require('./utilitairesHachage')
-const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
-// const { hacherDictionnaire } = require('@dugrema/millegrilles.common/lib/forgecommon')
-const { hacherMessage } = require('@dugrema/millegrilles.common/lib/formatteurMessage')
-const { verifierMessage } = require('@dugrema/millegrilles.common/lib/validateurMessage')
 
 async function chargerCatalogue(pathCatalogue) {
   return new Promise((resolve, reject)=>{

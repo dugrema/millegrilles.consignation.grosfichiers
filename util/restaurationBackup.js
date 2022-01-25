@@ -1,14 +1,10 @@
 const debug = require('debug')('millegrilles:util:restaurationBackup')
 const fs = require('fs')
-const { spawn } = require('child_process')
 const path = require('path')
 const readdirp = require('readdirp')
 const tar = require('tar')
 
-const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
-const { TraitementFichier, PathConsignation, supprimerRepertoiresVides, supprimerFichiers,
-        getFichiersDomaine, getGrosFichiersHoraire } = require('../util/traitementFichier')
-const {pki, ValidateurSignature} = require('./pki')
+const { PathConsignation, getFichiersDomaine, getGrosFichiersHoraire } = require('../util/traitementFichier')
 
 // Classe qui s'occupe du staging d'archives et fichiers de backup
 // Prepare et valide le contenu du repertoire staging/

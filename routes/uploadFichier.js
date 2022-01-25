@@ -6,7 +6,7 @@ const fsPromises = require('fs/promises')
 const path = require('path')
 const readdirp = require('readdirp')
 
-const {VerificateurHachage} = require('@dugrema/millegrilles.common/lib/hachage')
+const { VerificateurHachage } = require('@dugrema/millegrilles.utiljs')
 
 function init(pathConsignation) {
   const route = express()

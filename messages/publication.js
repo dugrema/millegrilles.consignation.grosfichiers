@@ -1,13 +1,12 @@
 const debug = require('debug')('millegrilles:fichiers:publication')
 const path = require('path')
 const fsPromises = require('fs/promises')
-const multibase = require('multibase')
 const { PathConsignation } = require('../util/traitementFichier')
-const {
-  getPublicKey, connecterSSH, preparerSftp,
-  putFichier: putFichierSsh,
-  addRepertoire: putRepertoireSsh
-} = require('../util/ssh')
+// const {
+//   getPublicKey, connecterSSH, preparerSftp,
+//   putFichier: putFichierSsh,
+//   addRepertoire: putRepertoireSsh
+// } = require('../util/ssh')
 // const { init: initIpfs,
 //         addFichier: addFichierIpfs,
 //         addRepertoire: putRepertoireIpfs,
@@ -16,8 +15,9 @@ const {
 //         importerCleIpns,
 //       } = require('../util/ipfs')
 const { preparerConnexionS3, uploaderFichier: putFichierAwsS3, addRepertoire: putRepertoireAwsS3 } = require('../util/awss3')
-const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../util/publicStaging')
-const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.common/lib/chiffrage')
+
+// fixme
+// const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../util/publicStaging')
 
 var _mq = null,
     _pathConsignation = null,
@@ -694,4 +694,7 @@ function emettreErreur(erreur, properties) {
   _mq.transmettreReponse(message, properties.replyTo, properties.correlationId)
 }
 
-module.exports = {init, on_connecter, getPublicKey}
+module.exports = {
+  init, on_connecter, 
+  // getPublicKey  // fixme ipfs
+}
