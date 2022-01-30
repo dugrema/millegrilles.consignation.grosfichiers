@@ -6,7 +6,7 @@ const fsPromises = require('fs/promises')
 const path = require('path')
 const readdirp = require('readdirp')
 
-const { VerificateurHachage } = require('@dugrema/millegrilles.utiljs')
+const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 
 function init(pathConsignation) {
   const route = express()
@@ -112,7 +112,6 @@ async function traiterPostUpload(req, res, next) {
   const pathOutput = path.join(pathCorrelation, hachage + '.mgs2')
   debug("Upload Fichier, recu hachage: %s", hachage)
   const verificateurHachage = new VerificateurHachage(hachage)
-
 
   // Verifier le hachage
   try {
