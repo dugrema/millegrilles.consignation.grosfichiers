@@ -5,7 +5,7 @@ const path = require('path')
 const S3 = require('aws-sdk/clients/s3')
 const { trouverExtension, trouverMimetype } = require('../util/traitementFichier')
 const { preparerPublicationRepertoire } = require('./publierUtils')
-const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.utiljs')
+const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.nodejs/src/chiffrage')
 
 const AWS_API_VERSION = '2006-03-01'
 

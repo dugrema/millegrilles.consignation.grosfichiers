@@ -5,9 +5,9 @@ const stringify = require('json-stable-stringify');
 const fs = require('fs');
 const path = require('path');
 const tmp = require('tmp');
-const { forgecommon } = require('@dugrema/millegrilles.utiljs')
+const { extraireExtensionsMillegrille } = require('@dugrema/millegrilles.utiljs/src/forgecommon')
 
-const { extraireExtensionsMillegrille } = forgecommon
+// const { extraireExtensionsMillegrille } = forgecommon
 
 const REPERTOIRE_CERTS_TMP = tmp.dirSync().name;  //'/tmp/consignationfichiers.certs';
 console.info("Repertoire temporaire certs : %s", REPERTOIRE_CERTS_TMP);

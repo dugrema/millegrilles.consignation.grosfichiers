@@ -7,7 +7,7 @@ const lzma = require('lzma-native')
 
 // const { formatterDateString } = require('@dugrema/millegrilles.common/lib/js_formatters')
 // const { hacherMessage } = require('@dugrema/millegrilles.common/lib/formatteurMessage')
-const { formatterDateString, hacherMessage } = require('@dugrema/millegrilles.utiljs')
+const { formatterDateString, hacherMessage } = require('@dugrema/millegrilles.utiljs/src/formatteurMessage')
 
 const { calculerHachageFichier, calculerHachageStream } = require('./utilitairesHachage')
 

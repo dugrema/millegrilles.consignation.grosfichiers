@@ -1,5 +1,5 @@
 const fs = require('fs')
-const { Hacheur, VerificateurHachage } = require('@dugrema/millegrilles.utiljs')
+const { Hacheur, VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 
 async function calculerHachageFichier(pathFichier, opts) {
   if(!opts) opts = {};

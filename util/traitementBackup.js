@@ -3,7 +3,7 @@ const fs = require('fs')
 const readdirp = require('readdirp')
 const path = require('path')
 
-const { formatterDateString } = require('@dugrema/millegrilles.utiljs')
+const { formatterDateString } = require('@dugrema/millegrilles.utiljs/src/formatteurMessage')
 
 const { PathConsignation } = require('./traitementFichier')
 const {traiterFichiersBackup, traiterFichiersApplication} = require('./processFichiersBackup')

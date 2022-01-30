@@ -7,12 +7,12 @@ const lzma = require('lzma-native')
 const tar = require('tar')
 const parse = require('tar-parse')
 
-const { formatteurMessage } = require('@dugrema/millegrilles.utiljs')
+const { hacherMessage } = require('@dugrema/millegrilles.utiljs/src/formatteurMessage')
 
 const { calculerHachageFichier, verifierHachageFichier } = require('./utilitairesHachage')
 const { supprimerFichiers } = require('./traitementFichier')
 
-const { hacherMessage } = formatteurMessage
+// const { hacherMessage } = formatteurMessage
 
 async function traiterFichiersBackup(amqpdao, pathConsignation, fichierTransactions, fichierCatalogue, fichierMaitrecles) {
   // Meme repertoire pour toutes les transactions et catalogues horaire
