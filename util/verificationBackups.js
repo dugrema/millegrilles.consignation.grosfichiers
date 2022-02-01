@@ -63,7 +63,7 @@ async function genererListeHoraire(repertoire, opts) {
   const fileFilter = ['*.json.xz']
   if(opts.verification_hachage) {
     fileFilter.push('*.jsonl.xz')
-    fileFilter.push('*.jsonl.xz.mgs2')
+    fileFilter.push('*.jsonl.xz.mgs3')
   }
 
   const settingsReaddirp = {

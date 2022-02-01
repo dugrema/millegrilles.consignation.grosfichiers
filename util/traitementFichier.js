@@ -115,7 +115,7 @@ class PathConsignation {
   _formatterPath(fichierUuid, opts) {
     opts = opts || {}
 
-    var format = 'mgs2'
+    var format = 'mgs3'
     if(opts.format) {
       format = opts.format
     } else if(opts.mimetype) {
@@ -397,16 +397,16 @@ async function getFichiersDomaine(domaine, pathRepertoireBackup, opts) {
     // Domaine simple
     `${domaine}_*.json.xz`,
     `${domaine}_*.jsonl.xz`,
-    `${domaine}_*.jsonl.xz.mgs2`,
+    `${domaine}_*.jsonl.xz.mgs3`,
 
     // Sous domaine
     `${domaine}.*_*.json.xz`,
     `${domaine}.*_*.jsonl.xz`,
-    `${domaine}.*_*.jsonl.xz.mgs2`,
+    `${domaine}.*_*.jsonl.xz.mgs3`,
   ]
   const filterSnapshot = [
     'transactions.jsonl.xz',
-    'transactions.jsonl.xz.mgs2',
+    'transactions.jsonl.xz.mgs3',
     'catalogue.json.xz',
   ]
   var fileFilter = []

@@ -109,7 +109,7 @@ async function traiterPostUpload(req, res, next) {
   const commandeMaitreCles = informationFichier.commandeMaitrecles
   const transactionGrosFichiers = informationFichier.transactionGrosFichiers
   const hachage = commandeMaitreCles.hachage_bytes
-  const pathOutput = path.join(pathCorrelation, hachage + '.mgs2')
+  const pathOutput = path.join(pathCorrelation, hachage + '.mgs3')
   debug("Upload Fichier, recu hachage: %s", hachage)
   const verificateurHachage = new VerificateurHachage(hachage)
 

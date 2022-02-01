@@ -258,7 +258,7 @@ async function restaurerListeGrosFichiers(listeGrosFichiers, pathConsignation) {
     const basename = path.basename(fullPath),
           extname = path.extname(fullPath)
 
-    const chiffre = extname === '.mgs2',
+    const chiffre = extname === '.mgs3',
           extension = extname.slice(1)
     const nomfichierSansExtension = basename.replace(extname, '')
     const pathFichier = pathConsignation.trouverPathLocal(nomfichierSansExtension, chiffre, {extension})
