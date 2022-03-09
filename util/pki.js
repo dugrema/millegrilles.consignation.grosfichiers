@@ -584,7 +584,7 @@ function verificationCertificatSSL(req, res, next) {
     // Verifier extensions (exchanges)
     const extensions = extraireExtensionsMillegrille(cert)
     const exchanges = extensions.niveauxSecurite
-    if(exchanges.includes('2.prive') || exchanges.includes('3.protege') || exchanges.includes('4.secure')) {
+    if(exchanges.includes('1.public') || exchanges.includes('2.prive') || exchanges.includes('3.protege') || exchanges.includes('4.secure')) {
       // Ok, certificat correct
     } else {
       console.error("Niveau de securite non supporte %O, acces refuse" + exchanges);
