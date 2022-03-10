@@ -20,6 +20,7 @@ function InitialiserGrosFichiers() {
   // router.get('/fichiers/public/:fuuid', downloadFichierPublic, pipeReponse)
   // router.get('/fichiers/stream/:fuuid', downloadVideoPrive, pipeReponse)
   router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
+  router.head('/fichiers/:fuuid', downloadFichierLocal)
 
   // Path fichiers_transfert. Comportement identique a /fichiers, utilise
   // pour faire une authentification systeme avec cert SSL (en amont,
@@ -89,7 +90,12 @@ async function downloadFichierLocal(req, res, next) {
   res.setHeader('securite', niveauAcces)
   res.setHeader('Last-Modified', res.stat.mtime)
 
-  next()
+  if(req.method === "GET") {
+    next()
+  } else if(req.method === "HEAD") {
+    return res.sendStatus(200)
+  }
+  
 }
 
 async function downloadFichierPublic(req, res, next) {
