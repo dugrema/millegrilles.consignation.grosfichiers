@@ -103,12 +103,12 @@ async function traiterPostUpload(req, res, next) {
   const informationFichier = req.body
   debug("Traitement post %s upload %O", correlation, informationFichier)
 
-
-  debug("Information fichier a uploader : %O", informationFichier)
-
   const commandeMaitreCles = informationFichier.commandeMaitrecles
   const transactionGrosFichiers = informationFichier.transactionGrosFichiers
-  const hachage = commandeMaitreCles.hachage_bytes
+
+  // Note: Correlation est le fuuid si on n'a pas de commandeMaitreCles
+  const hachage = commandeMaitreCles?commandeMaitreCles.hachage_bytes:correlation
+
   const pathOutput = path.join(pathCorrelation, hachage + '.mgs3')
   debug("Upload Fichier, recu hachage: %s", hachage)
   const verificateurHachage = new VerificateurHachage(hachage)
@@ -181,9 +181,11 @@ async function traiterPostUpload(req, res, next) {
     await verificateurHachage.verify()
     debug("Fichier correlation %s OK\nhachage %s", correlation, hachage)
 
-    // Transmettre la cle
-    debug("Transmettre commande cle pour le fichier: %O", commandeMaitreCles)
-    await req.amqpdao.transmettreEnveloppeCommande(commandeMaitreCles)
+    if(commandeMaitreCles) {
+      // Transmettre la cle
+      debug("Transmettre commande cle pour le fichier: %O", commandeMaitreCles)
+      await req.amqpdao.transmettreEnveloppeCommande(commandeMaitreCles)
+    }
 
     debug("Deplacer le fichier vers le storage permanent")
     const pathStorage = req.pathConsignation.trouverPathLocal(hachage)
