@@ -109,7 +109,8 @@ async function traiterPostUpload(req, res, next) {
   // Note: Correlation est le fuuid si on n'a pas de commandeMaitreCles
   const hachage = commandeMaitreCles?commandeMaitreCles.hachage_bytes:correlation
 
-  const pathOutput = path.join(pathCorrelation, hachage + '.mgs3')
+  // const pathOutput = path.join(pathCorrelation, hachage + '.mgs3')
+  const pathOutput = path.join(pathCorrelation, hachage)
   debug("Upload Fichier, recu hachage: %s", hachage)
   const verificateurHachage = new VerificateurHachage(hachage)
 
@@ -222,12 +223,12 @@ async function traiterPostUpload(req, res, next) {
   }
 }
 
-async function downloadFichier(req, res) {
-  const hachage = req.params.hachage
-  debug("Downloader fichier %s", hachage)
-  const pathFichier = pathStorageFichier(hachage)
-  res.download(pathFichier)
-}
+// async function downloadFichier(req, res) {
+//   const hachage = req.params.hachage
+//   debug("Downloader fichier %s", hachage)
+//   const pathFichier = pathStorageFichier(hachage)
+//   res.download(pathFichier)
+// }
 
 async function traiterDeleteUpload(req, res) {
   const correlation = req.params.correlation

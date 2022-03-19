@@ -115,27 +115,29 @@ class PathConsignation {
   _formatterPath(fichierUuid, opts) {
     opts = opts || {}
 
-    var format = 'mgs3'
-    if(opts.format) {
-      format = opts.format
-    } else if(opts.mimetype) {
-      format = MAP_MIMETYPE_EXTENSION[opts.mimetype] || 'bin'
-    }
+    // var format = 'mgs3'
+    // if(opts.format) {
+    //   format = opts.format
+    // } else if(opts.mimetype) {
+    //   format = MAP_MIMETYPE_EXTENSION[opts.mimetype] || 'bin'
+    // }
 
-    // Format du fichier (type de chiffrage)
-    const extension = '.' + format
+    // // Format du fichier (type de chiffrage)
+    // const extension = '.' + format
 
-    const niveau1 = fichierUuid.slice(0,5)
-    const niveau2 = fichierUuid.slice(5,7)
+    const niveau1 = fichierUuid.slice(0,8)
+    const niveau2 = fichierUuid.slice(8,11)
 
-    return path.join(niveau1, niveau2, fichierUuid + extension)
+    // return path.join(niveau1, niveau2, fichierUuid + extension)
+    return path.join(niveau1, niveau2, fichierUuid)
   }
 
 }
 
 function trouverExtension(mimetype) {
-  var extension = MAP_MIMETYPE_EXTENSION[mimetype] || 'bin'
-  return '.' + extension
+  throw new Error("TODO - fix me")
+  // var extension = MAP_MIMETYPE_EXTENSION[mimetype] || 'bin'
+  // return '.' + extension
 }
 
 function trouverMimetype(nomfichier) {

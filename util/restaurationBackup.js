@@ -255,13 +255,14 @@ async function restaurerListeGrosFichiers(listeGrosFichiers, pathConsignation) {
   for(let idx in listeGrosFichiers) {
     const fullPath = listeGrosFichiers[idx]
 
-    const basename = path.basename(fullPath),
-          extname = path.extname(fullPath)
+    const basename = path.basename(fullPath)  //,
+          //extname = path.extname(fullPath)
 
-    const chiffre = extname === '.mgs3',
-          extension = extname.slice(1)
-    const nomfichierSansExtension = basename.replace(extname, '')
-    const pathFichier = pathConsignation.trouverPathLocal(nomfichierSansExtension, chiffre, {extension})
+    const chiffre = true  // extname === '.mgs3',
+          // extension = extname.slice(1)
+    const nomfichierSansExtension = basename   // basename.replace(extname, '')
+    // const pathFichier = pathConsignation.trouverPathLocal(nomfichierSansExtension, chiffre, {extension})
+    const pathFichier = pathConsignation.trouverPathLocal(nomfichierSansExtension, chiffre, {})
     const basedir = path.dirname(pathFichier)
 
     debug("Path fichier : %s", pathFichier)

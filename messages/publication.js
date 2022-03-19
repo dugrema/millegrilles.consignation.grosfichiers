@@ -81,115 +81,116 @@ function getPublicKeySsh(message, rk, opts) {
 }
 
 async function publierFichierSftp(message, rk, opts) {
-  opts = opts || {}
-  debug("publication.publierFichierSftp : %O (opts: %O)", message, opts)
+  throw new Error("TODO - fix me")
+  // opts = opts || {}
+  // debug("publication.publierFichierSftp : %O (opts: %O)", message, opts)
 
-  const {host, port, username, fuuid, cdn_id: cdnId} = message
-  const properties = opts.properties || {}
-  const securite = message.securite || L2PRIVE
-  const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
-  const keyType = message.keyType || 'ed25519'
-  try {
-    const basedir = message.basedir || './'
+  // const {host, port, username, fuuid, cdn_id: cdnId} = message
+  // const properties = opts.properties || {}
+  // const securite = message.securite || L2PRIVE
+  // const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
+  // const keyType = message.keyType || 'ed25519'
+  // try {
+  //   const basedir = message.basedir || './'
 
-    var localPath = _pathConsignation.trouverPathLocal(fuuid)
-    debug("Fichier local a publier sur SSH : %s", localPath)
+  //   var localPath = _pathConsignation.trouverPathLocal(fuuid)
+  //   debug("Fichier local a publier sur SSH : %s", localPath)
 
-    var mimetype = message.mimetype
-    if(securite === '1.public') {
-      // Dechiffrer le fichier public dans staging
-      const infoFichierPublic = await preparerStagingPublic(fuuid)
-      debug("Information fichier public : %O", infoFichierPublic)
-      localPath = infoFichierPublic.filePath
-    } else if(securite === '2.prive' && mimetype.startsWith('video/')) {
-      const infoFichierStream = await preparerStagingStream(fuuid)
-      debug("Information fichier stream : %O", infoFichierStream)
-      localPath = infoFichierStream.filePath
-    }
-    // else {
-    //   throw new Error("FICHIER PAS PUBLIC : message: %O, opts: %O", message, opts)
-    // }
+  //   var mimetype = message.mimetype
+  //   if(securite === '1.public') {
+  //     // Dechiffrer le fichier public dans staging
+  //     const infoFichierPublic = await preparerStagingPublic(fuuid)
+  //     debug("Information fichier public : %O", infoFichierPublic)
+  //     localPath = infoFichierPublic.filePath
+  //   } else if(securite === '2.prive' && mimetype.startsWith('video/')) {
+  //     const infoFichierStream = await preparerStagingStream(fuuid)
+  //     debug("Information fichier stream : %O", infoFichierStream)
+  //     localPath = infoFichierStream.filePath
+  //   }
+  //   // else {
+  //   //   throw new Error("FICHIER PAS PUBLIC : message: %O, opts: %O", message, opts)
+  //   // }
 
-    const conn = await connecterSSH(host, port, username, {keyType})
-    const sftp = await preparerSftp(conn)
-    debug("Connexion SSH et SFTP OK")
+  //   const conn = await connecterSSH(host, port, username, {keyType})
+  //   const sftp = await preparerSftp(conn)
+  //   debug("Connexion SSH et SFTP OK")
 
-    var remotePath = null
-    if(securite === '1.public') {
-      remotePath = path.join(basedir, 'fichiers', 'public', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
-      if(remotePath.endsWith('.mgs2')) {
-        // Pas suppose arriver, diag
-        debug("ERREUR publication.publierFichierSftp fichier public (mimetype: %s) avec ext mgs2 %O (props: %O)", mimetype, message, opts)
-        throw new Error("Erreur fichier public avec .mgs2")
-      }
-    } else if(securite === '2.prive' && mimetype.startsWith('video/')) {
-      remotePath = path.join(basedir, 'fichiers', 'stream', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
-      if(remotePath.endsWith('.mgs2')) {
-        // Pas suppose arriver, diag
-        debug("ERREUR publication.publierFichierSftp fichier public (mimetype: %s) avec ext mgs2 %O (props: %O)", mimetype, message, opts)
-        throw new Error("Erreur fichier public avec .mgs2")
-      }
-    } else {
-      remotePath = path.join(basedir, 'fichiers', _pathConsignation.trouverPathRelatif(fuuid))
-    }
-    debug("Path remote pour le fichier : %s", remotePath)
+  //   var remotePath = null
+  //   if(securite === '1.public') {
+  //     remotePath = path.join(basedir, 'fichiers', 'public', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+  //     if(remotePath.endsWith('.mgs2')) {
+  //       // Pas suppose arriver, diag
+  //       debug("ERREUR publication.publierFichierSftp fichier public (mimetype: %s) avec ext mgs2 %O (props: %O)", mimetype, message, opts)
+  //       throw new Error("Erreur fichier public avec .mgs2")
+  //     }
+  //   } else if(securite === '2.prive' && mimetype.startsWith('video/')) {
+  //     remotePath = path.join(basedir, 'fichiers', 'stream', _pathConsignation.trouverPathRelatif(fuuid, {mimetype}))
+  //     if(remotePath.endsWith('.mgs2')) {
+  //       // Pas suppose arriver, diag
+  //       debug("ERREUR publication.publierFichierSftp fichier public (mimetype: %s) avec ext mgs2 %O (props: %O)", mimetype, message, opts)
+  //       throw new Error("Erreur fichier public avec .mgs2")
+  //     }
+  //   } else {
+  //     remotePath = path.join(basedir, 'fichiers', _pathConsignation.trouverPathRelatif(fuuid))
+  //   }
+  //   debug("Path remote pour le fichier : %s", remotePath)
 
-    var dernierEvent = 0
-    const intervalPublish = 2000
-    const optsPut = {
-      progressCb: (current, _, total) => {
-        debug("SFTP progres cb : %s/%s", current, total)
-        // Throttle evenements, toutes les 2 secondes
-        const epochCourant = new Date().getTime()
-        if(epochCourant-intervalPublish > dernierEvent) {
-          dernierEvent = epochCourant  // Update date pour throttle
-          const confirmation = {
-            identificateur_document,
-            cdn_id: cdnId,
-            current_bytes: current,
-            total_bytes: total,
-            complete: false,
-          }
-          const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-          _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-        }
-      }
-    }
+  //   var dernierEvent = 0
+  //   const intervalPublish = 2000
+  //   const optsPut = {
+  //     progressCb: (current, _, total) => {
+  //       debug("SFTP progres cb : %s/%s", current, total)
+  //       // Throttle evenements, toutes les 2 secondes
+  //       const epochCourant = new Date().getTime()
+  //       if(epochCourant-intervalPublish > dernierEvent) {
+  //         dernierEvent = epochCourant  // Update date pour throttle
+  //         const confirmation = {
+  //           identificateur_document,
+  //           cdn_id: cdnId,
+  //           current_bytes: current,
+  //           total_bytes: total,
+  //           complete: false,
+  //         }
+  //         const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+  //         _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+  //       }
+  //     }
+  //   }
 
-    await putFichierSsh(sftp, localPath, remotePath, optsPut)
-    debug("Put fichier ssh OK")
+  //   await putFichierSsh(sftp, localPath, remotePath, optsPut)
+  //   debug("Put fichier ssh OK")
 
-    if(properties && properties.replyTo) {
-      _mq.transmettreReponse({ok: true}, properties.replyTo, properties.correlationId)
-    }
+  //   if(properties && properties.replyTo) {
+  //     _mq.transmettreReponse({ok: true}, properties.replyTo, properties.correlationId)
+  //   }
 
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id: cdnId,
-      complete: true,
-      securite,
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+  //   // Emettre evenement de publication
+  //   const confirmation = {
+  //     identificateur_document,
+  //     cdn_id: cdnId,
+  //     complete: true,
+  //     securite,
+  //   }
+  //   const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+  //   _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
-  } catch(err) {
-    console.error("ERROR publication.publierFichierSftp: Erreur publication fichier sur sftp : %O", err)
-    if(properties && properties.replyTo) {
-      _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
-    }
+  // } catch(err) {
+  //   console.error("ERROR publication.publierFichierSftp: Erreur publication fichier sur sftp : %O", err)
+  //   if(properties && properties.replyTo) {
+  //     _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
+  //   }
 
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id: cdnId,
-      complete: false,
-      err: ''+err,
-      stack: JSON.stringify(err.stack),
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-  }
+  //   // Emettre evenement de publication
+  //   const confirmation = {
+  //     identificateur_document,
+  //     cdn_id: cdnId,
+  //     complete: false,
+  //     err: ''+err,
+  //     stack: JSON.stringify(err.stack),
+  //   }
+  //   const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+  //   _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+  // }
 }
 
 // async function publierFichierIpfs(message, rk, opts) {
