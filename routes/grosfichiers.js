@@ -9,7 +9,8 @@ const uploadFichier = require('./uploadFichier')
 
 // const throttle = require('@sitespeed.io/throttle');
 
-const STAGING_FILE_TIMEOUT_MSEC = 300000
+const STAGING_FILE_TIMEOUT_MSEC = 300000,
+      L2PRIVE = '2.prive'
 
 function InitialiserGrosFichiers() {
 
@@ -39,9 +40,9 @@ async function downloadFichierLocal(req, res, next) {
   // debug("PARAMS\n%O", req.params)
   // debug("QUERY\n%O", req.query)
 
-  const securite = req.headers.securite || '3.protege'
+  const securite = req.headers.securite || L2PRIVE
   var encrypted = false
-  if(securite === '3.protege') encrypted = true
+  if(securite === L2PRIVE) encrypted = true
   var utiliserPreview = req.query.preview?true:false
   var nofile = req.query.nofile?true:false
 
@@ -100,7 +101,7 @@ async function downloadFichierPublic(req, res, next) {
   debug("downloadFichierLocalChiffre methode:" + req.method + ": " + req.url);
   debug("Headers : %O\nAutorisation: %o", req.headers, req.autorisationMillegrille);
 
-  const securite = req.headers.securite || '3.protege'
+  const securite = req.headers.securite || L2PRIVE
   var encrypted = true
 
   var utiliserPreview = req.query.preview?true:false

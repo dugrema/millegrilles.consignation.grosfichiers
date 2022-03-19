@@ -16,6 +16,8 @@ const { PathConsignation } = require('../util/traitementFichier')
 //       } = require('../util/ipfs')
 const { preparerConnexionS3, uploaderFichier: putFichierAwsS3, addRepertoire: putRepertoireAwsS3 } = require('../util/awss3')
 
+const L2PRIVE = '2.prive'
+
 // fixme
 // const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../util/publicStaging')
 
@@ -84,7 +86,7 @@ async function publierFichierSftp(message, rk, opts) {
 
   const {host, port, username, fuuid, cdn_id: cdnId} = message
   const properties = opts.properties || {}
-  const securite = message.securite || '3.protege'
+  const securite = message.securite || L2PRIVE
   const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
   const keyType = message.keyType || 'ed25519'
   try {
@@ -193,7 +195,7 @@ async function publierFichierSftp(message, rk, opts) {
 // async function publierFichierIpfs(message, rk, opts) {
 //   opts = opts || {}
 //   const {fuuid, cdn_id: cdnId} = message
-//   const securite = message.securite || '3.protege'
+//   const securite = message.securite || L2PRIVE
 //   const properties = opts.properties || {}
 //   const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
 //
@@ -320,7 +322,7 @@ async function publierFichierAwsS3(message, rk, opts) {
   const {
     fuuid, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre,
     permission, bucketName, bucketDirfichier, cdn_id: cdnId} = message
-  const securite = message.securite || '3.protege'
+  const securite = message.securite || L2PRIVE
   const properties = opts.properties || {}
   const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
 

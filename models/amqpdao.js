@@ -34,7 +34,7 @@ async function init(opts) {
     'backup': {name: 'fichiers/backup'},
     'publication': {name: 'fichiers/publication'},
   }
-  const amqpdao = new MilleGrillesAmqpDAO(instPki, {qCustom})
+  const amqpdao = new MilleGrillesAmqpDAO(instPki, {qCustom, exchange: '2.prive'})
   const mqConnectionUrl = process.env.MG_MQ_URL;
   await amqpdao.connect(mqConnectionUrl)
 

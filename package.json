@@ -1,6 +1,6 @@
 {
   "name": "millegrilles.consignation.grosfichiers",
-  "version": "2022.1.0",
+  "version": "2022.2.0",
   "private": true,
   "scripts": {
     "start": "node ./bin/www",
@@ -9,13 +9,13 @@
     "dev": "export $(cat .env.development .env.local | grep -v ^\\# | xargs) && npm start"
   },
   "dependencies": {
-    "@dugrema/millegrilles.utiljs": "github:dugrema/millegrilles.utiljs#2022.0.0",
-    "@dugrema/millegrilles.nodejs": "github:dugrema/millegrilles.nodejs#2022.0.0",
+    "@dugrema/millegrilles.utiljs": "github:dugrema/millegrilles.utiljs#2022.2",
+    "@dugrema/millegrilles.nodejs": "github:dugrema/millegrilles.nodejs#2022.2",
     "@dugrema/node-forge": "github:dugrema/forge#ed25519",
-    "aws-sdk": "^2.1062.0",
-    "axios": "^0.24.0",
-    "debug": "~4.3.3",
-    "express": "~4.17.2",
+    "aws-sdk": "^2.1096.0",
+    "axios": "^0.26.1",
+    "debug": "~4.3.4",
+    "express": "~4.17.3",
     "http-errors": "~2.0.0",
     "json-stable-stringify": "^1.0.1",
     "lzma-native": "^8.0.6",
@@ -26,7 +26,7 @@
     "readdirp": "^3.6.0",
     "redis": "^3.1.2",
     "spdy": "^4.0.2",
-    "ssh2": "^1.5.0",
+    "ssh2": "^1.7.0",
     "ssh2-streams": "^0.4.10",
     "stream-buffers": "^3.0.2",
     "tar": "^6.1.11",
@@ -37,6 +37,6 @@
   },
   "devDependencies": {
     "@sitespeed.io/throttle": "^3.1.0",
-    "jest": "^27.4.7"
+    "jest": "^27.5.1"
   }
 }

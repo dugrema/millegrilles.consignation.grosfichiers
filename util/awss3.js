@@ -7,7 +7,8 @@ const { trouverExtension, trouverMimetype } = require('../util/traitementFichier
 const { preparerPublicationRepertoire } = require('./publierUtils')
 const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.nodejs/src/chiffrage')
 
-const AWS_API_VERSION = '2006-03-01'
+const AWS_API_VERSION = '2006-03-01',
+      L2PRIVE = '2.prive'
 
 async function preparerConnexionS3(mq, bucketRegion, credentialsAccessKeyId, secretKeyInfo) {
   /** Prepare connexion avec Amazon Web Services S3 **/
@@ -290,7 +291,7 @@ async function uploaderFichier(s3, message, pathFichier, bucketName, bucketDirfi
   //   }
   const metadata = {
     nom_fichier: nomFichier,
-    securite: message.securite || '3.protege',
+    securite: message.securite || L2Prive,
   }
   if(message.uuid) metadata.uuid = message.uuid
   if(message.fuuid) metadata.fuuid = message.fuuid

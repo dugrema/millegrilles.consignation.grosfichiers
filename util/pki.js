@@ -14,6 +14,7 @@ console.info("Repertoire temporaire certs : %s", REPERTOIRE_CERTS_TMP);
 
 const PEM_CERT_DEBUT = '-----BEGIN CERTIFICATE-----';
 const PEM_CERT_FIN = '-----END CERTIFICATE-----';
+const L2PRIVE = '2.prive'
 // const ROLES_PERMIS_SSL = ['web_protege', 'domaines', 'maitrecles', 'monitor', 'prive', 'backup', 'core']
 
 class PKIUtils {
@@ -476,7 +477,7 @@ function verificationCertificatSSL(req, res, next) {
     // DEV
     if ( process.env.DISABLE_SSL_AUTH && process.env.IDMG ) {
       req.autorisationMillegrille = {
-        idmg:process.env.IDMG, protege: true, prive: true, public: true, securite: '3.protege'
+        idmg:process.env.IDMG, protege: true, prive: true, public: true, securite: L2PRIVE
       }
       debug("Fake autorisation %s:\n%O", req.url, req.autorisationMillegrille)
       return next()
@@ -517,8 +518,8 @@ function verificationCertificatSSL(req, res, next) {
           // Acces prive aux fichiers
           req.autorisationMillegrille = {
             idmg,
-            protege: '3.protege'===securite?true:false,
-            prive: ['3.protege', '2.prive'].includes(securite)?true:false,
+            protege: L2PRIVE===securite?true:false,
+            prive: ['2.prive'].includes(securite)?true:false,
             public: true,
             securite,
           }
@@ -602,7 +603,7 @@ function verificationCertificatSSL(req, res, next) {
 
   // Sauvegarder l'information d'autorisation de MilleGrille sur objet req.
   req.autorisationMillegrille = {
-    idmg, protege: true, prive: true, public: true, securite: '3.protege'
+    idmg, protege: true, prive: true, public: true, securite: L2PRIVE
   }
 
   next();

@@ -197,7 +197,7 @@ class TraitementFichier {
 
       // console.debug(headers);
       const fuuid = transactionFichier.fuuid
-      const encrypte = transactionFichier.securite === '3.protege'
+      const encrypte = transactionFichier.securite === L2PRIVE
       const extension = path.parse(transactionFichier.nom_fichier).ext.replace('.', '')
       const mimetype = transactionFichier.mimetype
 
