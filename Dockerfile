@@ -13,6 +13,7 @@ ENV PORT=443 \
     MG_MQ_URL=amqps://mq:5673 \
     MG_REDIS_HOST=redis \
     MG_REDIS_PORT=6379 \
+    MG_MQ_REDIS_PASSWD=/run/secrets/passwd.redis.txt \
     MG_MQ_CERTFILE=/run/secrets/cert.pem \
     MG_MQ_KEYFILE=/run/secrets/key.pem \
     MG_MQ_CAFILE=/run/secrets/millegrille.cert.pem \
