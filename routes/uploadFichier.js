@@ -103,8 +103,8 @@ async function traiterPostUpload(req, res, next) {
   const informationFichier = req.body
   debug("Traitement post %s upload %O", correlation, informationFichier)
 
-  const commandeMaitreCles = informationFichier.commandeMaitrecles
-  const transactionGrosFichiers = informationFichier.transactionGrosFichiers
+  const commandeMaitreCles = informationFichier.cles
+  const transactionGrosFichiers = informationFichier.transaction
 
   // Note: Correlation est le fuuid si on n'a pas de commandeMaitreCles
   const hachage = commandeMaitreCles?commandeMaitreCles.hachage_bytes:correlation
