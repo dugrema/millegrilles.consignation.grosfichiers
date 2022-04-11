@@ -201,7 +201,8 @@ async function traiterPostUpload(req, res, next) {
 
     if(transactionGrosFichiers) {
       debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
-      const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeCommande(transactionGrosFichiers)
+      const domaine = transactionGrosFichiers['en-tete'].domaine
+      const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeCommande(transactionGrosFichiers, domaine, {exchange: '2.prive'})
       debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
 
       res.status(201).send(reponseGrosfichiers)
