@@ -32,6 +32,7 @@ class PathConsignation {
 
     // Path utilisable localement
     this.consignationPathLocal = path.join(this.consignationPath, 'grosfichiers');
+    this.consignationPathCorbeille = path.join(this.consignationPath, 'corbeille', 'grosfichiers');
     this.consignationPathBackup = path.join(this.consignationPath, 'backup');
     this.consignationPathBackupApplications = path.join(this.consignationPathBackup, 'applications');
     this.consignationPathBackupStaging = path.join(this.consignationPathBackup, 'staging');

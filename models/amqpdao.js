@@ -74,6 +74,10 @@ async function initialiserRabbitMQ(rabbitMQ) {
   publication.init(rabbitMQ)
   rabbitMQ.enregistrerListenerConnexion(publication)
 
+  const entretien = require('../messages/entretien')
+  entretien.init(rabbitMQ)
+  rabbitMQ.enregistrerListenerConnexion(entretien)
+
   return {rabbitMQ};
 }
 
