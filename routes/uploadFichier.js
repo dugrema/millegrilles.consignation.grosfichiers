@@ -15,43 +15,25 @@ function init(pathConsignation) {
   // TODO : pour 1.43, downgrade verif a public (upload via web grosfichiers)
   //        remettre verification privee quand ce sera approprie, avec nouvelle
   //        methode de verification
-  route.put('/fichiers/:correlation/:position', verifierNiveauPublic, traiterUpload)
-  route.post('/fichiers/:correlation', verifierNiveauPublic, bodyParser.json(), traiterPostUpload)
-  route.delete('/fichiers/:correlation', verifierNiveauPublic, traiterDeleteUpload)
+  //route.put('/fichiers/:correlation/:position', verifierNiveauPublic, traiterUpload)
+  //route.post('/fichiers/:correlation', verifierNiveauPublic, bodyParser.json(), traiterPostUpload)
+  //route.delete('/fichiers/:correlation', verifierNiveauPublic, traiterDeleteUpload)
 
   // Path utilise pour communication entre systemes. Validation ssl client (en amont, deja faite)
-  route.put('/fichiers_transfert/:correlation/:position', verifierNiveauPublic, traiterUpload)
-  route.post('/fichiers_transfert/:correlation', verifierNiveauPublic, bodyParser.json(), traiterPostUpload)
-  route.delete('/fichiers_transfert/:correlation', verifierNiveauPublic, traiterDeleteUpload)
+  route.put('/fichiers_transfert/:correlation/:position', traiterUpload)
+  route.post('/fichiers_transfert/:correlation', bodyParser.json(), traiterPostUpload)
+  route.delete('/fichiers_transfert/:correlation', traiterDeleteUpload)
 
   return route
 }
 
-// function verifierNiveauPrive(req, res, next) {
+// function verifierNiveauPublic(req, res, next) {
 //   // S'assurer que l'usager est au moins logge avec le niveau prive
-//   debug('!!! REQ verifierNiveauPrive : %O', req.headers)
-//   if(req.autorisationMillegrille.prive) {
-//     // OK
+//   if(req.autorisationMillegrille.public) {
 //     return next()
-//   } else if(req.headers.verified === 'SUCCESS') {
-//     const dns = req.headers.dn.split(',').reduce((acc, item)=>{
-//       const kv = item.split('=')
-//       acc[kv[0]] = kv[1]
-//     }, {})
-//     const ou = dns['OU']
-//     if( ['web_protege', 'prive'].includes(ou) ) return next()
 //   }
-
 //   return res.sendStatus(403)
 // }
-
-function verifierNiveauPublic(req, res, next) {
-  // S'assurer que l'usager est au moins logge avec le niveau prive
-  if(req.autorisationMillegrille.public) {
-    return next()
-  }
-  return res.sendStatus(403)
-}
 
 async function traiterUpload(req, res) {
   const {position, correlation} = req.params
