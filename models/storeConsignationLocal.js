@@ -87,12 +87,20 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
     const verificateurHachage = new VerificateurHachage(fuuid)
     try {
+        const listeParts = []
         for await (const entry of promiseReaddirp) {
-            // debug("Entry path : %O", entry);
             const fichierPart = entry.basename
             const position = Number(fichierPart.split('.').shift())
+            listeParts.push({position, fullPath: entry.fullPath})
+        }
+        listeParts.sort((a,b)=>{return a.position-b.position})
+        for await (const entry of listeParts) {
+            const {position, fullPath} = entry
+            // debug("Entry path : %O", entry);
+            // const fichierPart = entry.basename
+            // const position = Number(fichierPart.split('.').shift())
             debug("Traiter consignation pour item %s position %d", fuuid, position)
-            const streamReader = fs.createReadStream(entry.fullPath)
+            const streamReader = fs.createReadStream(fullPath)
             
             let total = 0
             streamReader.on('data', chunk=>{

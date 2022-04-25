@@ -80,7 +80,7 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
     // Conserver le fichier
     const pathFichierStaging = path.join(pathReady, item)
     try {
-        _storeConsignation.consignerFichier(pathFichierStaging, fuuid)
+        await _storeConsignation.consignerFichier(pathFichierStaging, fuuid)
     } catch(err) {
         console.error("%O ERROR Erreur consignation fichier : %O", new Date(), err)
         return
