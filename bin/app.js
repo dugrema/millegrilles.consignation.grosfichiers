@@ -4,18 +4,19 @@ var path = require('path')
 
 // var indexRouter = require('./routes/index');
 const {InitialiserGrosFichiers} = require('../routes/grosfichiers')
-const {InitialiserBackup} = require('../routes/backup')
-const {init: InitialiserPublier} = require('../routes/publier')
+// const {InitialiserBackup} = require('../routes/backup')
+// const {init: InitialiserPublier} = require('../routes/publier')
 const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki')
-const {PathConsignation} = require('../util/traitementFichier')
+// const {PathConsignation} = require('../util/traitementFichier')
 
-function initialiser(opts) {
+function initialiser(storeConsignation, opts) {
   debug("Initialiser app, opts : %O", opts)
   opts = opts || {}
   const middleware = opts.middleware,
         mq = opts.mq,
         idmg = opts.mq.pki.idmg
-  const pathConsignation = new PathConsignation({idmg})
+
+  // const pathConsignation = new PathConsignation({idmg})
 
   var app = express()
 
@@ -31,12 +32,7 @@ function initialiser(opts) {
 
   // Inject RabbitMQ pour la MilleGrille detectee sous etape SSL
   app.use((req, res, next)=>{
-    //const idmg = req.autorisationMillegrille.idmg
-    const idmg = req.idmg
-    //const rabbitMQ = req.fctRabbitMQParIdmg(idmg)
-    // req.amqpdao = rabbitMQ  // Nouvelle approche
-    req.pathConsignation = new PathConsignation({idmg})
-
+    req.storeConsignation = storeConsignation
     next()
   })
 
@@ -46,11 +42,11 @@ function initialiser(opts) {
 
   app.use(express.static(path.join(__dirname, 'public')))
 
-  app.all('/backup/*', InitialiserBackup())
+  // app.all('/backup/*', InitialiserBackup())
   const traitementGrosFichiers = InitialiserGrosFichiers()
-  app.all('/fichiers/*', traitementGrosFichiers)
+  // app.all('/fichiers/*', traitementGrosFichiers)
   app.all('/fichiers_transfert/*', traitementGrosFichiers)
-  app.all('/publier/*', InitialiserPublier(mq, pathConsignation))
+  // app.all('/publier/*', InitialiserPublier(mq, pathConsignation))
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {

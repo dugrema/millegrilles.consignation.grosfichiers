@@ -2,11 +2,12 @@ const debug = require('debug')('millegrilles:fichiers:publication')
 const path = require('path')
 const fsPromises = require('fs/promises')
 const { PathConsignation } = require('../util/traitementFichier')
-// const {
-//   getPublicKey, connecterSSH, preparerSftp,
-//   putFichier: putFichierSsh,
-//   addRepertoire: putRepertoireSsh
-// } = require('../util/ssh')
+const {
+  getPublicKey, 
+  //connecterSSH, preparerSftp,
+  //putFichier: putFichierSsh,
+  //addRepertoire: putRepertoireSsh
+} = require('../util/ssh')
 // const { init: initIpfs,
 //         addFichier: addFichierIpfs,
 //         addRepertoire: putRepertoireIpfs,
@@ -14,7 +15,7 @@ const { PathConsignation } = require('../util/traitementFichier')
 //         creerCleIpns: _creerCleIpns,
 //         importerCleIpns,
 //       } = require('../util/ipfs')
-const { preparerConnexionS3, uploaderFichier: putFichierAwsS3, addRepertoire: putRepertoireAwsS3 } = require('../util/awss3')
+// const { preparerConnexionS3, uploaderFichier: putFichierAwsS3, addRepertoire: putRepertoireAwsS3 } = require('../util/awss3')
 
 const L2PRIVE = '2.prive'
 
@@ -23,29 +24,35 @@ const L2PRIVE = '2.prive'
 
 var _mq = null,
     _pathConsignation = null,
-    _repertoireCodeWebapps = process.env.WEBAPPS_SRC_FOLDER
+    _repertoireCodeWebapps = process.env.WEBAPPS_SRC_FOLDER,
+    _storeConsignation = null
 
-function init(mq) {
+function init(mq, storeConsignation) {
   _mq = mq
+  _storeConsignation = storeConsignation
 
   const idmg = mq.pki.idmg
-  _pathConsignation = new PathConsignation({idmg});
+  // _pathConsignation = new PathConsignation({idmg});
 
   // const ipfsHost = process.env.IPFS_HOST || 'http://ipfs:5001'
   // initIpfs(ipfsHost)
 }
 
 function on_connecter() {
+  _ajouterCb('requete.fichiers.getConfiguration', getConfiguration, {direct: true})
+  _ajouterCb('commande.fichiers.modifierConfiguration', modifierConfiguration, {direct: true})
+
   // Commandes SSH/SFTP
   _ajouterCb('requete.fichiers.getPublicKeySsh', getPublicKeySsh, {direct: true})
-  _ajouterCb('commande.fichiers.publierFichierSftp', publierFichierSftp)
-  _ajouterCb('commande.fichiers.publierRepertoireSftp', publierRepertoireSftp)
-  _ajouterCb('commande.fichiers.publierVitrineSftp', publierVitrineSftp)
+
+  // _ajouterCb('commande.fichiers.publierFichierSftp', publierFichierSftp)
+  // _ajouterCb('commande.fichiers.publierRepertoireSftp', publierRepertoireSftp)
+  // _ajouterCb('commande.fichiers.publierVitrineSftp', publierVitrineSftp)
 
   // Commandes AWS S3
-  _ajouterCb('commande.fichiers.publierFichierAwsS3', publierFichierAwsS3)
-  _ajouterCb('commande.fichiers.publierRepertoireAwsS3', publierRepertoireAwsS3)
-  _ajouterCb('commande.fichiers.publierVitrineAwsS3', publierVitrineAwsS3)
+  // _ajouterCb('commande.fichiers.publierFichierAwsS3', publierFichierAwsS3)
+  // _ajouterCb('commande.fichiers.publierRepertoireAwsS3', publierRepertoireAwsS3)
+  // _ajouterCb('commande.fichiers.publierVitrineAwsS3', publierVitrineAwsS3)
 
   // Commandes IPFS
   // _ajouterCb('commande.fichiers.publierFichierIpfs', publierFichierIpfs)
@@ -67,6 +74,32 @@ function _ajouterCb(rk, cb, opts) {
     [rk],
     paramsSup
   )
+}
+
+async function getConfiguration(message, rk, opts) {
+  opts = opts || {}
+  const properties = opts.properties || {}
+  debug("publication.getConfiguration (replyTo: %s)", properties.replyTo)
+  const configuration = await _storeConsignation.chargerConfiguration()
+
+  _mq.transmettreReponse(configuration, properties.replyTo, properties.correlationId)
+}
+
+async function modifierConfiguration(message, rk, opts) {
+  opts = opts || {}
+  const properties = opts.properties || {}
+  debug("publication.modifierConfiguration (replyTo: %s)", properties.replyTo)
+
+  let reponse = {ok: false}
+  try {
+    await _storeConsignation.modifierConfiguration(message, {override: true})
+
+    reponse = {ok: true}
+  } catch(err) {
+    console.error("%O storeConsignation.modifierConfiguration, Erreur store modifierConfiguration : %O", new Date(), err)
+    reponse = {ok: false, err: ''+err}
+  }
+  _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
 }
 
 function getPublicKeySsh(message, rk, opts) {
@@ -318,203 +351,203 @@ async function publierFichierSftp(message, rk, opts) {
 //
 // }
 
-async function publierFichierAwsS3(message, rk, opts) {
-  opts = opts || {}
-  const {
-    fuuid, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre,
-    permission, bucketName, bucketDirfichier, cdn_id: cdnId} = message
-  const securite = message.securite || L2PRIVE
-  const properties = opts.properties || {}
-  const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
+// async function publierFichierAwsS3(message, rk, opts) {
+//   opts = opts || {}
+//   const {
+//     fuuid, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre,
+//     permission, bucketName, bucketDirfichier, cdn_id: cdnId} = message
+//   const securite = message.securite || L2PRIVE
+//   const properties = opts.properties || {}
+//   const identificateur_document = {fuuid, '_mg-libelle': 'fichier'}
 
-  try {
-    // Connecter AWS S3
-    const secretKeyInfo = {secretAccessKey: secretAccessKey_chiffre, permission}
-    const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretKeyInfo)
-    // const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre)
+//   try {
+//     // Connecter AWS S3
+//     const secretKeyInfo = {secretAccessKey: secretAccessKey_chiffre, permission}
+//     const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretKeyInfo)
+//     // const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre)
 
-    var localPath = _pathConsignation.trouverPathLocal(fuuid)
-    debug("Fichier local a publier sur AWS S3 : %s", localPath)
+//     var localPath = _pathConsignation.trouverPathLocal(fuuid)
+//     debug("Fichier local a publier sur AWS S3 : %s", localPath)
 
-    if(securite === '1.public') {
-      // Dechiffrer le fichier public dans staging
-      const infoFichierPublic = await preparerStagingPublic(fuuid)
-      debug("Information fichier public : %O", infoFichierPublic)
-      localPath = infoFichierPublic.filePath
-    }
+//     if(securite === '1.public') {
+//       // Dechiffrer le fichier public dans staging
+//       const infoFichierPublic = await preparerStagingPublic(fuuid)
+//       debug("Information fichier public : %O", infoFichierPublic)
+//       localPath = infoFichierPublic.filePath
+//     }
 
-    var dernierEvent = 0
-    const intervalPublish = 1000
-    const optsPut = {
-      progressCb: update => {
-        //   loaded: 8174,
-        //   total: 8174,
-        //   part: 1,
-        //   key: 'QME8SjhaCFySD9qBt1AikQ1U7WxieJY2xDg2JCMczJST/public/89122e80-4227-11eb-a00c-0bb29e75acbf'
+//     var dernierEvent = 0
+//     const intervalPublish = 1000
+//     const optsPut = {
+//       progressCb: update => {
+//         //   loaded: 8174,
+//         //   total: 8174,
+//         //   part: 1,
+//         //   key: 'QME8SjhaCFySD9qBt1AikQ1U7WxieJY2xDg2JCMczJST/public/89122e80-4227-11eb-a00c-0bb29e75acbf'
 
-        debug("AWS S3 progres cb : %O", update)
-        // Throttle evenements, toutes les 2 secondes
-        const epochCourant = new Date().getTime()
-        if(epochCourant-intervalPublish > dernierEvent) {
-          dernierEvent = epochCourant  // Update date pour throttle
-          const confirmation = {
-            identificateur_document,
-            cdn_id: cdnId,
-            // current_bytes: current,
-            // total_bytes: total,
-            complete: false,
-          }
-          const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-          _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-        }
-      }
-    }
+//         debug("AWS S3 progres cb : %O", update)
+//         // Throttle evenements, toutes les 2 secondes
+//         const epochCourant = new Date().getTime()
+//         if(epochCourant-intervalPublish > dernierEvent) {
+//           dernierEvent = epochCourant  // Update date pour throttle
+//           const confirmation = {
+//             identificateur_document,
+//             cdn_id: cdnId,
+//             // current_bytes: current,
+//             // total_bytes: total,
+//             complete: false,
+//           }
+//           const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//           _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//         }
+//       }
+//     }
 
-    debug("Debut upload AWS S3 %s vers %s", fuuid, bucketName)
-    // let bucketDirfichierEtendu = bucketDirfichier
-    // if(securite === '1.public') {
-    //   bucketDirfichierEtendu = bucketDirfichier + '/public'
-    // }
-    var remotePath = null
-    if(securite === '1.public') {
-      remotePath = path.join(bucketDirfichier, 'fichiers', 'public')
-    } else {
-      remotePath = path.join(bucketDirfichier, 'fichiers')
-    }
-    const resultat = await putFichierAwsS3(s3, message, localPath, bucketName, remotePath, optsPut)
-    debug("Resultat upload S3 : %O", resultat)
-    // Resultat:
-    // {
-	  //    ETag: '"874e56c9ae15779368e082b3b95b0832"',
-	  //    Location: 'https://millegrilles.s3.amazonaws.com/mg-dev4/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2',
-	  //    key: 'mg-dev4/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2',
-	  //    Key: 'mg-dev4/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2',
-	  //    Bucket: 'millegrilles'
-    // }
+//     debug("Debut upload AWS S3 %s vers %s", fuuid, bucketName)
+//     // let bucketDirfichierEtendu = bucketDirfichier
+//     // if(securite === '1.public') {
+//     //   bucketDirfichierEtendu = bucketDirfichier + '/public'
+//     // }
+//     var remotePath = null
+//     if(securite === '1.public') {
+//       remotePath = path.join(bucketDirfichier, 'fichiers', 'public')
+//     } else {
+//       remotePath = path.join(bucketDirfichier, 'fichiers')
+//     }
+//     const resultat = await putFichierAwsS3(s3, message, localPath, bucketName, remotePath, optsPut)
+//     debug("Resultat upload S3 : %O", resultat)
+//     // Resultat:
+//     // {
+// 	  //    ETag: '"874e56c9ae15779368e082b3b95b0832"',
+// 	  //    Location: 'https://millegrilles.s3.amazonaws.com/mg-dev4/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2',
+// 	  //    key: 'mg-dev4/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2',
+// 	  //    Key: 'mg-dev4/z8VwJR6hCq6z7TJY2MjsJsfAGTkjEimw9yduR6dDnHnUf4uF7cJFJxCWKmy2tw5kpRJtgvaZCatQKu5dDbCC63fVk6t.mgs2',
+// 	  //    Bucket: 'millegrilles'
+//     // }
 
-    const reponseMq = {
-      ok: true,
-      ...resultat,
-    }
+//     const reponseMq = {
+//       ok: true,
+//       ...resultat,
+//     }
 
-    if(properties && properties.replyTo) {
-      _mq.transmettreReponse(reponseMq, properties.replyTo, properties.correlationId)
-    }
+//     if(properties && properties.replyTo) {
+//       _mq.transmettreReponse(reponseMq, properties.replyTo, properties.correlationId)
+//     }
 
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id: cdnId,
-      complete: true,
-      securite,
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//     // Emettre evenement de publication
+//     const confirmation = {
+//       identificateur_document,
+//       cdn_id: cdnId,
+//       complete: true,
+//       securite,
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
-  } catch(err) {
-    console.error("ERROR publication.publierFichierAwsS3: Erreur publication fichier sur AWS S3 : %O", err)
-    if(properties && properties.replyTo) {
-      _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
-    }
+//   } catch(err) {
+//     console.error("ERROR publication.publierFichierAwsS3: Erreur publication fichier sur AWS S3 : %O", err)
+//     if(properties && properties.replyTo) {
+//       _mq.transmettreReponse({ok: false, err: ''+err}, properties.replyTo, properties.correlationId)
+//     }
 
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id: cdnId,
-      complete: false,
-      err: ''+err,
-      stack: JSON.stringify(err.stack),
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-  }
-}
+//     // Emettre evenement de publication
+//     const confirmation = {
+//       identificateur_document,
+//       cdn_id: cdnId,
+//       complete: false,
+//       err: ''+err,
+//       stack: JSON.stringify(err.stack),
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//   }
+// }
 
-async function preparerStagingPublic(fuuid) {
-  // Dechiffrer un fichier public dans zone de downloadStaging (auto-cleanup)
+// async function preparerStagingPublic(fuuid) {
+//   // Dechiffrer un fichier public dans zone de downloadStaging (auto-cleanup)
 
-  const infoStream = await creerStreamDechiffrage(_mq, fuuid)
-  if(infoStream.acces === '0.refuse') {
-    debug("Permission d'acces refuse en mode %s pour %s", infoStream.acces, fuuid)
-    throw new Error("Acces public refuse a " + fuuid)
-  }
+//   const infoStream = await creerStreamDechiffrage(_mq, fuuid)
+//   if(infoStream.acces === '0.refuse') {
+//     debug("Permission d'acces refuse en mode %s pour %s", infoStream.acces, fuuid)
+//     throw new Error("Acces public refuse a " + fuuid)
+//   }
 
-  // // Ajouter information de dechiffrage pour la reponse
-  // res.decipherStream = infoStream.decipherStream
-  // res.permission = infoStream.permission
-  // res.fuuid = infoStream.fuuidEffectif
+//   // // Ajouter information de dechiffrage pour la reponse
+//   // res.decipherStream = infoStream.decipherStream
+//   // res.permission = infoStream.permission
+//   // res.fuuid = infoStream.fuuidEffectif
 
-  // const fuuidEffectif = infoStream.fuuidEffectif
+//   // const fuuidEffectif = infoStream.fuuidEffectif
 
-  // Preparer le fichier dechiffre dans repertoire de staging
-  const infoFichierEffectif = await stagingPublic(_pathConsignation, fuuid, infoStream)
-  //res.stat = infoFichierEffectif.stat
-  //res.filePath = infoFichierEffectif.filePath
-  return infoFichierEffectif
-}
+//   // Preparer le fichier dechiffre dans repertoire de staging
+//   const infoFichierEffectif = await stagingPublic(_pathConsignation, fuuid, infoStream)
+//   //res.stat = infoFichierEffectif.stat
+//   //res.filePath = infoFichierEffectif.filePath
+//   return infoFichierEffectif
+// }
 
-async function preparerStagingStream(fuuid) {
-  const infoStream = await creerStreamDechiffrage(_mq, fuuid, {prive: true})
-  if(infoStream.acces === '0.refuse') {
-    debug("Permission d'acces refuse en mode %s pour %s", infoStream.acces, fuuid)
-    throw new Error("Acces public refuse a " + fuuid)
-  }
+// async function preparerStagingStream(fuuid) {
+//   const infoStream = await creerStreamDechiffrage(_mq, fuuid, {prive: true})
+//   if(infoStream.acces === '0.refuse') {
+//     debug("Permission d'acces refuse en mode %s pour %s", infoStream.acces, fuuid)
+//     throw new Error("Acces public refuse a " + fuuid)
+//   }
 
-  // Preparer le fichier dechiffre dans repertoire de staging
-  const infoFichierEffectif = await stagingPublic(_pathConsignation, fuuid, infoStream)
-  return infoFichierEffectif
-}
+//   // Preparer le fichier dechiffre dans repertoire de staging
+//   const infoFichierEffectif = await stagingPublic(_pathConsignation, fuuid, infoStream)
+//   return infoFichierEffectif
+// }
 
-async function publierRepertoireSftp(message, rk, opts) {
-  const {host, port, username, repertoireStaging, repertoireRemote, identificateur_document, cdn_id, securite, keyType} = message
-  try {
-    debug("Publier repertoire sftp\n%O", message)
-    const conn = await connecterSSH(host, port, username, {keyType})
-    const sftp = await preparerSftp(conn)
-    const reponseSsh = await putRepertoireSsh(sftp, repertoireStaging, {repertoireRemote})
+// async function publierRepertoireSftp(message, rk, opts) {
+//   const {host, port, username, repertoireStaging, repertoireRemote, identificateur_document, cdn_id, securite, keyType} = message
+//   try {
+//     debug("Publier repertoire sftp\n%O", message)
+//     const conn = await connecterSSH(host, port, username, {keyType})
+//     const sftp = await preparerSftp(conn)
+//     const reponseSsh = await putRepertoireSsh(sftp, repertoireStaging, {repertoireRemote})
 
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id,
-      complete: true,
-      securite,
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//     // Emettre evenement de publication
+//     const confirmation = {
+//       identificateur_document,
+//       cdn_id,
+//       complete: true,
+//       securite,
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
-  } catch(err) {
-    console.error('ERROR publication.publierRepertoireSftp %O', err)
-    // Emettre evenement d'echec de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id,
-      complete: false,
-      err: ''+err,
-      stack: JSON.stringify(err.stack),
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
-  } finally {
-    if(message.uploadUnique) {
-      // Supprimer le repertoire de staging
-      await fsPromises.rm(repertoireStaging, {recursive: true})
-    }
-  }
-}
+//   } catch(err) {
+//     console.error('ERROR publication.publierRepertoireSftp %O', err)
+//     // Emettre evenement d'echec de publication
+//     const confirmation = {
+//       identificateur_document,
+//       cdn_id,
+//       complete: false,
+//       err: ''+err,
+//       stack: JSON.stringify(err.stack),
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//   } finally {
+//     if(message.uploadUnique) {
+//       // Supprimer le repertoire de staging
+//       await fsPromises.rm(repertoireStaging, {recursive: true})
+//     }
+//   }
+// }
 
-function publierVitrineSftp(message, rk, opts) {
-  // Va publier le code de vitrine via SFTP
-  const pathVitrine = path.join(_repertoireCodeWebapps, 'vitrine')
-  const configurationPublication = {
-    ...message,
+// function publierVitrineSftp(message, rk, opts) {
+//   // Va publier le code de vitrine via SFTP
+//   const pathVitrine = path.join(_repertoireCodeWebapps, 'vitrine')
+//   const configurationPublication = {
+//     ...message,
 
-    // Ajouter repertoire source
-    repertoireStaging: pathVitrine,
-  }
-  debug("Publier vitrine : %O", configurationPublication)
-  return publierRepertoireSftp(configurationPublication, rk, opts)
-}
+//     // Ajouter repertoire source
+//     repertoireStaging: pathVitrine,
+//   }
+//   debug("Publier vitrine : %O", configurationPublication)
+//   return publierRepertoireSftp(configurationPublication, rk, opts)
+// }
 
 // async function publierRepertoireIpfs(message, rk, opts) {
 //   debug("Publier repertoire ipfs : %O", message)
@@ -604,67 +637,67 @@ function publierVitrineSftp(message, rk, opts) {
 //   return publierRepertoireIpfs(configurationPublication, rk, opts)
 // }
 
-async function publierRepertoireAwsS3(message, rk, opts) {
-  debug("publication.publierVitrineIpfs Publier vitrine vers AWS S3 : %O", message)
-  const {
-    repertoireStaging, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre,
-    permission, bucketName, bucketDirfichier,
-    identificateur_document, cdn_id, securite } = message
+// async function publierRepertoireAwsS3(message, rk, opts) {
+//   debug("publication.publierVitrineIpfs Publier vitrine vers AWS S3 : %O", message)
+//   const {
+//     repertoireStaging, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre,
+//     permission, bucketName, bucketDirfichier,
+//     identificateur_document, cdn_id, securite } = message
 
-  try {
-    // Connecter AWS S3
-    const secretKeyInfo = {secretAccessKey: secretAccessKey_chiffre, permission}
-    const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretKeyInfo)
-    // const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre)
-    const reponse = await putRepertoireAwsS3(s3, repertoireStaging, bucketName, {bucketDirfichier, message})
-    debug("publication.publierVitrineIpfs Fin upload AWS S3 : %O", reponse)
+//   try {
+//     // Connecter AWS S3
+//     const secretKeyInfo = {secretAccessKey: secretAccessKey_chiffre, permission}
+//     const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretKeyInfo)
+//     // const s3 = await preparerConnexionS3(_mq, bucketRegion, credentialsAccessKeyId, secretAccessKey_chiffre)
+//     const reponse = await putRepertoireAwsS3(s3, repertoireStaging, bucketName, {bucketDirfichier, message})
+//     debug("publication.publierVitrineIpfs Fin upload AWS S3 : %O", reponse)
 
-    // Emettre evenement de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id,
-      complete: true,
-      securite,
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//     // Emettre evenement de publication
+//     const confirmation = {
+//       identificateur_document,
+//       cdn_id,
+//       complete: true,
+//       securite,
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
-  } catch(err) {
-    console.error('ERROR publication.publierRepertoireSftp %O', err)
+//   } catch(err) {
+//     console.error('ERROR publication.publierRepertoireSftp %O', err)
 
-    // Emettre evenement d'echec de publication
-    const confirmation = {
-      identificateur_document,
-      cdn_id,
-      complete: false,
-      err: ''+err,
-      stack: JSON.stringify(err.stack),
-    }
-    const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
-    _mq.emettreEvenement(confirmation, domaineActionConfirmation)
+//     // Emettre evenement d'echec de publication
+//     const confirmation = {
+//       identificateur_document,
+//       cdn_id,
+//       complete: false,
+//       err: ''+err,
+//       stack: JSON.stringify(err.stack),
+//     }
+//     const domaineActionConfirmation = 'evenement.fichiers.publierFichier'
+//     _mq.emettreEvenement(confirmation, domaineActionConfirmation)
 
-  } finally {
-    if(message.uploadUnique) {
-      // Supprimer le repertoire de staging
-      await fsPromises.rm(repertoireStaging, {recursive: true})
-    }
-  }
-}
+//   } finally {
+//     if(message.uploadUnique) {
+//       // Supprimer le repertoire de staging
+//       await fsPromises.rm(repertoireStaging, {recursive: true})
+//     }
+//   }
+// }
 
-function publierVitrineAwsS3(message, rk, opts) {
-  // Va publier le code de vitrine via SFTP
-  const pathVitrine = path.join(_repertoireCodeWebapps, 'vitrine')
-  const configurationPublication = {
-    ...message,
+// function publierVitrineAwsS3(message, rk, opts) {
+//   // Va publier le code de vitrine via SFTP
+//   const pathVitrine = path.join(_repertoireCodeWebapps, 'vitrine')
+//   const configurationPublication = {
+//     ...message,
 
-    // Ajouter repertoire source
-    repertoireStaging: pathVitrine,
-    maxAge: 0,
-    chunkImmutable: true,  // fichiers avec .chunk. vont etre mis en cache public immutable maxAge 1 an
-  }
-  debug("Publier vitrine sur AWS S3 : %O", configurationPublication)
-  return publierRepertoireAwsS3(configurationPublication, rk, opts)
-}
+//     // Ajouter repertoire source
+//     repertoireStaging: pathVitrine,
+//     maxAge: 0,
+//     chunkImmutable: true,  // fichiers avec .chunk. vont etre mis en cache public immutable maxAge 1 an
+//   }
+//   debug("Publier vitrine sur AWS S3 : %O", configurationPublication)
+//   return publierRepertoireAwsS3(configurationPublication, rk, opts)
+// }
 
 // async function publierIpns(message, rk, opts) {
 //   debug("Publier cle ipns")

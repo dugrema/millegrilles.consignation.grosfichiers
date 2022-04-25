@@ -8,6 +8,7 @@ const fs = require('fs')
 const {initialiser: initialiserServer} = require('./server')
 const {initialiser: initialiserApp} = require('./app');
 const amqpdao = require('../models/amqpdao')
+const StoreConsignation = require('../models/storeConsignation')
 
 const CERT_CA_FILE = process.env.MG_MQ_CAFILE,
       CERT_FILE = process.env.MG_MQ_CERTFILE,
@@ -50,8 +51,11 @@ async function init() {
   await redisClient.connect()
   await redisClient.ping()
 
+  const storeConsignation = StoreConsignation
+  await storeConsignation.init()
+
   // Connexion AMQ
-  const {amqpdao: instAmqpdao} = await amqpdao.init({redisClient})
+  const {amqpdao: instAmqpdao} = await amqpdao.init(storeConsignation, {redisClient})
   const idmg = instAmqpdao.pki.idmg
 
   debug("Initialisation serveur IDMG : %s", idmg)
@@ -85,11 +89,15 @@ async function init() {
   //   next()
   // })
 
-  const root = await initialiserApp({middleware, mq: instAmqpdao})
+  const root = await initialiserApp(storeConsignation, {middleware, mq: instAmqpdao})
   const serverInstance = initialiserServer(root)
 
   // Hook pour un health check regulier (surtout pour connexion MQ)
   setInterval(()=>healthCheck(serverInstance, instAmqpdao).catch(err=>console.error("www.healthCheck ERROR : %O", err)), 60000)
+}
+
+async function chargerConfigurationStoreConsignation() {
+
 }
 
 async function healthCheck(server, instAmqpdao) {

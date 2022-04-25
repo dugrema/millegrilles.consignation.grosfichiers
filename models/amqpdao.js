@@ -4,7 +4,7 @@ const { MilleGrillesPKI, MilleGrillesAmqpDAO } = require('@dugrema/millegrilles.
 
 const EXPIRATION_MESSAGE_DEFAUT = 30 * 60 * 1000  // 15 minutes en millisec
 
-async function init(opts) {
+async function init(storeConsignation, opts) {
   opts = opts || {}
 
   // Preparer certificats
@@ -39,7 +39,7 @@ async function init(opts) {
   await amqpdao.connect(mqConnectionUrl)
 
   // Attacher les evenements, cles de routage
-  await initialiserRabbitMQ(amqpdao)
+  await initialiserMessageHandlers(amqpdao, storeConsignation)
 
   // Middleware, injecte l'instance
   const middleware = (req, res, next) => {
@@ -50,7 +50,7 @@ async function init(opts) {
   return {middleware, amqpdao}
 }
 
-async function initialiserRabbitMQ(rabbitMQ) {
+async function initialiserMessageHandlers(rabbitMQ, storeConsignation) {
   // Creer objets de connexion a MQ - importer librairies requises
   const {PkiMessages} = require('../messages/pki');
   rabbitMQ.enregistrerListenerConnexion(new PkiMessages(rabbitMQ));
@@ -67,11 +67,11 @@ async function initialiserRabbitMQ(rabbitMQ) {
   // const {PublicateurAWS} = require('../messages/aws');
   // rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
 
-  const {GestionnaireMessagesBackup} = require('../messages/backup')
-  rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ))
+  // const {GestionnaireMessagesBackup} = require('../messages/backup')
+  // rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ))
 
   const publication = require('../messages/publication')
-  publication.init(rabbitMQ)
+  publication.init(rabbitMQ, storeConsignation)
   rabbitMQ.enregistrerListenerConnexion(publication)
 
   const entretien = require('../messages/entretien')
