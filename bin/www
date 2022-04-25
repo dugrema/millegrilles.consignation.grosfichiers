@@ -52,11 +52,12 @@ async function init() {
   await redisClient.ping()
 
   const storeConsignation = StoreConsignation
-  await storeConsignation.init()
 
   // Connexion AMQ
   const {amqpdao: instAmqpdao} = await amqpdao.init(storeConsignation, {redisClient})
   const idmg = instAmqpdao.pki.idmg
+
+  await storeConsignation.init(instAmqpdao)
 
   debug("Initialisation serveur IDMG : %s", idmg)
 
@@ -89,7 +90,7 @@ async function init() {
   //   next()
   // })
 
-  const root = await initialiserApp(storeConsignation, {middleware, mq: instAmqpdao})
+  const root = await initialiserApp(instAmqpdao, storeConsignation, {middleware})
   const serverInstance = initialiserServer(root)
 
   // Hook pour un health check regulier (surtout pour connexion MQ)

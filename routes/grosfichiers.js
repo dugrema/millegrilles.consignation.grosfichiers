@@ -12,7 +12,11 @@ const uploadFichier = require('./uploadFichier')
 const STAGING_FILE_TIMEOUT_MSEC = 300000,
       L2PRIVE = '2.prive'
 
-function InitialiserGrosFichiers() {
+let _storeConsignation = null
+
+function InitialiserGrosFichiers(mq, storeConsignation, opts) {
+  opts = opts || {}
+  _storeConsignation = storeConsignation
 
   const router = express.Router();
   //router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
@@ -21,69 +25,109 @@ function InitialiserGrosFichiers() {
   // Path fichiers_transfert. Comportement identique a /fichiers, utilise
   // pour faire une authentification systeme avec cert SSL (en amont,
   // deja valide rendu ici)
-  router.get('/fichiers_transfert/:fuuid', downloadFichierLocal, pipeReponse)
-  router.head('/fichiers_transfert/:fuuid', downloadFichierLocal)
+  router.get('/fichiers_transfert/:fuuid', headersFichier, pipeReponse)
+  router.head('/fichiers_transfert/:fuuid', headersFichier, returnOk)
 
-  router.use(uploadFichier.init())
+  router.use(uploadFichier.init(mq, storeConsignation, opts))
 
   return router
 }
 
-async function downloadFichierLocal(req, res, next) {
-  debug("downloadFichierLocal methode:" + req.method + ": " + req.url);
-  debug(req.headers);
-  debug(req.autorisationMillegrille)
+async function downloadFichier(req, res, next) {
+  const fuuid = req.params.fuuid
+  debug("Download fichier %s", fuuid)
 
-  const encrypted = true
+  
+}
+
+function returnOk(req, res) {
+  res.sendStatus(200)
+}
+
+async function headersFichier(req, res, next) {
   const fuuid = req.params.fuuid
   res.fuuid = fuuid
-  debug("Fuuid : %s", fuuid)
-
-  // Verifier si le fichier existe
-  const idmg = req.autorisationMillegrille.idmg;
-  const pathConsignation = new PathConsignation({idmg})
-  res.filePath = pathConsignation.trouverPathLocal(res.fuuid, encrypted);
+  debug("HEAD fichier %s", fuuid)
 
   try {
-    const stat = await new Promise((resolve, reject)=>{
-      fs.stat(res.filePath, (err, stat)=>{
-        if(err) {
-          if(err.errno == -2) return reject(404)
-          console.error(err);
-          return reject(500)
-        }
-        resolve(stat)
-      })
-    })
-    res.stat = stat
-  } catch(statusCode) {
-    // console.error("Erreur acces fichier %s", statusCode)
-    return res.sendStatus(statusCode)
+    const infoFichier = await _storeConsignation.getInfoFichier(fuuid)
+    debug("Info fichier %s: %O", fuuid, infoFichier)
+    res.stat = infoFichier.stat
+    res.fileRedirect = infoFichier.fileRedirect
+    res.filePath = infoFichier.filePath
+  } catch(err) {
+    console.error("ERROR %O Erreur head fichier %s : %O", new Date(), fuuid, err)
+    return res.sendStatus(500)
   }
-
-  // Verifier si l'acces est en mode chiffre (protege) ou dechiffre (public, prive)
-  const niveauAcces = req.autorisationMillegrille.securite
-
+  
   // Transfert du fichier chiffre directement, on met les stats du filesystem
   var contentType = req.headers.mimetype || 'application/octet-stream'
   res.setHeader('Content-Length', res.stat.size)
   res.setHeader('Content-Type', contentType)
 
-  debug("Info idmg: %s, paths: %s", idmg, pathConsignation);
-
   // Cache control public, permet de faire un cache via proxy (nginx)
   res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
-  res.setHeader('fuuid', res.fuuid)
-  res.setHeader('securite', niveauAcces)
+  res.setHeader('fuuid', fuuid)
+  // res.setHeader('securite', niveauAcces)
   res.setHeader('Last-Modified', res.stat.mtime)
 
-  if(req.method === "GET") {
-    next()
-  } else if(req.method === "HEAD") {
-    return res.sendStatus(200)
-  }
-  
+  next()
 }
+
+// async function downloadFichierLocal(req, res, next) {
+//   debug("downloadFichierLocal methode:" + req.method + ": " + req.url);
+//   debug("headers : %O", req.headers);
+
+//   const encrypted = true
+//   const fuuid = req.params.fuuid
+//   res.fuuid = fuuid
+//   debug("Fuuid : %s", fuuid)
+
+//   // Verifier si le fichier existe
+//   const idmg = req.autorisationMillegrille.idmg;
+//   const pathConsignation = new PathConsignation({idmg})
+//   res.filePath = pathConsignation.trouverPathLocal(res.fuuid, encrypted);
+
+//   try {
+//     const stat = await new Promise((resolve, reject)=>{
+//       fs.stat(res.filePath, (err, stat)=>{
+//         if(err) {
+//           if(err.errno == -2) return reject(404)
+//           console.error(err);
+//           return reject(500)
+//         }
+//         resolve(stat)
+//       })
+//     })
+//     res.stat = stat
+//   } catch(statusCode) {
+//     // console.error("Erreur acces fichier %s", statusCode)
+//     return res.sendStatus(statusCode)
+//   }
+
+//   // Verifier si l'acces est en mode chiffre (protege) ou dechiffre (public, prive)
+//   const niveauAcces = req.autorisationMillegrille.securite
+
+//   // Transfert du fichier chiffre directement, on met les stats du filesystem
+//   var contentType = req.headers.mimetype || 'application/octet-stream'
+//   res.setHeader('Content-Length', res.stat.size)
+//   res.setHeader('Content-Type', contentType)
+
+//   debug("Info idmg: %s, paths: %s", idmg, pathConsignation);
+
+//   // Cache control public, permet de faire un cache via proxy (nginx)
+//   res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
+//   res.setHeader('fuuid', res.fuuid)
+//   res.setHeader('securite', niveauAcces)
+//   res.setHeader('Last-Modified', res.stat.mtime)
+
+//   if(req.method === "GET") {
+//     next()
+//   } else if(req.method === "HEAD") {
+//     return res.sendStatus(200)
+//   }
+  
+// }
 
 // async function downloadFichierPublic(req, res, next) {
 //   debug("downloadFichierLocalChiffre methode:" + req.method + ": " + req.url);
@@ -309,14 +353,13 @@ async function downloadFichierLocal(req, res, next) {
 
 // Sert a preparer un fichier temporaire local pour determiner la taille, supporter slicing
 function pipeReponse(req, res) {
-  const header = res.responseHeader
-  const filePath = res.filePath
+  // const header = res.responseHeader
+  const { range, filePath, fileRedirect, stat } = res
 
-  if(res.range) {
+  if(range) {
     // Implicitement un fichier 1.public, staging local
-    var start = res.range.Start,
-        end = res.range.End,
-        stat = res.stat
+    var start = range.Start,
+        end = range.End
 
     // If the range can't be fulfilled.
     if (start >= stat.size) { // || end >= stat.size) {
@@ -334,7 +377,10 @@ function pipeReponse(req, res) {
     const readStream = fs.createReadStream(filePath, { start: start, end: end })
     res.status(206)
     readStream.pipe(res)
-  } else {
+  } else if(fileRedirect) {
+    // Redirection
+    res.status(307).send(fileRedirect)
+  } else if(filePath) {
     // Transmission directe du fichier
     const readStream = fs.createReadStream(filePath)
     res.writeHead(200)

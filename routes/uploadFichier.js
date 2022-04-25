@@ -8,7 +8,8 @@ const readdirp = require('readdirp')
 
 const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 
-function init(pathConsignation) {
+function init(mq, storeConsignation, opts) {
+  opts = opts || {}
   const route = express()
 
   // Operations d'upload
@@ -20,9 +21,24 @@ function init(pathConsignation) {
   //route.delete('/fichiers/:correlation', verifierNiveauPublic, traiterDeleteUpload)
 
   // Path utilise pour communication entre systemes. Validation ssl client (en amont, deja faite)
-  route.put('/fichiers_transfert/:correlation/:position', traiterUpload)
-  route.post('/fichiers_transfert/:correlation', bodyParser.json(), traiterPostUpload)
-  route.delete('/fichiers_transfert/:correlation', traiterDeleteUpload)
+  // route.put('/fichiers_transfert/:correlation/:position', traiterUpload)
+  // route.post('/fichiers_transfert/:correlation', bodyParser.json(), traiterPostUpload)
+  // route.delete('/fichiers_transfert/:correlation', traiterDeleteUpload)
+
+
+  // Reception fichiers (PUT)
+  const middlewareRecevoirFichier = storeConsignation.middlewareRecevoirFichier(opts)
+  route.put('/fichiers_transfert/:correlation/:position', middlewareRecevoirFichier)
+
+  // Verification fichiers (POST)
+  const middlewareReadyFichier = storeConsignation.middlewareReadyFichier(mq, opts)
+  route.post('/fichiers_transfert/:correlation', bodyParser.json(), middlewareReadyFichier)
+
+  // Cleanup
+  const middlewareDeleteStaging = storeConsignation.middlewareDeleteStaging(opts)
+  route.delete('/fichiers_transfert/:correlation', middlewareDeleteStaging)
+
+  debug("Route /fichiers_transfert initialisee")
 
   return route
 }
@@ -35,176 +51,176 @@ function init(pathConsignation) {
 //   return res.sendStatus(403)
 // }
 
-async function traiterUpload(req, res) {
-  const {position, correlation} = req.params
-  debug("/upload PUT %s position %d", correlation, position)
+// async function traiterUpload(req, res) {
+//   const {position, correlation} = req.params
+//   debug("/upload PUT %s position %d", correlation, position)
 
-  const pathStaging = req.pathConsignation.consignationPathUploadStaging
+//   const pathStaging = req.pathConsignation.consignationPathUploadStaging
 
-  // Verifier si le repertoire existe, le creer au besoin
-  const pathCorrelation = path.join(pathStaging, correlation)
-  await new Promise((resolve, reject)=>{
-    fs.mkdir(pathCorrelation, {recursive: true}, err=>{
-      if(err && err.code !== 'EEXIST') {
-        debug("Erreur creation repertoire multer : %O", err)
-        return reject(err)
-      }
-      return resolve()
-    })
-  })
+//   // Verifier si le repertoire existe, le creer au besoin
+//   const pathCorrelation = path.join(pathStaging, correlation)
+//   await new Promise((resolve, reject)=>{
+//     fs.mkdir(pathCorrelation, {recursive: true}, err=>{
+//       if(err && err.code !== 'EEXIST') {
+//         debug("Erreur creation repertoire multer : %O", err)
+//         return reject(err)
+//       }
+//       return resolve()
+//     })
+//   })
 
-  // Creer output stream
-  const pathFichier = path.join(pathCorrelation, position + '.part')
-  const writer = fs.createWriteStream(pathFichier)
+//   // Creer output stream
+//   const pathFichier = path.join(pathCorrelation, position + '.part')
+//   const writer = fs.createWriteStream(pathFichier)
 
-  try {
-    const promise = new Promise((resolve, reject)=>{
-      req.on('end', _=>{
-        resolve()
-      })
-      req.on('error', err=>{
-        reject(err)
-      })
+//   try {
+//     const promise = new Promise((resolve, reject)=>{
+//       req.on('end', _=>{
+//         resolve()
+//       })
+//       req.on('error', err=>{
+//         reject(err)
+//       })
 
-    })
-    req.pipe(writer)
-    await promise
-  } catch(err) {
-    debug("Erreur PUT: %O", err)
-    return res.sendStatus(500)
-  }
+//     })
+//     req.pipe(writer)
+//     await promise
+//   } catch(err) {
+//     debug("Erreur PUT: %O", err)
+//     return res.sendStatus(500)
+//   }
 
-  res.sendStatus(200)
-}
+//   res.sendStatus(200)
+// }
 
-async function traiterPostUpload(req, res, next) {
-  const correlation = req.params.correlation
-  const pathStaging = req.pathConsignation.consignationPathUploadStaging
-  const pathCorrelation = path.join(pathStaging, correlation)
+// async function traiterPostUpload(req, res, next) {
+//   const correlation = req.params.correlation
+//   const pathStaging = req.pathConsignation.consignationPathUploadStaging
+//   const pathCorrelation = path.join(pathStaging, correlation)
 
-  const informationFichier = req.body
-  debug("Traitement post %s upload %O", correlation, informationFichier)
+//   const informationFichier = req.body
+//   debug("Traitement post %s upload %O", correlation, informationFichier)
 
-  const commandeMaitreCles = informationFichier.cles
-  const transactionGrosFichiers = informationFichier.transaction
+//   const commandeMaitreCles = informationFichier.cles
+//   const transactionGrosFichiers = informationFichier.transaction
 
-  // Note: Correlation est le fuuid si on n'a pas de commandeMaitreCles
-  const hachage = commandeMaitreCles?commandeMaitreCles.hachage_bytes:correlation
+//   // Note: Correlation est le fuuid si on n'a pas de commandeMaitreCles
+//   const hachage = commandeMaitreCles?commandeMaitreCles.hachage_bytes:correlation
 
-  // const pathOutput = path.join(pathCorrelation, hachage + '.mgs3')
-  const pathOutput = path.join(pathCorrelation, hachage)
-  debug("Upload Fichier, recu hachage: %s", hachage)
-  const verificateurHachage = new VerificateurHachage(hachage)
+//   // const pathOutput = path.join(pathCorrelation, hachage + '.mgs3')
+//   const pathOutput = path.join(pathCorrelation, hachage)
+//   debug("Upload Fichier, recu hachage: %s", hachage)
+//   const verificateurHachage = new VerificateurHachage(hachage)
 
-  // Verifier le hachage
-  try {
-    // Trouver le nombre de fichiers/parties
-    var files = await readdirp.promise(pathCorrelation, {fileFilter: '*.part'})
-    if(files.length === 0) {
-      // Aucuns fichiers trouves
-      return res.sendStatus(404)
-    } else if(files.length === 1) {
-      // Un seul fichier (0.part)
-      const file = files[0]
+//   // Verifier le hachage
+//   try {
+//     // Trouver le nombre de fichiers/parties
+//     var files = await readdirp.promise(pathCorrelation, {fileFilter: '*.part'})
+//     if(files.length === 0) {
+//       // Aucuns fichiers trouves
+//       return res.sendStatus(404)
+//     } else if(files.length === 1) {
+//       // Un seul fichier (0.part)
+//       const file = files[0]
 
-      debug("Traiter 1 fichier uploade %O", file)
+//       debug("Traiter 1 fichier uploade %O", file)
 
-      // Calculer hachage
-      const fileReader = fs.createReadStream(file.fullPath)
-      let total = 0
-      fileReader.on('data', chunk=>{
-        // Verifier hachage
-        verificateurHachage.update(chunk)
-        total += chunk.length
-      })
-      const promise = new Promise((resolve, reject)=>{
-        fileReader.on('end', _=>resolve())
-        fileReader.on('error', err=>reject(err))
-      })
-      await promise
-      debug("Taille fichier %s : %d", pathOutput, total)
+//       // Calculer hachage
+//       const fileReader = fs.createReadStream(file.fullPath)
+//       let total = 0
+//       fileReader.on('data', chunk=>{
+//         // Verifier hachage
+//         verificateurHachage.update(chunk)
+//         total += chunk.length
+//       })
+//       const promise = new Promise((resolve, reject)=>{
+//         fileReader.on('end', _=>resolve())
+//         fileReader.on('error', err=>reject(err))
+//       })
+//       await promise
+//       debug("Taille fichier %s : %d", pathOutput, total)
 
-      // Renommer
-      await fsPromises.rename(file.fullPath, pathOutput)
+//       // Renommer
+//       await fsPromises.rename(file.fullPath, pathOutput)
 
-    } else {
-      // Reassembler les fichiers
-      const writer = fs.createWriteStream(pathOutput)
-      // Convertir les noms de fichier en integer
-      files = files.map(file=>{
-        return Number(file.path.split('.')[0])
-      })
-      // Trier en ordre numerique
-      files.sort((a,b)=>{return a-b})
+//     } else {
+//       // Reassembler les fichiers
+//       const writer = fs.createWriteStream(pathOutput)
+//       // Convertir les noms de fichier en integer
+//       files = files.map(file=>{
+//         return Number(file.path.split('.')[0])
+//       })
+//       // Trier en ordre numerique
+//       files.sort((a,b)=>{return a-b})
 
-      for(let idx in files) {
-        const file = files[idx]
-        debug("Charger fichier %s position %d", correlation, file)
-        const pathFichier = path.join(pathCorrelation, file + '.part')
-        const fileReader = fs.createReadStream(pathFichier)
+//       for(let idx in files) {
+//         const file = files[idx]
+//         debug("Charger fichier %s position %d", correlation, file)
+//         const pathFichier = path.join(pathCorrelation, file + '.part')
+//         const fileReader = fs.createReadStream(pathFichier)
 
-        let total = 0
-        fileReader.on('data', chunk=>{
-          // Verifier hachage
-          verificateurHachage.update(chunk)
-          writer.write(chunk)
-          total += chunk.length
-        })
+//         let total = 0
+//         fileReader.on('data', chunk=>{
+//           // Verifier hachage
+//           verificateurHachage.update(chunk)
+//           writer.write(chunk)
+//           total += chunk.length
+//         })
 
-        const promise = new Promise((resolve, reject)=>{
-          fileReader.on('end', _=>resolve())
-          fileReader.on('error', err=>reject(err))
-        })
+//         const promise = new Promise((resolve, reject)=>{
+//           fileReader.on('end', _=>resolve())
+//           fileReader.on('error', err=>reject(err))
+//         })
 
-        await promise
-        debug("Taille fichier %s : %d", pathOutput, total)
-      }
-    }
+//         await promise
+//         debug("Taille fichier %s : %d", pathOutput, total)
+//       }
+//     }
 
-    await verificateurHachage.verify()
-    debug("Fichier correlation %s OK\nhachage %s", correlation, hachage)
+//     await verificateurHachage.verify()
+//     debug("Fichier correlation %s OK\nhachage %s", correlation, hachage)
 
-    if(commandeMaitreCles) {
-      // Transmettre la cle
-      debug("Transmettre commande cle pour le fichier: %O", commandeMaitreCles)
-      await req.amqpdao.transmettreEnveloppeCommande(commandeMaitreCles)
-    }
+//     if(commandeMaitreCles) {
+//       // Transmettre la cle
+//       debug("Transmettre commande cle pour le fichier: %O", commandeMaitreCles)
+//       await req.amqpdao.transmettreEnveloppeCommande(commandeMaitreCles)
+//     }
 
-    debug("Deplacer le fichier vers le storage permanent")
-    const pathStorage = req.pathConsignation.trouverPathLocal(hachage)
-    await fsPromises.mkdir(path.dirname(pathStorage), {recursive: true})
-    try {
-      await fsPromises.rename(pathOutput, pathStorage)
-    } catch(err) {
-      console.warn("WARN : Erreur deplacement fichier, on copie : %O", err)
-      await fsPromises.copyFile(pathOutput, pathStorage)
-      await fsPromises.unlink(pathOutput)
-    }
+//     debug("Deplacer le fichier vers le storage permanent")
+//     const pathStorage = req.pathConsignation.trouverPathLocal(hachage)
+//     await fsPromises.mkdir(path.dirname(pathStorage), {recursive: true})
+//     try {
+//       await fsPromises.rename(pathOutput, pathStorage)
+//     } catch(err) {
+//       console.warn("WARN : Erreur deplacement fichier, on copie : %O", err)
+//       await fsPromises.copyFile(pathOutput, pathStorage)
+//       await fsPromises.unlink(pathOutput)
+//     }
 
-    if(transactionGrosFichiers) {
-      debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
-      const domaine = transactionGrosFichiers['en-tete'].domaine
-      const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeCommande(transactionGrosFichiers, domaine, {exchange: '2.prive'})
-      debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
+//     if(transactionGrosFichiers) {
+//       debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
+//       const domaine = transactionGrosFichiers['en-tete'].domaine
+//       const reponseGrosfichiers = await req.amqpdao.transmettreEnveloppeCommande(transactionGrosFichiers, domaine, {exchange: '2.prive'})
+//       debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
 
-      res.status(201).send(reponseGrosfichiers)
-    } else {
-      // Transaction non inclue, retourner OK
-      res.sendStatus(200)
-    }
+//       res.status(201).send(reponseGrosfichiers)
+//     } else {
+//       // Transaction non inclue, retourner OK
+//       res.sendStatus(200)
+//     }
 
-  } catch(err) {
-    console.error("ERROR uploadFichier.traiterPostUpload: Erreur de verification du hachage : %O", err)
-    res.sendStatus(500)
-  } finally {
-    // Nettoyer le repertoire
-    fs.rmdir(pathCorrelation, {recursive: true}, err=>{
-      if(err) {
-        console.warn("WARN uploadFichier.traiterPostUpload: Erreur suppression repertoire tmp %s : %O", pathCorrelation, err)
-      }
-    })
-  }
-}
+//   } catch(err) {
+//     console.error("ERROR uploadFichier.traiterPostUpload: Erreur de verification du hachage : %O", err)
+//     res.sendStatus(500)
+//   } finally {
+//     // Nettoyer le repertoire
+//     fs.rmdir(pathCorrelation, {recursive: true}, err=>{
+//       if(err) {
+//         console.warn("WARN uploadFichier.traiterPostUpload: Erreur suppression repertoire tmp %s : %O", pathCorrelation, err)
+//       }
+//     })
+//   }
+// }
 
 // async function downloadFichier(req, res) {
 //   const hachage = req.params.hachage
@@ -213,20 +229,20 @@ async function traiterPostUpload(req, res, next) {
 //   res.download(pathFichier)
 // }
 
-async function traiterDeleteUpload(req, res) {
-  const correlation = req.params.correlation
-  const pathStaging = req.pathConsignation.consignationPathUploadStaging
-  const pathCorrelation = path.join(pathStaging, correlation)
+// async function traiterDeleteUpload(req, res) {
+//   const correlation = req.params.correlation
+//   const pathStaging = req.pathConsignation.consignationPathUploadStaging
+//   const pathCorrelation = path.join(pathStaging, correlation)
 
-  // Nettoyer le repertoire
-  fs.rmdir(pathCorrelation, {recursive: true}, err=>{
-    if(err) {
-      return debug("Erreur suppression repertoire tmp %s : %O", pathCorrelation, err)
-    }
-    debug("Repertoire DELETE OK, correlation %s", correlation)
-  })
+//   // Nettoyer le repertoire
+//   fs.rmdir(pathCorrelation, {recursive: true}, err=>{
+//     if(err) {
+//       return debug("Erreur suppression repertoire tmp %s : %O", pathCorrelation, err)
+//     }
+//     debug("Repertoire DELETE OK, correlation %s", correlation)
+//   })
 
-  res.sendStatus(200)
-}
+//   res.sendStatus(200)
+// }
 
 module.exports = {init}

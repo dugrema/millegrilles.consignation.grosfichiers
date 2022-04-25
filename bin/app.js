@@ -9,12 +9,11 @@ const {InitialiserGrosFichiers} = require('../routes/grosfichiers')
 const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki')
 // const {PathConsignation} = require('../util/traitementFichier')
 
-function initialiser(storeConsignation, opts) {
+function initialiser(mq, storeConsignation, opts) {
   debug("Initialiser app, opts : %O", opts)
   opts = opts || {}
   const middleware = opts.middleware,
-        mq = opts.mq,
-        idmg = opts.mq.pki.idmg
+        idmg = mq.pki.idmg
 
   // const pathConsignation = new PathConsignation({idmg})
 
@@ -43,7 +42,7 @@ function initialiser(storeConsignation, opts) {
   app.use(express.static(path.join(__dirname, 'public')))
 
   // app.all('/backup/*', InitialiserBackup())
-  const traitementGrosFichiers = InitialiserGrosFichiers()
+  const traitementGrosFichiers = InitialiserGrosFichiers(mq, storeConsignation, opts)
   // app.all('/fichiers/*', traitementGrosFichiers)
   app.all('/fichiers_transfert/*', traitementGrosFichiers)
   // app.all('/publier/*', InitialiserPublier(mq, pathConsignation))
