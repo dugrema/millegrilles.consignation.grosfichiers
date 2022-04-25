@@ -52,8 +52,10 @@ async function headersFichier(req, res, next) {
   try {
     const infoFichier = await _storeConsignation.getInfoFichier(fuuid)
     debug("Info fichier %s: %O", fuuid, infoFichier)
+    if(infoFichier.fileRedirect) {
+      return res.redirect(infoFichier.fileRedirect)
+    }
     res.stat = infoFichier.stat
-    res.fileRedirect = infoFichier.fileRedirect
     res.filePath = infoFichier.filePath
   } catch(err) {
     console.error("ERROR %O Erreur head fichier %s : %O", new Date(), fuuid, err)

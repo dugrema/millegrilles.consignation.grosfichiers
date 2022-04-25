@@ -5,6 +5,7 @@ const fsPromises = require('fs/promises')
 const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
 
 const StoreConsignationLocal = require('./storeConsignationLocal')
+const StoreConsignationSftp = require('./storeConsignationSftp')
 
 let _storeConsignation = null,
     _storeConsignationLocal = null
@@ -35,15 +36,17 @@ async function changerStoreConsignation(typeStore, params, opts) {
     typeStore = typeStore?typeStore.toLowerCase():'local'
     debug("changerStoreConsignation type: %s, params: %O", typeStore, params)
 
+    if(_storeConsignation && _storeConsignation.fermer) await _storeConsignation.fermer()
+
     switch(typeStore) {
-        case 'sftp': throw new Error('todo'); break
+        case 'sftp': _storeConsignation = StoreConsignationSftp; break
         case 'awss3': throw new Error('todo'); break
         case 'local': _storeConsignation = _storeConsignationLocal; break
         default: _storeConsignation = _storeConsignationLocal
     }
 
     // Changer methode de consignation
-    _storeConsignation.FichiersTransfertBackingStore
+    await _storeConsignation.init(params)
 
     await _storeConsignationLocal.modifierConfiguration({...params, typeStore})
 }
