@@ -204,6 +204,84 @@ async function connecterSSH(host, port, username, opts) {
     })
 }
 
+async function marquerSupprime(fuuid) {
+    const pathFichier = getPathFichier(fuuid)
+    const pathFichierSupprime = pathFichier + '.corbeille'
+    await rename(pathFichier, pathFichierSupprime)
+}
+
+async function parourirFichiers(callback, opts) {
+    await parourirFichiersRecursif(_remotePath, callback, opts)
+    await callback()  // Dernier appel avec aucune valeur (fin traitement)
+}
+
+async function parourirFichiersRecursif(repertoire, callback, opts) {
+    opts = opts || {}
+    debug("parourirFichiers %s", repertoire)
+  
+    const handleDir = await opendir(repertoire)
+    try {
+        let liste = await readdir(handleDir)
+        while(liste) {
+            // Filtrer la liste, conserver uniquement les fuuids (fichiers, enlever extension)
+            // Appeler callback sur chaque item
+            var infoFichiers = liste.filter(item=>{
+                let isFile = item.attrs.isFile()
+                if(opts.filtre) return isFile && opts.filtre(item)
+                return isFile
+            })
+            if(infoFichiers && infoFichiers.length > 0) {
+                for(let fichier of infoFichiers) {
+                    const data = { filename: fichier.filename, directory: repertoire, modified: fichier.attrs.mtime }
+                    await callback(data)
+                }
+            }
+        
+            // Parcourir recursivement tous les repertoires
+            const directories = liste.filter(item=>item.attrs.isDirectory())
+            for await (const directory of directories) {
+                const subDirectory = path.join(repertoire, directory.filename)
+                await parourirFichiersRecursif(subDirectory, callback, opts)
+            }
+
+            try {
+                liste = await readdir(handleDir)
+            } catch (err) {
+                liste = false
+            }
+        }
+    } finally {
+        close(handleDir)
+    }
+}
+
+function opendir(pathRepertoire) {
+    return new Promise((resolve, reject)=>{
+        _connexionSftp.opendir(pathRepertoire, (err, info)=>{
+            if(err) return reject(err)
+            resolve(info)
+        })
+    })
+}
+
+function readdir(pathRepertoire) {
+    return new Promise((resolve, reject)=>{
+        _connexionSftp.readdir(pathRepertoire, (err, info)=>{
+            if(err) return reject(err)
+            resolve(info)
+        })
+    })
+}
+
+function rename(srcPath, destPath) {
+    return new Promise((resolve, reject)=>{
+        _connexionSftp.rename(srcPath, destPath, err=>{
+            if(err) return reject(err)
+            resolve()
+        })
+    })
+}
+
 function stat(pathFichier) {
     return new Promise((resolve, reject)=>{
         _connexionSftp.stat(pathFichier, (err, info)=>{
@@ -261,5 +339,6 @@ function close(handle) {
 
 module.exports = {
     init, fermer,
-    getInfoFichier, consignerFichier,
+    getInfoFichier, consignerFichier, marquerSupprime,
+    parourirFichiers,
 }

@@ -75,7 +75,7 @@ async function initialiserMessageHandlers(rabbitMQ, storeConsignation) {
   rabbitMQ.enregistrerListenerConnexion(publication)
 
   const entretien = require('../messages/entretien')
-  entretien.init(rabbitMQ)
+  entretien.init(rabbitMQ, storeConsignation)
   rabbitMQ.enregistrerListenerConnexion(entretien)
 
   return {rabbitMQ};

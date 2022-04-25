@@ -7,12 +7,15 @@ const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/
 const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
 
-let _storeConsignation = null,
+const BATCH_SIZE = 100
+
+let _mq = null,
+    _storeConsignation = null,
     _storeConsignationLocal = null
 
 async function init(mq, opts) {
     opts = opts || {}
-    // const {typeStore} = opts
+    _mq = mq
 
     // Toujours initialiser le type local - utilise pour stocker/charger la configuration
     _storeConsignationLocal = StoreConsignationLocal
@@ -110,6 +113,59 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
 
 }
 
+async function entretienFichiersSupprimes() {
+    debug("Debut entretien des fichiers supprimes")
+
+    // Detecter les fichiers qui devraient etre mis en attente de suppression
+    let batchFichiers = []
+    const callbackTraiterFichiers = async item => {
+        if(!item) {
+            // Derniere batch
+            if(batchFichiers.length > 0) await traiterBatch(batchFichiers)
+        } else {
+            batchFichiers.push(item)
+            while(batchFichiers.length > BATCH_SIZE) {
+                const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
+                batchFichiers = batchFichiers.slice(BATCH_SIZE)
+                await traiterBatch(batchCourante)
+            }
+        }
+    }
+    const filtre = item => !item.filename.endsWith('.corbeille')
+    await _storeConsignation.parourirFichiers(callbackTraiterFichiers, {filtre})
+
+    // Supprimer les fichiers en attente depuis plus de 14 jours
+
+}
+
+async function traiterBatch(batchFichiers) {
+    debug("Traiter batch : %O", batchFichiers)
+
+    const fuuids = batchFichiers.map(item=>item.filename)
+
+    const requete = { fuuids }
+    const domaine = 'GrosFichiers',
+          action = 'confirmerEtatFuuids'
+    const reponse = await _mq.transmettreRequete(domaine, requete, {action})
+    debug("Reponse verification : %O", reponse.confirmation)
+
+    const confirmation = reponse.confirmation || {},
+          fichiersResultat = confirmation.fichiers || []
+
+    debug("Reponse verification : %O", confirmation)
+
+    if(fichiersResultat) {
+        for await (const reponseFichier of fichiersResultat) {
+            const {fuuid, supprime} = reponseFichier
+            if(supprime) {
+                debug("Le fichier %s est supprime, on le deplace vers la corbeille", fuuid)
+                await _storeConsignation.marquerSupprime(fuuid)
+            }
+        }
+    }
+
+}
+
 function getInfoFichier(fuuid) {
     return _storeConsignation.getInfoFichier(fuuid)
 }
@@ -128,5 +184,6 @@ function middlewareDeleteStaging(opts) {
 
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
+    entretienFichiersSupprimes,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
 }

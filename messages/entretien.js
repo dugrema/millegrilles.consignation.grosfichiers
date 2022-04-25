@@ -3,11 +3,13 @@ const { PathConsignation } = require('../util/traitementFichier')
 const { entretienFichiersSupprimes } = require('../util/fichiersSupprimes')
 
 var _mq = null,
-    _pathConsignation = null
+    _pathConsignation = null,
+    _storeConsignation
 
-function init(mq) {
+function init(mq, storeConsignation) {
     debug("entretien init()")
     _mq = mq
+    _storeConsignation = storeConsignation
 
     const idmg = mq.pki.idmg
     _pathConsignation = new PathConsignation({idmg});
@@ -38,7 +40,7 @@ function traiterCedule(message, rk, opts) {
 
     if( flag_jour ) {
         // Entretien fichiers supprimes
-        entretienFichiersSupprimes(_mq, _pathConsignation)
+        _storeConsignation.entretienFichiersSupprimes()
             .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
     }
 
