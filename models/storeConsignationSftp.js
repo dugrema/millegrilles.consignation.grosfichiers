@@ -75,6 +75,9 @@ async function getInfoFichier(fuuid) {
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
+
+    if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
     const pathFichier = getPathFichier(fuuid)
 
     // Lire toutes les parts et combiner dans la destination
@@ -98,6 +101,8 @@ async function consignerFichier(pathFichierStaging, fuuid) {
             listeParts.push({position, fullPath: entry.fullPath})
         }
         listeParts.sort((a,b)=>{return a.position-b.position})
+
+        let total = 0
         for await (const entry of listeParts) {
             const {position, fullPath} = entry
             // debug("Entry path : %O", entry);
@@ -106,12 +111,13 @@ async function consignerFichier(pathFichierStaging, fuuid) {
             debug("Traiter consignation pour item %s position %d", fuuid, position)
             const streamReader = fs.createReadStream(fullPath)
             
-            let total = 0
             streamReader.on('data', chunk=>{
                 // Verifier hachage
+                streamReader.pause()
                 verificateurHachage.update(chunk)
                 writer.write(chunk)
                 total += chunk.length
+                streamReader.resume()
             })
 
             const promise = new Promise((resolve, reject)=>{
@@ -124,10 +130,36 @@ async function consignerFichier(pathFichierStaging, fuuid) {
             debug("Taille fichier %s : %d", pathFichier, total)
         }
 
+        // await writer.close()
         await verificateurHachage.verify()
         debug("Fichier %s transfere avec succes vers consignation sftp", fuuid)
+
+        // Attendre que l'ecriture du fichier soit terminee (fs sync)
+        const handle = await open(pathFichier, 'r')
+        let infoFichier = null
+        try {
+            debug("Attente sync du fichier %s", pathFichier)
+            await sync(handle)
+            infoFichier = await fstat(handle)
+            debug("Info fichier : %O", infoFichier)
+        } finally {
+            close(handle)
+        }
+
+        if(infoFichier.size !== total) {
+            const err = new Error(`Taille du fichier est differente sur sftp : ${infoFichier.size} != ${total}`)
+            debug("Erreur taille fichier: %O", err)
+            return reject(err)
+        }
+
+        debug("Information fichier sftp : %O", infoFichier)
+
     } catch(err) {
-        fsPromises.rm(pathFichier).catch(err=>console.error("Erreur suppression fichier : %O", err))
+        try {
+            await unlink(pathFichier)
+        } catch(err) {
+            console.error("Erreur unlink fichier sftp %s : %O", pathFichier, err)
+        }
         throw err
     }
 
@@ -168,6 +200,61 @@ async function connecterSSH(host, port, username, opts) {
             host, port, username, privateKey,
             readyTimeout: 60000,  // 60s, regle probleme sur login hostgator
             // debug,
+        })
+    })
+}
+
+function stat(pathFichier) {
+    return new Promise((resolve, reject)=>{
+        _connexionSftp.stat(pathFichier, (err, info)=>{
+            if(err) return reject(err)
+            resolve(info)
+        })
+    })
+}
+
+function unlink(pathFichier) {
+    return new Promise((resolve, reject)=>{
+        _connexionSftp.unlink(pathFichier, (err, info)=>{
+            if(err) return reject(err)
+            resolve(info)
+        })
+    })
+}
+
+function open(pathFichier, flags) {
+    return new Promise((resolve, reject)=>{
+        _connexionSftp.open(pathFichier, flags, (err, info)=>{
+            if(err) return reject(err)
+            resolve(info)
+        })
+    })
+}
+
+function sync(handle) {
+    return new Promise((resolve, reject)=>{
+        _connexionSftp.ext_openssh_fsync(handle, (err, info)=>{
+            if(err) return reject(err)
+            resolve(info)
+        })
+    })
+}
+
+function fstat(handle) {
+    return new Promise((resolve, reject)=>{
+        _connexionSftp.fstat(handle, (err, info)=>{
+            if(err) return reject(err)
+            resolve(info)
+        })
+    })
+}
+
+
+function close(handle) {
+    return new Promise((resolve, reject)=>{
+        _connexionSftp.close(handle, (err, info)=>{
+            if(err) return reject(err)
+            resolve(info)
         })
     })
 }
