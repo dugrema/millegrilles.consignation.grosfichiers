@@ -6,16 +6,15 @@ const readdirp = require('readdirp')
 
 const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 
-let _pathConsignation = ''
-
 const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegrilles/consignation'
 const PATH_CONFIG_DIR = path.join(CONSIGNATION_PATH, 'config')
 const PATH_CONFIG_FICHIER = path.join(PATH_CONFIG_DIR, 'store.json')
 
+let _pathConsignation = path.join(CONSIGNATION_PATH, 'local')
 
 function init(params) {
     params = params || {}
-    _pathConsignation = params.pathConsignation || CONSIGNATION_PATH
+    _pathConsignation = params.pathConsignation || _pathConsignation
 }
 
 async function chargerConfiguration() {
@@ -53,7 +52,7 @@ async function modifierConfiguration(params, opts) {
 }
 
 function getPathFichier(fuuid) {
-    return path.join(CONSIGNATION_PATH, 'local', fuuid)
+    return path.join(_pathConsignation, fuuid)
 }
 
 /**
@@ -87,31 +86,31 @@ async function consignerFichier(pathFichierStaging, fuuid) {
     })
 
     const verificateurHachage = new VerificateurHachage(fuuid)
-    for await (const entry of promiseReaddirp) {
-        // debug("Entry path : %O", entry);
-        const fichierPart = entry.basename
-        const position = Number(fichierPart.split('.').shift())
-        debug("Traiter consignation pour item %s position %d", fuuid, position)
-        const streamReader = fs.createReadStream(entry.fullPath)
-        
-        let total = 0
-        streamReader.on('data', chunk=>{
-          // Verifier hachage
-          verificateurHachage.update(chunk)
-          writer.write(chunk)
-          total += chunk.length
-        })
-
-        const promise = new Promise((resolve, reject)=>{
-            streamReader.on('end', _=>resolve())
-            streamReader.on('error', err=>reject(err))
-        })
-
-        await promise
-        debug("Taille fichier %s : %d", pathFichier, total)
-    }
-
     try {
+        for await (const entry of promiseReaddirp) {
+            // debug("Entry path : %O", entry);
+            const fichierPart = entry.basename
+            const position = Number(fichierPart.split('.').shift())
+            debug("Traiter consignation pour item %s position %d", fuuid, position)
+            const streamReader = fs.createReadStream(entry.fullPath)
+            
+            let total = 0
+            streamReader.on('data', chunk=>{
+            // Verifier hachage
+            verificateurHachage.update(chunk)
+            writer.write(chunk)
+            total += chunk.length
+            })
+
+            const promise = new Promise((resolve, reject)=>{
+                streamReader.on('end', _=>resolve())
+                streamReader.on('error', err=>reject(err))
+            })
+
+            await promise
+            debug("Taille fichier %s : %d", pathFichier, total)
+        }
+
         await verificateurHachage.verify()
         debug("Fichier %s transfere avec succes vers consignation locale", fuuid)
     } catch(err) {
