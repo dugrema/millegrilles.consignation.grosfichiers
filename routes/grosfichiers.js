@@ -53,7 +53,8 @@ async function headersFichier(req, res, next) {
     const infoFichier = await _storeConsignation.getInfoFichier(fuuid)
     debug("Info fichier %s: %O", fuuid, infoFichier)
     if(infoFichier.fileRedirect) {
-      return res.redirect(infoFichier.fileRedirect)
+      res.setHeader('Cache-Control', 'public, max-age=300, immutable')
+      return res.redirect(307, infoFichier.fileRedirect)
     }
     res.stat = infoFichier.stat
     res.filePath = infoFichier.filePath
