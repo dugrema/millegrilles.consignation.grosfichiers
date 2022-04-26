@@ -1,4 +1,4 @@
-const debug = require('debug')('entretien')
+const debug = require('debug')('messages:entretien')
 
 var _mq = null,
     _storeConsignation

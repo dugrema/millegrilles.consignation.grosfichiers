@@ -1,4 +1,4 @@
-const debug = require('debug')('millegrilles:messages:backup')
+const debug = require('debug')('messages:backup')
 
 const { TraitementFichier } = require('../util/traitementFichier');
 const { TraitementFichierBackup } = require('../util/traitementBackup')

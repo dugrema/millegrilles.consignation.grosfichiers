@@ -1,4 +1,4 @@
-const debug = require('debug')('millegrilles:fichiers:uploadFichier')
+const debug = require('debug')('routes:uploadFichier')
 const express = require('express')
 const bodyParser = require('body-parser')
 const fs = require('fs')

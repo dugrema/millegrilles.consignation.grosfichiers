@@ -1,4 +1,4 @@
-const debug = require('debug')('millegrilles:routes:backup')
+const debug = require('debug')('routes:backup')
 const express = require('express')
 const path = require('path')
 const fs = require('fs')

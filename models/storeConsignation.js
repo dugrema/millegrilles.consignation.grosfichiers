@@ -166,6 +166,14 @@ async function traiterBatch(batchFichiers) {
 
 }
 
+function supprimerFichier(fuuid) {
+    return _storeConsignation.marquerSupprime(fuuid)
+}
+
+function recupererFichier(fuuid) {
+    return _storeConsignation.recoverFichierSupprime(fuuid)
+}
+
 function getInfoFichier(fuuid, opts) {
     opts = opts || {}
     return _storeConsignation.getInfoFichier(fuuid, opts)
@@ -185,6 +193,6 @@ function middlewareDeleteStaging(opts) {
 
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
-    entretienFichiersSupprimes,
+    entretienFichiersSupprimes, supprimerFichier, recupererFichier,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
 }

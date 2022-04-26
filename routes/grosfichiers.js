@@ -1,4 +1,4 @@
-const debug = require('debug')('millegrilles:fichiers:routeGrosfichiers')
+const debug = require('debug')('fichiers:routeGrosfichiers')
 const express = require('express');
 const fs = require('fs');
 const bodyParser = require('body-parser')

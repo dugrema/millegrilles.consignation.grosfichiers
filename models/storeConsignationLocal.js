@@ -193,5 +193,5 @@ async function parourirFichiersRecursif(repertoire, callback, opts) {
 module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     getFichier, getInfoFichier, consignerFichier,
-    marquerSupprime, parourirFichiers,
+    marquerSupprime, recoverFichierSupprime, parourirFichiers,
 }

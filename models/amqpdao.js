@@ -33,6 +33,7 @@ async function init(storeConsignation, opts) {
   const qCustom = {
     'backup': {name: 'fichiers/backup'},
     'publication': {name: 'fichiers/publication'},
+    'actions': {name: 'fichiers/actions'},
   }
   const amqpdao = new MilleGrillesAmqpDAO(instPki, {qCustom, exchange: '2.prive'})
   const mqConnectionUrl = process.env.MG_MQ_URL;
@@ -77,6 +78,10 @@ async function initialiserMessageHandlers(rabbitMQ, storeConsignation) {
   const entretien = require('../messages/entretien')
   entretien.init(rabbitMQ, storeConsignation)
   rabbitMQ.enregistrerListenerConnexion(entretien)
+
+  const actions = require('../messages/actions')
+  actions.init(rabbitMQ, storeConsignation)
+  rabbitMQ.enregistrerListenerConnexion(actions)
 
   return {rabbitMQ};
 }

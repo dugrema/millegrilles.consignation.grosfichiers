@@ -79,8 +79,8 @@ async function recoverFichierSupprime(fuuid) {
     try {
         await stat(filePathCorbeille)
         await rename(filePathCorbeille, filePath)
-        const stat = await stat(filePath)
-        return { stat, filePath }
+        const statInfo = await stat(filePath)
+        return { stat: statInfo, filePath }
     } catch(err) {
         debug("Erreur recoverFichierSupprime %s : %O", fuuid, err)
         return null
