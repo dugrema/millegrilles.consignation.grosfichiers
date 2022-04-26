@@ -25,21 +25,23 @@ let _hostname = null,
     _port = 22,
     _username = null,
     _urlDownload = null,
-    _remotePath = '.'
+    _remotePath = '.',
+    _keyType = 'ed25519'
 
 async function init(params) {
     params = params || {}
-    const {hostname, username, urlDownload, port, remotePath} = params
-    if(!hostname) throw new Error("Parametre hostname manquant")
-    if(!username) throw new Error("Parametre username manquant")
+    const {hostnameSftp, usernameSftp, urlDownload, portSftp, remotePathSftp, keyTypeSftp} = params
+    if(!hostnameSftp) throw new Error("Parametre hostname manquant")
+    if(!usernameSftp) throw new Error("Parametre username manquant")
     if(!urlDownload) throw new Error("Parametre urlDownload manquant")
 
-    _hostname = hostname
-    _username = username
+    _hostname = hostnameSftp
+    _username = usernameSftp
     _urlDownload = new URL(''+urlDownload).href
+    _keyType = keyTypeSftp || 'ed25519'
     
-    _port = port || _port
-    _remotePath = remotePath || _remotePath
+    _port = portSftp || _port
+    _remotePath = remotePathSftp || _remotePath
 
     if(!_intervalEntretienConnexion) {
         _intervalEntretienConnexion = setInterval(entretienConnexion, CONNEXION_TIMEOUT/2)
@@ -185,7 +187,8 @@ async function connecterSSH(host, port, username, opts) {
     debug("Connecter SSH sur %s (opts: %O)", connexionName, opts)
   
     var privateKey = _privateEd25519Key
-    if(opts.keyType === 'rsa') {
+    const keyType = opts.keyType || _keyType || 'ed25519'
+    if(keyType === 'rsa') {
         privateKey = _privateRsaKey
     }
   
