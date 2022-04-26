@@ -62,13 +62,44 @@ function getPathFichier(fuuid) {
  */
 async function getFichier(fuuid) {
     const pathFichier = getPathFichier(fuuid)
-    return fs.createReadStream(pathFichier)
+    try {
+        const stream = fs.createReadStream(pathFichier)
+    } catch(err) {
+        if(err.errno === -2) return null
+        else throw err
+    }
 }
 
-async function getInfoFichier(fuuid) {
+async function getInfoFichier(fuuid, opts) {
+    opts = opts || {}
     const filePath = getPathFichier(fuuid)
-    const stat = await fsPromises.stat(filePath)
-    return { stat, filePath }
+    try {
+        const stat = await fsPromises.stat(filePath)
+        return { stat, filePath }
+    } catch(err) {
+        if(err.errno === -2) {
+            if(opts.recover === true)  {
+                // Verifier si le fichier est encore disponible
+                return recoverFichierSupprime(fuuid)
+            }
+            return null
+        }
+        else throw err
+    }
+}
+
+async function recoverFichierSupprime(fuuid) {
+    const filePath = getPathFichier(fuuid)
+    const filePathCorbeille = filePath + '.corbeille'
+    try {
+        await fsPromises.stat(filePathCorbeille)
+        await fsPromises.rename(filePathCorbeille, filePath)
+        const stat = await fsPromises.stat(filePath)
+        return { stat, filePath }
+    } catch(err) {
+        debug("Erreur recoverFichierSupprime %s : %O", fuuid, err)
+        return null
+    }
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {

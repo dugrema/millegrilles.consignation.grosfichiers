@@ -33,13 +33,6 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   return router
 }
 
-async function downloadFichier(req, res, next) {
-  const fuuid = req.params.fuuid
-  debug("Download fichier %s", fuuid)
-
-  
-}
-
 function returnOk(req, res) {
   res.sendStatus(200)
 }
@@ -50,9 +43,11 @@ async function headersFichier(req, res, next) {
   debug("HEAD fichier %s", fuuid)
 
   try {
-    const infoFichier = await _storeConsignation.getInfoFichier(fuuid)
+    const infoFichier = await _storeConsignation.getInfoFichier(fuuid, {recover: true})
     debug("Info fichier %s: %O", fuuid, infoFichier)
-    if(infoFichier.fileRedirect) {
+    if(!infoFichier) {
+      return res.sendStatus(404)
+    } else if(infoFichier.fileRedirect) {
       res.setHeader('Cache-Control', 'public, max-age=300, immutable')
       return res.redirect(307, infoFichier.fileRedirect)
     }

@@ -166,8 +166,9 @@ async function traiterBatch(batchFichiers) {
 
 }
 
-function getInfoFichier(fuuid) {
-    return _storeConsignation.getInfoFichier(fuuid)
+function getInfoFichier(fuuid, opts) {
+    opts = opts || {}
+    return _storeConsignation.getInfoFichier(fuuid, opts)
 }
 
 function middlewareRecevoirFichier(opts) {

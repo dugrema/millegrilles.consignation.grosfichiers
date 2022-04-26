@@ -1,18 +1,12 @@
 const debug = require('debug')('entretien')
-const { PathConsignation } = require('../util/traitementFichier')
-const { entretienFichiersSupprimes } = require('../util/fichiersSupprimes')
 
 var _mq = null,
-    _pathConsignation = null,
     _storeConsignation
 
 function init(mq, storeConsignation) {
     debug("entretien init()")
     _mq = mq
     _storeConsignation = storeConsignation
-
-    const idmg = mq.pki.idmg
-    _pathConsignation = new PathConsignation({idmg});
 }
 
 function on_connecter() {
