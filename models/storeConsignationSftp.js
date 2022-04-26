@@ -19,7 +19,8 @@ const CONNEXION_TIMEOUT = 10 * 60 * 1000  // 10 minutes
 
 let _intervalEntretienConnexion = null,
     _connexionSsh = null,
-    _connexionSftp = null
+    _connexionSftp = null,
+    _supporteSshExtensions = true
 
 let _hostname = null,
     _port = 22,
@@ -99,7 +100,8 @@ async function consignerFichier(pathFichierStaging, fuuid) {
     const dirFichier = path.dirname(pathFichier)
     // await fsPromises.mkdir(dirFichier, {recursive: true})
     // const writer = fs.createWriteStream(pathFichier)
-    const writer = _connexionSftp.createWriteStream(pathFichier, {flags: 'w', mode: 0o644, autoClose: true})
+    // const writer = _connexionSftp.createWriteStream(pathFichier, {flags: 'w', mode: 0o644, autoClose: true})
+    const writeHandle = await open(pathFichier, 'w', 0o644)
 
     const promiseReaddirp = readdirp(pathFichierStaging, {
         type: 'files',
@@ -126,11 +128,12 @@ async function consignerFichier(pathFichierStaging, fuuid) {
             debug("Traiter consignation pour item %s position %d", fuuid, position)
             const streamReader = fs.createReadStream(fullPath)
             
-            streamReader.on('data', chunk=>{
+            streamReader.on('data', async chunk => {
                 // Verifier hachage
                 streamReader.pause()
                 verificateurHachage.update(chunk)
-                writer.write(chunk)
+                // writer.write(chunk)
+                await write(writeHandle, chunk, 0, chunk.length, total)
                 total += chunk.length
                 streamReader.resume()
             })
@@ -150,15 +153,51 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         debug("Fichier %s transfere avec succes vers consignation sftp", fuuid)
 
         // Attendre que l'ecriture du fichier soit terminee (fs sync)
-        const handle = await open(pathFichier, 'r')
+        // const handle = await open(pathFichier, 'r')
         let infoFichier = null
         try {
             debug("Attente sync du fichier %s", pathFichier)
-            await sync(handle)
-            infoFichier = await fstat(handle)
+            // if(_supporteSshExtensions) {
+            //     try {
+            //         const ok = await sync(handle)
+            //         if(ok === false) {
+            //             // Echec du sync, on utilise poll
+            //             debug("Echec sync, on va faire du polling")
+            //         }
+            //     } catch(err) {
+            //         debug("Erreur sync(3)", err)
+            //     }
+            // }
+
+            debug("Execution fstat sur %s", fuuid)
+            infoFichier = await fstat(writeHandle)
+            let tailleStat = infoFichier.size, 
+                compteur = 0,
+                delai = 750
+            debug("Stat fichier initial avant attente : %O", infoFichier)
+
+            // while(tailleStat < total && compteur++ < 10) {
+            //     debug("Attente fichier %s ms, boucle compteur: %d", delai, compteur)
+            //     await new Promise((resolve, reject)=>{
+            //         setTimeout(async ()=>{
+            //             try {
+            //                 infoFichier = await fstat(handle)
+            //                 if(tailleStat === infoFichier.size) {
+            //                     reject(`Fichier ${fuuid} bloque a taille ${tailleStat}`)
+            //                 }
+            //                 tailleStat = infoFichier.size
+            //                 delai = delai * 1.5  // Augmenter delai attente
+            //                 resolve()
+            //             } catch(err) {
+            //                 reject(err)
+            //             }
+            //         }, delai)
+            //     })
+            // }
+
             debug("Info fichier : %O", infoFichier)
         } finally {
-            close(handle)
+            close(writeHandle)
         }
 
         if(infoFichier.size !== total) {
@@ -182,6 +221,9 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
 async function connecterSSH(host, port, username, opts) {
     opts = opts || {}
+    host = host || _hostname
+    port = port || _port
+    username = username || _username
     const connexionName = username + '@' + host + ':' + port
   
     debug("Connecter SSH sur %s (opts: %O)", connexionName, opts)
@@ -200,8 +242,8 @@ async function connecterSSH(host, port, username, opts) {
             conn.sftp((err, sftp)=>{
                 if(err) return reject(err)
                 _connexionSftp = sftp
+                resolve(conn)
             })
-            resolve(conn)
         })
         conn.on('error', err=>{
             reject(err)
@@ -276,7 +318,7 @@ async function parourirFichiersRecursif(repertoire, callback, opts) {
 
 function opendir(pathRepertoire) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+        if(!_connexionSsh) await connecterSSH()
 
         _connexionSftp.opendir(pathRepertoire, (err, info)=>{
             if(err) return reject(err)
@@ -287,7 +329,7 @@ function opendir(pathRepertoire) {
 
 function readdir(pathRepertoire) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+        if(!_connexionSsh) await connecterSSH()
 
         _connexionSftp.readdir(pathRepertoire, (err, info)=>{
             if(err) return reject(err)
@@ -298,7 +340,7 @@ function readdir(pathRepertoire) {
 
 function rename(srcPath, destPath) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+        if(!_connexionSsh) await connecterSSH()
 
         _connexionSftp.rename(srcPath, destPath, err=>{
             if(err) return reject(err)
@@ -309,7 +351,7 @@ function rename(srcPath, destPath) {
 
 function stat(pathFichier) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+        if(!_connexionSsh) await connecterSSH()
 
         _connexionSftp.stat(pathFichier, (err, info)=>{
             if(err) return reject(err)
@@ -320,7 +362,7 @@ function stat(pathFichier) {
 
 function unlink(pathFichier) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+        if(!_connexionSsh) await connecterSSH()
 
         _connexionSftp.unlink(pathFichier, (err, info)=>{
             if(err) return reject(err)
@@ -329,31 +371,55 @@ function unlink(pathFichier) {
     })
 }
 
-function open(pathFichier, flags) {
+function open(pathFichier, flags, mode) {
+    mode = mode || 0o644
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+        if(!_connexionSsh) await connecterSSH()
 
-        _connexionSftp.open(pathFichier, flags, (err, info)=>{
+        _connexionSftp.open(pathFichier, flags, mode, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
+        })
+    })
+}
+
+function write(handle, buffer, offset, length, position) {
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH()
+
+        _connexionSftp.write(handle, buffer, offset, length, position, err=>{
+            if(err) return reject(err)
+            resolve()
         })
     })
 }
 
 function sync(handle) {
+    if(!_supporteSshExtensions) return 
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+        if(!_connexionSsh) await connecterSSH()
 
-        _connexionSftp.ext_openssh_fsync(handle, (err, info)=>{
-            if(err) return reject(err)
-            resolve(info)
-        })
+        try {
+            _connexionSftp.ext_openssh_fsync(handle, err=>{
+                if(err) {
+                    debug("Erreur SYNC (1), on assume manque de support de openssh extensions : %O", err)
+                    _supporteSshExtensions = false  // toggle support extensions a false
+                    // return reject(err)
+                    resolve(false)
+                }
+                resolve(true)
+            })
+        } catch(err) {
+            debug("Erreur SYNC (2), on assume manque de support de openssh extensions : %O", err)
+            _supporteSshExtensions = false  // toggle support extensions a false
+            resolve(false)
+        }
     })
 }
 
 function fstat(handle) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+        if(!_connexionSsh) await connecterSSH()
 
         _connexionSftp.fstat(handle, (err, info)=>{
             if(err) return reject(err)
@@ -364,7 +430,7 @@ function fstat(handle) {
 
 function close(handle) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+        if(!_connexionSsh) await connecterSSH()
 
         _connexionSftp.close(handle, (err, info)=>{
             if(err) return reject(err)
