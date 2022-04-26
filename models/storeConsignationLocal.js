@@ -159,7 +159,95 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
 }
 
+function marquerSupprime(fuuid) {
+    const pathFichier = getPathFichier(fuuid)
+    const pathFichierSupprime = pathFichier + '.corbeille'
+    return fsPromises.rename(pathFichier, pathFichierSupprime)
+}
+
+async function parourirFichiers(callback, opts) {
+    await parourirFichiersRecursif(_pathConsignation, callback, opts)
+    await callback()  // Dernier appel avec aucune valeur (fin traitement)
+}
+
+async function parourirFichiersRecursif(repertoire, callback, opts) {
+    opts = opts || {}
+    debug("parourirFichiers %s", repertoire)
+  
+    const settingsReaddirp = { type: 'files', alwaysStat: true, depth: 1 }
+
+    // const pathFichiersActifs = pathConsignation.consignationPathLocal
+    // let fichiersVerifier = {}
+    // let compteur = 0
+    for await (const entry of readdirp(repertoire, settingsReaddirp)) {
+        debug("Fichier : %O", entry)
+        const { basename, fullPath, stats } = entry
+        const { mtimeMs, size } = stats
+        const repertoire = path.dirname(fullPath)
+        const data = { filename: basename, directory: repertoire, modified: mtimeMs, size }
+
+        // let utiliserFichier = true
+        if(opts.filtre) utiliserFichier = opts.filtre(data)
+
+        if(utiliserFichier) {
+            debug("!!! FICHIER ITEM : \n%O", entry)
+            await callback(data)
+        }
+
+    //     fichiersVerifier[basename] = fullPath
+    //     if(++compteur >= 1000) {
+    //         // Executer une batch de verification
+    //         await traiterBatch(mq, pathConsignation, fichiersVerifier)
+
+    //         // Reset
+    //         fichiersVerifier = {}
+    //         compteur = 0
+    //     }
+    }
+
+    // if(compteur > 0) {
+    //     // Derniere batch
+    //     await traiterBatch(mq, pathConsignation, fichiersVerifier)
+    // }
+
+    // const handleDir = await opendir(repertoire)
+    // try {
+    //     let liste = await readdir(handleDir)
+    //     while(liste) {
+    //         // Filtrer la liste, conserver uniquement les fuuids (fichiers, enlever extension)
+    //         // Appeler callback sur chaque item
+    //         var infoFichiers = liste.filter(item=>{
+    //             let isFile = item.attrs.isFile()
+    //             if(opts.filtre) return isFile && opts.filtre(item)
+    //             return isFile
+    //         })
+    //         if(infoFichiers && infoFichiers.length > 0) {
+    //             for(let fichier of infoFichiers) {
+    //                 const data = { filename: fichier.filename, directory: repertoire, modified: fichier.attrs.mtime }
+    //                 await callback(data)
+    //             }
+    //         }
+        
+    //         // Parcourir recursivement tous les repertoires
+    //         const directories = liste.filter(item=>item.attrs.isDirectory())
+    //         for await (const directory of directories) {
+    //             const subDirectory = path.join(repertoire, directory.filename)
+    //             await parourirFichiersRecursif(subDirectory, callback, opts)
+    //         }
+
+    //         try {
+    //             liste = await readdir(handleDir)
+    //         } catch (err) {
+    //             liste = false
+    //         }
+    //     }
+    // } finally {
+    //     close(handleDir)
+    // }
+}
+
 module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     getFichier, getInfoFichier, consignerFichier,
+    marquerSupprime, parourirFichiers,
 }

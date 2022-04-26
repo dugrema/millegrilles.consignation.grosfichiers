@@ -227,7 +227,10 @@ async function parourirFichiersRecursif(repertoire, callback, opts) {
             // Appeler callback sur chaque item
             var infoFichiers = liste.filter(item=>{
                 let isFile = item.attrs.isFile()
-                if(opts.filtre) return isFile && opts.filtre(item)
+                if(opts.filtre) {
+                    const data = { filename: item.filename, directory: repertoire, modified: item.attrs.mtime }
+                    return isFile && opts.filtre(data)
+                }
                 return isFile
             })
             if(infoFichiers && infoFichiers.length > 0) {
