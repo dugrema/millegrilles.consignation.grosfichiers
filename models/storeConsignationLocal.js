@@ -128,8 +128,6 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         for await (const entry of listeParts) {
             const {position, fullPath} = entry
             // debug("Entry path : %O", entry);
-            // const fichierPart = entry.basename
-            // const position = Number(fichierPart.split('.').shift())
             debug("Traiter consignation pour item %s position %d", fuuid, position)
             const streamReader = fs.createReadStream(fullPath)
             
@@ -176,9 +174,6 @@ async function parourirFichiersRecursif(repertoire, callback, opts) {
   
     const settingsReaddirp = { type: 'files', alwaysStat: true, depth: 1 }
 
-    // const pathFichiersActifs = pathConsignation.consignationPathLocal
-    // let fichiersVerifier = {}
-    // let compteur = 0
     for await (const entry of readdirp(repertoire, settingsReaddirp)) {
         debug("Fichier : %O", entry)
         const { basename, fullPath, stats } = entry
@@ -186,64 +181,13 @@ async function parourirFichiersRecursif(repertoire, callback, opts) {
         const repertoire = path.dirname(fullPath)
         const data = { filename: basename, directory: repertoire, modified: mtimeMs, size }
 
-        // let utiliserFichier = true
+        let utiliserFichier = true
         if(opts.filtre) utiliserFichier = opts.filtre(data)
 
         if(utiliserFichier) {
-            debug("!!! FICHIER ITEM : \n%O", entry)
             await callback(data)
         }
-
-    //     fichiersVerifier[basename] = fullPath
-    //     if(++compteur >= 1000) {
-    //         // Executer une batch de verification
-    //         await traiterBatch(mq, pathConsignation, fichiersVerifier)
-
-    //         // Reset
-    //         fichiersVerifier = {}
-    //         compteur = 0
-    //     }
     }
-
-    // if(compteur > 0) {
-    //     // Derniere batch
-    //     await traiterBatch(mq, pathConsignation, fichiersVerifier)
-    // }
-
-    // const handleDir = await opendir(repertoire)
-    // try {
-    //     let liste = await readdir(handleDir)
-    //     while(liste) {
-    //         // Filtrer la liste, conserver uniquement les fuuids (fichiers, enlever extension)
-    //         // Appeler callback sur chaque item
-    //         var infoFichiers = liste.filter(item=>{
-    //             let isFile = item.attrs.isFile()
-    //             if(opts.filtre) return isFile && opts.filtre(item)
-    //             return isFile
-    //         })
-    //         if(infoFichiers && infoFichiers.length > 0) {
-    //             for(let fichier of infoFichiers) {
-    //                 const data = { filename: fichier.filename, directory: repertoire, modified: fichier.attrs.mtime }
-    //                 await callback(data)
-    //             }
-    //         }
-        
-    //         // Parcourir recursivement tous les repertoires
-    //         const directories = liste.filter(item=>item.attrs.isDirectory())
-    //         for await (const directory of directories) {
-    //             const subDirectory = path.join(repertoire, directory.filename)
-    //             await parourirFichiersRecursif(subDirectory, callback, opts)
-    //         }
-
-    //         try {
-    //             liste = await readdir(handleDir)
-    //         } catch (err) {
-    //             liste = false
-    //         }
-    //     }
-    // } finally {
-    //     close(handleDir)
-    // }
 }
 
 module.exports = {

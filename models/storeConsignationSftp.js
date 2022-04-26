@@ -1,6 +1,5 @@
 const debug = require('debug')('consignation:store:sftp')
 const fs = require('fs')
-const fsPromises = require('fs/promises')
 const path = require('path')
 const readdirp = require('readdirp')
 const {Client} = require('ssh2')
@@ -72,6 +71,20 @@ async function getInfoFichier(fuuid) {
     const fileRedirect = url.href
     debug("File redirect : %O", fileRedirect)
     return { fileRedirect }
+}
+
+async function recoverFichierSupprime(fuuid) {
+    const filePath = getPathFichier(fuuid)
+    const filePathCorbeille = filePath + '.corbeille'
+    try {
+        await stat(filePathCorbeille)
+        await rename(filePathCorbeille, filePath)
+        const stat = await stat(filePath)
+        return { stat, filePath }
+    } catch(err) {
+        debug("Erreur recoverFichierSupprime %s : %O", fuuid, err)
+        return null
+    }
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
@@ -259,7 +272,9 @@ async function parourirFichiersRecursif(repertoire, callback, opts) {
 }
 
 function opendir(pathRepertoire) {
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
         _connexionSftp.opendir(pathRepertoire, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
@@ -268,7 +283,9 @@ function opendir(pathRepertoire) {
 }
 
 function readdir(pathRepertoire) {
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
         _connexionSftp.readdir(pathRepertoire, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
@@ -277,7 +294,9 @@ function readdir(pathRepertoire) {
 }
 
 function rename(srcPath, destPath) {
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
         _connexionSftp.rename(srcPath, destPath, err=>{
             if(err) return reject(err)
             resolve()
@@ -286,7 +305,9 @@ function rename(srcPath, destPath) {
 }
 
 function stat(pathFichier) {
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
         _connexionSftp.stat(pathFichier, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
@@ -295,7 +316,9 @@ function stat(pathFichier) {
 }
 
 function unlink(pathFichier) {
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
         _connexionSftp.unlink(pathFichier, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
@@ -304,7 +327,9 @@ function unlink(pathFichier) {
 }
 
 function open(pathFichier, flags) {
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
         _connexionSftp.open(pathFichier, flags, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
@@ -313,7 +338,9 @@ function open(pathFichier, flags) {
 }
 
 function sync(handle) {
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
         _connexionSftp.ext_openssh_fsync(handle, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
@@ -322,7 +349,9 @@ function sync(handle) {
 }
 
 function fstat(handle) {
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
         _connexionSftp.fstat(handle, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
@@ -330,9 +359,10 @@ function fstat(handle) {
     })
 }
 
-
 function close(handle) {
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
+        if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+
         _connexionSftp.close(handle, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
@@ -342,6 +372,6 @@ function close(handle) {
 
 module.exports = {
     init, fermer,
-    getInfoFichier, consignerFichier, marquerSupprime,
+    getInfoFichier, consignerFichier, marquerSupprime, recoverFichierSupprime,
     parourirFichiers,
 }
