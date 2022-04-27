@@ -16,11 +16,13 @@ const _privateRsaKey = fs.readFileSync(_privateRsaKeyPath)
 
 // Creer un pool de connexions a reutiliser
 const CONNEXION_TIMEOUT = 10 * 60 * 1000  // 10 minutes
+const CHUNK_SIZE = 32768 - 29  // Packet ssh est 32768 sur hostgator, 29 bytes overhead
 
 let _intervalEntretienConnexion = null,
     _connexionSsh = null,
     _channelSftp = null,
-    _supporteSshExtensions = true
+    _supporteSshExtensions = true,
+    _connexionError = null
 
 let _hostname = null,
     _port = 22,
@@ -133,104 +135,50 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         }
         listeParts.sort((a,b)=>{return a.position-b.position})
 
-        const CHUNK_SIZE = 32*1024
-        let file_position = 0
+        let retryCount = 0,
+            fileSize = 0
         for await (const entry of listeParts) {
-            const {position, fullPath} = entry
-            debug("Entry path : %O", entry);
-            // const fichierPart = entry.basename
-            // const position = Number(fichierPart.split('.').shift())
-            debug("Traiter consignation pour item %s position %d", fuuid, position)
-            const streamReader = fs.createReadStream(fullPath)
-            
-            const promise = new Promise((resolve, reject)=>{
-                let termine = false,
-                    ecritureEnCours = false
-                streamReader.on('end', _=>{
-                    termine = true
-                    if(ecritureEnCours) {
-                        debug("end appele, ecriture en cours? %s", ecritureEnCours)
-                    } else {
-                        resolve()
-                    }
-                })
-                streamReader.on('error', err=>reject(err))
-                streamReader.on('data', async chunk => {
-                    ecritureEnCours = true
-                    if(termine) throw new Error("Stream / promise resolved avant fin ecriture")
+            while(retryCount++ < 3) {
+                try {
+                    const { total } = await putFile(sftp, fuuid, entry, writeHandle)
 
-                    // Verifier hachage
-                    streamReader.pause()
-                    verificateurHachage.update(chunk)
-                    // writer.write(chunk)
-                    let chunk_offset = 0,
-                        retry = 0
-                    while(chunk_offset < chunk.length) {
-                        try {
-                            const chunk_size = Math.min(chunk.length - chunk_offset, CHUNK_SIZE)
-                            // await write(writeHandle, chunk, 0, chunk.length, total)
-                            debug("Ecrire position %d (offset %d, len: %d)", file_position, chunk_offset, chunk_size)
-                            await write(sftp, writeHandle, chunk, chunk_offset, chunk_size, file_position)
-    
-                            // Ajuster counters
-                            chunk_offset += chunk_size
-                            file_position += chunk_size
-                            retry = 0
-                        } catch(err) {
-                            if(retry++ < 3) {
-                                debug("Erreur ecriture chunk %s position %s, tenter recovery : %O", fuuid, file_position, err)
-                                if(!_connexionSsh) await connecterSSH()
-                                sftp = await sftpClient()
-                                writeHandle = await open(sftp, pathFichier, 'w', 0o644)
-                            } else {
-                                streamReader.cancel()
-                                return reject(err)
-                            }
+                    // Succes, break boucle retry
+                    fileSize = total  // Total est la position finale a l'ecriture
+                    retryCount = 0
+                    break
+                } catch(err) {
+                    if(retryCount < 3) {
+                        debug("Erreur putfile %s, reessayer. Detail : %O", fuuid, err)
+                        if(!_connexionSsh) {
+                            // Reconnecter, restaurer etat ecriture
+                            await connecterSSH()
+                            sftp = await sftpClient()
+                            writeHandle = await open(sftp, pathFichier, 'r+', 0o644)
                         }
                     }
-                    // total += chunk.length
-                    debug("Ecriture rendu position %d (offset %d)", file_position)
-
-                    ecritureEnCours = false
-                    if(termine) resolve()
-
-                    streamReader.resume()
-                })
-            })
-
-            await promise
-
-            debug("Taille fichier %s : %d", pathFichier, file_position)
+                }
+            }
         }
 
         // await writer.close()
-        await verificateurHachage.verify()
+        // await verificateurHachage.verify()
         debug("Fichier %s transfere avec succes vers consignation sftp", fuuid)
 
         // Attendre que l'ecriture du fichier soit terminee (fs sync)
         // const handle = await open(pathFichier, 'r')
         let infoFichier = null
-        // try {
-            debug("Attente sync du fichier %s", pathFichier)
+        debug("Attente sync du fichier %s", pathFichier)
 
-            debug("Execution fstat sur %s", fuuid)
-            infoFichier = await fstat(sftp, writeHandle)
-            let tailleStat = infoFichier.size, 
-                compteur = 0,
-                delai = 750
-            debug("Stat fichier initial avant attente : %O", infoFichier)
+        debug("Execution fstat sur %s", fuuid)
+        infoFichier = await fstat(sftp, writeHandle)
+        debug("Stat fichier initial avant attente : %O", infoFichier)
 
-            debug("Info fichier : %O", infoFichier)
-        // } finally {
-        //     close(writeHandle)
-        // }
+        debug("Info fichier : %O", infoFichier)
 
-        const total = file_position
-
-        if(infoFichier.size !== total) {
-            const err = new Error(`Taille du fichier est differente sur sftp : ${infoFichier.size} != ${total}`)
+        if(infoFichier.size !== fileSize) {
+            const err = new Error(`Taille du fichier est differente sur sftp : ${infoFichier.size} != ${fileSize}`)
             debug("Erreur taille fichier: %O", err)
-            return reject(err)
+            throw err
         }
 
         debug("Information fichier sftp : %O", infoFichier)
@@ -254,6 +202,62 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
 }
 
+async function putFile(sftp, fuuid, entry, writeHandle) {
+    const {position, fullPath} = entry
+    let filePosition = position
+
+    // debug("Entry path : %O", entry);
+    debug("Traiter consignation pour item %s position %d", fuuid, position)
+    const streamReader = fs.createReadStream(fullPath, {highWaterMark: CHUNK_SIZE})
+
+    const promise = new Promise((resolve, reject)=>{
+        let termine = false,
+            ecritureEnCours = false
+        streamReader.on('end', _=>{
+            termine = true
+            if(ecritureEnCours) {
+                debug("end appele, ecriture en cours : %s", ecritureEnCours)
+            } else {
+                resolve({total: filePosition})
+            }
+        })
+        streamReader.on('error', err=>reject(err))
+        streamReader.on('data', async chunk => {
+            ecritureEnCours = true
+            if(termine) return reject("Stream / promise resolved avant fin ecriture")
+
+            // Verifier hachage
+            streamReader.pause()
+            // verificateurHachage.update(chunk)
+
+            // Ecrire le contenu du chunk
+            debug("Ecrire position %d (offset %d, len: %d)", filePosition, 0, chunk.length)
+            try {
+                await new Promise(resolve=>setTimeout(resolve, 10))  // Throttle, aide pour hostgator
+                await write(sftp, writeHandle, chunk, 0, chunk.length, filePosition)
+            } catch(err) {
+                streamReader.close()
+                return reject(err)
+            }
+
+            // Incrementer position globale
+            filePosition += chunk.length
+
+            debug("Ecriture rendu position %d (offset %d)", filePosition)
+
+            ecritureEnCours = false
+            if(termine) resolve({total: filePosition})
+
+            streamReader.resume()
+        })
+    })
+
+    const resultat = await promise
+
+    debug("Taille fichier %s : %d", fuuid, filePosition)
+    return resultat
+}
+
 async function connecterSSH(host, port, username, opts) {
     opts = opts || {}
     host = host || _hostname
@@ -272,6 +276,8 @@ async function connecterSSH(host, port, username, opts) {
     }
   
     const conn = new Client()
+
+    _connexionError = null
     return new Promise((resolve, reject)=>{
         conn.on('ready', async _ => {
             debug("Connexion ssh ready")
@@ -286,6 +292,9 @@ async function connecterSSH(host, port, username, opts) {
         })
         conn.on('error', err=>{
             debug("Erreur connexion SFTP : %O", err)
+            _connexionError = err
+            _channelSftp = null
+            _connexionSsh = null
             reject(err)
         })
         conn.on('end', _=>{
