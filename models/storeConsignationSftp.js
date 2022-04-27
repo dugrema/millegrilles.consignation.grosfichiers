@@ -4,8 +4,9 @@ const path = require('path')
 const readdirp = require('readdirp')
 const {Client} = require('ssh2')
 
-const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
+const { Hacheur, VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 const { writer } = require('repl')
+const hachage = require('@dugrema/millegrilles.nodejs/src/hachage')
 
 // Charger les cles privees utilisees pour se connecter par sftp
 // Ed25519 est prefere, RSA comme fallback
@@ -122,7 +123,24 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         depth: 1,
     })
 
+    // Creer hacheur en sha2-256 pour verifier avec sha256sums via ssh apres l'upload
+    const hacheur = new Hacheur({encoding: 'base16', hash: 'sha2-256'})
+    // Verifier contenu local uploade
     const verificateurHachage = new VerificateurHachage(fuuid)
+
+    let positionVerif = 0
+    const callbackVerif = async (chunk, position) => {
+        if(positionVerif === position) {  // Handle retry
+            await hacheur.update(chunk)
+            await verificateurHachage.update(chunk)
+            positionVerif += chunk.length
+        } else if(positionVerif > position) {
+            debug("Verification, skip position previous (retry?): %d < %d", position, positionVerif)
+        } else {
+            debug("Erreur hachage, position out of sync (%d != %d)", position, positionVerif)
+        }
+    }
+
     try {
         var sftp = await sftpClient()
         var writeHandle = await open(sftp, pathFichier, 'w', 0o644)
@@ -140,7 +158,7 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         for await (const entry of listeParts) {
             while(retryCount++ < 3) {
                 try {
-                    const { total } = await putFile(sftp, fuuid, entry, writeHandle)
+                    const { total } = await putFile(sftp, fuuid, entry, writeHandle, callbackVerif)
 
                     // Succes, break boucle retry
                     fileSize = total  // Total est la position finale a l'ecriture
@@ -161,8 +179,10 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         }
 
         // await writer.close()
-        // await verificateurHachage.verify()
-        debug("Fichier %s transfere avec succes vers consignation sftp", fuuid)
+        await verificateurHachage.verify()
+        const multiHachageSha256 = await hacheur.finalize()
+        const hachageSha256 = multiHachageSha256.slice(5)  // Retirer 5 premiers chars (f multibase, multihash)
+        debug("Fichier %s transfere avec succes vers consignation sftp, sha-256 local = %s", fuuid, hachageSha256)
 
         // Attendre que l'ecriture du fichier soit terminee (fs sync)
         // const handle = await open(pathFichier, 'r')
@@ -202,7 +222,7 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
 }
 
-async function putFile(sftp, fuuid, entry, writeHandle) {
+async function putFile(sftp, fuuid, entry, writeHandle, callback) {
     const {position, fullPath} = entry
     let filePosition = position
 
@@ -233,8 +253,9 @@ async function putFile(sftp, fuuid, entry, writeHandle) {
             // Ecrire le contenu du chunk
             debug("Ecrire position %d (offset %d, len: %d)", filePosition, 0, chunk.length)
             try {
-                await new Promise(resolve=>setTimeout(resolve, 10))  // Throttle, aide pour hostgator
+                await new Promise(resolve=>setTimeout(resolve, 20))  // Throttle, aide pour hostgator
                 await write(sftp, writeHandle, chunk, 0, chunk.length, filePosition)
+                if(callback) await callback(chunk, filePosition)
             } catch(err) {
                 streamReader.close()
                 return reject(err)
