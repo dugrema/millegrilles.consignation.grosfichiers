@@ -19,7 +19,7 @@ const CONNEXION_TIMEOUT = 10 * 60 * 1000  // 10 minutes
 
 let _intervalEntretienConnexion = null,
     _connexionSsh = null,
-    _connexionSftp = null,
+    _channelSftp = null,
     _supporteSshExtensions = true
 
 let _hostname = null,
@@ -60,6 +60,7 @@ function fermer() {
 async function entretienConnexion(opts) {
     opts = opts || {}
     if(opts.closeAll) {
+        debug("entretientConnexion closeAll")
         if(_connexionSsh) _connexionSsh.end()
     }
 }
@@ -69,6 +70,7 @@ function getPathFichier(fuuid) {
 }
 
 async function getInfoFichier(fuuid) {
+    debug("getInfoFichier %s", fuuid)
     const url = new URL(_urlDownload)
     url.pathname = path.join(url.pathname, fuuid)
     const fileRedirect = url.href
@@ -77,22 +79,32 @@ async function getInfoFichier(fuuid) {
 }
 
 async function recoverFichierSupprime(fuuid) {
+    debug("recoverFichierSupprime %s", fuuid)
     const filePath = getPathFichier(fuuid)
     const filePathCorbeille = filePath + '.corbeille'
     try {
-        await stat(filePathCorbeille)
-        await rename(filePathCorbeille, filePath)
+        var sftp = await sftpClient()
+        await stat(sftp, filePathCorbeille)
+        await rename(sftp, filePathCorbeille, filePath)
         const statInfo = await stat(filePath)
         return { stat: statInfo, filePath }
     } catch(err) {
         debug("Erreur recoverFichierSupprime %s : %O", fuuid, err)
         return null
+    } finally {
+        try {
+            debug("recoverFichierSupprime fermer sftp apres %s", fuuid)
+            // sftp.end(err=>console.debug("SFTP end, resultat : %O", err))
+        } catch(err) {
+            debug("ERR sftp.end: %O", err)
+        }
     }
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
-
-    if(!_connexionSsh) await connecterSSH(_hostname, _port, _username, params)
+    debug("Consigner fichier fuuid %s", fuuid)
+    if(!_connexionSsh) await connecterSSH()
+    // let sftp = await sftpClient()
 
     const pathFichier = getPathFichier(fuuid)
 
@@ -101,7 +113,6 @@ async function consignerFichier(pathFichierStaging, fuuid) {
     // await fsPromises.mkdir(dirFichier, {recursive: true})
     // const writer = fs.createWriteStream(pathFichier)
     // const writer = _connexionSftp.createWriteStream(pathFichier, {flags: 'w', mode: 0o644, autoClose: true})
-    const writeHandle = await open(pathFichier, 'w', 0o644)
 
     const promiseReaddirp = readdirp(pathFichierStaging, {
         type: 'files',
@@ -111,6 +122,9 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
     const verificateurHachage = new VerificateurHachage(fuuid)
     try {
+        var sftp = await sftpClient()
+        var writeHandle = await open(sftp, pathFichier, 'w', 0o644)
+
         const listeParts = []
         for await (const entry of promiseReaddirp) {
             const fichierPart = entry.basename
@@ -119,33 +133,74 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         }
         listeParts.sort((a,b)=>{return a.position-b.position})
 
-        let total = 0
+        const CHUNK_SIZE = 32*1024
+        let file_position = 0
         for await (const entry of listeParts) {
             const {position, fullPath} = entry
-            // debug("Entry path : %O", entry);
+            debug("Entry path : %O", entry);
             // const fichierPart = entry.basename
             // const position = Number(fichierPart.split('.').shift())
             debug("Traiter consignation pour item %s position %d", fuuid, position)
             const streamReader = fs.createReadStream(fullPath)
             
-            streamReader.on('data', async chunk => {
-                // Verifier hachage
-                streamReader.pause()
-                verificateurHachage.update(chunk)
-                // writer.write(chunk)
-                await write(writeHandle, chunk, 0, chunk.length, total)
-                total += chunk.length
-                streamReader.resume()
-            })
-
             const promise = new Promise((resolve, reject)=>{
-                streamReader.on('end', _=>resolve())
+                let termine = false,
+                    ecritureEnCours = false
+                streamReader.on('end', _=>{
+                    termine = true
+                    if(ecritureEnCours) {
+                        debug("end appele, ecriture en cours? %s", ecritureEnCours)
+                    } else {
+                        resolve()
+                    }
+                })
                 streamReader.on('error', err=>reject(err))
+                streamReader.on('data', async chunk => {
+                    ecritureEnCours = true
+                    if(termine) throw new Error("Stream / promise resolved avant fin ecriture")
+
+                    // Verifier hachage
+                    streamReader.pause()
+                    verificateurHachage.update(chunk)
+                    // writer.write(chunk)
+                    let chunk_offset = 0,
+                        retry = 0
+                    while(chunk_offset < chunk.length) {
+                        try {
+                            const chunk_size = Math.min(chunk.length - chunk_offset, CHUNK_SIZE)
+                            // await write(writeHandle, chunk, 0, chunk.length, total)
+                            debug("Ecrire position %d (offset %d, len: %d)", file_position, chunk_offset, chunk_size)
+                            await write(sftp, writeHandle, chunk, chunk_offset, chunk_size, file_position)
+    
+                            // Ajuster counters
+                            chunk_offset += chunk_size
+                            file_position += chunk_size
+                            retry = 0
+                        } catch(err) {
+                            if(retry++ < 3) {
+                                debug("Erreur ecriture chunk %s position %s, tenter recovery : %O", fuuid, file_position, err)
+                                if(!_connexionSsh) await connecterSSH()
+                                sftp = await sftpClient()
+                                writeHandle = await open(sftp, pathFichier, 'w', 0o644)
+                            } else {
+                                streamReader.cancel()
+                                return reject(err)
+                            }
+                        }
+                    }
+                    // total += chunk.length
+                    debug("Ecriture rendu position %d (offset %d)", file_position)
+
+                    ecritureEnCours = false
+                    if(termine) resolve()
+
+                    streamReader.resume()
+                })
             })
 
             await promise
 
-            debug("Taille fichier %s : %d", pathFichier, total)
+            debug("Taille fichier %s : %d", pathFichier, file_position)
         }
 
         // await writer.close()
@@ -155,50 +210,22 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         // Attendre que l'ecriture du fichier soit terminee (fs sync)
         // const handle = await open(pathFichier, 'r')
         let infoFichier = null
-        try {
+        // try {
             debug("Attente sync du fichier %s", pathFichier)
-            // if(_supporteSshExtensions) {
-            //     try {
-            //         const ok = await sync(handle)
-            //         if(ok === false) {
-            //             // Echec du sync, on utilise poll
-            //             debug("Echec sync, on va faire du polling")
-            //         }
-            //     } catch(err) {
-            //         debug("Erreur sync(3)", err)
-            //     }
-            // }
 
             debug("Execution fstat sur %s", fuuid)
-            infoFichier = await fstat(writeHandle)
+            infoFichier = await fstat(sftp, writeHandle)
             let tailleStat = infoFichier.size, 
                 compteur = 0,
                 delai = 750
             debug("Stat fichier initial avant attente : %O", infoFichier)
 
-            // while(tailleStat < total && compteur++ < 10) {
-            //     debug("Attente fichier %s ms, boucle compteur: %d", delai, compteur)
-            //     await new Promise((resolve, reject)=>{
-            //         setTimeout(async ()=>{
-            //             try {
-            //                 infoFichier = await fstat(handle)
-            //                 if(tailleStat === infoFichier.size) {
-            //                     reject(`Fichier ${fuuid} bloque a taille ${tailleStat}`)
-            //                 }
-            //                 tailleStat = infoFichier.size
-            //                 delai = delai * 1.5  // Augmenter delai attente
-            //                 resolve()
-            //             } catch(err) {
-            //                 reject(err)
-            //             }
-            //         }, delai)
-            //     })
-            // }
-
             debug("Info fichier : %O", infoFichier)
-        } finally {
-            close(writeHandle)
-        }
+        // } finally {
+        //     close(writeHandle)
+        // }
+
+        const total = file_position
 
         if(infoFichier.size !== total) {
             const err = new Error(`Taille du fichier est differente sur sftp : ${infoFichier.size} != ${total}`)
@@ -210,11 +237,19 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
     } catch(err) {
         try {
-            await unlink(pathFichier)
+            if(sftp !== undefined) await unlink(sftp, pathFichier)
         } catch(err) {
             console.error("Erreur unlink fichier sftp %s : %O", pathFichier, err)
         }
         throw err
+    } finally {
+        try { await close(sftp, writeHandle) }
+        catch(err) { debug("Erreur fermeture writeHandle %s : %O", fuuid, err)}
+        try { 
+            debug("consignerFichier fermer sftp apres %s", fuuid)
+            // sftp.end(err=>debug("Fermeture sftp : %O", err)) 
+        }
+        catch(err) { debug("ERR fermerture sftp : %O", err)}
     }
 
 }
@@ -228,6 +263,8 @@ async function connecterSSH(host, port, username, opts) {
   
     debug("Connecter SSH sur %s (opts: %O)", connexionName, opts)
   
+    // await new Promise(resolve=>setTimeout(resolve, 3000))  // Delai connexion
+
     var privateKey = _privateEd25519Key
     const keyType = opts.keyType || _keyType || 'ed25519'
     if(keyType === 'rsa') {
@@ -236,50 +273,92 @@ async function connecterSSH(host, port, username, opts) {
   
     const conn = new Client()
     return new Promise((resolve, reject)=>{
-        conn.on('ready', _=>{
+        conn.on('ready', async _ => {
             debug("Connexion ssh ready")
             _connexionSsh = conn
-            conn.sftp((err, sftp)=>{
-                if(err) return reject(err)
-                _connexionSftp = sftp
+            try {
+                _channelSftp = await sftpClient()
                 resolve(conn)
-            })
+            } catch(err) {
+                debug("Erreur ouverture sftp : %O", err)
+                reject(err)
+            }
         })
         conn.on('error', err=>{
+            debug("Erreur connexion SFTP : %O", err)
             reject(err)
         })
         conn.on('end', _=>{
-            debug("Connexion %s fermee, nettoyage pool", connexionName)
-            _connexionSftp = null
+            debug("connecterSSH.end Connexion %s fermee, nettoyage pool", connexionName)
+            _channelSftp = null
             _connexionSsh = null
         })
 
         conn.connect({
             host, port, username, privateKey,
             readyTimeout: 60000,  // 60s, regle probleme sur login hostgator
-            // debug,
+            debug,
         })
     })
 }
 
+async function sftpClient() {
+    if(_channelSftp) return _channelSftp
+
+    debug("!!! sftpClient ")
+    if(!_connexionSsh) await connecterSSH()
+    return new Promise(async (resolve, reject)=>{
+        try {
+            debug("Ouverture sftp")
+            _connexionSsh.sftp((err, sftp)=>{
+                debug("Sftp ready, err?: %O", err)
+                if(err) return reject(err)
+
+                sftp.on('end', ()=>{
+                    debug("Channel SFTP end")
+                    _channelSftp = null
+                })
+                sftp.on('error', ()=>{
+                    debug("ERROR Channel SFTP : %O", err)
+                })
+
+                resolve(sftp)
+            })
+        } catch(err) {
+            reject(err)
+        }
+    })
+}
+
 async function marquerSupprime(fuuid) {
-    const pathFichier = getPathFichier(fuuid)
-    const pathFichierSupprime = pathFichier + '.corbeille'
-    await rename(pathFichier, pathFichierSupprime)
+    try {
+        var sftp = await sftpClient()
+        const pathFichier = getPathFichier(fuuid)
+        const pathFichierSupprime = pathFichier + '.corbeille'
+        await rename(sftp, pathFichier, pathFichierSupprime)
+    } finally {
+        // sftp.end(err=>debug("SFTP end : %O", err))
+    }
 }
 
 async function parourirFichiers(callback, opts) {
-    await parourirFichiersRecursif(_remotePath, callback, opts)
-    await callback()  // Dernier appel avec aucune valeur (fin traitement)
+    try {
+        var sftp = await sftpClient()
+        await parourirFichiersRecursif(sftp, _remotePath, callback, opts)
+        await callback()  // Dernier appel avec aucune valeur (fin traitement)
+    } finally {
+        debug("parourirFichiers fermer sftp")
+        // sftp.end(err=>debug("SFTP end : %O", err))
+    }
 }
 
-async function parourirFichiersRecursif(repertoire, callback, opts) {
+async function parourirFichiersRecursif(sftp, repertoire, callback, opts) {
     opts = opts || {}
     debug("parourirFichiers %s", repertoire)
   
-    const handleDir = await opendir(repertoire)
+    const handleDir = await opendir(sftp, repertoire)
     try {
-        let liste = await readdir(handleDir)
+        let liste = await readdir(sftp, handleDir)
         while(liste) {
             // Filtrer la liste, conserver uniquement les fuuids (fichiers, enlever extension)
             // Appeler callback sur chaque item
@@ -302,105 +381,89 @@ async function parourirFichiersRecursif(repertoire, callback, opts) {
             const directories = liste.filter(item=>item.attrs.isDirectory())
             for await (const directory of directories) {
                 const subDirectory = path.join(repertoire, directory.filename)
-                await parourirFichiersRecursif(subDirectory, callback, opts)
+                await parourirFichiersRecursif(sftp, subDirectory, callback, opts)
             }
 
             try {
-                liste = await readdir(handleDir)
+                liste = await readdir(sftp, handleDir)
             } catch (err) {
                 liste = false
             }
         }
     } finally {
-        close(handleDir)
+        close(sftp, handleDir)
     }
 }
 
-function opendir(pathRepertoire) {
+function opendir(sftp, pathRepertoire) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
-        _connexionSftp.opendir(pathRepertoire, (err, info)=>{
+        sftp.opendir(pathRepertoire, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
         })
     })
 }
 
-function readdir(pathRepertoire) {
+function readdir(sftp, pathRepertoire) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
-        _connexionSftp.readdir(pathRepertoire, (err, info)=>{
+        sftp.readdir(pathRepertoire, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
         })
     })
 }
 
-function rename(srcPath, destPath) {
+function rename(sftp, srcPath, destPath) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
-        _connexionSftp.rename(srcPath, destPath, err=>{
+        sftp.rename(srcPath, destPath, err=>{
             if(err) return reject(err)
             resolve()
         })
     })
 }
 
-function stat(pathFichier) {
+function stat(sftp, pathFichier) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
-        _connexionSftp.stat(pathFichier, (err, info)=>{
+        sftp.stat(pathFichier, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
         })
     })
 }
 
-function unlink(pathFichier) {
+function unlink(sftp, pathFichier) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
-        _connexionSftp.unlink(pathFichier, (err, info)=>{
+        sftp.unlink(pathFichier, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
         })
     })
 }
 
-function open(pathFichier, flags, mode) {
+function open(sftp, pathFichier, flags, mode) {
     mode = mode || 0o644
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
-        _connexionSftp.open(pathFichier, flags, mode, (err, info)=>{
+        sftp.open(pathFichier, flags, mode, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
         })
     })
 }
 
-function write(handle, buffer, offset, length, position) {
-    return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
-        _connexionSftp.write(handle, buffer, offset, length, position, err=>{
+function write(sftp, handle, buffer, offset, length, position) {
+    return new Promise((resolve, reject)=>{
+        sftp.write(handle, buffer, offset, length, position, err=>{
             if(err) return reject(err)
             resolve()
         })
     })
 }
 
-function sync(handle) {
+function sync(sftp, handle) {
     if(!_supporteSshExtensions) return 
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
         try {
-            _connexionSftp.ext_openssh_fsync(handle, err=>{
+            sftp.ext_openssh_fsync(handle, err=>{
                 if(err) {
                     debug("Erreur SYNC (1), on assume manque de support de openssh extensions : %O", err)
                     _supporteSshExtensions = false  // toggle support extensions a false
@@ -417,22 +480,18 @@ function sync(handle) {
     })
 }
 
-function fstat(handle) {
+function fstat(sftp, handle) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
-        _connexionSftp.fstat(handle, (err, info)=>{
+        sftp.fstat(handle, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
         })
     })
 }
 
-function close(handle) {
+function close(sftp, handle) {
     return new Promise(async (resolve, reject)=>{
-        if(!_connexionSsh) await connecterSSH()
-
-        _connexionSftp.close(handle, (err, info)=>{
+        sftp.close(handle, (err, info)=>{
             if(err) return reject(err)
             resolve(info)
         })
