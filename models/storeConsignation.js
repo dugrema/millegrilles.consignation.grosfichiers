@@ -68,8 +68,10 @@ async function modifierConfiguration(params, opts) {
 
 async function transfererFichierVersConsignation(mq, pathReady, item) {
     const transactions = await FichiersTransfertBackingStore.traiterTransactions(mq, pathReady, item)
-    const {transaction: transactionGrosFichiers, cles: commandeMaitreCles} = transactions
-    const fuuid = commandeMaitreCles.hachage_bytes
+    const {etat, transaction: transactionGrosFichiers, cles: commandeMaitreCles} = transactions
+    
+    // const fuuid = commandeMaitreCles.hachage_bytes
+    const fuuid = etat.hachage
 
     // Conserver cle
     if(commandeMaitreCles) {
