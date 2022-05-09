@@ -108,6 +108,18 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
         }
     }
 
+    // Emettre un evenement de consignation, peut etre utilise par domaines connexes (e.g. messagerie)
+    try {
+        const domaine = 'fichiers',
+              action = 'consigne'
+        const contenu = { 'hachage_bytes': etat.hachage }
+        mq.emettreEvenement(contenu, domaine, {action, exchange: '2.prive'}).catch(err=>{
+            console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
+        })
+    } catch(err) {
+        console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
+    }
+
     // Le fichier a ete transfere avec succes (aucune exception)
     // On peut supprimer le repertoire ready local
     fsPromises.rm(pathFichierStaging, {recursive: true})
