@@ -14,6 +14,7 @@ function on_connecter() {
     // ajouterCb('evenement.global.cedule', traiterCedule, {direct: true})
     ajouterCb('evenement.grosfichiers.fuuidSupprimerDocument', traiterFichiersSupprimes)
     ajouterCb('evenement.grosfichiers.fuuidRecuperer', traiterFichiersRecuperes)
+    ajouterCb('requete.fichiers.fuuidVerifierExistance', verifierExistanceFichiers)
 }
 
 function ajouterCb(rk, cb, opts) {
@@ -51,6 +52,41 @@ async function traiterFichiersRecuperes(message, rk, opts) {
             debug("Erreur recuperation fichier : %O", err)
         }
     }
+}
+
+async function verifierExistanceFichiers(message, rk, opts) {
+    opts = opts || {}
+    let replyTo = null, correlationId = null
+    if(opts.properties) {
+        replyTo = opts.properties.replyTo;
+        correlationId = opts.properties.correlationId;
+    }
+    if(!replyTo || !correlationId) return  // Rien a faire
+    
+    const fuuids = message.fuuids
+    const reponse = {fuuids: {}}
+    debug("verifierExistanceFichiers, fuuids : %O", fuuids)
+    for(let fuuid of fuuids) {
+        try {
+            const infoFichier = await _storeConsignation.getInfoFichier(fuuid)
+            if(!infoFichier) {
+                reponse.fuuids[fuuid] = false
+            } else if(infoFichier.redirect) {
+                throw new Error("TODO")
+            } else if (infoFichier.stat) {
+                const statFichier = infoFichier.stat
+                reponse.fuuids[fuuid] = true  // {size: statFichier.size, ctime: Math.floor(statFichier.ctimeMs/1000)}
+            }
+        } catch(err) {
+            debug("Erreur recuperation fichier : %O", err)
+            reponse.fuuids[fuuid] = false
+        }
+    }
+    debug('verifierExistanceFichiers, fuuids reponse : %O', reponse)
+
+    // console.debug("Reponse a " + replyTo + ", correlation " + correlationId);
+    _mq.transmettreReponse(reponse, replyTo, correlationId);
+    
 }
 
 module.exports = { init, on_connecter }
