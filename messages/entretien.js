@@ -33,11 +33,11 @@ function traiterCedule(message, rk, opts) {
     debug("Traiter cedule, message : %s", message.date_string)
 
 
-    //if( flag_jour ) {
+    if( flag_jour ) {
         // Entretien fichiers supprimes
         _storeConsignation.entretienFichiersSupprimes()
             .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
-    //}
+    }
 
 }
 
