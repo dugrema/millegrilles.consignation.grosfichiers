@@ -12,6 +12,7 @@ function init(mq, storeConsignation) {
 function on_connecter() {
     debug("entretien Enregistrer 'evenement.global.cedule'")
     ajouterCb('evenement.global.cedule', traiterCedule, {direct: true})
+    ajouterCb('commande.fichiers.confirmerActiviteFuuids', traiterConfirmerActiviteFuuids, {direct: true})
 }
 
 function ajouterCb(rk, cb, opts) {
@@ -32,11 +33,21 @@ function traiterCedule(message, rk, opts) {
     debug("Traiter cedule, message : %s", message.date_string)
 
 
-    if( flag_jour ) {
+    //if( flag_jour ) {
         // Entretien fichiers supprimes
         _storeConsignation.entretienFichiersSupprimes()
             .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
-    }
+    //}
+
+}
+
+function traiterConfirmerActiviteFuuids(message, rk, opts) {
+    debug("Traiter confirmer activite fuuids : %O", message)
+    const { fuuids } = message
+
+    // Entretien fichiers supprimes
+    _storeConsignation.confirmerActiviteFuuids(fuuids)
+        .catch(err=>console.error("entretien ERROR traiterConfirmerActiviteFuuids a echoue : %O", err))
 
 }
 

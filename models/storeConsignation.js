@@ -127,6 +127,9 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
 
 }
 
+var _batchFichiersFuuids = null, // Dict { [fuuid]: bool }, true veut dire fichier reconnu par au moins 1 module
+    _triggerPromiseBatch = null  // Fonction, invoquer pour continuer batch avant timeout (e.g. all files accounted for)
+
 async function entretienFichiersSupprimes() {
     debug("Debut entretien des fichiers supprimes")
 
@@ -156,28 +159,78 @@ async function traiterBatch(batchFichiers) {
     debug("Traiter batch : %O", batchFichiers)
 
     const fuuids = batchFichiers.map(item=>item.filename)
+    _batchFichiersFuuids = batchFichiers.reduce((acc, item)=>{
+        acc[item.filename]=false 
+        return acc
+    }, {})
+    debug("Traiter batch fichiers : %O", _batchFichiersFuuids)
 
-    const requete = { fuuids }
-    const domaine = 'GrosFichiers',
-          action = 'confirmerEtatFuuids'
-    const reponse = await _mq.transmettreRequete(domaine, requete, {action})
-    debug("Reponse verification : %O", reponse.confirmation)
+    const evenement = { fuuids }
+    //const domaine = 'GrosFichiers',
+    const action = 'confirmerEtatFuuids',
+          domaine = 'fichiers'
+    // const reponse = await _mq.transmettreRequete(domaine, requete, {action})
+    await _mq.emettreEvenement(evenement, domaine, {action})
 
-    const confirmation = reponse.confirmation || {},
-          fichiersResultat = confirmation.fichiers || []
+    // Attendre reponses, timeout de 10 secondes pour collecter tous les messages
+    await new Promise(resolve=>{
+        let timeoutBatch = setTimeout(resolve, 10000)
+        _triggerPromiseBatch = () => {
+            clearTimeout(timeoutBatch)
+            resolve()
+        }
+    })
 
-    debug("Reponse verification : %O", confirmation)
+    const resultatBatch = _batchFichiersFuuids
+    _batchFichiersFuuids = null
+    _triggerPromiseBatch = null
+    debug("Resultat verification : %O", resultatBatch)
 
-    if(fichiersResultat) {
-        for await (const reponseFichier of fichiersResultat) {
-            const {fuuid, supprime} = reponseFichier
-            if(supprime) {
-                debug("Le fichier %s est supprime, on le deplace vers la corbeille", fuuid)
-                await _storeConsignation.marquerSupprime(fuuid)
-            }
+    // Reassembler resultat
+    const resultatFuuids = {}
+    for(const fuuid in resultatBatch) {
+        const resultat = resultatBatch[fuuid]
+        if(resultat === false) {
+            resultatFuuids[fuuid] = {fuuid, supprime: true}
+        } else {
+            resultatFuuids[fuuid] = resultat
+        }
+    }
+    
+    const resultatListe = Object.values(resultatFuuids)
+
+    debug("Reponse verification : %O", resultatListe)
+
+    for await (const reponseFichier of resultatListe) {
+        const {fuuid, supprime} = reponseFichier
+        if(supprime === true) {
+            debug("Le fichier %s est supprime, on le deplace vers la corbeille", fuuid)
+            await _storeConsignation.marquerSupprime(fuuid)
         }
     }
 
+}
+
+// Callback via commande pour que multiple domaines/modules puissent confirmer leur utilisation
+// courante de fichiers
+async function confirmerActiviteFuuids(fuuids) {
+    debug("confirmerActiviteFuuids fuuids %O", fuuids)
+    if(fuuids) {
+        fuuids.forEach(item=>{
+            _batchFichiersFuuids[item.fuuid] = item
+        })
+    }
+    debug("Liste fuuids locale : %O", _batchFichiersFuuids)
+
+    // Detecter si la liste est complete
+    let complete = Object.values(_batchFichiersFuuids).reduce((acc, item)=>{
+        acc = acc && item?true:false
+        return acc
+    }, true)
+    if(complete) {
+        debug("Liste fichiers est complete : %s", complete)
+        _triggerPromiseBatch()
+    }
 }
 
 function supprimerFichier(fuuid) {
@@ -207,6 +260,6 @@ function middlewareDeleteStaging(opts) {
 
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
-    entretienFichiersSupprimes, supprimerFichier, recupererFichier,
+    entretienFichiersSupprimes, supprimerFichier, recupererFichier, confirmerActiviteFuuids,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
 }
