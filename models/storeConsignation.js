@@ -127,40 +127,87 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
 
 }
 
-var _batchFichiersFuuids = null, // Dict { [fuuid]: bool }, true veut dire fichier reconnu par au moins 1 module
+var _batchFichiersFuuids = null, // Dict { [fuuid]: false/{fuuid, supprime: bool} }
     _triggerPromiseBatch = null  // Fonction, invoquer pour continuer batch avant timeout (e.g. all files accounted for)
 
 async function entretienFichiersSupprimes() {
     debug("Debut entretien des fichiers supprimes")
 
-    // Detecter les fichiers qui devraient etre mis en attente de suppression
-    let batchFichiers = []
-    const callbackTraiterFichiers = async item => {
-        if(!item) {
-            // Derniere batch
-            if(batchFichiers.length > 0) await traiterBatch(batchFichiers)
-        } else {
-            batchFichiers.push(item)
-            while(batchFichiers.length > BATCH_SIZE) {
-                const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
-                batchFichiers = batchFichiers.slice(BATCH_SIZE)
-                await traiterBatch(batchCourante)
-            }
-        }
-    }
-    const filtre = item => !item.filename.endsWith('.corbeille')
-    await _storeConsignation.parourirFichiers(callbackTraiterFichiers, {filtre})
+    // Detecter les fichiers qui devraient etre mis en attente de suppression    
+    await traiterSupprimer()
+
+    // Verifier les fichiers dans la corbeille (pour les recuperer au besoin)
+    traiterRecuperer()
 
     // Supprimer les fichiers en attente depuis plus de 14 jours
 
 }
 
-async function traiterBatch(batchFichiers) {
-    debug("Traiter batch : %O", batchFichiers)
+async function traiterSupprimer() {
+    debug("Traitement des fichiers a supprimer")
+    let batchFichiers = []
+    
+    const callbackActionSupprimer = async item => {
+        const {fuuid, supprime} = item
+        if(supprime === true) {
+            debug("Le fichier %s est supprime, on le deplace vers la corbeille", fuuid)
+            await _storeConsignation.marquerSupprime(fuuid)
+        }
+    }
 
-    const fuuids = batchFichiers.map(item=>item.filename)
-    _batchFichiersFuuids = batchFichiers.reduce((acc, item)=>{
-        acc[item.filename]=false 
+    const callbackTraiterFichiersASupprimer = async item => {
+        if(!item) {
+            // Derniere batch
+            if(batchFichiers.length > 0) await traiterBatch(batchFichiers, callbackActionSupprimer)
+        } else {
+            batchFichiers.push(item.filename)
+            while(batchFichiers.length > BATCH_SIZE) {
+                const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
+                batchFichiers = batchFichiers.slice(BATCH_SIZE)
+                await traiterBatch(batchCourante, callbackActionSupprimer)
+            }
+        }
+    }
+    
+    const filtre = item => !item.filename.endsWith('.corbeille')
+    await _storeConsignation.parourirFichiers(callbackTraiterFichiersASupprimer, {filtre})
+}
+
+async function traiterRecuperer() {
+    debug("Traitement des fichiers a recuperer")
+    let batchFichiers = []
+    
+    const callbackActionRecuperer = async item => {
+        const {fuuid, supprime} = item
+        if(supprime === false) {
+            debug("Le fichier supprime %s est requis par un module, on le recupere", fuuid)
+            await _storeConsignation.recoverFichierSupprime(fuuid)
+        }
+    }
+
+    const callbackTraiterFichiersARecuperer = async item => {
+        if(!item) {
+            // Derniere batch
+            if(batchFichiers.length > 0) await traiterBatch(batchFichiers, callbackActionRecuperer)
+        } else {
+            batchFichiers.push(path.basename(item.filename, '.corbeille'))
+            while(batchFichiers.length > BATCH_SIZE) {
+                const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
+                batchFichiers = batchFichiers.slice(BATCH_SIZE)
+                await traiterBatch(batchCourante, callbackActionRecuperer)
+            }
+        }
+    }
+    
+    const filtre = item => item.filename.endsWith('.corbeille')
+    await _storeConsignation.parourirFichiers(callbackTraiterFichiersARecuperer, {filtre})
+}
+
+async function traiterBatch(fuuids, callbackAction) {
+    debug("Traiter batch : %O", fuuids)
+
+    _batchFichiersFuuids = fuuids.reduce((acc, item)=>{
+        acc[item]=false 
         return acc
     }, {})
     debug("Traiter batch fichiers : %O", _batchFichiersFuuids)
@@ -202,11 +249,7 @@ async function traiterBatch(batchFichiers) {
     debug("Reponse verification : %O", resultatListe)
 
     for await (const reponseFichier of resultatListe) {
-        const {fuuid, supprime} = reponseFichier
-        if(supprime === true) {
-            debug("Le fichier %s est supprime, on le deplace vers la corbeille", fuuid)
-            await _storeConsignation.marquerSupprime(fuuid)
-        }
+        await callbackAction(reponseFichier)
     }
 
 }
