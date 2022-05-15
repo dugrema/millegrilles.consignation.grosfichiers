@@ -169,8 +169,12 @@ async function traiterSupprimer() {
         }
     }
     
-    const filtre = item => !item.filename.endsWith('.corbeille')
-    await _storeConsignation.parourirFichiers(callbackTraiterFichiersASupprimer, {filtre})
+    try {
+        const filtre = item => !item.filename.endsWith('.corbeille')
+        await _storeConsignation.parourirFichiers(callbackTraiterFichiersASupprimer, {filtre})
+    } catch(err) {
+        console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
+    }
 }
 
 async function traiterRecuperer() {
@@ -199,8 +203,12 @@ async function traiterRecuperer() {
         }
     }
     
-    const filtre = item => item.filename.endsWith('.corbeille')
-    await _storeConsignation.parourirFichiers(callbackTraiterFichiersARecuperer, {filtre})
+    try {
+        const filtre = item => item.filename.endsWith('.corbeille')
+        await _storeConsignation.parourirFichiers(callbackTraiterFichiersARecuperer, {filtre})
+    } catch(err) {
+        console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
+    }
 }
 
 async function traiterBatch(fuuids, callbackAction) {
@@ -246,7 +254,7 @@ async function traiterBatch(fuuids, callbackAction) {
     
     const resultatListe = Object.values(resultatFuuids)
 
-    debug("Reponse verification : %O", resultatListe)
+    debug("Appliquer callback a liste : %O", resultatListe)
 
     for await (const reponseFichier of resultatListe) {
         await callbackAction(reponseFichier)
@@ -263,7 +271,7 @@ async function confirmerActiviteFuuids(fuuids) {
             _batchFichiersFuuids[item.fuuid] = item
         })
     }
-    debug("Liste fuuids locale : %O", _batchFichiersFuuids)
+    // debug("Liste fuuids locale : %O", _batchFichiersFuuids)
 
     // Detecter si la liste est complete
     let complete = Object.values(_batchFichiersFuuids).reduce((acc, item)=>{
