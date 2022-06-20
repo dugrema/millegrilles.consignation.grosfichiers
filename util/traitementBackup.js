@@ -13,8 +13,7 @@ class TraitementFichierBackup {
 
   constructor(rabbitMQ) {
     this.rabbitMQ = rabbitMQ
-    const idmg = rabbitMQ.pki.idmg
-    this.pathConsignation = new PathConsignation({idmg})
+    this.pathConsignation = new PathConsignation()
   }
 
   // PUT pour un fichier de backup

@@ -3,7 +3,6 @@ const express = require('express');
 const fs = require('fs');
 const bodyParser = require('body-parser')
 
-const {PathConsignation} = require('../util/traitementFichier')
 const uploadFichier = require('./uploadFichier')
 // const { stagingFichier: stagingPublic, creerStreamDechiffrage } = require('../util/publicStaging')
 

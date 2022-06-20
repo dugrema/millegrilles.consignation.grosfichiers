@@ -1,7 +1,6 @@
 const debug = require('debug')('messages:publication')
 const path = require('path')
 const fsPromises = require('fs/promises')
-const { PathConsignation } = require('../util/traitementFichier')
 const {
   getPublicKey, 
   //connecterSSH, preparerSftp,
