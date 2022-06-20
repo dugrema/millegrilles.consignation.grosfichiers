@@ -68,8 +68,9 @@ async function initialiserMessageHandlers(rabbitMQ, storeConsignation) {
   // const {PublicateurAWS} = require('../messages/aws');
   // rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
 
-  // const {GestionnaireMessagesBackup} = require('../messages/backup')
-  // rabbitMQ.enregistrerListenerConnexion(new GestionnaireMessagesBackup(rabbitMQ))
+  const backup = require('../messages/backup')
+  backup.init(rabbitMQ, storeConsignation)
+  rabbitMQ.enregistrerListenerConnexion(backup)
 
   const publication = require('../messages/publication')
   publication.init(rabbitMQ, storeConsignation)

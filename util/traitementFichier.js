@@ -208,6 +208,6 @@ async function deplacerFichier(req, nouveauPathFichier) {
 // Instances
 
 module.exports = {
-  TraitementFichier, PathConsignation,
+  PathConsignation,
   extraireTarFile, supprimerRepertoiresVides, supprimerFichiers,
 }

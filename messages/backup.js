@@ -1,98 +1,44 @@
 const debug = require('debug')('messages:backup')
+const { conserverBackup } = require('../util/traitementBackup')
 
-const { TraitementFichier } = require('../util/traitementFichier');
-const { TraitementFichierBackup } = require('../util/traitementBackup')
-const { RestaurateurBackup } = require('../util/restaurationBackup')
-const { genererBackupQuotidien } = require('../util/processFichiersBackup')
+var _mq = null,
+    _storeConsignation
 
-const EXPIRATION_MESSAGE_DEFAUT = 15 * 60 * 1000  // 15 minutes en millisec
+function init(mq, storeConsignation) {
+    debug("messages backup init()")
+    _mq = mq
+    _storeConsignation = storeConsignation
+}
 
-class GestionnaireMessagesBackup {
+// Appele lors d'une reconnexion MQ
+function on_connecter() {
+  enregistrerChannel()
+}
 
-  constructor(mq) {
-    this.mq = mq;
-    this.pki = mq.pki;
-    //this.genererBackupQuotidien.bind(this);
-    this.traitementFichier = new TraitementFichier(mq);
-    this.traitementFichierBackup = new TraitementFichierBackup(mq);
-    this.pathConsignation = this.traitementFichier.pathConsignation;
-  }
+function enregistrerChannel() {
 
-  // Appele lors d'une reconnexion MQ
-  on_connecter() {
-    this.enregistrerChannel();
-  }
-
-  enregistrerChannel() {
-    this.mq.routingKeyManager.addRoutingKeyCallback(
-      (routingKey, message, opts) => {
-        // Verifier si la commande est expiree
-        if(this.mq.estExpire(message, {expiration: EXPIRATION_MESSAGE_DEFAUT})) {
-          console.warn("WARN backup.genererBackupQuotidien Commande expiree, on l'ignore : %O", message)
-          return
-        }
-        return genererBackupQuotidien(this.mq, this.pathConsignation, message.catalogue, message.uuid_rapport)
-      },
-      ['commande.backup.genererBackupQuotidien'],
-      {qCustom: 'backup'}
-    )
-
-    // Ajouter messages suivants :
-    // - retourner la liste des domaines connus (repertoires de backup)
-
-  }
-
-  // Generer le repertoire staging, extrait et verifie tous les fichiers
-  // de catalogues, transactions et autres (e.g. grosfichiers)
-  // Retourne un rapport avec les erreurs
-  async prerarerStagingRestauration(routingKey, message, opts) {
-    debug("Preparer staging restauration")
-
-    const {correlationId, replyTo} = opts.properties
-
-    const restaurateur = new RestaurateurBackup(this.mq)
-    const rapportRestauration = await restaurateur.restaurationComplete()
-    debug("rapportRestauration : %O", rapportRestauration)
-
-    // debug("rapportHardLinks : %O", rapportRestauration.rapportHardLinks)
-    // debug("rapportTarExtraction : %O", rapportRestauration.rapports.rapportTarExtraction)
-    // debug("rapportVerificationHoraire.erreurs : %O", rapportRestauration.rapports.rapportVerificationHoraire.erreurs)
-    //
-    // // Transmettre reponse
-    // this.mq.transmettreReponse(rapportRestauration, replyTo, correlationId)
-
-    debug("Staging restauration complete")
-  }
-
-  async restaurerGrosFichiers(routingKey, message, opts) {
-    debug("Restaurer les grosfichiers a partir du repertoire backup")
-    const {correlationId, replyTo} = opts.properties
-
-    // Transmettre la reponse immediatement pour indiquer le debut du traitement
-    var reponse = {'action': 'debut_restauration', 'domaine': 'fichiers'}
-    this.mq.transmettreReponse(reponse, replyTo, correlationId)
-
-    try {
-      const restaurateur = new RestaurateurBackup(this.mq)
-
-      // Restaurer les fichiers dans les archives annuelles
-      this.mq.emettreEvenement({action: 'debut_restauration', niveau: 'archives', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
-      await restaurateur.restaurerGrosFichiersArchives()
-
-      // Restaurer les fichiers deja extraits sous horaire
-      this.mq.emettreEvenement({action: 'restauration_en_cours', niveau: 'horaire', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
-      await restaurateur.restaurerGrosFichiersHoraire()
-
-      this.mq.emettreEvenement({action: 'fin_restauration', domaine: 'fichiers'}, 'evenement.backup.restaurationFichiers')
-
-    } catch(err) {
-      console.error("restaurerGrosFichiers: Erreur\n%O", err)
-      const messageErreur = {'err': ''+err, 'domaine': 'fichiers'}
-      this.mq.emettreEvenement(messageErreur, 'evenement.backup.restaurationFichiers')
-    }
-
-  }
+  const exchange = '2.prive'
+  _mq.routingKeyManager.addRoutingKeyCallback(
+    (_routingKey, message, opts)=>{return recevoirConserverBackup(message, opts)},
+    ['commande.fichiers.backupTransactions'],
+    { qCustom: 'backup', exchange }
+  )
 
 }
 
-module.exports = {GestionnaireMessagesBackup};
+async function recevoirConserverBackup(message, opts) {
+    const {replyTo, correlationId} = opts.properties
+    debug("recevoirConserverBackup, message : %O\nopts %O", message, opts)
+    let reponse = {ok: false}
+    try {
+        reponse = await conserverBackup(_mq, _storeConsignation, message)
+    } catch(err) {
+        console.error("ERROR recevoirConserverBackup: %O", err)
+        reponse = {ok: false, err: ''+err}
+    }
+
+    // await _mq.transmettreReponse(reponse, replyTo, correlationId, {ajouterCertificat: true})
+    return reponse
+}
+
+module.exports = { init, on_connecter }

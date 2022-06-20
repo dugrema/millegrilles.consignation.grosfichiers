@@ -62,15 +62,6 @@ async function init() {
 
   debug("Initialisation serveur IDMG : %s", idmg)
 
-  // Creer une collection avec la connexion a MQ (format qui supporte hebergement)
-  // const rabbitMQParIdmg = {
-  //   [idmg]: instAmqpdao
-  // }
-  //
-  // const fctRabbitMQParIdmg = (idmg) => {
-  //   return rabbitMQParIdmg[idmg]
-  // }
-
   //const root = express()
   const middleware = [
     logger('dev'),
@@ -81,25 +72,12 @@ async function init() {
       next()
     }
   ]
-  // root.use(logger('dev'))
-
-  // Injecter fonction de mapping de RabbitMQ
-  // root.use((req, res, next) => {
-  //   req.amqpdao = instAmqpdao
-  //   req.rabbitMQ = instAmqpdao
-  //   req.idmg = idmg
-  //   next()
-  // })
 
   const root = await initialiserApp(instAmqpdao, storeConsignation, {middleware})
   const serverInstance = initialiserServer(root)
 
   // Hook pour un health check regulier (surtout pour connexion MQ)
   setInterval(()=>healthCheck(serverInstance, instAmqpdao).catch(err=>console.error("www.healthCheck ERROR : %O", err)), 60000)
-}
-
-async function chargerConfigurationStoreConsignation() {
-
 }
 
 async function healthCheck(server, instAmqpdao) {
