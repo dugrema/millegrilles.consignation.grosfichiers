@@ -309,8 +309,17 @@ function middlewareDeleteStaging(opts) {
     return FichiersTransfertBackingStore.middlewareDeleteStaging(opts)
 }
 
+function sauvegarderBackupTransactions(message) {
+    return _storeConsignation.sauvegarderBackupTransactions(message)
+}
+
+function rotationBackupTransactions(message) {
+    return _storeConsignation.rotationBackupTransactions(message)
+}
+
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
     entretienFichiersSupprimes, supprimerFichier, recupererFichier, confirmerActiviteFuuids,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
+    sauvegarderBackupTransactions, rotationBackupTransactions,
 }

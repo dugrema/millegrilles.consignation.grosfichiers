@@ -1,5 +1,5 @@
 const debug = require('debug')('messages:backup')
-const { conserverBackup } = require('../util/traitementBackup')
+const { conserverBackup, rotationBackupTransactions } = require('../util/traitementBackup')
 
 var _mq = null,
     _storeConsignation
@@ -24,11 +24,18 @@ function enregistrerChannel() {
     { qCustom: 'backup', exchange }
   )
 
+  _mq.routingKeyManager.addRoutingKeyCallback(
+    (_routingKey, message, opts)=>{return recevoirRotationBackupTransactions(message, opts)},
+    ['commande.fichiers.rotationBackupTransactions'],
+    { qCustom: 'backup', exchange }
+  )
+  
 }
 
 async function recevoirConserverBackup(message, opts) {
     const {replyTo, correlationId} = opts.properties
     debug("recevoirConserverBackup, message : %O\nopts %O", message, opts)
+
     let reponse = {ok: false}
     try {
         reponse = await conserverBackup(_mq, _storeConsignation, message)
@@ -37,8 +44,20 @@ async function recevoirConserverBackup(message, opts) {
         reponse = {ok: false, err: ''+err}
     }
 
-    // await _mq.transmettreReponse(reponse, replyTo, correlationId, {ajouterCertificat: true})
     return reponse
+}
+
+async function recevoirRotationBackupTransactions(message, opts) {
+  debug("recevoirRotationBackupTransactions, message : %O\nopts %O", message, opts)
+  let reponse = {ok: false}
+  try {
+      reponse = await rotationBackupTransactions(_mq, _storeConsignation, message)
+  } catch(err) {
+      console.error("ERROR recevoirRotationBackupTransactions: %O", err)
+      reponse = {ok: false, err: ''+err}
+  }
+
+  return reponse
 }
 
 module.exports = { init, on_connecter }

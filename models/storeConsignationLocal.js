@@ -3,12 +3,17 @@ const fs = require('fs')
 const fsPromises = require('fs/promises')
 const path = require('path')
 const readdirp = require('readdirp')
+const lzma = require('lzma-native')
 
 const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
+const { WritableStreamBuffer } = require('stream-buffers')
+const { execPath } = require('process')
 
 const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegrilles/consignation'
 const PATH_CONFIG_DIR = path.join(CONSIGNATION_PATH, 'config')
 const PATH_CONFIG_FICHIER = path.join(PATH_CONFIG_DIR, 'store.json')
+const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
+const PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions_archives')
 
 let _pathConsignation = path.join(CONSIGNATION_PATH, 'local')
 
@@ -190,8 +195,99 @@ async function parourirFichiersRecursif(repertoire, callback, opts) {
     }
 }
 
+async function sauvegarderBackupTransactions(message) {
+
+    const { domaine, partition, date_transactions_fin } = message
+    const { uuid_transaction } = message['en-tete']
+
+    const dateFinBackup = new Date(date_transactions_fin * 1000)
+    debug("Sauvegarde du backup %s date %O", domaine, dateFinBackup)
+
+    // Creer repertoire de backup
+    const dirBackup = path.join(PATH_BACKUP_TRANSACTIONS_DIR, domaine)
+    await fsPromises.mkdir(dirBackup, {recursive: true})
+
+    // Formatter le nom du fichier avec domaine_partition_DATE
+    const dateFinString = dateFinBackup.toISOString().replaceAll('-', '').replaceAll(':', '')
+    const nomFichierList = [domaine]
+    if(partition) nomFichierList.push(partition)
+    nomFichierList.push(dateFinString)
+    nomFichierList.push(uuid_transaction.slice(0,8))  // Ajouter valeur "random" avec uuid_transaction
+    
+    const nomFichier = nomFichierList.join('_') + '.json.xz'
+    const pathFichier = path.join(dirBackup, nomFichier)
+
+    // Compresser en lzma et conserver
+    const messageCompresse = await lzma.compress(JSON.stringify(message), 9)
+    await fsPromises.writeFile(pathFichier + '.new', messageCompresse)
+    await fsPromises.rename(pathFichier + '.new', pathFichier)
+    
+    debug("Backup %s date %O sauvegarde sous %O", domaine, dateFinBackup, pathFichier)
+}
+
+async function rotationBackupTransactions(message) {
+
+    const { domaine, partition } = message
+
+    const maxArchives = 3
+
+    try {
+        await fsPromises.mkdir(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR)
+    } catch(err) {
+        // EEXIST est ok
+        if(err.code !== 'EEXIST') throw err
+    }
+
+    const dirBackup = path.join(PATH_BACKUP_TRANSACTIONS_DIR, domaine)
+    const dirArchives = path.join(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR, domaine + '.1')
+
+    try {
+        await fsPromises.stat(dirBackup)
+    } catch (err) {
+        // Le code ENOENT (inexistant) indique qu'il n'y a rien a faire
+        if(err.code === 'ENOENT') return
+    }
+
+    const dirArchiveDernier = path.join(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR, domaine + '.' + maxArchives)
+    try {
+        await fsPromises.rm(dirArchiveDernier, {recursive: true})
+    } catch(err) {
+        // Le code ENOENT (inexistant) est OK
+        if(err.code != 'ENOENT') throw err
+    }
+
+    try {
+        await pushRotateArchive(domaine, partition, 1, 2)
+    } catch(err) {
+        // Le code ENOENT (inexistant) est OK
+        if(err.code != 'ENOENT') throw err
+    }
+
+    debug("Deplacer repertoire %s vers archive %s", dirBackup, dirArchives)
+    await fsPromises.rename(dirBackup, dirArchives)
+}
+
+async function pushRotateArchive(domaine, partition, idxFrom) {
+    const dirArchivesScr = path.join(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR, domaine + '.' + idxFrom)
+    const dirArchivesDst = path.join(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR, domaine + '.' + (idxFrom+1))
+
+    debug("pushRotateArchive domaine %s, partition %s, idxFrom %d", domaine, partition, idxFrom)
+
+    try {
+        await fsPromises.stat(dirArchivesDst)
+        // Le repertoire existe, on le deplace en premier (recursivement)
+        await pushRotateArchive(domaine, partition, idxFrom+1)
+    } catch (err) {
+        // Le code ENOENT (inexistant) est OK
+        if(err.code != 'ENOENT') return  // Le code ENOENT (inexistant) est OK, rien a faire
+    }
+
+    await fsPromises.rename(dirArchivesScr, dirArchivesDst)
+}
+
 module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     getFichier, getInfoFichier, consignerFichier,
     marquerSupprime, recoverFichierSupprime, parourirFichiers,
+    sauvegarderBackupTransactions, rotationBackupTransactions,
 }

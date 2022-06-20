@@ -9,11 +9,41 @@ const { PathConsignation } = require('./traitementFichier')
 
 async function conserverBackup(mq, storeConsignation, message) {
   debug("conserverBackup commande %O", message)
-  //  throw new Error('to do')
+  
+  const { uuid_backup } = message
+
+  // Validations de base
+  const champsManquants = validerMessageBackup(message)
+  if(champsManquants.length > 0) {
+    return {ok: false, err: `Champs manquants dans le fichier de backup ${uuid_backup} : ${champsManquants}`}
+  }
+
+  // Sauvegarder le backup
+  await storeConsignation.sauvegarderBackupTransactions(message)
+
   return {ok: true}
 }
 
-module.exports = { conserverBackup }
+function validerMessageBackup(message) {
+  const champsObligatoires = [
+    'uuid_backup', 'certificats', 'data_hachage_bytes', 'data_transactions', 'domaine', 
+    'date_backup', 'date_transactions_debut', 'date_transactions_fin',
+    'cle', 'format', 'iv', 'tag',  // Chiffrage
+  ]
+  const champsMessage = Object.keys(message)
+  const champsManquants = champsObligatoires.filter(champ=>!champsMessage.includes(champ))
+  
+ 
+  return champsManquants
+}
+
+async function rotationBackupTransactions(mq, storeConsignation, message) {
+  debug("rotationBackupTransactions commande %O", message)
+  await storeConsignation.rotationBackupTransactions(message)
+  return {ok: true}
+}
+
+module.exports = { conserverBackup, rotationBackupTransactions }
 
 
 // const {traiterFichiersBackup, traiterFichiersApplication} = require('./processFichiersBackup')
