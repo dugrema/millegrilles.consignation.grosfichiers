@@ -33,7 +33,6 @@ function enregistrerChannel() {
 }
 
 async function recevoirConserverBackup(message, opts) {
-    const {replyTo, correlationId} = opts.properties
     debug("recevoirConserverBackup, message : %O\nopts %O", message, opts)
 
     let reponse = {ok: false}
@@ -56,6 +55,8 @@ async function recevoirRotationBackupTransactions(message, opts) {
       console.error("ERROR recevoirRotationBackupTransactions: %O", err)
       reponse = {ok: false, err: ''+err}
   }
+
+  debug("recevoirRotationBackupTransactions reponse %O", reponse)
 
   return reponse
 }

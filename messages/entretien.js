@@ -39,6 +39,9 @@ function traiterCedule(message, rk, opts) {
             .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
     }
 
+    // Evenement trigger de backup
+    emettreMessagesBackup(message).catch(err=>debug("Erreur emettre messages backup : %O", err))
+
 }
 
 function traiterConfirmerActiviteFuuids(message, rk, opts) {
@@ -49,6 +52,24 @@ function traiterConfirmerActiviteFuuids(message, rk, opts) {
     _storeConsignation.confirmerActiviteFuuids(fuuids)
         .catch(err=>console.error("entretien ERROR traiterConfirmerActiviteFuuids a echoue : %O", err))
 
+}
+
+async function emettreMessagesBackup(message) {
+    const { estampille } = message
+    const date = new Date(estampille * 1000)
+    const hours = date.getHours()
+    const minutes = date.getMinutes()
+    const dow = date.getDay()
+
+    if(dow === 0 && hours === 4) {
+        debug("emettreMessagesBackup Emettre trigger backup complet, dimanche 4:00")
+        const evenement = { complet: true }
+        await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+    } else if(minutes % 20 === 0) {
+        debug("emettreMessagesBackup Emettre trigger backup incremental")
+        const evenement = { complet: false }
+        await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+    }
 }
 
 module.exports = { init, on_connecter }
