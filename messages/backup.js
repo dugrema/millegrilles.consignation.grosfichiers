@@ -1,5 +1,8 @@
 const debug = require('debug')('messages:backup')
-const { conserverBackup, rotationBackupTransactions } = require('../util/traitementBackup')
+const { conserverBackup, rotationBackupTransactions, 
+  getClesBackupTransactions: getClesBackupTransactionsRun,
+  getBackupTransaction: getBackupTransactionRun,
+} = require('../util/traitementBackup')
 
 var _mq = null,
     _storeConsignation
@@ -29,7 +32,19 @@ function enregistrerChannel() {
     ['commande.fichiers.rotationBackupTransactions'],
     { qCustom: 'backup', exchange }
   )
-  
+
+  _mq.routingKeyManager.addRoutingKeyCallback(
+    (_routingKey, message, opts)=>{return getClesBackupTransactions(message, opts)},
+    ['commande.fichiers.getClesBackupTransactions'],
+    { qCustom: 'backup', exchange }
+  )
+
+  _mq.routingKeyManager.addRoutingKeyCallback(
+    (_routingKey, message, opts)=>{return getBackupTransaction(message, opts)},
+    ['requete.fichiers.getBackupTransaction'],
+    { qCustom: 'backup', exchange }
+  )
+
 }
 
 async function recevoirConserverBackup(message, opts) {
@@ -57,6 +72,36 @@ async function recevoirRotationBackupTransactions(message, opts) {
   }
 
   debug("recevoirRotationBackupTransactions reponse %O", reponse)
+
+  return reponse
+}
+
+async function getClesBackupTransactions(message, opts) {
+  debug("getClesBackupTransactions, message : %O\nopts %O", message, opts)
+  let reponse = {ok: false}
+  try {
+      reponse = await getClesBackupTransactionsRun(_mq, _storeConsignation, message, opts)
+  } catch(err) {
+      console.error("ERROR getClesBackupTransactions: %O", err)
+      reponse = {ok: false, err: ''+err}
+  }
+
+  debug("getClesBackupTransactions reponse %O", reponse)
+
+  return reponse
+}
+
+async function getBackupTransaction(message, opts) {
+  debug("getBackupTransaction, message : %O\nopts %O", message, opts)
+  let reponse = {ok: false}
+  try {
+      reponse = await getBackupTransactionRun(_mq, _storeConsignation, message, opts)
+  } catch(err) {
+      console.error("ERROR getBackupTransaction: %O", err)
+      reponse = {ok: false, err: ''+err}
+  }
+
+  debug("getBackupTransaction reponse %O", reponse)
 
   return reponse
 }

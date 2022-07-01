@@ -285,9 +285,68 @@ async function pushRotateArchive(domaine, partition, idxFrom) {
     await fsPromises.rename(dirArchivesScr, dirArchivesDst)
 }
 
+async function getFichiersBackupTransactionsCourant(mq, replyTo) {
+    // Parcourir repertoire
+    const promiseReaddirp = readdirp(PATH_BACKUP_TRANSACTIONS_DIR, {
+        type: 'files',
+        fileFilter: '*.json.xz',
+        depth: 2,
+    })
+
+    let clesAccumulees = {}
+    let countCles = 0
+
+    for await (const entry of promiseReaddirp) {
+        debug("Fichier backup transactions : %O", entry)
+        const nomFichier = entry.path
+        let contenu = await fsPromises.readFile(entry.fullPath)
+        contenu = await lzma.decompress(contenu)
+        debug("Contenu archive str : %O", contenu)
+        contenu = JSON.parse(contenu)
+        debug("Contenu archive : %O", contenu)
+
+        const cle = contenu.cle
+        clesAccumulees[nomFichier] = cle
+        countCles++
+
+        if(countCles >= 1000) {
+            debug("Emettre message %d cles (batch)", countCles)
+            await emettreMessageCles(mq, replyTo, clesAccumulees, false)
+
+            // Clear
+            clesAccumulees = {}
+            countCles = 0
+        }
+    }
+
+    debug("Emettre message %d cles (final)", countCles)
+    await emettreMessageCles(mq, replyTo, clesAccumulees, true)
+
+}
+
+async function emettreMessageCles(mq, replyTo, cles, complet) {
+    const reponse = { ok: true, cles, complet }
+    await mq.transmettreReponse(reponse, replyTo, 'cles')
+}
+
+async function getBackupTransaction(pathBackupTransaction) {
+
+    const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
+
+    let contenu = await fsPromises.readFile(pathFichier)
+    contenu = await lzma.decompress(contenu)
+
+    debug("Contenu archive str : %O", contenu)
+    contenu = JSON.parse(contenu)
+
+    debug("Contenu archive : %O", contenu)
+    return contenu
+}
+
 module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     getFichier, getInfoFichier, consignerFichier,
     marquerSupprime, recoverFichierSupprime, parourirFichiers,
     sauvegarderBackupTransactions, rotationBackupTransactions,
+    getFichiersBackupTransactionsCourant, getBackupTransaction,
 }

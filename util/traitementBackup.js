@@ -3,10 +3,6 @@ const fs = require('fs')
 const readdirp = require('readdirp')
 const path = require('path')
 
-const { formatterDateString } = require('@dugrema/millegrilles.utiljs/src/formatteurMessage')
-const { PathConsignation } = require('./traitementFichier')
-
-
 async function conserverBackup(mq, storeConsignation, message) {
   debug("conserverBackup commande %O", message)
   
@@ -43,7 +39,30 @@ async function rotationBackupTransactions(mq, storeConsignation, message) {
   return {ok: true}
 }
 
-module.exports = { conserverBackup, rotationBackupTransactions }
+async function getClesBackupTransactions(mq, storeConsignation, message, messageProperties) {
+  debug("getClesBackupTransactions (params: %O, messageProps: %O)", message, messageProperties)
+
+  const replyTo = messageProperties.properties.replyTo
+
+  // Parcourir liste des fichiers de backup de transaction courants, retenir les cles
+  await storeConsignation.getFichiersBackupTransactionsCourant(mq, replyTo)
+}
+
+async function getBackupTransaction(mq, storeConsignation, message, messageProperties) {
+  debug("getBackupTransaction (params: %O, messageProps: %O)", message, messageProperties)
+
+  const pathBackupTransaction = message.fichierBackup
+  const backupTransaction = await storeConsignation.getBackupTransaction(pathBackupTransaction)
+
+  const reponse = { ok: true, backup: backupTransaction }
+  return reponse
+
+  // const replyTo = messageProperties.properties.replyTo,
+  //       correlationId = messageProperties.properties.correlationId
+  // await mq.transmettreReponse(reponse, replyTo, correlationId)
+}
+
+module.exports = { conserverBackup, rotationBackupTransactions, getClesBackupTransactions, getBackupTransaction }
 
 
 // const {traiterFichiersBackup, traiterFichiersApplication} = require('./processFichiersBackup')

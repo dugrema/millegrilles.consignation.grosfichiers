@@ -317,9 +317,18 @@ function rotationBackupTransactions(message) {
     return _storeConsignation.rotationBackupTransactions(message)
 }
 
+function getFichiersBackupTransactionsCourant(mq, replyTo) {
+    return _storeConsignation.getFichiersBackupTransactionsCourant(mq, replyTo)
+}
+
+function getBackupTransaction(pathBackupTransaction) {
+    return _storeConsignation.getBackupTransaction(pathBackupTransaction)
+}
+
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
     entretienFichiersSupprimes, supprimerFichier, recupererFichier, confirmerActiviteFuuids,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
+    getFichiersBackupTransactionsCourant, getBackupTransaction,
 }

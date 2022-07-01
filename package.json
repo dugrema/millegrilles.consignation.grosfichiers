@@ -6,6 +6,7 @@
     "start": "node ./bin/www",
     "server": "node ./bin/www",
     "test": "node ./node_modules/jest/bin/jest.js $1",
+    "requesttest": "export $(cat .env.local | grep -v ^\\# | xargs) && node ",
     "dev": "export $(cat .env.development .env.local | grep -v ^\\# | xargs) && npm start"
   },
   "dependencies": {
