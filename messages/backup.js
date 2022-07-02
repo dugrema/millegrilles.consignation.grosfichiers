@@ -1,4 +1,5 @@
 const debug = require('debug')('messages:backup')
+const forgecommon = require('@dugrema/millegrilles.utiljs/src/forgecommon')
 const { conserverBackup, rotationBackupTransactions, 
   getClesBackupTransactions: getClesBackupTransactionsRun,
   getBackupTransaction: getBackupTransactionRun,
@@ -36,6 +37,12 @@ function enregistrerChannel() {
   _mq.routingKeyManager.addRoutingKeyCallback(
     (_routingKey, message, opts)=>{return getClesBackupTransactions(message, opts)},
     ['commande.fichiers.getClesBackupTransactions'],
+    { qCustom: 'backup', exchange }
+  )
+
+  _mq.routingKeyManager.addRoutingKeyCallback(
+    (_routingKey, message, opts)=>{return demarrerBackupTransactions(message, opts)},
+    ['commande.fichiers.demarrerBackupTransactions'],
     { qCustom: 'backup', exchange }
   )
 
@@ -104,6 +111,40 @@ async function getBackupTransaction(message, opts) {
   debug("getBackupTransaction reponse %O", reponse)
 
   return reponse
+}
+
+async function demarrerBackupTransactions(message, opts) {
+  debug("demarrerBackupTransactions, message : %O\nopts %O", message, opts)
+
+  // Verifier autorisation
+  const { certificat } = opts
+  const { roles, niveauxSecurite, delegationGlobale } = forgecommon.extraireExtensionsMillegrille(certificat)
+
+  if(delegationGlobale === 'proprietaire') {
+    // Ok
+  } else if(roles && roles.includes('instance') && niveauxSecurite.includes('3.protege')) {
+    // Ok
+  } else {
+    debug("demarrerBackupTransactions Acces refuse (roles=%O, niveauxSecurite=%O, delegationGlobale=%O)", roles, niveauxSecurite, delegationGlobale)
+    return {ok: false, err: 'Acces refuse'}
+  }
+
+  const { complet } = message
+
+  if(complet === true) {
+      debug("emettreMessagesBackup Declencher un backup complet avec rotation des archives")
+
+      // Entretien fichiers supprimes
+      _storeConsignation.entretienFichiersSupprimes()
+        .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
+
+      const evenement = { complet: true }
+      await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+  } else {
+      debug("emettreMessagesBackup Emettre trigger backup incremental")
+      const evenement = { complet: false }
+      await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+  }
 }
 
 module.exports = { init, on_connecter }
