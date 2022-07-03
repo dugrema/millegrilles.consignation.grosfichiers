@@ -145,6 +145,8 @@ async function demarrerBackupTransactions(message, opts) {
       const evenement = { complet: false }
       await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
   }
+
+  return {ok: true}
 }
 
 module.exports = { init, on_connecter }
