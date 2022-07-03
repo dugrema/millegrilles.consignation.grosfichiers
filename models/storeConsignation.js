@@ -103,7 +103,7 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
             const reponseGrosfichiers = await mq.transmettreEnveloppeCommande(transactionGrosFichiers, domaine, {exchange: '2.prive'})
             debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
         } catch(err) {
-            console.error("%O ERROR Erreur sauvegarde cle fichier %s : %O", new Date(), fuuid, err)
+            console.error("%O ERROR Erreur sauvegarde fichier (commande) %s : %O", new Date(), fuuid, err)
             return
         }
     }
