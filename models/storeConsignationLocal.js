@@ -322,6 +322,7 @@ async function getFichiersBackupTransactionsCourant(mq, replyTo) {
     debug("Emettre message %d cles (final)", countCles)
     await emettreMessageCles(mq, replyTo, clesAccumulees, true)
 
+    return {ok: true}
 }
 
 async function emettreMessageCles(mq, replyTo, cles, complet) {
