@@ -1,6 +1,6 @@
 {
   "name": "millegrilles.consignation.grosfichiers",
-  "version": "2022.4.0",
+  "version": "2022.5.0",
   "private": true,
   "scripts": {
     "start": "node ./bin/www",
@@ -10,13 +10,13 @@
     "dev": "export $(cat .env.development .env.local | grep -v ^\\# | xargs) && npm start"
   },
   "dependencies": {
-    "@dugrema/millegrilles.nodejs": "github:dugrema/millegrilles.nodejs#2022.4",
-    "aws-sdk": "^2.1165.0",
+    "@dugrema/millegrilles.nodejs": "github:dugrema/millegrilles.nodejs#2022.5",
+    "aws-sdk": "^2.1192.0",
     "debug": "~4.3.4",
     "express": "~4.18.1",
     "http-errors": "~2.0.0",
     "lzma-native": "^8.0.6",
-    "moment": "^2.29.3",
+    "moment": "^2.29.4",
     "moment-js": "^1.1.15",
     "morgan": "~1.10.0",
     "multer": "^1.4.4",
@@ -32,14 +32,14 @@
     "uuid": "^8.3.2"
   },
   "peerDependencies": {
-    "@dugrema/millegrilles.utiljs": "github:dugrema/millegrilles.utiljs#2022.4",
+    "@dugrema/millegrilles.utiljs": "github:dugrema/millegrilles.utiljs#2022.5",
     "@dugrema/node-forge": "github:dugrema/forge#ed25519",
     "axios": "^0",
     "json-stable-stringify": "^1",
     "redis": "^4"
   },
   "devDependencies": {
-    "@sitespeed.io/throttle": "^4.0.3",
-    "jest": "^28.1.2"
+    "@sitespeed.io/throttle": "^5.0.0",
+    "jest": "^28.1.3"
   }
 }
