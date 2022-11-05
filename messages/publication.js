@@ -17,6 +17,7 @@ const {
 // const { preparerConnexionS3, uploaderFichier: putFichierAwsS3, addRepertoire: putRepertoireAwsS3 } = require('../util/awss3')
 
 const L2PRIVE = '2.prive'
+const CONST_CHAMPS_CONFIG = ['typeStore', 'urlDownload', 'consignationUrl']
 
 // fixme
 // const { creerStreamDechiffrage, stagingFichier: stagingPublic } = require('../util/publicStaging')
@@ -82,6 +83,19 @@ async function getConfiguration(message, rk, opts) {
   const configuration = await _storeConsignation.chargerConfiguration()
 
   _mq.transmettreReponse(configuration, properties.replyTo, properties.correlationId)
+
+}
+
+async function emettrePresence() {
+  debug("emettrePresence Configuration fichiers")
+  const configuration = await _storeConsignation.chargerConfiguration()
+    
+  const info = {}
+  for(const champ of Object.keys(configuration)) {
+      if(CONST_CHAMPS_CONFIG.includes(champ)) info[champ] = configuration[champ]
+  }
+  
+  await _mq.emettreEvenement(info, 'fichiers', {action: 'presence', attacherCertificat: true})
 }
 
 async function modifierConfiguration(message, rk, opts) {
@@ -99,6 +113,9 @@ async function modifierConfiguration(message, rk, opts) {
     reponse = {ok: false, err: ''+err}
   }
   _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
+
+  emettrePresence()
+    .catch(err=>console.error("publication.getConfiguration Erreur emission presence ", err))
 }
 
 function getPublicKeySsh(message, rk, opts) {

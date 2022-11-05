@@ -8,6 +8,7 @@ const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
 
 const BATCH_SIZE = 100
+const CONST_CHAMPS_CONFIG = ['typeStore', 'urlDownload', 'consignationUrl']
 
 let _mq = null,
     _storeConsignation = null,
@@ -31,6 +32,10 @@ async function init(mq, opts) {
     )
 
     await changerStoreConsignation(typeStore, params)
+
+    // Emettre la presence (premiere apres 10 secs, apres sous intervalles)
+    setTimeout(emettrePresence, 10_000)
+    setInterval(emettrePresence, 180_000)
 }
 
 async function changerStoreConsignation(typeStore, params, opts) {
@@ -281,6 +286,22 @@ async function confirmerActiviteFuuids(fuuids) {
     if(complete) {
         debug("Liste fichiers est complete : %s", complete)
         _triggerPromiseBatch()
+    }
+}
+
+async function emettrePresence() {
+    try {
+        debug("emettrePresence Configuration fichiers")
+        const configuration = await chargerConfiguration()
+        
+        const info = {}
+        for(const champ of Object.keys(configuration)) {
+            if(CONST_CHAMPS_CONFIG.includes(champ)) info[champ] = configuration[champ]
+        }
+        
+        await _mq.emettreEvenement(info, 'fichiers', {action: 'presence', attacherCertificat: true})
+    } catch(err) {
+        console.error("storeConsignation.emettrePresence Erreur emission presence : ", err)
     }
 }
 
