@@ -44,7 +44,7 @@ async function changerStoreConsignation(typeStore, params, opts) {
     switch(typeStore) {
         case 'sftp': _storeConsignation = StoreConsignationSftp; break
         case 'awss3': throw new Error('todo'); break
-        case 'local': _storeConsignation = _storeConsignationLocal; break
+        case 'millegrille': _storeConsignation = _storeConsignationLocal; break
         default: _storeConsignation = _storeConsignationLocal
     }
 
