@@ -33,7 +33,7 @@ async function chargerConfiguration() {
         config = JSON.parse(fichierConfiguration)
     } catch(err) {
         if(err.errno === -2) {
-            config = {typeStore: 'millegrille', consignationUrl: 'https://fichiers:444'}
+            config = {typeStore: 'millegrille', consignationUrl: 'https://fichiers:443'}
             await fsPromises.writeFile(PATH_CONFIG_FICHIER, JSON.stringify(config))
         } else {
             console.error("storeConsignationLocal.chargerConfiguration ERROR Erreur chargement fichier configuration : %O", err)
