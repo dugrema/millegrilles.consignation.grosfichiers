@@ -7,6 +7,7 @@ const {Client} = require('ssh2')
 const { Hacheur, VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 const { writer } = require('repl')
 const hachage = require('@dugrema/millegrilles.nodejs/src/hachage')
+const { sauvegarderBackupTransactions, rotationBackupTransactions } = require('./storeConsignationLocal')
 
 // Charger les cles privees utilisees pour se connecter par sftp
 // Ed25519 est prefere, RSA comme fallback
@@ -18,6 +19,9 @@ const _privateRsaKey = fs.readFileSync(_privateRsaKeyPath)
 // Creer un pool de connexions a reutiliser
 const CONNEXION_TIMEOUT = 10 * 60 * 1000  // 10 minutes
 const CHUNK_SIZE = 32768 - 29  // Packet ssh est 32768 sur hostgator, 29 bytes overhead
+
+const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegrilles/consignation'
+const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
 
 let _intervalEntretienConnexion = null,
     _connexionSsh = null,
@@ -532,4 +536,7 @@ module.exports = {
     init, fermer,
     getInfoFichier, consignerFichier, marquerSupprime, recoverFichierSupprime,
     parourirFichiers,
+
+    // Re-exporter - provient de store local
+    sauvegarderBackupTransactions, rotationBackupTransactions,
 }
