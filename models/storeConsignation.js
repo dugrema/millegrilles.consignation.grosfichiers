@@ -26,9 +26,11 @@ async function init(mq, opts) {
 
     const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
 
+    // Configuration thread
+    // Pour consignationFichiers, toujours faire un lien vers la consignation primaire
     FichiersTransfertBackingStore.configurerThreadPutFichiersConsignation(
         mq, 
-        {...opts, consignerFichier: transfererFichierVersConsignation}
+        {...opts, consignerFichier: transfererFichierVersConsignation, primaire: true}
     )
 
     await changerStoreConsignation(typeStore, params)
