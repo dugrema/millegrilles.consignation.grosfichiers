@@ -1,6 +1,8 @@
 const debug = require('debug')('consignation:store:root')
 const path = require('path')
 const fsPromises = require('fs/promises')
+const fs = require('fs')
+const axios = require('axios')
 
 const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
 
@@ -13,7 +15,8 @@ const CONST_CHAMPS_CONFIG = ['typeStore', 'urlDownload', 'consignationUrl']
 var _mq = null,
     _storeConsignation = null,
     _storeConsignationLocal = null,
-    _estPrimaire = false
+    _estPrimaire = false,
+    _sync_lock = false
 
 async function init(mq, opts) {
     opts = opts || {}
@@ -315,6 +318,100 @@ async function entretien() {
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
     }
+    
+    processusSynchronisation()
+        .catch(err=>console.error("storeConsignation.entretien() Erreur processusSynchronisation(1) ", err))
+}
+
+async function processusSynchronisation() {
+    if(_sync_lock !== false) return  // Abort, sync deja en cours
+    try {
+        _sync_lock = true
+        const infoData = await getDataSynchronisation()
+
+    } catch(err) {
+        console.error("storeConsignation.entretien() Erreur processusSynchronisation(2) ", err)
+    } finally {
+        _sync_lock = false
+    }
+}
+
+async function getDataSynchronisation() {
+    const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
+    if(!httpsAgent) throw new Error("processusSynchronisation: httpsAgent n'est pas initialise")
+
+    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
+
+    const urlData = new URL(urlTransfert.href)
+    urlData.pathname = urlData.pathname + '/data/data.json'
+    debug("Download %s", urlData.href)
+    const reponse = await axios({
+        method: 'GET',
+        httpsAgent,
+        url: urlData.href,
+    })
+    debug("Reponse GET data.json %s :\n%O", reponse.status, reponse.data)
+    
+    // Charger listes
+    {
+        const urlData = new URL(urlTransfert.href)
+        urlData.pathname = urlData.pathname + '/data/fuuidsActifs.txt'
+        debug("Download %s", urlData.href)
+        const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt.work')
+        const actifStream = fs.createWriteStream(fichierActifsPrimaire)
+        const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream' })
+        debug("Reponse GET actifs %s", reponseActifs.status)
+        await new Promise((resolve, reject)=>{
+            actifStream.on('close', resolve)
+            actifStream.on('error', err=>{
+                actifStream.close()
+                reject(err)
+            })
+            reponseActifs.data.pipe(actifStream)
+        })
+        try { await fsPromises.unlink(fichierActifsPrimaireDest) } catch(err) {}
+        const fichierActifsPrimaireDest = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
+        try { await fsPromises.rename(fichierActifsPrimaire, fichierActifsPrimaireDest) } 
+        catch(err) {
+            console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
+        }
+    }
+
+    try {
+        const urlData = new URL(urlTransfert.href)
+        urlData.pathname = urlData.pathname + '/data/fuuidsCorbeille.txt'
+        debug("Download %s", urlData.href)
+        const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt.work')
+        const corbeilleStream = fs.createWriteStream(fichierCorbeillePrimaire)
+        const reponseCorbeille = await axios({method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream'})
+        debug("Reponse GET corbeille %s", reponseCorbeille.status)
+        await new Promise((resolve, reject)=>{
+            corbeilleStream.on('close', resolve)
+            corbeilleStream.on('error', err=>{
+                corbeilleStream.close()
+                reject(err)
+            })
+            reponseCorbeille.data.pipe(corbeilleStream)
+        })
+        try { await fsPromises.unlink(fichierCorbeillePrimaireDest) } catch(err) {}
+        const fichierCorbeillePrimaireDest = path.join(getPathDataFolder(), 'corbeillePrimaire.txt')
+        try { await fsPromises.rename(fichierCorbeillePrimaire, fichierCorbeillePrimaireDest) } 
+        catch(err) {
+            console.error("storeConsignation.getDataSynchronisation Erreur renaming corbeille ", err)
+        }
+    } catch(err) {
+        if(err.response) {
+            console.info("Erreur recuperation fichier corbeille HTTP %d", err.response.status)
+        } else {
+            console.warn("Erreur recuperation fichier corbeille - ", err)
+        }
+    }
+    
+    return reponse.data
+}
+
+function getPathDataFolder() {
+    return path.join(FichiersTransfertBackingStore.getPathStaging(), 'liste')
 }
 
 async function emettrePresence() {
@@ -328,7 +425,7 @@ async function emettrePresence() {
         }
         
         try {
-            const pathData = path.join(FichiersTransfertBackingStore.getPathStaging(), 'liste', 'data.json')
+            const pathData = path.join(getPathDataFolder(), 'data.json')
             const fichierData = await fsPromises.readFile(pathData, 'utf-8')
             const data = JSON.parse(fichierData)
             info.fichiers_nombre = data.nombreFichiersActifs
@@ -377,7 +474,6 @@ async function genererListeLocale() {
                 return  // Dernier fichier
             }
 
-            debug("genererListeLocale Fichier ", item)
             const corbeille = item.filename.endsWith('.corbeille')
             if(corbeille) {
                 streamFuuidsCorbeille.write(item.filename + '\n')
@@ -476,4 +572,5 @@ module.exports = {
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
+    getPathDataFolder,
 }

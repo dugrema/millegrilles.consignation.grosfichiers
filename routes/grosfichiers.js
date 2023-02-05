@@ -26,6 +26,7 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   // pour faire une authentification systeme avec cert SSL (en amont,
   // deja valide rendu ici)
   router.get('/fichiers_transfert/backup/liste', getListeFichiers)
+  staticRouteData(router, storeConsignation)
   router.get('/fichiers_transfert/:fuuid', headersFichier, pipeReponse)
   router.head('/fichiers_transfert/:fuuid', headersFichier, returnOk)
 
@@ -36,6 +37,25 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
 
 function returnOk(req, res) {
   res.sendStatus(200)
+}
+
+function staticRouteData(route, storeConsignation) {
+  // Route utilisee pour transmettre fichiers react de la messagerie en production
+  const folderStatic = storeConsignation.getPathDataFolder()
+  const router2 = new express.Router()
+  route.use('/fichiers_transfert/data', router2)
+  router2.use((req, res, next)=>{
+    debug("staticRouteData ", req.url)
+    next()
+  })
+  router2.use(cacheRes, express.static(folderStatic))
+  debug("staticRouteData Route %s pour data fichiers initialisee", folderStatic)
+}
+
+function cacheRes(req, res, next) {
+  res.append('Cache-Control', 'max-age=300')
+  res.append('Cache-Control', 'public')
+  next()
 }
 
 async function getListeFichiers(req, res, next) {
