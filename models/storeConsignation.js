@@ -293,14 +293,28 @@ async function confirmerActiviteFuuids(fuuids) {
 }
 
 async function entretien() {
-    await emettrePresence()
+    try {
+        await emettrePresence()
+    } catch(err) {
+        console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
+    }
 
-    // Determiner si on est la consignation primaire
-    const instance_id_consignation = FichiersTransfertBackingStore.getInstanceId()
-    const instance_id_local = _mq.pki.cert.subject.getField('CN').value
-    debug("entetien Instance consignation : %s, instance_id local %s", instance_id_consignation, instance_id_local)
-    _estPrimaire = instance_id_consignation === instance_id_local
-    debug("entetien estPrimaire? %s", _estPrimaire)
+    try {
+        // Determiner si on est la consignation primaire
+        const instance_id_consignation = FichiersTransfertBackingStore.getInstanceId()
+        const instance_id_local = _mq.pki.cert.subject.getField('CN').value
+        debug("entetien Instance consignation : %s, instance_id local %s", instance_id_consignation, instance_id_local)
+        _estPrimaire = instance_id_consignation === instance_id_local
+        debug("entetien estPrimaire? %s", _estPrimaire)
+    } catch(err) {
+        console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
+    }
+
+    try {
+        await genererListeLocale()
+    } catch(err) {
+        console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
+    }
 }
 
 async function emettrePresence() {
@@ -317,6 +331,89 @@ async function emettrePresence() {
     } catch(err) {
         console.error("storeConsignation.emettrePresence Erreur emission presence : ", err)
     }
+}
+
+/** Genere une liste locale de tous les fuuids */
+async function genererListeLocale() {
+    debug("genererListeLocale Debut")
+
+    const pathStaging = FichiersTransfertBackingStore.getPathStaging()
+    const pathFichiers = path.join(pathStaging, 'liste')
+    debug("genererListeLocale Fichiers sous ", pathFichiers)
+    await fsPromises.mkdir(pathFichiers, {recursive: true})
+
+    const fichierActifsNew = path.join(pathFichiers, '/fuuidsActifs.txt.new'),
+          fichierCorbeilleNew = path.join(pathFichiers, 'fuuidsCorbeille.txt.new')
+
+    const fichierFuuidsActifsHandle = await fsPromises.open(fichierActifsNew, 'w'),
+          fichierFuuidsCorbeilleHandle = await fsPromises.open(fichierCorbeilleNew, 'w')
+
+    let ok = true,
+        nombreFichiersActifs = 0,
+        nombreFichiersCorbeille = 0,
+        tailleActifs = 0,
+        tailleCorbeille = 0
+    try {
+        const streamFuuidsActifs = fichierFuuidsActifsHandle.createWriteStream(),
+              streamFuuidsCorbeille = fichierFuuidsCorbeilleHandle.createWriteStream()
+
+        const callbackTraiterFichier = async item => {
+            if(!item) {
+                streamFuuidsActifs.close()
+                streamFuuidsCorbeille.close()
+                return  // Dernier fichier
+            }
+
+            debug("genererListeLocale Fichier ", item)
+            const corbeille = item.filename.endsWith('.corbeille')
+            if(corbeille) {
+                streamFuuidsCorbeille.write(item.filename + '\n')
+                nombreFichiersCorbeille++
+                tailleCorbeille += item.size
+            } else {
+                streamFuuidsActifs.write(item.filename + '\n')
+                nombreFichiersActifs++
+                tailleActifs += item.size
+            }
+        }
+
+        await _storeConsignation.parourirFichiers(callbackTraiterFichier)
+    } catch(err) {
+        console.error(new Date() + " ERROR genererListeLocale() : %O", err)
+        ok = false
+    } finally {
+        await fichierFuuidsActifsHandle.close()
+        await fichierFuuidsCorbeilleHandle.close()
+    }
+
+    if(ok) {
+        debug("genererListeLocale Terminer information liste")
+        const info = {
+            nombreFichiersActifs, 
+            nombreFichiersCorbeille,
+            tailleActifs,
+            tailleCorbeille,
+        }
+        const messageFormatte = await _mq.pki.formatterMessage(info, 'fichiers', {action: 'liste', ajouterCertificat: true})
+        debug("genererListeLocale messageFormatte : ", messageFormatte)
+        fsPromises.writeFile(path.join(pathFichiers, 'data.json'), JSON.stringify(messageFormatte))
+
+        // Renommer fichiers .new
+        const fichierActifs = path.join(pathFichiers, '/fuuidsActifs.txt'),
+              fichierCorbeille = path.join(pathFichiers, 'fuuidsCorbeille.txt')
+        try { await fsPromises.rm(fichierActifs) } catch(err) { }
+        try { await fsPromises.rm(fichierCorbeille) } catch(err) { }
+        try { await fsPromises.rename(fichierActifsNew, fichierActifs) } 
+        catch(err) { 
+            console.error("storeConsignation.genererListeLocale Erreur copie fichiers actifs : ", err)
+        }
+        try { await fsPromises.rename(fichierCorbeilleNew, fichierCorbeille) }
+        catch(err) { 
+            console.error("storeConsignation.genererListeLocale Erreur copie fichiers corbeille : ", err)
+        }
+    }
+
+    debug("genererListeLocale Fin")
 }
 
 function supprimerFichier(fuuid) {
