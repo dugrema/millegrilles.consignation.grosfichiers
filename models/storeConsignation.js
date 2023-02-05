@@ -10,9 +10,10 @@ const StoreConsignationSftp = require('./storeConsignationSftp')
 const BATCH_SIZE = 100
 const CONST_CHAMPS_CONFIG = ['typeStore', 'urlDownload', 'consignationUrl']
 
-let _mq = null,
+var _mq = null,
     _storeConsignation = null,
-    _storeConsignationLocal = null
+    _storeConsignationLocal = null,
+    _estPrimaire = false
 
 async function init(mq, opts) {
     opts = opts || {}
@@ -35,9 +36,9 @@ async function init(mq, opts) {
 
     await changerStoreConsignation(typeStore, params)
 
-    // Emettre la presence (premiere apres 10 secs, apres sous intervalles)
-    setTimeout(emettrePresence, 10_000)
-    setInterval(emettrePresence, 180_000)
+    // Entretien - emet la presence (premiere apres 10 secs, apres sous intervalles)
+    setTimeout(entretien, 10_000)
+    setInterval(entretien, 180_000)
 }
 
 async function changerStoreConsignation(typeStore, params, opts) {
@@ -289,6 +290,17 @@ async function confirmerActiviteFuuids(fuuids) {
         debug("Liste fichiers est complete : %s", complete)
         _triggerPromiseBatch()
     }
+}
+
+async function entretien() {
+    await emettrePresence()
+
+    // Determiner si on est la consignation primaire
+    const instance_id_consignation = FichiersTransfertBackingStore.getInstanceId()
+    const instance_id_local = _mq.pki.cert.subject.getField('CN').value
+    debug("entetien Instance consignation : %s, instance_id local %s", instance_id_consignation, instance_id_local)
+    _estPrimaire = instance_id_consignation === instance_id_local
+    debug("entetien estPrimaire? %s", _estPrimaire)
 }
 
 async function emettrePresence() {
