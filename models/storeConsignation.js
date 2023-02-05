@@ -27,7 +27,7 @@ async function init(mq, opts) {
     const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
 
     FichiersTransfertBackingStore.configurerThreadPutFichiersConsignation(
-        'https://localhost', mq, 
+        mq, 
         {...opts, consignerFichier: transfererFichierVersConsignation}
     )
 

@@ -21,6 +21,12 @@ async function init(storeConsignation, opts) {
 
   // Charger PKI
   const instPki = new MilleGrillesPKI()
+  const qCustom = {
+    'backup': {name: 'fichiers/backup'},
+    'publication': {name: 'fichiers/publication'},
+    'actions': {name: 'fichiers/actions'},
+  }
+  const amqpdao = new MilleGrillesAmqpDAO(instPki, {qCustom, exchange: '2.prive'})
   await instPki.initialiserPkiPEMS(certPems)
 
   if(opts.redisClient) {
@@ -29,14 +35,7 @@ async function init(storeConsignation, opts) {
   }
 
   // Connecter a MilleGrilles avec AMQP DAO
-  // const nomsQCustom = ['image', 'video', 'publication']
-  const qCustom = {
-    'backup': {name: 'fichiers/backup'},
-    'publication': {name: 'fichiers/publication'},
-    'actions': {name: 'fichiers/actions'},
-  }
-  const amqpdao = new MilleGrillesAmqpDAO(instPki, {qCustom, exchange: '2.prive'})
-  const mqConnectionUrl = process.env.MG_MQ_URL;
+  const mqConnectionUrl = process.env.MG_MQ_URL
   await amqpdao.connect(mqConnectionUrl)
 
   // Attacher les evenements, cles de routage

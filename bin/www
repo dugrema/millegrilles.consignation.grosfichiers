@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const debug = require('debug')('millegrilles:www')
+const debug = require('debug')('www')
 const logger = require('morgan')
 const redis = require("redis")
 const fs = require('fs')
@@ -58,9 +58,10 @@ async function init() {
   const {amqpdao: instAmqpdao} = await amqpdao.init(storeConsignation, {redisClient})
   const idmg = instAmqpdao.pki.idmg
 
-  await storeConsignation.init(instAmqpdao, {PATH_STAGING})
+  debug("Initialisation serveur IDMG : %s\n%O", idmg, instAmqpdao)
 
-  debug("Initialisation serveur IDMG : %s", idmg)
+  if(instAmqpdao.transmettreRequete === undefined) throw new Error("Tada")
+  await storeConsignation.init(instAmqpdao, {PATH_STAGING})
 
   //const root = express()
   const middleware = [
