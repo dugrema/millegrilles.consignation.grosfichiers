@@ -327,6 +327,19 @@ async function emettrePresence() {
             if(CONST_CHAMPS_CONFIG.includes(champ)) info[champ] = configuration[champ]
         }
         
+        try {
+            const pathData = path.join(FichiersTransfertBackingStore.getPathStaging(), 'liste', 'data.json')
+            const fichierData = await fsPromises.readFile(pathData, 'utf-8')
+            const data = JSON.parse(fichierData)
+            info.fichiers_nombre = data.nombreFichiersActifs
+            info.corbeille_nombre = data.nombreFichiersCorbeille
+            info.fichiers_taille = data.tailleActifs
+            info.corbeille_taille = data.tailleCorbeille
+
+        } catch(err) {
+            console.error("storeConsignationLocal.emettrePresence ERROR Erreur chargement fichier data.json : %O", err)
+        }
+
         await _mq.emettreEvenement(info, 'fichiers', {action: 'presence', attacherCertificat: true})
     } catch(err) {
         console.error("storeConsignation.emettrePresence Erreur emission presence : ", err)
