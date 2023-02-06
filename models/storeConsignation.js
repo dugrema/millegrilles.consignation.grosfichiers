@@ -12,12 +12,14 @@ const StoreConsignationSftp = require('./storeConsignationSftp')
 
 const BATCH_SIZE = 100
 const CONST_CHAMPS_CONFIG = ['typeStore', 'urlDownload', 'consignationUrl']
+const INTERVALLE_SYNC = 1_800_000  // 30 minutes
 
 var _mq = null,
     _storeConsignation = null,
     _storeConsignationLocal = null,
     _estPrimaire = false,
-    _sync_lock = false
+    _sync_lock = false,
+    _derniere_sync = 0
 
 async function init(mq, opts) {
     opts = opts || {}
@@ -298,12 +300,6 @@ async function confirmerActiviteFuuids(fuuids) {
 
 async function entretien() {
     try {
-        await emettrePresence()
-    } catch(err) {
-        console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
-    }
-
-    try {
         // Determiner si on est la consignation primaire
         const instance_id_consignation = FichiersTransfertBackingStore.getInstanceId()
         const instance_id_local = _mq.pki.cert.subject.getField('CN').value
@@ -315,13 +311,24 @@ async function entretien() {
     }
 
     try {
-        await genererListeLocale()
+        await emettrePresence()
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
     }
-    
-    processusSynchronisation()
-        .catch(err=>console.error("storeConsignation.entretien() Erreur processusSynchronisation(1) ", err))
+
+    const now = new Date().getTime()
+    if(now > _derniere_sync + INTERVALLE_SYNC) {
+        _derniere_sync = now  // Temporaire, pour eviter loop si un probleme survient
+
+        processusSynchronisation()
+            .then(genererListeLocale)
+            .then(()=>{
+                debug("Sync complete, re-emettre presence")
+                _derniere_sync = new Date().getTime()
+            })
+            .then(emettrePresence)
+            .catch(err=>console.error("storeConsignation.entretien() Erreur processusSynchronisation(1) ", err))
+    }
 }
 
 async function processusSynchronisation() {
