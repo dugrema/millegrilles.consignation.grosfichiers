@@ -414,6 +414,8 @@ async function getDataSynchronisation() {
 }
 
 async function downloadFichiersSync() {
+    const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
+    if(!httpsAgent) throw new Error("processusSynchronisation: httpsAgent n'est pas initialise")
 
     const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
     await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
@@ -431,11 +433,11 @@ async function downloadFichiersSync() {
             urlFuuid.pathname = urlFuuid.pathname + '/' + fuuid
             debug("Download %s", urlFuuid.href)
         
-            const fuuidFichier = path.join(getPathDataFolder(), fuuid)
+            const fuuidFichier = path.join(getPathDataFolder(), 'syncDownload', fuuid)
             const fuuidStream = fs.createWriteStream(fuuidFichier)
 
             try {
-                const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream' })
+                const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlFuuid.href, responseType: 'stream' })
                 debug("Reponse GET actifs %s", reponseActifs.status)
                 await new Promise((resolve, reject)=>{
                     fuuidStream.on('close', resolve)
