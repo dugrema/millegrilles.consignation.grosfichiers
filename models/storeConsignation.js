@@ -2,6 +2,7 @@ const debug = require('debug')('consignation:store:root')
 const path = require('path')
 const fsPromises = require('fs/promises')
 const fs = require('fs')
+const readline = require('readline')
 const axios = require('axios')
 
 const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
@@ -324,11 +325,13 @@ async function entretien() {
 }
 
 async function processusSynchronisation() {
-    if(_sync_lock !== false) return  // Abort, sync deja en cours
+    if( _estPrimaire === true ) return  // Le primaire n'effectue pas de sync
+    if( _sync_lock !== false ) return   // Abort, sync deja en cours
+
     try {
         _sync_lock = true
         const infoData = await getDataSynchronisation()
-
+        await downloadFichiersSync()
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur processusSynchronisation(2) ", err)
     } finally {
@@ -408,6 +411,20 @@ async function getDataSynchronisation() {
     }
     
     return reponse.data
+}
+
+async function downloadFichiersSync() {
+
+    const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
+    const readStreamFichiers = fs.createReadStream(fichierActifsPrimaire)
+    const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
+    for await (const line of rlFichiers) {
+        const fuuid = line.trim()
+        const infoFichier = await getInfoFichier(fuuid)
+        if(!infoFichier) {
+            debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
+        }
+    }
 }
 
 function getPathDataFolder() {
