@@ -415,14 +415,43 @@ async function getDataSynchronisation() {
 
 async function downloadFichiersSync() {
 
+    const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
+    await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
+
     const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
     const readStreamFichiers = fs.createReadStream(fichierActifsPrimaire)
     const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
+    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
     for await (const line of rlFichiers) {
         const fuuid = line.trim()
         const infoFichier = await getInfoFichier(fuuid)
         if(!infoFichier) {
             debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
+            const urlFuuid = new URL(urlTransfert.href)
+            urlFuuid.pathname = urlFuuid.pathname + '/' + fuuid
+            debug("Download %s", urlFuuid.href)
+        
+            const fuuidFichier = path.join(getPathDataFolder(), fuuid)
+            const fuuidStream = fs.createWriteStream(fuuidFichier)
+
+            try {
+                const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream' })
+                debug("Reponse GET actifs %s", reponseActifs.status)
+                await new Promise((resolve, reject)=>{
+                    fuuidStream.on('close', resolve)
+                    fuuidStream.on('error', err=>{
+                        fuuidStream.close()
+                        fsPromises.unlink(fuuidFichier)
+                            .catch(err=>console.warn("Erreur suppression fichier %s : %O", fuuidFichier, err))
+                        reject(err)
+                    })
+                    reponseActifs.data.pipe(fuuidStream)
+                })
+
+                debug("Fichier %s download complete", fuuid)
+            } catch(err) {
+                console.info("Erreur sync fuuid %s : %O", fuuid, err)
+            }
         }
     }
 }
