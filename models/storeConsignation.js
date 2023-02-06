@@ -454,9 +454,10 @@ async function downloadFichiersSync() {
 
                 debug("Fichier %s download complete", fuuid)
                 await _storeConsignation.consignerFichier(dirFuuid, fuuid)
-
             } catch(err) {
                 console.info("Erreur sync fuuid %s : %O", fuuid, err)
+            } finally {
+                await fsPromises.rm(dirFuuid, {recursive: true, force: true})
             }
         }
     }
