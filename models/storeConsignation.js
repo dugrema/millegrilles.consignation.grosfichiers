@@ -433,7 +433,9 @@ async function downloadFichiersSync() {
             urlFuuid.pathname = urlFuuid.pathname + '/' + fuuid
             debug("Download %s", urlFuuid.href)
         
-            const fuuidFichier = path.join(getPathDataFolder(), 'syncDownload', fuuid)
+            const dirFuuid = path.join(getPathDataFolder(), 'syncDownload', fuuid)
+            await fsPromises.mkdir(dirFuuid, {recursive: true})
+            const fuuidFichier = path.join(dirFuuid, '0.part')  // Fichier avec position initiale - 1 seul fichier
             const fuuidStream = fs.createWriteStream(fuuidFichier)
 
             try {
@@ -451,6 +453,8 @@ async function downloadFichiersSync() {
                 })
 
                 debug("Fichier %s download complete", fuuid)
+                await _storeConsignation.consignerFichier(dirFuuid, fuuid)
+
             } catch(err) {
                 console.info("Erreur sync fuuid %s : %O", fuuid, err)
             }
