@@ -41,7 +41,7 @@ function init(mq, storeConsignation) {
 }
 
 function on_connecter() {
-  _ajouterCb('requete.fichiers.getConfiguration', getConfiguration, {direct: true})
+  // _ajouterCb('requete.fichiers.getConfiguration', getConfiguration, {direct: true})
   _ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration, {direct: true})
 
   // Commandes SSH/SFTP
