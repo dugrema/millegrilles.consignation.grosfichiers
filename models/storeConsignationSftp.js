@@ -38,18 +38,18 @@ let _hostname = null,
 
 async function init(params) {
     params = params || {}
-    const {hostnameSftp, usernameSftp, urlDownload, portSftp, remotePathSftp, keyTypeSftp} = params
-    if(!hostnameSftp) throw new Error("Parametre hostname manquant")
-    if(!usernameSftp) throw new Error("Parametre username manquant")
-    if(!urlDownload) throw new Error("Parametre urlDownload manquant")
+    const {hostname_sftp, username_sftp, url_download, port_sftp, remote_path_sftp, key_type_sftp} = params
+    if(!hostname_sftp) throw new Error("Parametre hostname manquant")
+    if(!username_sftp) throw new Error("Parametre username manquant")
+    if(!url_download) throw new Error("Parametre urlDownload manquant")
 
-    _hostname = hostnameSftp
-    _username = usernameSftp
-    _urlDownload = new URL(''+urlDownload).href
-    _keyType = keyTypeSftp || 'ed25519'
+    _hostname = hostname_sftp
+    _username = username_sftp
+    _urlDownload = new URL(''+url_download).href
+    _keyType = key_type_sftp || 'ed25519'
     
-    _port = portSftp || _port
-    _remotePath = remotePathSftp || _remotePath
+    _port = port_sftp || _port
+    _remotePath = remote_path_sftp || _remotePath
 
     if(!_intervalEntretienConnexion) {
         _intervalEntretienConnexion = setInterval(entretienConnexion, CONNEXION_TIMEOUT/2)
