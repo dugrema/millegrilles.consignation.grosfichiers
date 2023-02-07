@@ -55,6 +55,7 @@ function enregistrerChannel() {
 }
 
 async function recevoirConserverBackup(message, opts) {
+    if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
     debug("recevoirConserverBackup, message : %O\nopts %O", message, opts)
 
     let reponse = {ok: false}
@@ -69,6 +70,7 @@ async function recevoirConserverBackup(message, opts) {
 }
 
 async function recevoirRotationBackupTransactions(message, opts) {
+  if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
   debug("recevoirRotationBackupTransactions, message : %O\nopts %O", message, opts)
   let reponse = {ok: false}
   try {
@@ -84,6 +86,7 @@ async function recevoirRotationBackupTransactions(message, opts) {
 }
 
 async function getClesBackupTransactions(message, opts) {
+  if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
   debug("getClesBackupTransactions, message : %O\nopts %O", message, opts)
   let reponse = {ok: false}
   try {
@@ -99,6 +102,7 @@ async function getClesBackupTransactions(message, opts) {
 }
 
 async function getBackupTransaction(message, opts) {
+  if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
   debug("getBackupTransaction, message : %O\nopts %O", message, opts)
   let reponse = {ok: false}
   try {
@@ -114,6 +118,7 @@ async function getBackupTransaction(message, opts) {
 }
 
 async function demarrerBackupTransactions(message, opts) {
+  if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
   debug("demarrerBackupTransactions, message : %O\nopts %O", message, opts)
 
   // Verifier autorisation

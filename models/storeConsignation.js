@@ -626,11 +626,15 @@ function getBackupTransaction(pathBackupTransaction) {
     return _storeConsignation.getBackupTransaction(pathBackupTransaction)
 }
 
+function estPrimaire() {
+    return _estPrimaire
+}
+
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
     entretienFichiersSupprimes, supprimerFichier, recupererFichier, confirmerActiviteFuuids,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
-    getPathDataFolder,
+    getPathDataFolder, estPrimaire, 
 }
