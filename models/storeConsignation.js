@@ -73,7 +73,8 @@ async function chargerConfiguration(opts) {
 
     // Recuperer configuration a partir de CoreTopologie
     try {
-        const requete = {instance_id: FichiersTransfertBackingStore.getInstanceId()}
+        const instanceId = _mq.pki.cert.subject.getField('CN').value
+        const requete = {instance_id: instanceId}
         const action = 'getConsignationFichiers'
         const configuration = await _mq.transmettreRequete('CoreTopologie', requete, {action, exchange: '2.prive'})
         // await _mq.transmettreRequete({instance_id: FichiersTransfertBackingStore.getInstanceId()})
