@@ -25,13 +25,15 @@ const CONST_CHAMPS_CONFIG = ['typeStore', 'urlDownload', 'consignationUrl']
 var _mq = null,
     _pathConsignation = null,
     _repertoireCodeWebapps = process.env.WEBAPPS_SRC_FOLDER,
-    _storeConsignation = null
+    _storeConsignation = null,
+    _instanceId = null
 
 function init(mq, storeConsignation) {
   _mq = mq
   _storeConsignation = storeConsignation
 
   const idmg = mq.pki.idmg
+  _instanceId = mq.pki.cert.subject.getField('CN').value
   // _pathConsignation = new PathConsignation({idmg});
 
   // const ipfsHost = process.env.IPFS_HOST || 'http://ipfs:5001'
@@ -40,7 +42,7 @@ function init(mq, storeConsignation) {
 
 function on_connecter() {
   _ajouterCb('requete.fichiers.getConfiguration', getConfiguration, {direct: true})
-  _ajouterCb('commande.fichiers.modifierConfiguration', modifierConfiguration, {direct: true})
+  _ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration, {direct: true})
 
   // Commandes SSH/SFTP
   _ajouterCb('requete.fichiers.getPublicKeySsh', getPublicKeySsh, {direct: true})
