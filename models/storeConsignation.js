@@ -524,7 +524,7 @@ async function uploaderFichiersVersPrimaire() {
     const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
     const fichierMissing = path.join(getPathDataFolder(), 'fuuidsMissing.txt')
     await new Promise((resolve, reject)=>{
-        exec(`diff ${fichierActifsPrimaire} ${fichierActifs} | grep '<'| cut -d ' ' -f 2 > ${fichierMissing}`, error=>{
+        exec(`comm -3 ${fichierActifs} ${fichierActifsPrimaire} > ${fichierMissing}`, error=>{
             if(error) return reject(error)
             else resolve()
         })
