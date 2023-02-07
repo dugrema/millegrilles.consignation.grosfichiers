@@ -649,11 +649,19 @@ function estPrimaire() {
     return _estPrimaire
 }
 
+async function setEstConsignationPrimaire(primaire) {
+    debug('setEstConsignationPrimaire %s', primaire)
+    if(_estPrimaire !== primaire) {
+        _estPrimaire = primaire
+        debug("Changement role consignation : primaire => %s", primaire)
+    }
+}
+
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
     entretienFichiersSupprimes, supprimerFichier, recupererFichier, confirmerActiviteFuuids,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
-    getPathDataFolder, estPrimaire, 
+    getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
 }

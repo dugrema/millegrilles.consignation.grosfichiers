@@ -43,6 +43,7 @@ function init(mq, storeConsignation) {
 function on_connecter() {
   // _ajouterCb('requete.fichiers.getConfiguration', getConfiguration, {direct: true})
   _ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration, {direct: true})
+  _ajouterCb(`evenement.CoreTopologie.changementConsignationPrimaire`, changementConsignationPrimaire, {direct: true})
 
   // Commandes SSH/SFTP
   _ajouterCb('requete.fichiers.getPublicKeySsh', getPublicKeySsh, {direct: true})
@@ -129,6 +130,11 @@ function getPublicKeySsh(message, rk, opts) {
 
   const reponse = {clePubliqueEd25519, clePubliqueRsa}
   _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
+}
+
+async function changementConsignationPrimaire(message, rk, opts) {
+  const instanceIdPrimaire = message.instance_id
+  await _storeConsignation.setEstConsignationPrimaire(instanceIdPrimaire===_instanceId)
 }
 
 async function publierFichierSftp(message, rk, opts) {
