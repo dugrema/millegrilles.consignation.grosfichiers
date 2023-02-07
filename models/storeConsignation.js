@@ -4,6 +4,7 @@ const fsPromises = require('fs/promises')
 const fs = require('fs')
 const readline = require('readline')
 const axios = require('axios')
+const { exec } = require('child_process')
 
 const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
 
@@ -359,6 +360,7 @@ async function processusSynchronisation() {
         const infoData = await getDataSynchronisation()
         await downloadFichiersSync()
         await marquerFichiersCorbeille()
+        await uploaderFichiersVersPrimaire()
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur processusSynchronisation(2) ", err)
     } finally {
@@ -514,6 +516,35 @@ async function marquerFichiersCorbeille() {
 
 }
 
+async function uploaderFichiersVersPrimaire() {
+    debug("uploaderFichiersVersPrimaire Debut")
+
+    // Detecter fichiers locaux (actifs) qui ne sont pas sur le primaire
+    const fichierActifs = path.join(getPathDataFolder(), 'fuuidsActifs.txt')
+    const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
+    const fichierMissing = path.join(getPathDataFolder(), 'fuuidsMissing.txt')
+    await new Promise((resolve, reject)=>{
+        exec(`diff ${fichierActifsPrimaire} ${fichierActifs} | grep '<'| cut -d ' ' -f 2 > ${fichierMissing}`, error=>{
+            if(error) return reject(error)
+            else resolve()
+        })
+    })
+
+    try {
+        const readStreamFichiers = fs.createReadStream(fichierMissing)
+        const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
+        for await (const line of rlFichiers) {
+            const fuuid = line.trim()
+            debug("uploaderFichiersVersPrimaire Transferer fichier manquant %s vers primaire", fuuid)
+        }
+    } catch(err) {
+        debug("uploaderFichiersVersPrimaire Erreur traitement ", err)
+    }
+
+
+    debug("uploaderFichiersVersPrimaire Fin")
+}
+
 function getPathDataFolder() {
     return path.join(FichiersTransfertBackingStore.getPathStaging(), 'liste')
 }
@@ -616,13 +647,53 @@ async function genererListeLocale() {
               fichierCorbeille = path.join(pathFichiers, 'fuuidsCorbeille.txt')
         try { await fsPromises.rm(fichierActifs) } catch(err) { }
         try { await fsPromises.rm(fichierCorbeille) } catch(err) { }
-        try { await fsPromises.rename(fichierActifsNew, fichierActifs) } 
-        catch(err) { 
+        
+        try { 
+            // Copier le fichier de .work.txt a .txt, trier en meme temps
+            await new Promise((resolve, reject)=>{
+                exec(`sort -o ${fichierActifs} ${fichierActifsNew} && gzip -fk ${fichierActifs}`, error=>{
+                    if(error) return reject(error)
+                    else resolve()
+                })
+            })
+        } catch(err) {
             console.error("storeConsignation.genererListeLocale Erreur copie fichiers actifs : ", err)
+        } finally {
+            // Supprimer .work.txt
+            try { await fsPromises.rm(fichierActifsNew) }
+            catch(err) {
+                if(err.code === 'ENOENT') {
+                    // Ok, fichier n'existe pas
+                } else {
+                    console.error("storeConsignation.genererListeLocale Erreur suppression fichiers actifs work : ", err)
+                }
+            }
         }
-        try { await fsPromises.rename(fichierCorbeilleNew, fichierCorbeille) }
-        catch(err) { 
-            console.error("storeConsignation.genererListeLocale Erreur copie fichiers corbeille : ", err)
+
+        try { 
+            // Copier le fichier de .work.txt a .txt, trier en meme temps
+            await new Promise((resolve, reject)=>{
+                exec(`sort -o ${fichierCorbeille} ${fichierCorbeilleNew} && gzip -fk ${fichierCorbeille}`, error=>{
+                    if(error) return reject(error)
+                    else resolve()
+                })
+            })
+        } catch(err) { 
+            if(err.code === 'ENOENT') {
+                // Ok, fichier n'existe pas
+            } else {
+                console.error("storeConsignation.genererListeLocale Erreur copie fichiers corbeille : ", err)
+            }
+        } finally {
+            // Supprimer .work.txt
+            try { await fsPromises.rm(fichierCorbeilleNew) }
+            catch(err) {
+                if(err.code === 'ENOENT') {
+                    // Ok, fichier n'existe pas
+                } else {
+                    console.error("storeConsignation.genererListeLocale Erreur suppression fichiers actifs work : ", err)
+                }
+            }
         }
     }
 
