@@ -70,7 +70,21 @@ async function changerStoreConsignation(typeStore, params, opts) {
 
 async function chargerConfiguration(opts) {
     opts = opts || {}
-    return await _storeConsignationLocal.chargerConfiguration(opts)
+
+    // Recuperer configuration a partir de CoreTopologie
+    try {
+        const requete = {instance_id: FichiersTransfertBackingStore.getInstanceId()}
+        const action = 'getConsignationFichiers'
+        const configuration = await _mq.transmettreRequete('CoreTopologie', requete, {action, exchange: '2.prive'})
+        // await _mq.transmettreRequete({instance_id: FichiersTransfertBackingStore.getInstanceId()})
+        debug("Configuration recue ", configuration)
+        await _storeConsignation.modifierConfiguration(configuration, {override: true})
+        return configuration
+    } catch(err) {
+        console.warn("Erreur chargement configuration via CoreTopologie, chargement local ", err)
+        return await _storeConsignationLocal.chargerConfiguration(opts)
+    }
+    
 }
 
 async function modifierConfiguration(params, opts) {
@@ -329,6 +343,10 @@ async function entretien() {
             .then(emettrePresence)
             .catch(err=>console.error("storeConsignation.entretien() Erreur processusSynchronisation(1) ", err))
     }
+}
+
+async function getConfiguration() {
+
 }
 
 async function processusSynchronisation() {
