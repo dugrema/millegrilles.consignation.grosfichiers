@@ -11,7 +11,7 @@ const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
 
 const BATCH_SIZE = 100
-const CONST_CHAMPS_CONFIG = ['typeStore', 'urlDownload', 'consignationUrl']
+const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 const INTERVALLE_SYNC = 1_800_000  // 30 minutes
 
 var _mq = null,
@@ -29,7 +29,7 @@ async function init(mq, opts) {
     _storeConsignationLocal = StoreConsignationLocal
     _storeConsignationLocal.init(opts)
     const configuration = await _storeConsignationLocal.chargerConfiguration(opts)
-    const typeStore = configuration.typeStore
+    const typeStore = configuration.type_store
 
     const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
 
@@ -65,7 +65,7 @@ async function changerStoreConsignation(typeStore, params, opts) {
     // Changer methode de consignation
     await _storeConsignation.init(params)
 
-    await _storeConsignationLocal.modifierConfiguration({...params, typeStore})
+    await _storeConsignationLocal.modifierConfiguration({...params, type_store: typeStore})
 }
 
 async function chargerConfiguration(opts) {
@@ -74,8 +74,8 @@ async function chargerConfiguration(opts) {
 }
 
 async function modifierConfiguration(params, opts) {
-    if(params.typeStore) {
-        return await changerStoreConsignation(params.typeStore, params, opts)
+    if(params.type_store) {
+        return await changerStoreConsignation(params.type_store, params, opts)
     }
     return await _storeConsignationLocal.modifierConfiguration(params, opts)
 }
