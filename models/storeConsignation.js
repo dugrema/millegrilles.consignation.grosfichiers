@@ -149,8 +149,11 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
         console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
     }
 
-    // Le fichier a ete transfere avec succes (aucune exception)
-    // On peut supprimer le repertoire ready local
+    if(_estPrimaire === true) {
+        // Le fichier a ete transfere avec succes (aucune exception)
+        // On peut supprimer le repertoire ready local
+    }
+
     fsPromises.rm(pathFichierStaging, {recursive: true})
         .catch(err=>console.error("Erreur suppression repertoire %s apres consignation reussie : %O", fuuid, err))
 
@@ -320,6 +323,7 @@ async function entretien() {
         const instance_id_local = _mq.pki.cert.subject.getField('CN').value
         debug("entetien Instance consignation : %s, instance_id local %s", instance_id_consignation, instance_id_local)
         _estPrimaire = instance_id_consignation === instance_id_local
+        FichiersTransfertBackingStore.setEstPrimaire(_estPrimaire)
         debug("entetien estPrimaire? %s", _estPrimaire)
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
@@ -346,10 +350,6 @@ async function entretien() {
     }
 }
 
-async function getConfiguration() {
-
-}
-
 async function processusSynchronisation() {
     if( _estPrimaire === true ) return  // Le primaire n'effectue pas de sync
     if( _sync_lock !== false ) return   // Abort, sync deja en cours
@@ -358,6 +358,7 @@ async function processusSynchronisation() {
         _sync_lock = true
         const infoData = await getDataSynchronisation()
         await downloadFichiersSync()
+        await marquerFichiersCorbeille()
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur processusSynchronisation(2) ", err)
     } finally {
@@ -452,7 +453,7 @@ async function downloadFichiersSync() {
     const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
     for await (const line of rlFichiers) {
         const fuuid = line.trim()
-        const infoFichier = await getInfoFichier(fuuid)
+        const infoFichier = await getInfoFichier(fuuid, {recover: true})
         if(!infoFichier) {
             debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
             const urlFuuid = new URL(urlTransfert.href)
@@ -487,6 +488,30 @@ async function downloadFichiersSync() {
             }
         }
     }
+}
+
+async function marquerFichiersCorbeille() {
+    const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
+    await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
+
+    const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt')
+    try {
+        const readStreamFichiers = fs.createReadStream(fichierCorbeillePrimaire)
+        const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
+
+        for await (const line of rlFichiers) {
+            const fuuid = line.trim()
+            try {
+                await _storeConsignation.marquerSupprime(fuuid)
+                debug("Fichier %s transfere a la corbeille", fuuid)
+            } catch(err) {
+                debug("Erreur transfert %s vers corbeille", fuuid, err)
+            }
+        }
+    } catch(err) {
+        debug("Erreur traitement sync corbeille ", err)
+    }
+
 }
 
 function getPathDataFolder() {
@@ -651,6 +676,7 @@ function estPrimaire() {
 
 async function setEstConsignationPrimaire(primaire) {
     debug('setEstConsignationPrimaire %s', primaire)
+    FichiersTransfertBackingStore.setEstPrimaire(primaire)
     if(_estPrimaire !== primaire) {
         _estPrimaire = primaire
         debug("Changement role consignation : primaire => %s", primaire)
