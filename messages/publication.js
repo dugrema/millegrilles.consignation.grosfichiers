@@ -43,6 +43,7 @@ function init(mq, storeConsignation) {
 function on_connecter() {
   // _ajouterCb('requete.fichiers.getConfiguration', getConfiguration, {direct: true})
   _ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration, {direct: true})
+  _ajouterCb(`commande.fichiers.declencherSync`, declencherSyncPrimaire, {direct: true})
   _ajouterCb(`evenement.CoreTopologie.changementConsignationPrimaire`, changementConsignationPrimaire, {direct: true})
   _ajouterCb(`evenement.fichiers.syncPret`, declencherSyncSecondaire, {direct: true})
 
@@ -138,12 +139,20 @@ async function changementConsignationPrimaire(message, rk, opts) {
   await _storeConsignation.setEstConsignationPrimaire(instanceIdPrimaire===_instanceId)
 }
 
+async function declencherSyncPrimaire(message, rk, opts) {
+  if(_storeConsignation.estPrimaire() === true) {
+    debug('declencherSyncPrimaire')
+    _storeConsignation.demarrerSynchronization()
+      .catch(err=>console.error(new Date() + ' publication.declencherSyncPrimaire Erreur traitement ', err))
+  }
+}
+
 async function declencherSyncSecondaire(message, rk, opts) {
   if(_storeConsignation.estPrimaire() !== true) {
     _storeConsignation.processusSynchronisation()
       .catch(err=>console.error("publication.declencherSyncSecondaire Erreur traitement sync : %O", err))
   } else {
-    console.debug("syncPret recu - mais on est le primaire (ignore)")
+    debug("syncPret recu - mais on est le primaire (ignore)")
   }
 }
 

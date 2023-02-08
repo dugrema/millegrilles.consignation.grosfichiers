@@ -352,15 +352,19 @@ async function entretien() {
     if(now > _derniere_sync + INTERVALLE_SYNC) {
         _derniere_sync = now  // Temporaire, pour eviter loop si un probleme survient
 
-        genererListeLocale()
-            .then(processusSynchronisation)
-            .then(()=>{
-                debug("Sync complete, re-emettre presence")
-                _derniere_sync = new Date().getTime()
-            })
-            .then(emettrePresence)
+        demarrerSynchronization()
             .catch(err=>console.error("storeConsignation.entretien() Erreur processusSynchronisation(1) ", err))
     }
+}
+
+async function demarrerSynchronization() {
+    await genererListeLocale()
+    await processusSynchronisation()
+    
+    debug("Sync complete, re-emettre presence")
+    _derniere_sync = new Date().getTime()
+
+    await emettrePresence()
 }
 
 async function processusSynchronisation() {
@@ -861,5 +865,5 @@ module.exports = {
     getFichiersBackupTransactionsCourant, getBackupTransaction,
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
     getUrlTransfert, getHttpsAgent, getInstanceId, ajouterDownloadPrimaire,
-    processusSynchronisation,
+    processusSynchronisation, demarrerSynchronization,
 }
