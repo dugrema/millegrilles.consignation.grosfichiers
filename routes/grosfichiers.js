@@ -48,7 +48,8 @@ function staticRouteData(route, storeConsignation) {
     debug("staticRouteData ", req.url)
     next()
   })
-  router2.use(cacheRes, express.static(folderStatic))
+  // router2.use(cacheRes, express.static(folderStatic))
+  router2.use(express.static(folderStatic))
   debug("staticRouteData Route %s pour data fichiers initialisee", folderStatic)
 }
 

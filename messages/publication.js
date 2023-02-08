@@ -144,6 +144,8 @@ async function declencherSyncPrimaire(message, rk, opts) {
     debug('declencherSyncPrimaire')
     _storeConsignation.demarrerSynchronization()
       .catch(err=>console.error(new Date() + ' publication.declencherSyncPrimaire Erreur traitement ', err))
+    const reponse = {ok: true}
+    _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
   }
 }
 
