@@ -405,14 +405,23 @@ async function getDataSynchronisation() {
         const actifStream = fs.createWriteStream(fichierActifsPrimaire)
         const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream' })
         debug("Reponse GET actifs %s", reponseActifs.status)
-        await new Promise((resolve, reject)=>{
-            actifStream.on('close', resolve)
-            actifStream.on('error', err=>{
-                actifStream.close()
-                reject(err)
+        try {
+            await new Promise((resolve, reject)=>{
+                actifStream.on('close', resolve)
+                actifStream.on('error', err=>{
+                    actifStream.close()
+                    reject(err)
+                })
+                reponseActifs.data.pipe(actifStream)
             })
-            reponseActifs.data.pipe(actifStream)
-        })
+        } catch(err) {
+            const response = err.response
+            if(response && response.status === 416) {
+                // OK, le fichier est vide
+            } else {
+                throw err
+            }
+        }
         try { await fsPromises.unlink(fichierActifsPrimaireDest) } catch(err) {}
         const fichierActifsPrimaireDest = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
         try { await fsPromises.rename(fichierActifsPrimaire, fichierActifsPrimaireDest) } 
@@ -444,8 +453,13 @@ async function getDataSynchronisation() {
             console.error("storeConsignation.getDataSynchronisation Erreur renaming corbeille ", err)
         }
     } catch(err) {
-        if(err.response) {
-            console.info("Erreur recuperation fichier corbeille HTTP %d", err.response.status)
+        const response = err.response
+        if(response ) {
+            if(response.status === 416) {
+                // OK, fichier vide
+            } else {
+                console.info("Erreur recuperation fichier corbeille HTTP %d", err.response.status)
+            }
         } else {
             console.warn("Erreur recuperation fichier corbeille - ", err)
         }
