@@ -11,6 +11,8 @@ const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/
 const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
 
+const TransfertPrimaire = require('./transfertPrimaire')
+
 const BATCH_SIZE = 100
 const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 const INTERVALLE_SYNC = 1_800_000  // 30 minutes
@@ -20,7 +22,8 @@ var _mq = null,
     _storeConsignationLocal = null,
     _estPrimaire = false,
     _sync_lock = false,
-    _derniere_sync = 0
+    _derniere_sync = 0,
+    _transfertPrimaire = null
 
 async function init(mq, opts) {
     opts = opts || {}
@@ -42,6 +45,10 @@ async function init(mq, opts) {
     )
 
     await changerStoreConsignation(typeStore, params)
+
+    // Objet responsable de l'upload vers le primaire (si local est secondaire)
+    _transfertPrimaire = new TransfertPrimaire(mq, this)
+    _transfertPrimaire.threadPutFichiersConsignation()  // Premiere run, initialise loop
 
     // Entretien - emet la presence (premiere apres 10 secs, apres sous intervalles)
     setTimeout(entretien, 10_000)
@@ -150,9 +157,9 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
         console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
     }
 
-    if(_estPrimaire === true) {
+    if(_estPrimaire !== true) {
         // Le fichier a ete transfere avec succes (aucune exception)
-        // On peut supprimer le repertoire ready local
+        _transfertPrimaire.ajouterItem(fuuid)
     }
 
     fsPromises.rm(pathFichierStaging, {recursive: true})
@@ -536,6 +543,7 @@ async function uploaderFichiersVersPrimaire() {
         for await (const line of rlFichiers) {
             const fuuid = line.trim()
             debug("uploaderFichiersVersPrimaire Transferer fichier manquant %s vers primaire", fuuid)
+            _transfertPrimaire.ajouterItem(fuuid)
         }
     } catch(err) {
         debug("uploaderFichiersVersPrimaire Erreur traitement ", err)
