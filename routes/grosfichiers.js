@@ -91,6 +91,12 @@ async function headersFichier(req, res, next) {
     const infoFichier = await _storeConsignation.getInfoFichier(fuuid, {recover: true})
     debug("Info fichier %s: %O", fuuid, infoFichier)
     if(!infoFichier) {
+
+      if(_storeConsignation.estPrimaire() !== true) {
+        debug("Tenter transferer fichier %s a partir primaire", fuuid)
+        _storeConsignation.ajouterDownloadPrimaire(fuuid)
+      }
+
       return res.sendStatus(404)
     } else if(infoFichier.fileRedirect) {
       res.setHeader('Cache-Control', 'public, max-age=300, immutable')

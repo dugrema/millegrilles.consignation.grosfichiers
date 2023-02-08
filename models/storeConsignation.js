@@ -15,7 +15,8 @@ const TransfertPrimaire = require('./transfertPrimaire')
 
 const BATCH_SIZE = 100
 const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
-const INTERVALLE_SYNC = 1_800_000  // 30 minutes
+const INTERVALLE_SYNC = 1_800_000,  // 30 minutes
+      DOWNLOAD_PRIMAIRE = 60_000  // 1 minute
 
 var _mq = null,
     _storeConsignation = null,
@@ -23,7 +24,9 @@ var _mq = null,
     _estPrimaire = false,
     _sync_lock = false,
     _derniere_sync = 0,
-    _transfertPrimaire = null
+    _transfertPrimaire = null,
+    _queueDownloadFuuids = new Set(),
+    _timeoutStartThreadDownload = null
 
 async function init(mq, opts) {
     opts = opts || {}
@@ -53,6 +56,8 @@ async function init(mq, opts) {
     // Entretien - emet la presence (premiere apres 10 secs, apres sous intervalles)
     setTimeout(entretien, 10_000)
     setInterval(entretien, 180_000)
+    _threadDownloadFichiersDuPrimaire()
+        .catch(err=>console.error("init Erreur initialisation _threadDownloadFichiersDuPrimaire ", err))
 }
 
 async function changerStoreConsignation(typeStore, params, opts) {
@@ -449,6 +454,14 @@ async function getDataSynchronisation() {
     return reponse.data
 }
 
+function ajouterDownloadPrimaire(fuuid) {
+    _queueDownloadFuuids.add(fuuid)
+    if(_timeoutStartThreadDownload) {
+        _threadDownloadFichiersDuPrimaire()
+            .catch(err=>{console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur ', err)})
+    }
+}
+
 async function downloadFichiersSync() {
     const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
     if(!httpsAgent) throw new Error("processusSynchronisation: httpsAgent n'est pas initialise")
@@ -459,42 +472,86 @@ async function downloadFichiersSync() {
     const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
     const readStreamFichiers = fs.createReadStream(fichierActifsPrimaire)
     const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
-    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
     for await (const line of rlFichiers) {
         const fuuid = line.trim()
-        const infoFichier = await getInfoFichier(fuuid, {recover: true})
-        if(!infoFichier) {
-            debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
-            const urlFuuid = new URL(urlTransfert.href)
-            urlFuuid.pathname = urlFuuid.pathname + '/' + fuuid
-            debug("Download %s", urlFuuid.href)
-        
-            const dirFuuid = path.join(getPathDataFolder(), 'syncDownload', fuuid)
-            await fsPromises.mkdir(dirFuuid, {recursive: true})
-            const fuuidFichier = path.join(dirFuuid, '0.part')  // Fichier avec position initiale - 1 seul fichier
-            const fuuidStream = fs.createWriteStream(fuuidFichier)
+        _queueDownloadFuuids.add(fuuid)
+    }
+
+    if(_timeoutStartThreadDownload) {
+        _threadDownloadFichiersDuPrimaire()
+            .catch(err=>{console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur ', err)})
+    }
+}
+
+async function _threadDownloadFichiersDuPrimaire() {
+    if(_timeoutStartThreadDownload) clearTimeout(_timeoutStartThreadDownload)
+    _timeoutStartThreadDownload = null
+
+    debug(new Date() + ' _threadDownloadFichiersDuPrimaire Demarrer download %s fichiers', _queueDownloadFuuids.length)
+
+    try {
+        while(true) {
+            // Recuperer un fuuid a partir du Set
+            let fuuid = null
+            for(fuuid of _queueDownloadFuuids.values()) break
+            if(!fuuid) break
+
+            _queueDownloadFuuids.delete(fuuid)
 
             try {
-                const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlFuuid.href, responseType: 'stream' })
-                debug("Reponse GET actifs %s", reponseActifs.status)
-                await new Promise((resolve, reject)=>{
-                    fuuidStream.on('close', resolve)
-                    fuuidStream.on('error', err=>{
-                        fuuidStream.close()
-                        fsPromises.unlink(fuuidFichier)
-                            .catch(err=>console.warn("Erreur suppression fichier %s : %O", fuuidFichier, err))
-                        reject(err)
-                    })
-                    reponseActifs.data.pipe(fuuidStream)
-                })
-
-                debug("Fichier %s download complete", fuuid)
-                await _storeConsignation.consignerFichier(dirFuuid, fuuid)
+                await downloadFichierDuPrimaire(fuuid)
             } catch(err) {
-                console.info("Erreur sync fuuid %s : %O", fuuid, err)
-            } finally {
-                await fsPromises.rm(dirFuuid, {recursive: true, force: true})
+                console.error(new Date() + " Erreur download %s du primaire %O", fuuid, err)
             }
+        }
+
+    } catch(err) {
+        console.error(new Date() + ' _threadDownloadFichiersDuPrimaire Erreur ', err)
+    } finally {
+        _timeoutStartThreadDownload = setTimeout(()=>{
+            _timeoutStartThreadDownload = null
+            _threadDownloadFichiersDuPrimaire()
+                .catch(err=>{console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur ', err)})
+        }, DOWNLOAD_PRIMAIRE)
+        debug(new Date() + ' _threadDownloadFichiersDuPrimaire Fin')
+    }
+}
+
+async function downloadFichierDuPrimaire(fuuid) {
+    const infoFichier = await getInfoFichier(fuuid, {recover: true})
+    if(!infoFichier) {
+        debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
+        const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
+        const urlFuuid = new URL(urlTransfert.href)
+        urlFuuid.pathname = urlFuuid.pathname + '/' + fuuid
+        debug("Download %s", urlFuuid.href)
+    
+        const dirFuuid = path.join(getPathDataFolder(), 'syncDownload', fuuid)
+        await fsPromises.mkdir(dirFuuid, {recursive: true})
+        const fuuidFichier = path.join(dirFuuid, '0.part')  // Fichier avec position initiale - 1 seul fichier
+        const fuuidStream = fs.createWriteStream(fuuidFichier)
+
+        try {
+            const httpsAgent = getHttpsAgent()
+            const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlFuuid.href, responseType: 'stream' })
+            debug("Reponse GET actifs %s", reponseActifs.status)
+            await new Promise((resolve, reject)=>{
+                fuuidStream.on('close', resolve)
+                fuuidStream.on('error', err=>{
+                    fuuidStream.close()
+                    fsPromises.unlink(fuuidFichier)
+                        .catch(err=>console.warn("Erreur suppression fichier %s : %O", fuuidFichier, err))
+                    reject(err)
+                })
+                reponseActifs.data.pipe(fuuidStream)
+            })
+
+            debug("Fichier %s download complete", fuuid)
+            await _storeConsignation.consignerFichier(dirFuuid, fuuid)
+        } catch(err) {
+            console.info("Erreur sync fuuid %s : %O", fuuid, err)
+        } finally {
+            await fsPromises.rm(dirFuuid, {recursive: true, force: true})
         }
     }
 }
@@ -781,5 +838,5 @@ module.exports = {
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
-    getUrlTransfert, getHttpsAgent, getInstanceId,
+    getUrlTransfert, getHttpsAgent, getInstanceId, ajouterDownloadPrimaire,
 }
