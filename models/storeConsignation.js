@@ -844,4 +844,5 @@ module.exports = {
     getFichiersBackupTransactionsCourant, getBackupTransaction,
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
     getUrlTransfert, getHttpsAgent, getInstanceId, ajouterDownloadPrimaire,
+    processusSynchronisation,
 }
