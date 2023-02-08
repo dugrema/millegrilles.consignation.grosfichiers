@@ -508,7 +508,7 @@ async function _threadDownloadFichiersDuPrimaire() {
     if(_timeoutStartThreadDownload) clearTimeout(_timeoutStartThreadDownload)
     _timeoutStartThreadDownload = null
 
-    debug(new Date() + ' _threadDownloadFichiersDuPrimaire Demarrer download %s fichiers', _queueDownloadFuuids.length)
+    debug(new Date() + ' _threadDownloadFichiersDuPrimaire Demarrer download fichiers')
 
     try {
         while(true) {

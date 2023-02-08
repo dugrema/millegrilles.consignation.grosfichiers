@@ -149,7 +149,7 @@ async function declencherSyncPrimaire(message, rk, opts) {
 
 async function declencherSyncSecondaire(message, rk, opts) {
   if(_storeConsignation.estPrimaire() !== true) {
-    _storeConsignation.processusSynchronisation()
+    _storeConsignation.demarrerSynchronization()
       .catch(err=>console.error("publication.declencherSyncSecondaire Erreur traitement sync : %O", err))
   } else {
     debug("syncPret recu - mais on est le primaire (ignore)")
