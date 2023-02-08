@@ -4,7 +4,7 @@ const path = require('path')
 const axios = require('axios')
 
 const INTERVALLE_PUT_CONSIGNATION = 900_000,
-      CONST_TAILLE_SPLIT_MAX_DEFAULT = 64*1024  // 20 * 1024 * 1024
+      CONST_TAILLE_SPLIT_MAX_DEFAULT = 20 * 1024 * 1024
 
 function TransfertPrimaire(mq, storeConsignation) {
     this.amqpdao = mq
