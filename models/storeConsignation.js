@@ -760,6 +760,11 @@ async function genererListeLocale() {
                 }
             }
         }
+
+        if(_estPrimaire) {
+            debug("Emettre evenement de fin du creation de liste du primaire")
+            await _mq.emettreEvenement(messageFormatte, 'fichiers', {action: 'syncPret', ajouterCertificat: true})
+        }
     }
 
     debug("genererListeLocale Fin")

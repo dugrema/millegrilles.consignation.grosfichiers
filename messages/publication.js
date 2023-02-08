@@ -44,6 +44,7 @@ function on_connecter() {
   // _ajouterCb('requete.fichiers.getConfiguration', getConfiguration, {direct: true})
   _ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration, {direct: true})
   _ajouterCb(`evenement.CoreTopologie.changementConsignationPrimaire`, changementConsignationPrimaire, {direct: true})
+  _ajouterCb(`evenement.fichiers.syncPret`, declencherSyncSecondaire, {direct: true})
 
   // Commandes SSH/SFTP
   _ajouterCb('requete.fichiers.getPublicKeySsh', getPublicKeySsh, {direct: true})
@@ -135,6 +136,15 @@ function getPublicKeySsh(message, rk, opts) {
 async function changementConsignationPrimaire(message, rk, opts) {
   const instanceIdPrimaire = message.instance_id
   await _storeConsignation.setEstConsignationPrimaire(instanceIdPrimaire===_instanceId)
+}
+
+async function declencherSyncSecondaire(message, rk, opts) {
+  if(_storeConsignation.estPrimaire() !== true) {
+    _storeConsignation.processusSynchronisation()
+      .catch(err=>console.error("publication.declencherSyncSecondaire Erreur traitement sync : %O", err))
+  } else {
+    console.debug("syncPret recu - mais on est le primaire (ignore)")
+  }
 }
 
 async function publierFichierSftp(message, rk, opts) {
