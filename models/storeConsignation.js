@@ -721,6 +721,18 @@ function getInfoFichier(fuuid, opts) {
     return _storeConsignation.getInfoFichier(fuuid, opts)
 }
 
+function getInstanceId() {
+    return FichiersTransfertBackingStore.getInstanceId()
+}
+
+function getUrlTransfert() {
+    return new URL(FichiersTransfertBackingStore.getUrlTransfert())
+}
+
+function getHttpsAgent() {
+    return FichiersTransfertBackingStore.getHttpsAgent()
+}
+
 function middlewareRecevoirFichier(opts) {
     return FichiersTransfertBackingStore.middlewareRecevoirFichier(opts)
 }
@@ -769,4 +781,5 @@ module.exports = {
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
+    getUrlTransfert, getHttpsAgent, getInstanceId,
 }
