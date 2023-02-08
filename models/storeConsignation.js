@@ -402,10 +402,11 @@ async function getDataSynchronisation() {
         urlData.pathname = urlData.pathname + '/data/fuuidsActifs.txt'
         debug("Download %s", urlData.href)
         const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt.work')
-        const actifStream = fs.createWriteStream(fichierActifsPrimaire)
-        const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream' })
-        debug("Reponse GET actifs %s", reponseActifs.status)
         try {
+            const actifStream = fs.createWriteStream(fichierActifsPrimaire)
+            const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream' })
+            debug("Reponse GET actifs %s", reponseActifs.status)
+
             await new Promise((resolve, reject)=>{
                 actifStream.on('close', resolve)
                 actifStream.on('error', err=>{
@@ -421,20 +422,21 @@ async function getDataSynchronisation() {
             } else {
                 throw err
             }
-        }
-        try { await fsPromises.unlink(fichierActifsPrimaireDest) } catch(err) {}
-        const fichierActifsPrimaireDest = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
-        try { await fsPromises.rename(fichierActifsPrimaire, fichierActifsPrimaireDest) } 
-        catch(err) {
-            console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
+        } finally {
+            try { await fsPromises.unlink(fichierActifsPrimaireDest) } catch(err) {}
+            const fichierActifsPrimaireDest = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
+            try { await fsPromises.rename(fichierActifsPrimaire, fichierActifsPrimaireDest) } 
+            catch(err) {
+                console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
+            }
         }
     }
 
+    const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt.work')
     try {
         const urlData = new URL(urlTransfert.href)
         urlData.pathname = urlData.pathname + '/data/fuuidsCorbeille.txt'
         debug("Download %s", urlData.href)
-        const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt.work')
         const corbeilleStream = fs.createWriteStream(fichierCorbeillePrimaire)
         const reponseCorbeille = await axios({method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream'})
         debug("Reponse GET corbeille %s", reponseCorbeille.status)
@@ -446,12 +448,6 @@ async function getDataSynchronisation() {
             })
             reponseCorbeille.data.pipe(corbeilleStream)
         })
-        try { await fsPromises.unlink(fichierCorbeillePrimaireDest) } catch(err) {}
-        const fichierCorbeillePrimaireDest = path.join(getPathDataFolder(), 'corbeillePrimaire.txt')
-        try { await fsPromises.rename(fichierCorbeillePrimaire, fichierCorbeillePrimaireDest) } 
-        catch(err) {
-            console.error("storeConsignation.getDataSynchronisation Erreur renaming corbeille ", err)
-        }
     } catch(err) {
         const response = err.response
         if(response ) {
@@ -462,6 +458,13 @@ async function getDataSynchronisation() {
             }
         } else {
             console.warn("Erreur recuperation fichier corbeille - ", err)
+        }
+    } finally {
+        try { await fsPromises.unlink(fichierCorbeillePrimaireDest) } catch(err) {}
+        const fichierCorbeillePrimaireDest = path.join(getPathDataFolder(), 'corbeillePrimaire.txt')
+        try { await fsPromises.rename(fichierCorbeillePrimaire, fichierCorbeillePrimaireDest) } 
+        catch(err) {
+            console.error("storeConsignation.getDataSynchronisation Erreur renaming corbeille ", err)
         }
     }
     
