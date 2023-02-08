@@ -429,7 +429,15 @@ async function getDataSynchronisation() {
         } finally {
             try { await fsPromises.unlink(fichierActifsPrimaireDest) } catch(err) {}
             const fichierActifsPrimaireDest = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
-            try { await fsPromises.rename(fichierActifsPrimaire, fichierActifsPrimaireDest) } 
+            try { 
+                // await fsPromises.rename(fichierActifsPrimaire, fichierActifsPrimaireDest) 
+                await new Promise((resolve, reject)=>{
+                    exec(`sort -o ${fichierActifsPrimaireDest} ${fichierActifsPrimaire}`, error=>{
+                        if(error) return reject(error)
+                        else resolve()
+                    })
+                })
+            } 
             catch(err) {
                 console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
             }
@@ -466,7 +474,15 @@ async function getDataSynchronisation() {
     } finally {
         try { await fsPromises.unlink(fichierCorbeillePrimaireDest) } catch(err) {}
         const fichierCorbeillePrimaireDest = path.join(getPathDataFolder(), 'corbeillePrimaire.txt')
-        try { await fsPromises.rename(fichierCorbeillePrimaire, fichierCorbeillePrimaireDest) } 
+        try { 
+            // await fsPromises.rename(fichierCorbeillePrimaire, fichierCorbeillePrimaireDest) 
+            await new Promise((resolve, reject)=>{
+                exec(`sort -o ${fichierCorbeillePrimaireDest} ${fichierCorbeillePrimaire}`, error=>{
+                    if(error) return reject(error)
+                    else resolve()
+                })
+            })
+        } 
         catch(err) {
             console.error("storeConsignation.getDataSynchronisation Erreur renaming corbeille ", err)
         }
