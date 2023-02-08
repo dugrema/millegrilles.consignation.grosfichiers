@@ -352,8 +352,8 @@ async function entretien() {
     if(now > _derniere_sync + INTERVALLE_SYNC) {
         _derniere_sync = now  // Temporaire, pour eviter loop si un probleme survient
 
-        processusSynchronisation()
-            .then(genererListeLocale)
+        genererListeLocale()
+            .then(processusSynchronisation)
             .then(()=>{
                 debug("Sync complete, re-emettre presence")
                 _derniere_sync = new Date().getTime()
