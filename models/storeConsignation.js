@@ -694,10 +694,10 @@ async function downloadFichiersBackup() {
         if(!fichierBackup) continue  // Ligne vide, skip
 
         try {
-            if( ! fichiersBackupLocaux.has(fichierBackup) ) {
-                // Retirer le fichier du Set
-                fichiersBackupLocaux.delete(fichierBackup)
+            // Retirer le fichier du Set
+            fichiersBackupLocaux.delete(fichierBackup)
 
+            if( ! fichiersBackupLocaux.has(fichierBackup) ) {
                 // Downloader fichier
                 debug("downloadFichiersBackup Fichier backup manquant '%s'", fichierBackup)
                 const urlFichier = new URL(urlTransfert.href)
