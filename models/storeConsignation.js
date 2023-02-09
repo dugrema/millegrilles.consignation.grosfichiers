@@ -667,7 +667,7 @@ async function downloadFichiersBackup() {
     const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
     const urlListe = new URL(urlTransfert.href)
     urlListe.pathname = urlListe.pathname + '/backup/liste'
-    const reponse = await axios({method: 'GET', url: urlListe})
+    const reponse = await axios({method: 'GET', url: urlListe.href})
     debug("downloadFichiersBackup Reponse ", reponse)
 }
 
