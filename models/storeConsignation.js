@@ -723,9 +723,10 @@ async function downloadFichiersBackup() {
     for(let fichierBackup of fichiersBackupLocaux) {
         debug("Retirer fichier")
         try {
-            await _storeConsignation.deleteBackupTransaction(fichierBackup)
+            const pathFichierBase = fichierBackup.replace('transactions/', '')
+            await _storeConsignation.deleteBackupTransaction(pathFichierBase)
         } catch(err) {
-            console.error(new Date() + ' Erreur suppression fichier backup ', fichierBackup)
+            console.error(new Date() + ' Erreur suppression fichier backup ', pathFichierBase)
         }
     }
 }
