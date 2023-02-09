@@ -672,8 +672,28 @@ async function downloadFichiersBackup() {
     let reponse = await axios({method: 'GET', url: urlListe.href, httpsAgent})
     reponse = reponse.data.split('\n')
 
+    // Faire la liste des fichiers de backup locaux
+    const fichiersBackupLocaux = new Set()
+    const addFichierLocal = fichier => {
+        if(!fichier) return  // Derniere entree
+    
+        const pathFichierSplit = fichier.directory.split('/')
+        const pathBase = pathFichierSplit.slice(pathFichierSplit.length-2).join('/')
+    
+        // Conserver uniquement le contenu de transaction/ (transaction_archive/ n'est pas copie)
+        if(pathBase.startsWith('transaction/')) {
+            const fichierPath = path.join(pathBase, fichier.filename)
+            fichiersBackupLocaux.add(fichierPath)
+        }
+    }
+    await parcourirBackup(addFichierLocal)
+
     for(let fichierBackup of reponse) {
-        debug("downloadFichiersBackup Verifier presence locale de  ", fichierBackup)
+        if( ! fichiersBackupLocaux.has(fichierBackup) ) {
+            debug("downloadFichiersBackup Fichier backup manquant ", fichierBackup)
+        } else {
+            debug("downloadFichiersBackup Ficher backup existe localement (OK) ", fichierBackup)
+        }
     }
 }
 
