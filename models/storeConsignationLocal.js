@@ -363,7 +363,7 @@ async function pipeBackupTransactionStream(pathFichier, stream) {
     
     const writeStream = fs.createWriteStream(pathFichierComplet)
     await new Promise((resolve, reject)=>{
-        writeStream.on('end', resolve)
+        writeStream.on('close', resolve)
         writeStream.on('error', reject)
         stream.pipe(writeStream)
     })
