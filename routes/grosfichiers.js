@@ -19,6 +19,15 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   _storeConsignation = storeConsignation
 
   const router = express.Router();
+  const routerFichiersTransfert = express.Router()
+  router.use('/fichiers_transfert', routerFichiersTransfert)
+
+  // backup : /fichiers_transfert/backup
+  const routerBackup = express.Router()
+  routerFichiersTransfert.use('/backup', routerBackup)
+  routerBackup.get('/liste', getListeBackup)
+  routerBackup.get('/transaction/:pathBackup', getFichierTransaction)
+
   //router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
   //router.head('/fichiers/:fuuid', downloadFichierLocal)
 
@@ -27,11 +36,10 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   // deja valide rendu ici)
   //router.get('/fichiers_transfert/backup/liste', getListeFichiers)
   staticRouteData(router, storeConsignation)
-  router.get('/fichiers_transfert/backup/liste', getListeBackup)
-  router.get('/fichiers_transfert/:fuuid', headersFichier, pipeReponse)
-  router.head('/fichiers_transfert/:fuuid', headersFichier, returnOk)
+  routerFichiersTransfert.get('/:fuuid', headersFichier, pipeReponse)
+  routerFichiersTransfert.head('/:fuuid', headersFichier, returnOk)
 
-  router.use(uploadFichier.init(mq, storeConsignation, opts))
+  routerFichiersTransfert.use(uploadFichier.init(mq, storeConsignation, opts))
 
   return router
 }
@@ -78,6 +86,11 @@ async function getListeBackup(req, res) {
   res.set('Content-Type', 'text/plain')
   await _storeConsignation.parcourirBackup(traiterFichier)
   res.end()
+}
+
+async function getFichierTransaction(req, res) {
+  debug("getFichierTransaction url %s params %O", req.url, req.params)
+  res.sendStatus(200)
 }
 
 // async function getListeFichiers(req, res, next) {

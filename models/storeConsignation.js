@@ -691,6 +691,10 @@ async function downloadFichiersBackup() {
     for(let fichierBackup of reponse) {
         if( ! fichiersBackupLocaux.has(fichierBackup) ) {
             debug("downloadFichiersBackup Fichier backup manquant ", fichierBackup)
+            const urlFichier = new URL(urlTransfert.href)
+            urlFichier.pathname = urlFichier.pathname + 'fichierBackup'
+            const reponse = await axios({method: 'GET', url: urlFichier.href, httpsAgent})
+            debug("Reponse fichier backup : ", reponse)
         } else {
             debug("downloadFichiersBackup Ficher backup existe localement (OK) ", fichierBackup)
         }
