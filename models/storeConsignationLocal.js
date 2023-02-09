@@ -356,7 +356,8 @@ async function getBackupTransactionStream(pathBackupTransaction) {
 
 async function pipeBackupTransactionStream(pathFichier, stream) {
     const pathFichierParsed = path.parse(pathFichier)
-    const dirFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathFichierParsed.dirname)
+    debug("pipeBackupTransactionStream ", pathFichierParsed)
+    const dirFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathFichierParsed.dir)
     const pathFichierComplet = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathFichier)
     await fsPromises.mkdir(dirFichier, {recursive: true})
     
