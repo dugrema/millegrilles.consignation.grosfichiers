@@ -670,7 +670,9 @@ async function downloadFichiersBackup() {
     const urlListe = new URL(urlTransfert.href)
     urlListe.pathname = urlListe.pathname + '/backup/liste'
     let reponse = await axios({method: 'GET', url: urlListe.href, httpsAgent})
+    debug("Reponse fichiers backup :\n%s", reponse.data)
     reponse = reponse.data.split('\n')
+    debug("Reponse fichiers backup liste : %O", reponse)
 
     // Faire la liste des fichiers de backup locaux
     const fichiersBackupLocaux = new Set()
@@ -690,13 +692,13 @@ async function downloadFichiersBackup() {
 
     for(let fichierBackup of reponse) {
         if( fichierBackup && ! fichiersBackupLocaux.has(fichierBackup) ) {
-            debug("downloadFichiersBackup Fichier backup manquant ", fichierBackup)
+            debug("downloadFichiersBackup Fichier backup manquant '%s'", fichierBackup)
             const urlFichier = new URL(urlTransfert.href)
             urlFichier.pathname = path.join(urlFichier.pathname, fichierBackup)
             const reponse = await axios({method: 'GET', url: urlFichier.href, httpsAgent})
             debug("Reponse fichier backup : ", reponse)
         } else {
-            debug("downloadFichiersBackup Ficher backup existe localement (OK) ", fichierBackup)
+            debug("downloadFichiersBackup Ficher backup existe localement (OK) '%s'", fichierBackup)
         }
     }
 }
