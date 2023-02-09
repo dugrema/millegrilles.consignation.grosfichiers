@@ -698,9 +698,11 @@ async function downloadFichiersBackup() {
             const reponse = await axios({method: 'GET', url: urlFichier.href, httpsAgent, responseType: 'stream'})
             debug("Reponse fichier backup ", reponse.status)
 
+            const pathFichierBase = fichierBackup.replace('/transactions', '')
+
             const downloadStream = reponse.data
             // Ouvrir fichier pour conserver bytes
-            await _storeConsignation.pipeBackupTransactionStream(downloadStream)
+            await _storeConsignation.pipeBackupTransactionStream(pathFichierBase, downloadStream)
 
         } else {
             debug("downloadFichiersBackup Ficher backup existe localement (OK) '%s'", fichierBackup)

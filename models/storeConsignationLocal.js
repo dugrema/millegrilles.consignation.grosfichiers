@@ -354,10 +354,14 @@ async function getBackupTransactionStream(pathBackupTransaction) {
     return fs.createReadStream(pathFichier)
 }
 
-function pipeBackupTransactionStream(stream) {
-    const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, stream)
-    const writeStream = fs.createWriteStream(pathFichier)
-    return new Promise((resolve, reject)=>{
+async function pipeBackupTransactionStream(pathFichier, stream) {
+    const pathFichierParsed = path.parse(pathFichier)
+    const dirFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathFichierParsed.dirname)
+    const pathFichierComplet = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathFichier)
+    await fsPromises.mkdir(dirFichier, {recursive: true})
+    
+    const writeStream = fs.createWriteStream(pathFichierComplet)
+    await new Promise((resolve, reject)=>{
         writeStream.on('end', resolve)
         writeStream.on('error', reject)
         stream.pipe(writeStream)
