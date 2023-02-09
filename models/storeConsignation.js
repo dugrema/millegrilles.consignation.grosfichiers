@@ -13,6 +13,8 @@ const StoreConsignationSftp = require('./storeConsignationSftp')
 
 const TransfertPrimaire = require('./transfertPrimaire')
 
+const { startConsuming: startConsumingBackup, stopConsuming: stopConsumingBackup } = require('../messages/backup')
+
 const BATCH_SIZE = 100
 const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 const INTERVALLE_SYNC = 1_800_000,  // 30 minutes
@@ -63,7 +65,7 @@ async function init(mq, opts) {
 async function changerStoreConsignation(typeStore, params, opts) {
     opts = opts || {}
     params = params || {}
-    typeStore = typeStore?typeStore.toLowerCase():'local'
+    typeStore = typeStore?typeStore.toLowerCase():'millegrille'
     debug("changerStoreConsignation type: %s, params: %O", typeStore, params)
 
     if(_storeConsignation && _storeConsignation.fermer) await _storeConsignation.fermer()
@@ -335,7 +337,20 @@ async function entretien() {
         const instance_id_consignation = FichiersTransfertBackingStore.getInstanceId()
         const instance_id_local = _mq.pki.cert.subject.getField('CN').value
         debug("entetien Instance consignation : %s, instance_id local %s", instance_id_consignation, instance_id_local)
+        
+        const courant = _estPrimaire
         _estPrimaire = instance_id_consignation === instance_id_local
+        if(courant !== _estPrimaire) {
+            debug('entretien Toggle estPrimaire => %s', _estPrimaire)
+            if(_estPrimaire === true) {
+                // Ecouter Q de backup sur MQ
+                startConsumingBackup().catch(err=>console.error(new Date() + ' Erreur start consuming backup', err))
+            } else {
+                // Arret ecoute de Q de backup sur MQ
+                stopConsumingBackup().catch(err=>console.error(new Date() + ' Erreur stop consuming backup', err))
+            }
+        }
+
         FichiersTransfertBackingStore.setEstPrimaire(_estPrimaire)
         debug("entetien estPrimaire? %s", _estPrimaire)
     } catch(err) {
@@ -654,9 +669,14 @@ function getPathDataFolder() {
 async function emettrePresence() {
     try {
         debug("emettrePresence Configuration fichiers")
-        const configuration = await chargerConfiguration()
         
-        const info = {}
+        // Creer info avec defaults, override avec config locale
+        const info = {
+            type_store: 'millegrille',
+            consignation_url: 'https://fichiers:443'
+        }
+
+        const configuration = await chargerConfiguration()
         for(const champ of Object.keys(configuration)) {
             if(CONST_CHAMPS_CONFIG.includes(champ)) info[champ] = configuration[champ]
         }
@@ -867,9 +887,17 @@ function estPrimaire() {
 async function setEstConsignationPrimaire(primaire) {
     debug('setEstConsignationPrimaire %s', primaire)
     FichiersTransfertBackingStore.setEstPrimaire(primaire)
-    if(_estPrimaire !== primaire) {
-        _estPrimaire = primaire
+    const courant = _estPrimaire
+    _estPrimaire = primaire
+    if(courant !== primaire) {
         debug("Changement role consignation : primaire => %s", primaire)
+        if(_estPrimaire === true) {
+            // Ecouter Q de backup sur MQ
+            startConsumingBackup().catch(err=>console.error(new Date() + ' Erreur start consuming backup', err))
+        } else {
+            // Arret ecoute de Q de backup sur MQ
+            stopConsumingBackup().catch(err=>console.error(new Date() + ' Erreur stop consuming backup', err))
+        }
     }
 }
 

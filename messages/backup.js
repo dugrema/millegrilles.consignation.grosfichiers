@@ -19,9 +19,19 @@ function on_connecter() {
   enregistrerChannel()
 }
 
+const exchange = '2.prive',
+      backupQueue = 'fichiers/backup'
+
+async function startConsuming() {
+  await _mq.startConsumingCustomQ('backup')
+}
+
+async function stopConsuming() {
+  await _mq.stopConsumingCustomQ('backup')
+}
+
 function enregistrerChannel() {
 
-  const exchange = '2.prive'
   _mq.routingKeyManager.addRoutingKeyCallback(
     (_routingKey, message, opts)=>{return recevoirConserverBackup(message, opts)},
     ['commande.fichiers.backupTransactions'],
@@ -55,12 +65,12 @@ function enregistrerChannel() {
 }
 
 async function recevoirConserverBackup(message, opts) {
-    if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
     debug("recevoirConserverBackup, message : %O\nopts %O", message, opts)
 
     let reponse = {ok: false}
     try {
         reponse = await conserverBackup(_mq, _storeConsignation, message)
+        if(_storeConsignation.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
     } catch(err) {
         console.error("ERROR recevoirConserverBackup: %O", err)
         reponse = {ok: false, err: ''+err}
@@ -70,11 +80,11 @@ async function recevoirConserverBackup(message, opts) {
 }
 
 async function recevoirRotationBackupTransactions(message, opts) {
-  if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
   debug("recevoirRotationBackupTransactions, message : %O\nopts %O", message, opts)
   let reponse = {ok: false}
   try {
       reponse = await rotationBackupTransactions(_mq, _storeConsignation, message)
+      if(_storeConsignation.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
   } catch(err) {
       console.error("ERROR recevoirRotationBackupTransactions: %O", err)
       reponse = {ok: false, err: ''+err}
@@ -86,11 +96,11 @@ async function recevoirRotationBackupTransactions(message, opts) {
 }
 
 async function getClesBackupTransactions(message, opts) {
-  if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
   debug("getClesBackupTransactions, message : %O\nopts %O", message, opts)
   let reponse = {ok: false}
   try {
       reponse = await getClesBackupTransactionsRun(_mq, _storeConsignation, message, opts)
+      if(_storeConsignation.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
   } catch(err) {
       console.error("ERROR getClesBackupTransactions: %O", err)
       reponse = {ok: false, err: ''+err}
@@ -154,4 +164,4 @@ async function demarrerBackupTransactions(message, opts) {
   return {ok: true}
 }
 
-module.exports = { init, on_connecter }
+module.exports = { init, on_connecter, startConsuming, stopConsuming }
