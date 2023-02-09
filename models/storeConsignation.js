@@ -665,9 +665,11 @@ async function uploaderFichiersVersPrimaire() {
 
 async function downloadFichiersBackup() {
     const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
+    const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
+
     const urlListe = new URL(urlTransfert.href)
     urlListe.pathname = urlListe.pathname + '/backup/liste'
-    const reponse = await axios({method: 'GET', url: urlListe.href})
+    const reponse = await axios({method: 'GET', url: urlListe.href, httpsAgent})
     debug("downloadFichiersBackup Reponse ", reponse)
 }
 
