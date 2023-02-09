@@ -168,14 +168,19 @@ function marquerSupprime(fuuid) {
     return fsPromises.rename(pathFichier, pathFichierSupprime)
 }
 
-async function parourirFichiers(callback, opts) {
-    await parourirFichiersRecursif(_pathConsignation, callback, opts)
+async function parcourirFichiers(callback, opts) {
+    await parcourirFichiersRecursif(_pathConsignation, callback, opts)
     await callback()  // Dernier appel avec aucune valeur (fin traitement)
 }
 
-async function parourirFichiersRecursif(repertoire, callback, opts) {
+async function parcourirBackup(callback, opts) {
+    await parcourirFichiersRecursif(PATH_BACKUP_TRANSACTIONS_DIR, callback, opts)
+    await callback()  // Dernier appel avec aucune valeur (fin traitement)
+}
+
+async function parcourirFichiersRecursif(repertoire, callback, opts) {
     opts = opts || {}
-    debug("parourirFichiers %s", repertoire)
+    debug("parcourirFichiers %s", repertoire)
   
     const settingsReaddirp = { type: 'files', alwaysStat: true, depth: 1 }
 
@@ -347,7 +352,8 @@ async function getBackupTransaction(pathBackupTransaction) {
 module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     getFichier, getInfoFichier, consignerFichier,
-    marquerSupprime, recoverFichierSupprime, parourirFichiers,
+    marquerSupprime, recoverFichierSupprime, 
+    parcourirFichiers, parcourirBackup,
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
 }

@@ -218,7 +218,7 @@ async function traiterSupprimer() {
     
     try {
         const filtre = item => !item.filename.endsWith('.corbeille')
-        await _storeConsignation.parourirFichiers(callbackTraiterFichiersASupprimer, {filtre})
+        await _storeConsignation.parcourirFichiers(callbackTraiterFichiersASupprimer, {filtre})
     } catch(err) {
         console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
     }
@@ -252,7 +252,7 @@ async function traiterRecuperer() {
     
     try {
         const filtre = item => item.filename.endsWith('.corbeille')
-        await _storeConsignation.parourirFichiers(callbackTraiterFichiersARecuperer, {filtre})
+        await _storeConsignation.parcourirFichiers(callbackTraiterFichiersARecuperer, {filtre})
     } catch(err) {
         console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
     }
@@ -392,6 +392,7 @@ async function processusSynchronisation() {
         await downloadFichiersSync()
         await marquerFichiersCorbeille()
         await uploaderFichiersVersPrimaire()
+        await downloadFichiersBackup()
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur processusSynchronisation(2) ", err)
     } finally {
@@ -662,6 +663,14 @@ async function uploaderFichiersVersPrimaire() {
     debug("uploaderFichiersVersPrimaire Fin")
 }
 
+async function downloadFichiersBackup() {
+    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
+    const urlListe = new URL(urlTransfert.href)
+    urlListe.pathname = urlListe.pathname + '/backup/liste'
+    const reponse = await axios({method: 'GET', url: urlListe})
+    debug("downloadFichiersBackup Reponse ", reponse)
+}
+
 function getPathDataFolder() {
     return path.join(FichiersTransfertBackingStore.getPathStaging(), 'liste')
 }
@@ -743,7 +752,7 @@ async function genererListeLocale() {
             }
         }
 
-        await _storeConsignation.parourirFichiers(callbackTraiterFichier)
+        await _storeConsignation.parcourirFichiers(callbackTraiterFichier)
     } catch(err) {
         console.error(new Date() + " ERROR genererListeLocale() : %O", err)
         ok = false
@@ -825,6 +834,14 @@ async function genererListeLocale() {
     }
 
     debug("genererListeLocale Fin")
+}
+
+function parcourirFichiers(callback, opts) {
+    return _storeConsignation.parcourirFichiers(callback, opts)
+}
+
+function parcourirBackup(callback, opts) {
+    return _storeConsignation.parcourirBackup(callback, opts)
 }
 
 function supprimerFichier(fuuid) {
@@ -909,5 +926,6 @@ module.exports = {
     getFichiersBackupTransactionsCourant, getBackupTransaction,
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
     getUrlTransfert, getHttpsAgent, getInstanceId, ajouterDownloadPrimaire,
-    processusSynchronisation, demarrerSynchronization,
+    processusSynchronisation, demarrerSynchronization, 
+    parcourirFichiers, parcourirBackup,
 }

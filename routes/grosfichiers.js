@@ -25,8 +25,9 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   // Path fichiers_transfert. Comportement identique a /fichiers, utilise
   // pour faire une authentification systeme avec cert SSL (en amont,
   // deja valide rendu ici)
-  router.get('/fichiers_transfert/backup/liste', getListeFichiers)
+  //router.get('/fichiers_transfert/backup/liste', getListeFichiers)
   staticRouteData(router, storeConsignation)
+  router.get('/fichiers_transfert/backup/liste', getListeBackup)
   router.get('/fichiers_transfert/:fuuid', headersFichier, pipeReponse)
   router.head('/fichiers_transfert/:fuuid', headersFichier, returnOk)
 
@@ -59,29 +60,37 @@ function cacheRes(req, res, next) {
   next()
 }
 
-async function getListeFichiers(req, res, next) {
-
-  res.status(200)
-  res.setHeader('Cache-Control', 'no-cache')
-
-  let skipCount = 0, count = 0
-  for await (const entry of readdirp('/var/opt/millegrilles/consignation/local', {type: 'files', alwaysStat: true})) {
-    const { basename } = entry
-    if(basename.split('.').length > 1) {
-      skipCount++
-      continue
-    }
-    count++
-    const fichierParse = path.parse(basename)
-    const hachage_bytes = fichierParse.name
-    res.write(hachage_bytes)
-    res.write('\n')
+async function getListeBackup(req, res) {
+  debug('getListeBackup')
+  const cumuler = fichier => {
+    console.debug("!!! CUMULER ", fichier)
   }
-
-  debug("getListeFichiers Fichiers count %d, skip %d", count, skipCount)
-
-  res.end()
+  await storeConsignation.parcourirBackup(cumuler)
 }
+
+// async function getListeFichiers(req, res, next) {
+
+//   res.status(200)
+//   res.setHeader('Cache-Control', 'no-cache')
+
+//   let skipCount = 0, count = 0
+//   for await (const entry of readdirp('/var/opt/millegrilles/consignation/local', {type: 'files', alwaysStat: true})) {
+//     const { basename } = entry
+//     if(basename.split('.').length > 1) {
+//       skipCount++
+//       continue
+//     }
+//     count++
+//     const fichierParse = path.parse(basename)
+//     const hachage_bytes = fichierParse.name
+//     res.write(hachage_bytes)
+//     res.write('\n')
+//   }
+
+//   debug("getListeFichiers Fichiers count %d, skip %d", count, skipCount)
+
+//   res.end()
+// }
 
 async function headersFichier(req, res, next) {
   const fuuid = req.params.fuuid

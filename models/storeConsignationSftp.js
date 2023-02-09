@@ -375,20 +375,32 @@ async function marquerSupprime(fuuid) {
     }
 }
 
-async function parourirFichiers(callback, opts) {
+async function parcourirFichiers(callback, opts) {
     try {
         var sftp = await sftpClient()
-        await parourirFichiersRecursif(sftp, _remotePath, callback, opts)
+        await parcourirFichiersRecursif(sftp, _remotePath, callback, opts)
         await callback()  // Dernier appel avec aucune valeur (fin traitement)
     } finally {
-        debug("parourirFichiers fermer sftp")
+        debug("parcourirFichiers fermer sftp")
         // sftp.end(err=>debug("SFTP end : %O", err))
     }
 }
 
-async function parourirFichiersRecursif(sftp, repertoire, callback, opts) {
+async function parcourirBackup(callback, opts) {
+    throw new Error('not implemented')
+    // try {
+    //     var sftp = await sftpClient()
+    //     await parcourirFichiersRecursif(sftp, _remotePath, callback, opts)
+    //     await callback()  // Dernier appel avec aucune valeur (fin traitement)
+    // } finally {
+    //     debug("parcourirFichiers fermer sftp")
+    //     // sftp.end(err=>debug("SFTP end : %O", err))
+    // }
+}
+
+async function parcourirFichiersRecursif(sftp, repertoire, callback, opts) {
     opts = opts || {}
-    debug("parourirFichiers %s", repertoire)
+    debug("parcourirFichiers %s", repertoire)
   
     const handleDir = await opendir(sftp, repertoire)
     try {
@@ -415,7 +427,7 @@ async function parourirFichiersRecursif(sftp, repertoire, callback, opts) {
             const directories = liste.filter(item=>item.attrs.isDirectory())
             for await (const directory of directories) {
                 const subDirectory = path.join(repertoire, directory.filename)
-                await parourirFichiersRecursif(sftp, subDirectory, callback, opts)
+                await parcourirFichiersRecursif(sftp, subDirectory, callback, opts)
             }
 
             try {
@@ -535,7 +547,7 @@ function close(sftp, handle) {
 module.exports = {
     init, fermer,
     getInfoFichier, consignerFichier, marquerSupprime, recoverFichierSupprime,
-    parourirFichiers,
+    parcourirFichiers, parcourirBackup,
 
     // Re-exporter - provient de store local
     sauvegarderBackupTransactions, rotationBackupTransactions,
