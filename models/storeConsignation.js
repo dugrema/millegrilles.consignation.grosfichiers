@@ -694,9 +694,6 @@ async function downloadFichiersBackup() {
         if(!fichierBackup) continue  // Ligne vide, skip
 
         try {
-            // Retirer le fichier du Set
-            fichiersBackupLocaux.delete(fichierBackup)
-
             if( ! fichiersBackupLocaux.has(fichierBackup) ) {
                 // Downloader fichier
                 debug("downloadFichiersBackup Fichier backup manquant '%s'", fichierBackup)
@@ -716,6 +713,9 @@ async function downloadFichiersBackup() {
             }
         } catch(err) {
             console.error(new Date() + " storeConsignation Erreur download fichier backup %s : %O", fichierBackup, err)
+        } finally {
+            // Retirer le fichier du Set
+            fichiersBackupLocaux.delete(fichierBackup)
         }
     }
 
