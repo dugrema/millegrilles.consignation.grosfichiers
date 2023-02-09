@@ -683,7 +683,7 @@ async function downloadFichiersBackup() {
         const pathBase = pathFichierSplit.slice(pathFichierSplit.length-2).join('/')
     
         // Conserver uniquement le contenu de transaction/ (transaction_archive/ n'est pas copie)
-        if(pathBase.startsWith('transaction/')) {
+        if(pathBase.startsWith('transactions/')) {
             const fichierPath = path.join(pathBase, fichier.filename)
             fichiersBackupLocaux.add(fichierPath)
         }
