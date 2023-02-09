@@ -669,8 +669,12 @@ async function downloadFichiersBackup() {
 
     const urlListe = new URL(urlTransfert.href)
     urlListe.pathname = urlListe.pathname + '/backup/liste'
-    const reponse = await axios({method: 'GET', url: urlListe.href, httpsAgent})
-    debug("downloadFichiersBackup Reponse ", reponse)
+    let reponse = await axios({method: 'GET', url: urlListe.href, httpsAgent})
+    reponse = reponse.data.split('\n')
+
+    for(let fichierBackup of reponse) {
+        debug("downloadFichiersBackup Verifier presence locale de  ", fichierBackup)
+    }
 }
 
 function getPathDataFolder() {
@@ -899,6 +903,10 @@ function getBackupTransaction(pathBackupTransaction) {
     return _storeConsignation.getBackupTransaction(pathBackupTransaction)
 }
 
+function getBackupTransactionStream(pathBackupTransaction) {
+    return _storeConsignation.getBackupTransactionStream(pathBackupTransaction)
+}
+
 function estPrimaire() {
     return _estPrimaire
 }
@@ -925,9 +933,9 @@ module.exports = {
     entretienFichiersSupprimes, supprimerFichier, recupererFichier, confirmerActiviteFuuids,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
-    getFichiersBackupTransactionsCourant, getBackupTransaction,
+    getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
     getUrlTransfert, getHttpsAgent, getInstanceId, ajouterDownloadPrimaire,
     processusSynchronisation, demarrerSynchronization, 
-    parcourirFichiers, parcourirBackup,
+    parcourirFichiers, parcourirBackup, 
 }

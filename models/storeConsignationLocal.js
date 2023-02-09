@@ -349,6 +349,11 @@ async function getBackupTransaction(pathBackupTransaction) {
     return contenu
 }
 
+async function getBackupTransactionStream(pathBackupTransaction) {
+    const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
+    return fs.createReadStream(pathFichier)
+}
+
 module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     getFichier, getInfoFichier, consignerFichier,
@@ -356,4 +361,5 @@ module.exports = {
     parcourirFichiers, parcourirBackup,
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
+    getBackupTransactionStream,
 }

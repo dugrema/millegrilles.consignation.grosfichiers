@@ -61,11 +61,23 @@ function cacheRes(req, res, next) {
 }
 
 async function getListeBackup(req, res) {
-  debug('getListeBackup')
-  const cumuler = fichier => {
-    console.debug("!!! CUMULER ", fichier)
+  const traiterFichier = fichier => {
+    if(!fichier) return  // Derniere entree
+
+    const pathFichierSplit = fichier.directory.split('/')
+    const pathBase = pathFichierSplit.slice(pathFichierSplit.length-2).join('/')
+
+    // Conserver uniquement le contenu de transaction/ (transaction_archive/ n'est pas copie)
+    if(pathBase.startsWith('transaction/')) {
+      const fichierPath = path.join(pathBase, fichier.filename)
+      res.write(fichierPath + '\n')
+    }
   }
-  await storeConsignation.parcourirBackup(cumuler)
+
+  res.status(200)
+  res.set('Content-Type', 'text/plain')
+  await _storeConsignation.parcourirBackup(traiterFichier)
+  res.end()
 }
 
 // async function getListeFichiers(req, res, next) {
