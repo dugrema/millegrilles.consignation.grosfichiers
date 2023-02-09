@@ -721,12 +721,12 @@ async function downloadFichiersBackup() {
 
     // Cleanup des fichiers restants localement (qui ne sont pas sur le serveur remote)
     for(let fichierBackup of fichiersBackupLocaux) {
-        debug("Retirer fichier")
         try {
+            debug("Retirer fichier ", fichierBackup)
             const pathFichierBase = fichierBackup.replace('transactions/', '')
             await _storeConsignation.deleteBackupTransaction(pathFichierBase)
         } catch(err) {
-            console.error(new Date() + ' Erreur suppression fichier backup ', pathFichierBase)
+            console.error(new Date() + ' Erreur suppression fichier backup ', fichierBackup)
         }
     }
 }
