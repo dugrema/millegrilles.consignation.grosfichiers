@@ -140,6 +140,7 @@ async function changementConsignationPrimaire(message, rk, opts) {
 }
 
 async function declencherSyncPrimaire(message, rk, opts) {
+  const properties = opts.properties || {}
   if(_storeConsignation.estPrimaire() === true) {
     debug('declencherSyncPrimaire')
     _storeConsignation.demarrerSynchronization()
