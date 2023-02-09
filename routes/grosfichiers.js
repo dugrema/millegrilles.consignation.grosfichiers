@@ -26,7 +26,7 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   const routerBackup = express.Router()
   routerFichiersTransfert.use('/backup', routerBackup)
   routerBackup.get('/liste', getListeBackup)
-  routerBackup.get('/transaction/:pathBackup', getFichierTransaction)
+  routerBackup.get('/transactions/:domaine/:fichier', getFichierTransaction)
 
   //router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
   //router.head('/fichiers/:fuuid', downloadFichierLocal)
@@ -93,7 +93,18 @@ async function getListeBackup(req, res) {
 
 async function getFichierTransaction(req, res) {
   debug("getFichierTransaction url %s params %O", req.url, req.params)
-  res.sendStatus(200)
+  try {
+    const { domaine, fichier } = req.params
+    const pathFichier = path.join(domaine, fichier)
+    const stream = await _storeConsignation.getBackupTransactionStream(pathFichier)
+    debug("Stream fichier transactions ", stream)
+    res.status(200)
+    // res.set('Content-Length', ...)
+    stream.pipe(res)
+  } catch(err) {
+    console.error(new Date() + " getFichierTransaction Erreur ", err)
+    res.sendStatus(500)
+  }
 }
 
 // async function getListeFichiers(req, res, next) {

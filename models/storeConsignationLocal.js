@@ -354,6 +354,16 @@ async function getBackupTransactionStream(pathBackupTransaction) {
     return fs.createReadStream(pathFichier)
 }
 
+function pipeBackupTransactionStream(stream) {
+    const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, stream)
+    const writeStream = fs.createWriteStream(pathFichier)
+    return new Promise((resolve, reject)=>{
+        writeStream.on('end', resolve)
+        writeStream.on('error', reject)
+        stream.pipe(writeStream)
+    })
+}
+
 module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     getFichier, getInfoFichier, consignerFichier,
@@ -361,5 +371,5 @@ module.exports = {
     parcourirFichiers, parcourirBackup,
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
-    getBackupTransactionStream,
+    getBackupTransactionStream, pipeBackupTransactionStream,
 }
