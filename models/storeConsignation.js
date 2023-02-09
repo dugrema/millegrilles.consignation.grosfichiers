@@ -691,21 +691,41 @@ async function downloadFichiersBackup() {
     await parcourirBackup(addFichierLocal)
 
     for(let fichierBackup of reponse) {
-        if( fichierBackup && ! fichiersBackupLocaux.has(fichierBackup) ) {
-            debug("downloadFichiersBackup Fichier backup manquant '%s'", fichierBackup)
-            const urlFichier = new URL(urlTransfert.href)
-            urlFichier.pathname = path.join(urlFichier.pathname, 'backup', fichierBackup)
-            const reponse = await axios({method: 'GET', url: urlFichier.href, httpsAgent, responseType: 'stream'})
-            debug("Reponse fichier backup ", reponse.status)
+        if(!fichierBackup) continue  // Ligne vide, skip
 
-            const pathFichierBase = fichierBackup.replace('transactions/', '')
+        try {
+            if( ! fichiersBackupLocaux.has(fichierBackup) ) {
+                // Retirer le fichier du Set
+                fichiersBackupLocaux.delete(fichierBackup)
 
-            const downloadStream = reponse.data
-            // Ouvrir fichier pour conserver bytes
-            await _storeConsignation.pipeBackupTransactionStream(pathFichierBase, downloadStream)
+                // Downloader fichier
+                debug("downloadFichiersBackup Fichier backup manquant '%s'", fichierBackup)
+                const urlFichier = new URL(urlTransfert.href)
+                urlFichier.pathname = path.join(urlFichier.pathname, 'backup', fichierBackup)
+                const reponse = await axios({method: 'GET', url: urlFichier.href, httpsAgent, responseType: 'stream'})
+                debug("Reponse fichier backup ", reponse.status)
 
-        } else {
-            debug("downloadFichiersBackup Ficher backup existe localement (OK) '%s'", fichierBackup)
+                const pathFichierBase = fichierBackup.replace('transactions/', '')
+
+                const downloadStream = reponse.data
+                // Ouvrir fichier pour conserver bytes
+                await _storeConsignation.pipeBackupTransactionStream(pathFichierBase, downloadStream)
+
+            } else {
+                debug("downloadFichiersBackup Ficher backup existe localement (OK) '%s'", fichierBackup)
+            }
+        } catch(err) {
+            console.error(new Date() + " storeConsignation Erreur download fichier backup %s : %O", fichierBackup, err)
+        }
+    }
+
+    // Cleanup des fichiers restants localement (qui ne sont pas sur le serveur remote)
+    for(let fichierBackup of fichiersBackupLocaux) {
+        debug("Retirer fichier")
+        try {
+            await _storeConsignation.deleteBackupTransaction(fichierBackup)
+        } catch(err) {
+            console.error(new Date() + ' Erreur suppression fichier backup ', fichierBackup)
         }
     }
 }

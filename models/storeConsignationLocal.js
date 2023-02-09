@@ -369,6 +369,11 @@ async function pipeBackupTransactionStream(pathFichier, stream) {
     })
 }
 
+async function deleteBackupTransaction(pathBackupTransaction) {
+    const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
+    await fsPromises.unlink(pathFichier)
+}
+
 module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     getFichier, getInfoFichier, consignerFichier,
@@ -376,5 +381,5 @@ module.exports = {
     parcourirFichiers, parcourirBackup,
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
-    getBackupTransactionStream, pipeBackupTransactionStream,
+    getBackupTransactionStream, pipeBackupTransactionStream, deleteBackupTransaction,
 }
