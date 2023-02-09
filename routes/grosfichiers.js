@@ -69,6 +69,7 @@ function cacheRes(req, res, next) {
 }
 
 async function getListeBackup(req, res) {
+  debug("getListeBackup start")
   const traiterFichier = fichier => {
     if(!fichier) return  // Derniere entree
 
@@ -76,16 +77,18 @@ async function getListeBackup(req, res) {
     const pathBase = pathFichierSplit.slice(pathFichierSplit.length-2).join('/')
 
     // Conserver uniquement le contenu de transaction/ (transaction_archive/ n'est pas copie)
-    if(pathBase.startsWith('transaction/')) {
+    //if(pathBase.startsWith('transaction/')) {
       const fichierPath = path.join(pathBase, fichier.filename)
+      debug("getListeBackup fichier %s", fichierPath)
       res.write(fichierPath + '\n')
-    }
+    //}
   }
 
   res.status(200)
-  res.set('Content-Type', 'text/plain')
+  // res.set('Content-Type', 'text/plain')
   await _storeConsignation.parcourirBackup(traiterFichier)
   res.end()
+  console.debug("getListeBackup done")
 }
 
 async function getFichierTransaction(req, res) {

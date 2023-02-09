@@ -694,7 +694,7 @@ async function downloadFichiersBackup() {
         if( fichierBackup && ! fichiersBackupLocaux.has(fichierBackup) ) {
             debug("downloadFichiersBackup Fichier backup manquant '%s'", fichierBackup)
             const urlFichier = new URL(urlTransfert.href)
-            urlFichier.pathname = path.join(urlFichier.pathname, fichierBackup)
+            urlFichier.pathname = path.join(urlFichier.pathname, 'backup', fichierBackup)
             const reponse = await axios({method: 'GET', url: urlFichier.href, httpsAgent})
             debug("Reponse fichier backup : ", reponse)
         } else {
