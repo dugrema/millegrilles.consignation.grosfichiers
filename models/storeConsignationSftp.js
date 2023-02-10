@@ -100,7 +100,7 @@ async function recoverFichierSupprime(fuuid) {
         var sftp = await sftpClient()
         await stat(sftp, filePathCorbeille)
         await rename(sftp, filePathCorbeille, filePath)
-        const statInfo = await stat(filePath)
+        const statInfo = await stat(sftp, filePath)
         return { stat: statInfo, filePath }
     } catch(err) {
         debug("Erreur recoverFichierSupprime %s : %O", fuuid, err)

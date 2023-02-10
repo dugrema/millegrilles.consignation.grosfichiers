@@ -589,42 +589,47 @@ async function _threadDownloadFichiersDuPrimaire() {
 }
 
 async function downloadFichierDuPrimaire(fuuid) {
-    // const infoFichier = await getInfoFichier(fuuid, {recover: true})
-    // if(!infoFichier) {
-        debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
-        const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
-        const urlFuuid = new URL(urlTransfert.href)
-        urlFuuid.pathname = urlFuuid.pathname + '/' + fuuid
-        debug("Download %s", urlFuuid.href)
-    
-        const dirFuuid = path.join(getPathDataFolder(), 'syncDownload', fuuid)
-        await fsPromises.mkdir(dirFuuid, {recursive: true})
-        const fuuidFichier = path.join(dirFuuid, '0.part')  // Fichier avec position initiale - 1 seul fichier
-        const fuuidStream = fs.createWriteStream(fuuidFichier)
 
-        try {
-            const httpsAgent = getHttpsAgent()
-            const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlFuuid.href, responseType: 'stream' })
-            debug("Reponse GET actifs %s", reponseActifs.status)
-            await new Promise((resolve, reject)=>{
-                fuuidStream.on('close', resolve)
-                fuuidStream.on('error', err=>{
-                    fuuidStream.close()
-                    fsPromises.unlink(fuuidFichier)
-                        .catch(err=>console.warn("Erreur suppression fichier %s : %O", fuuidFichier, err))
-                    reject(err)
-                })
-                reponseActifs.data.pipe(fuuidStream)
+    // Tenter de recuperer le fichier localement
+    const recuperation = await recupererFichier(fuuid)
+    if(recuperation !== null)  {
+        debug("downloadFichierDuPrimaire Fichier %O recupere avec succes sans download", recuperation)
+        return
+    }
+
+    debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
+    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
+    const urlFuuid = new URL(urlTransfert.href)
+    urlFuuid.pathname = urlFuuid.pathname + '/' + fuuid
+    debug("Download %s", urlFuuid.href)
+
+    const dirFuuid = path.join(getPathDataFolder(), 'syncDownload', fuuid)
+    await fsPromises.mkdir(dirFuuid, {recursive: true})
+    const fuuidFichier = path.join(dirFuuid, '0.part')  // Fichier avec position initiale - 1 seul fichier
+    const fuuidStream = fs.createWriteStream(fuuidFichier)
+
+    try {
+        const httpsAgent = getHttpsAgent()
+        const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlFuuid.href, responseType: 'stream' })
+        debug("Reponse GET actifs %s", reponseActifs.status)
+        await new Promise((resolve, reject)=>{
+            fuuidStream.on('close', resolve)
+            fuuidStream.on('error', err=>{
+                fuuidStream.close()
+                fsPromises.unlink(fuuidFichier)
+                    .catch(err=>console.warn("Erreur suppression fichier %s : %O", fuuidFichier, err))
+                reject(err)
             })
+            reponseActifs.data.pipe(fuuidStream)
+        })
 
-            debug("Fichier %s download complete", fuuid)
-            await _storeConsignation.consignerFichier(dirFuuid, fuuid)
-        } catch(err) {
-            console.info("Erreur sync fuuid %s : %O", fuuid, err)
-        } finally {
-            await fsPromises.rm(dirFuuid, {recursive: true, force: true})
-        }
-    // }
+        debug("Fichier %s download complete", fuuid)
+        await _storeConsignation.consignerFichier(dirFuuid, fuuid)
+    } catch(err) {
+        console.info("Erreur sync fuuid %s : %O", fuuid, err)
+    } finally {
+        await fsPromises.rm(dirFuuid, {recursive: true, force: true})
+    }
 }
 
 async function marquerFichiersCorbeille() {
@@ -655,15 +660,7 @@ async function uploaderFichiersVersPrimaire() {
     debug("uploaderFichiersVersPrimaire Debut")
 
     // // Detecter fichiers locaux (actifs) qui ne sont pas sur le primaire
-    // const fichierActifs = path.join(getPathDataFolder(), 'fuuidsActifs.txt')
-    // const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
     const fichierMissing = path.join(getPathDataFolder(), 'fuuidsMissing.txt')
-    // await new Promise((resolve, reject)=>{
-    //     exec(`comm -3 ${fichierActifs} ${fichierActifsPrimaire} > ${fichierMissing}`, error=>{
-    //         if(error) return reject(error)
-    //         else resolve()
-    //     })
-    // })
 
     try {
         const readStreamFichiers = fs.createReadStream(fichierMissing)
