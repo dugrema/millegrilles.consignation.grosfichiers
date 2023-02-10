@@ -32,6 +32,8 @@ async function stopConsuming() {
 
 function enregistrerChannel() {
 
+  debug("backup Enregistrer channel")
+
   _mq.routingKeyManager.addRoutingKeyCallback(
     (_routingKey, message, opts)=>{return recevoirConserverBackup(message, opts)},
     ['commande.fichiers.backupTransactions'],

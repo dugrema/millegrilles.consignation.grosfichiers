@@ -380,7 +380,7 @@ module.exports = {
     PATH_CONFIG_DIR, PATH_CONFIG_FICHIER, DEFAULT_URL_CONSIGNATION, 
 
     init, chargerConfiguration, modifierConfiguration,
-    getFichier, getInfoFichier, consignerFichier,
+    getInfoFichier, consignerFichier,
     marquerSupprime, recoverFichierSupprime, 
     parcourirFichiers, parcourirBackup,
     sauvegarderBackupTransactions, rotationBackupTransactions,
