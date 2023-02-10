@@ -22,7 +22,7 @@ const INTERVALLE_SYNC = 1_800_000,  // 30 minutes
 
 var _mq = null,
     _storeConsignation = null,
-    _storeConsignationLocal = null,
+    // _storeConsignationLocal = null,
     _estPrimaire = false,
     _sync_lock = false,
     _derniere_sync = 0,
@@ -35,9 +35,9 @@ async function init(mq, opts) {
     _mq = mq
 
     // Toujours initialiser le type local - utilise pour stocker/charger la configuration
-    _storeConsignationLocal = StoreConsignationLocal
-    _storeConsignationLocal.init(opts)
-    const configuration = await _storeConsignationLocal.chargerConfiguration(opts)
+    _storeConsignation = StoreConsignationLocal
+    _storeConsignation.init(opts)
+    const configuration = await _storeConsignation.chargerConfiguration(opts)
     const typeStore = configuration.type_store
 
     const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
@@ -73,14 +73,17 @@ async function changerStoreConsignation(typeStore, params, opts) {
     switch(typeStore) {
         case 'sftp': _storeConsignation = StoreConsignationSftp; break
         case 'awss3': throw new Error('todo'); break
-        case 'millegrille': _storeConsignation = _storeConsignationLocal; break
-        default: _storeConsignation = _storeConsignationLocal
+        case 'local':
+        case 'millegrille': 
+            _storeConsignation = StoreConsignationLocal
+            break
+        default: _storeConsignation = StoreConsignationLocal
     }
 
     // Changer methode de consignation
     await _storeConsignation.init(params)
 
-    await _storeConsignationLocal.modifierConfiguration({...params, type_store: typeStore})
+    await _storeConsignation.modifierConfiguration({...params, type_store: typeStore})
 }
 
 async function chargerConfiguration(opts) {
@@ -98,7 +101,7 @@ async function chargerConfiguration(opts) {
         return configuration
     } catch(err) {
         console.warn("Erreur chargement configuration via CoreTopologie, chargement local ", err)
-        return await _storeConsignationLocal.chargerConfiguration(opts)
+        return await _storeConsignation.chargerConfiguration(opts)
     }
     
 }
@@ -107,7 +110,7 @@ async function modifierConfiguration(params, opts) {
     if(params.type_store) {
         return await changerStoreConsignation(params.type_store, params, opts)
     }
-    return await _storeConsignationLocal.modifierConfiguration(params, opts)
+    return await _storeConsignation.modifierConfiguration(params, opts)
 }
 
 async function transfererFichierVersConsignation(mq, pathReady, item) {

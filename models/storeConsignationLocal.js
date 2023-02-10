@@ -15,6 +15,8 @@ const PATH_CONFIG_FICHIER = path.join(PATH_CONFIG_DIR, 'store.json')
 const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
 const PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions_archives')
 
+const DEFAULT_URL_CONSIGNATION = 'https://fichiers:443'
+
 let _pathConsignation = path.join(CONSIGNATION_PATH, 'local')
 
 function init(params) {
@@ -33,7 +35,7 @@ async function chargerConfiguration() {
         config = JSON.parse(fichierConfiguration)
     } catch(err) {
         if(err.errno === -2) {
-            config = {type_store: 'millegrille', consignation_url: 'https://fichiers:443'}
+            config = {type_store: 'millegrille', consignation_url: DEFAULT_URL_CONSIGNATION}
             await fsPromises.writeFile(PATH_CONFIG_FICHIER, JSON.stringify(config))
         } else {
             console.error("storeConsignationLocal.chargerConfiguration ERROR Erreur chargement fichier configuration : %O", err)
@@ -375,6 +377,8 @@ async function deleteBackupTransaction(pathBackupTransaction) {
 }
 
 module.exports = {
+    PATH_CONFIG_DIR, PATH_CONFIG_FICHIER, DEFAULT_URL_CONSIGNATION, 
+
     init, chargerConfiguration, modifierConfiguration,
     getFichier, getInfoFichier, consignerFichier,
     marquerSupprime, recoverFichierSupprime, 

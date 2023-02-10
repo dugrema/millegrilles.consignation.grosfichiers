@@ -1,4 +1,6 @@
-const debug = require('debug')('consignation:store:sftp')
+const debugLib = require('debug')
+const debug = debugLib('consignation:store:sftp')
+const debugSftp = debugLib('consignation:store:sftpTrace')
 const fs = require('fs')
 const path = require('path')
 const readdirp = require('readdirp')
@@ -7,7 +9,8 @@ const {Client} = require('ssh2')
 const { Hacheur, VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 const { writer } = require('repl')
 const hachage = require('@dugrema/millegrilles.nodejs/src/hachage')
-const { sauvegarderBackupTransactions, rotationBackupTransactions } = require('./storeConsignationLocal')
+// const { sauvegarderBackupTransactions, rotationBackupTransactions } = require('./storeConsignationLocal')
+const { chargerConfiguration, modifierConfiguration } = require('./storeConsignationLocal')
 
 // Charger les cles privees utilisees pour se connecter par sftp
 // Ed25519 est prefere, RSA comme fallback
@@ -22,6 +25,8 @@ const CHUNK_SIZE = 32768 - 29  // Packet ssh est 32768 sur hostgator, 29 bytes o
 
 const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegrilles/consignation'
 const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
+const PATH_CONFIG_DIR = path.join(CONSIGNATION_PATH, 'config')
+const PATH_CONFIG_FICHIER = path.join(PATH_CONFIG_DIR, 'store.json')
 
 let _intervalEntretienConnexion = null,
     _connexionSsh = null,
@@ -73,7 +78,7 @@ async function entretienConnexion(opts) {
 }
 
 function getPathFichier(fuuid) {
-    return path.join(_remotePath, fuuid)
+    return path.join(_remotePath, 'local', fuuid)
 }
 
 async function getInfoFichier(fuuid) {
@@ -240,7 +245,7 @@ async function putFile(sftp, fuuid, entry, writeHandle, callback) {
         streamReader.on('end', _=>{
             termine = true
             if(ecritureEnCours) {
-                debug("end appele, ecriture en cours : %s", ecritureEnCours)
+                debugSftp("end appele, ecriture en cours : %s", ecritureEnCours)
             } else {
                 resolve({total: filePosition})
             }
@@ -255,7 +260,7 @@ async function putFile(sftp, fuuid, entry, writeHandle, callback) {
             // verificateurHachage.update(chunk)
 
             // Ecrire le contenu du chunk
-            debug("Ecrire position %d (offset %d, len: %d)", filePosition, 0, chunk.length)
+            debugSftp("Ecrire position %d (offset %d, len: %d)", filePosition, 0, chunk.length)
             try {
                 await new Promise(resolve=>setTimeout(resolve, 20))  // Throttle, aide pour hostgator
                 await write(sftp, writeHandle, chunk, 0, chunk.length, filePosition)
@@ -268,7 +273,7 @@ async function putFile(sftp, fuuid, entry, writeHandle, callback) {
             // Incrementer position globale
             filePosition += chunk.length
 
-            debug("Ecriture rendu position %d (offset %d)", filePosition)
+            debugSftp("Ecriture rendu position %d (offset %d)", filePosition)
 
             ecritureEnCours = false
             if(termine) resolve({total: filePosition})
@@ -331,7 +336,7 @@ async function connecterSSH(host, port, username, opts) {
         conn.connect({
             host, port, username, privateKey,
             readyTimeout: 60000,  // 60s, regle probleme sur login hostgator
-            debug,
+            debug: debugSftp,
         })
     })
 }
@@ -378,7 +383,9 @@ async function marquerSupprime(fuuid) {
 async function parcourirFichiers(callback, opts) {
     try {
         var sftp = await sftpClient()
-        await parcourirFichiersRecursif(sftp, _remotePath, callback, opts)
+        const pathLocal = getRemotePathFichiers()
+        debug("sftp.parcourirFichiers Path local %s", pathLocal)
+        await parcourirFichiersRecursif(sftp, pathLocal, callback, opts)
         await callback()  // Dernier appel avec aucune valeur (fin traitement)
     } finally {
         debug("parcourirFichiers fermer sftp")
@@ -386,16 +393,24 @@ async function parcourirFichiers(callback, opts) {
     }
 }
 
+function getRemotePathFichiers() {
+    return path.join(_remotePath, 'local')
+}
+
+function getRemotePathBackup() {
+    return path.join(_remotePath, 'backup')
+}
+
 async function parcourirBackup(callback, opts) {
-    throw new Error('not implemented')
-    // try {
-    //     var sftp = await sftpClient()
-    //     await parcourirFichiersRecursif(sftp, _remotePath, callback, opts)
-    //     await callback()  // Dernier appel avec aucune valeur (fin traitement)
-    // } finally {
-    //     debug("parcourirFichiers fermer sftp")
-    //     // sftp.end(err=>debug("SFTP end : %O", err))
-    // }
+    try {
+        var sftp = await sftpClient()
+        const pathLocal = getRemotePathBackup()
+        await parcourirFichiersRecursif(sftp, pathLocal, callback, opts)
+        await callback()  // Dernier appel avec aucune valeur (fin traitement)
+    } finally {
+        debug("parcourirFichiers fermer sftp")
+        // sftp.end(err=>debug("SFTP end : %O", err))
+    }
 }
 
 async function parcourirFichiersRecursif(sftp, repertoire, callback, opts) {
@@ -418,7 +433,13 @@ async function parcourirFichiersRecursif(sftp, repertoire, callback, opts) {
             })
             if(infoFichiers && infoFichiers.length > 0) {
                 for(let fichier of infoFichiers) {
-                    const data = { filename: fichier.filename, directory: repertoire, modified: fichier.attrs.mtime }
+                    debug("parcourirFichiersRecursif Fichier ", fichier)
+                    const data = { 
+                        filename: fichier.filename, 
+                        directory: repertoire, 
+                        modified: fichier.attrs.mtime, 
+                        size: fichier.attrs.size 
+                    }
                     await callback(data)
                 }
             }
@@ -546,9 +567,25 @@ function close(sftp, handle) {
 
 module.exports = {
     init, fermer,
-    getInfoFichier, consignerFichier, marquerSupprime, recoverFichierSupprime,
+    chargerConfiguration, modifierConfiguration,
+//     getFichier,
+    getInfoFichier, consignerFichier, 
+    marquerSupprime, recoverFichierSupprime,
     parcourirFichiers, parcourirBackup,
 
     // Re-exporter - provient de store local
-    sauvegarderBackupTransactions, rotationBackupTransactions,
+//     sauvegarderBackupTransactions, rotationBackupTransactions,
+//     getFichiersBackupTransactionsCourant, getBackupTransaction,
+//     getBackupTransactionStream, pipeBackupTransactionStream, deleteBackupTransaction,
 }
+
+// module.exports = {
+//     init, 
+//     chargerConfiguration, modifierConfiguration,
+//     getFichier, getInfoFichier, consignerFichier,
+//     marquerSupprime, recoverFichierSupprime, 
+//     parcourirFichiers, parcourirBackup,
+//     sauvegarderBackupTransactions, rotationBackupTransactions,
+//     getFichiersBackupTransactionsCourant, getBackupTransaction,
+//     getBackupTransactionStream, pipeBackupTransactionStream, deleteBackupTransaction,
+// }
