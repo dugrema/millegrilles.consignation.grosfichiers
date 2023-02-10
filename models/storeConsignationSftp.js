@@ -123,10 +123,6 @@ async function consignerFichier(pathFichierStaging, fuuid) {
     const pathFichier = getPathFichier(fuuid)
 
     // Lire toutes les parts et combiner dans la destination
-    const dirFichier = path.dirname(pathFichier)
-    // await fsPromises.mkdir(dirFichier, {recursive: true})
-    // const writer = fs.createWriteStream(pathFichier)
-    // const writer = _connexionSftp.createWriteStream(pathFichier, {flags: 'w', mode: 0o644, autoClose: true})
 
     const promiseReaddirp = readdirp(pathFichierStaging, {
         type: 'files',
@@ -242,51 +238,6 @@ async function putFile(sftp, fuuid, entry, writeHandle, callback) {
     const streamReader = fs.createReadStream(fullPath, {highWaterMark: CHUNK_SIZE})
 
     const resultat = await writeStream(sftp, streamReader, writeHandle, callback)
-
-    // const promise = new Promise((resolve, reject)=>{
-    //     let termine = false,
-    //         ecritureEnCours = false
-    //     streamReader.on('end', _=>{
-    //         termine = true
-    //         if(ecritureEnCours) {
-    //             debugSftp("end appele, ecriture en cours : %s", ecritureEnCours)
-    //         } else {
-    //             resolve({total: filePosition})
-    //         }
-    //     })
-    //     streamReader.on('error', err=>reject(err))
-    //     streamReader.on('data', async chunk => {
-    //         ecritureEnCours = true
-    //         if(termine) return reject("Stream / promise resolved avant fin ecriture")
-
-    //         // Verifier hachage
-    //         streamReader.pause()
-    //         // verificateurHachage.update(chunk)
-
-    //         // Ecrire le contenu du chunk
-    //         debugSftp("Ecrire position %d (offset %d, len: %d)", filePosition, 0, chunk.length)
-    //         try {
-    //             await new Promise(resolve=>setTimeout(resolve, 20))  // Throttle, aide pour hostgator
-    //             await write(sftp, writeHandle, chunk, 0, chunk.length, filePosition)
-    //             if(callback) await callback(chunk, filePosition)
-    //         } catch(err) {
-    //             streamReader.close()
-    //             return reject(err)
-    //         }
-
-    //         // Incrementer position globale
-    //         filePosition += chunk.length
-
-    //         debugSftp("Ecriture rendu position %d (offset %d)", filePosition)
-
-    //         ecritureEnCours = false
-    //         if(termine) resolve({total: filePosition})
-
-    //         streamReader.resume()
-    //     })
-    // })
-
-    // const resultat = await promise
 
     debug("Taille fichier %s : %d", fuuid, filePosition)
     return resultat
@@ -538,13 +489,6 @@ async function sauvegarderBackupTransactions(message) {
     const dateFinBackup = new Date(date_transactions_fin * 1000)
     debug("Sauvegarde du backup %s date %O", domaine, dateFinBackup)
 
-    // // Creer repertoire de backup
-    // const dirBackup = getRemotePathBackup()
-    // const dirBackupDomaine = path.join(dirBackup, domaine)
-    // debug("Creation repertoire backup ", dirBackupDomaine)
-    // await mkdir(sftp, dirBackup, 0o750)
-    // await mkdir(sftp, dirBackupDomaine, 0o750)
-
     // Formatter le nom du fichier avec domaine_partition_DATE
     const dateFinString = dateFinBackup.toISOString().replaceAll('-', '').replaceAll(':', '')
     const nomFichierList = [domaine]
@@ -635,12 +579,8 @@ async function emettreMessageCles(mq, replyTo, cles, complet) {
 }
 
 async function getBackupTransaction(pathBackupTransaction) {
-    throw new Error('not implemented')
-
-    const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
-
-    let contenu = await fsPromises.readFile(pathFichier)
-    contenu = await lzma.decompress(contenu)
+    const readStream = getBackupTransactionStream(pathBackupTransaction)
+    contenu = await lzma.decompress(readStream)
 
     debug("Contenu archive str : %O", contenu)
     contenu = JSON.parse(contenu)
@@ -650,9 +590,9 @@ async function getBackupTransaction(pathBackupTransaction) {
 }
 
 async function getBackupTransactionStream(pathBackupTransaction) {
-    throw new Error('not implemented')
-    const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
-    return fs.createReadStream(pathFichier)
+    const pathDomaine = path.join(getRemotePathBackup(), pathBackupTransaction)
+    const sftp = await sftpClient()
+    return sftp.createReadStream(pathDomaine)
 }
 
 async function pipeBackupTransactionStream(pathFichier, stream) {
@@ -675,9 +615,10 @@ async function pipeBackupTransactionStream(pathFichier, stream) {
 }
 
 async function deleteBackupTransaction(pathBackupTransaction) {
-    throw new Error('not implemented')
-    const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
-    await fsPromises.unlink(pathFichier)
+    const dirBackup = getRemotePathBackup()
+    const pathFichier = path.join(dirBackup, pathBackupTransaction)
+    const sftp = await sftpClient()
+    await unlink(sftp, pathFichier)
 }
 
 function mkdir(sftp, pathRepertoire) {
