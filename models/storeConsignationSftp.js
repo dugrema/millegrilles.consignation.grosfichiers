@@ -413,8 +413,13 @@ function getRemotePathBackup() {
     return path.join(_remotePath, 'backup')
 }
 
+function getRemotePathBackupTransactions() {
+    return path.join(_remotePath, 'backup', 'transactions')
+}
+
 async function parcourirBackup(callback, opts) {
     debug("Parcourir backup")
+    
     try {
         var sftp = await sftpClient()
         const pathLocal = getRemotePathBackup()
@@ -524,7 +529,7 @@ async function rotationBackupTransactions(message) {
 
     const maxArchives = 1
 
-    const pathDomaine = path.join(getRemotePathBackup(), domaine)
+    const pathDomaine = path.join(getRemotePathBackupTransactions(), domaine)
     const sftp = await sftpClient()
     await rmdir(sftp, pathDomaine)
 
@@ -579,7 +584,7 @@ async function emettreMessageCles(mq, replyTo, cles, complet) {
 }
 
 async function getBackupTransaction(pathBackupTransaction) {
-    const readStream = getBackupTransactionStream(pathBackupTransaction)
+    const readStream = getRemotePathBackupTransactions(pathBackupTransaction)
     contenu = await lzma.decompress(readStream)
 
     debug("Contenu archive str : %O", contenu)
@@ -590,7 +595,7 @@ async function getBackupTransaction(pathBackupTransaction) {
 }
 
 async function getBackupTransactionStream(pathBackupTransaction) {
-    const pathDomaine = path.join(getRemotePathBackup(), pathBackupTransaction)
+    const pathDomaine = path.join(getRemotePathBackupTransactions(), pathBackupTransaction)
     const sftp = await sftpClient()
     return sftp.createReadStream(pathDomaine)
 }
@@ -601,7 +606,7 @@ async function pipeBackupTransactionStream(pathFichier, stream) {
 
     const pathFichierParsed = path.parse(pathFichier)
     debug("pipeBackupTransactionStream ", pathFichierParsed)
-    const dirBackup = getRemotePathBackup()
+    const dirBackup = getRemotePathBackupTransactions()
     await mkdir(sftp, dirBackup)
     const dirFichier = path.join(dirBackup, pathFichierParsed.dir)
     await mkdir(sftp, dirFichier)
@@ -615,7 +620,7 @@ async function pipeBackupTransactionStream(pathFichier, stream) {
 }
 
 async function deleteBackupTransaction(pathBackupTransaction) {
-    const dirBackup = getRemotePathBackup()
+    const dirBackup = getRemotePathBackupTransactions()
     const pathFichier = path.join(dirBackup, pathBackupTransaction)
     const sftp = await sftpClient()
     await unlink(sftp, pathFichier)
