@@ -9,8 +9,8 @@ const { Readable } = require('stream')
 const lzma = require('lzma-native')
 
 const { Hacheur, VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
-const { writer } = require('repl')
-const hachage = require('@dugrema/millegrilles.nodejs/src/hachage')
+// const { writer } = require('repl')
+// const hachage = require('@dugrema/millegrilles.nodejs/src/hachage')
 // const { sauvegarderBackupTransactions, rotationBackupTransactions } = require('./storeConsignationLocal')
 const { chargerConfiguration, modifierConfiguration } = require('./storeConsignationLocal')
 
@@ -83,6 +83,14 @@ function getPathFichier(fuuid) {
     return path.join(_remotePath, 'local', fuuid)
 }
 
+function getPathWork(fuuid) {
+    if(fuuid) {
+        return path.join(_remotePath, 'work', fuuid)
+    } else {
+        return path.join(_remotePath, 'work')
+    }
+}
+
 async function getInfoFichier(fuuid) {
     debug("getInfoFichier %s", fuuid)
     const url = new URL(_urlDownload)
@@ -118,9 +126,11 @@ async function recoverFichierSupprime(fuuid) {
 async function consignerFichier(pathFichierStaging, fuuid) {
     debug("Consigner fichier fuuid %s", fuuid)
     if(!_connexionSsh) await connecterSSH()
+    
     // let sftp = await sftpClient()
+    await mkdir(await sftpClient(), getPathWork())
 
-    const pathFichier = getPathFichier(fuuid)
+    const pathFichier = getPathWork(fuuid)
 
     // Lire toutes les parts et combiner dans la destination
 
@@ -162,6 +172,7 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
         let retryCount = 0,
             fileSize = 0
+        debug("consignerFichier Conserver %s avec parts %O", fuuid, listeParts)
         for await (const entry of listeParts) {
             while(retryCount++ < 3) {
                 try {
@@ -186,9 +197,10 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         }
 
         // await writer.close()
-        await verificateurHachage.verify()
         const multiHachageSha256 = await hacheur.finalize()
         const hachageSha256 = multiHachageSha256.slice(5)  // Retirer 5 premiers chars (f multibase, multihash)
+        debug("Fichier %s sftp upload, sha-256 local = %s, taille %s", fuuid, hachageSha256, fileSize)
+        await verificateurHachage.verify()
         debug("Fichier %s transfere avec succes vers consignation sftp, sha-256 local = %s", fuuid, hachageSha256)
 
         // Attendre que l'ecriture du fichier soit terminee (fs sync)
@@ -209,6 +221,9 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         }
 
         debug("Information fichier sftp : %O", infoFichier)
+
+        // Renommer de work/fuuid a local/fuuid
+        await rename(sftp, pathFichier, getPathFichier(fuuid))
 
     } catch(err) {
         try {
@@ -231,23 +246,23 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
 async function putFile(sftp, fuuid, entry, writeHandle, callback) {
     const {position, fullPath} = entry
-    let filePosition = position
 
     // debug("Entry path : %O", entry);
     debug("Traiter consignation pour item %s position %d", fuuid, position)
     const streamReader = fs.createReadStream(fullPath, {highWaterMark: CHUNK_SIZE})
 
-    const resultat = await writeStream(sftp, streamReader, writeHandle, callback)
+    const resultat = await writeStream(sftp, streamReader, writeHandle, callback, {position})
 
-    debug("Taille fichier %s : %d", fuuid, filePosition)
+    debug("Bytes fichier %s ecits : %d", fuuid, resultat.total - position)
     return resultat
 }
 
-async function writeStream(sftp, streamReader, writeHandle, callback) {
-    let filePosition = 0
+async function writeStream(sftp, streamReader, writeHandle, callback, opts) {
+    opts = opts || {}
+    let filePosition = opts.position || 0
 
     // debug("Entry path : %O", entry);
-    debug("putStream")
+    debug("putStream position %d", filePosition)
 
     const promise = new Promise((resolve, reject)=>{
         let termine = false,
@@ -255,7 +270,7 @@ async function writeStream(sftp, streamReader, writeHandle, callback) {
         streamReader.on('end', _=>{
             termine = true
             if(ecritureEnCours) {
-                debugSftp("end appele, ecriture en cours : %s", ecritureEnCours)
+                debug("end appele, ecriture en cours : %s", ecritureEnCours)
             } else {
                 resolve({total: filePosition})
             }
@@ -272,7 +287,7 @@ async function writeStream(sftp, streamReader, writeHandle, callback) {
             // Ecrire le contenu du chunk
             debugSftp("Ecrire position %d (offset %d, len: %d)", filePosition, 0, chunk.length)
             try {
-                await new Promise(resolve=>setTimeout(resolve, 20))  // Throttle, aide pour hostgator
+                // await new Promise(resolve=>setTimeout(resolve, 20))  // Throttle, aide pour hostgator
                 await write(sftp, writeHandle, chunk, 0, chunk.length, filePosition)
                 if(callback) await callback(chunk, filePosition)
             } catch(err) {
@@ -286,7 +301,7 @@ async function writeStream(sftp, streamReader, writeHandle, callback) {
             debugSftp("Ecriture rendu position %d (offset %d)", filePosition)
 
             ecritureEnCours = false
-            if(termine) resolve({total: filePosition})
+            if(termine) return resolve({total: filePosition})
 
             streamReader.resume()
         })
