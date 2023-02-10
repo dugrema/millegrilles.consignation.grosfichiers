@@ -456,6 +456,17 @@ async function getDataSynchronisation() {
                         else resolve()
                     })
                 })
+
+                // Detecter fichiers locaux (actifs) qui ne sont pas sur le primaire
+                const fichierActifs = path.join(getPathDataFolder(), 'fuuidsActifs.txt')
+                const fichierMissing = path.join(getPathDataFolder(), 'fuuidsMissing.txt')
+                await new Promise((resolve, reject)=>{
+                    exec(`comm -3 ${fichierActifs} ${fichierActifsPrimaireDest} > ${fichierMissing}`, error=>{
+                        if(error) return reject(error)
+                        else resolve()
+                    })
+                })
+
             } 
             catch(err) {
                 console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
@@ -525,12 +536,16 @@ async function downloadFichiersSync() {
     const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
     await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
 
-    const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
-    const readStreamFichiers = fs.createReadStream(fichierActifsPrimaire)
+    // const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
+    const fichierMissing = path.join(getPathDataFolder(), 'fuuidsMissing.txt')
+    const readStreamFichiers = fs.createReadStream(fichierMissing)
     const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
     for await (const line of rlFichiers) {
-        const fuuid = line.trim()
-        _queueDownloadFuuids.add(fuuid)
+        // Detecter fichiers manquants localement par espaces vide au debut de la ligne
+        if(line.startsWith('	')) {
+            const fuuid = line.trim()
+            _queueDownloadFuuids.add(fuuid)
+        }
     }
 
     if(_timeoutStartThreadDownload) {
@@ -574,8 +589,8 @@ async function _threadDownloadFichiersDuPrimaire() {
 }
 
 async function downloadFichierDuPrimaire(fuuid) {
-    const infoFichier = await getInfoFichier(fuuid, {recover: true})
-    if(!infoFichier) {
+    // const infoFichier = await getInfoFichier(fuuid, {recover: true})
+    // if(!infoFichier) {
         debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
         const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
         const urlFuuid = new URL(urlTransfert.href)
@@ -609,7 +624,7 @@ async function downloadFichierDuPrimaire(fuuid) {
         } finally {
             await fsPromises.rm(dirFuuid, {recursive: true, force: true})
         }
-    }
+    // }
 }
 
 async function marquerFichiersCorbeille() {
@@ -639,24 +654,27 @@ async function marquerFichiersCorbeille() {
 async function uploaderFichiersVersPrimaire() {
     debug("uploaderFichiersVersPrimaire Debut")
 
-    // Detecter fichiers locaux (actifs) qui ne sont pas sur le primaire
-    const fichierActifs = path.join(getPathDataFolder(), 'fuuidsActifs.txt')
-    const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
+    // // Detecter fichiers locaux (actifs) qui ne sont pas sur le primaire
+    // const fichierActifs = path.join(getPathDataFolder(), 'fuuidsActifs.txt')
+    // const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
     const fichierMissing = path.join(getPathDataFolder(), 'fuuidsMissing.txt')
-    await new Promise((resolve, reject)=>{
-        exec(`comm -3 ${fichierActifs} ${fichierActifsPrimaire} > ${fichierMissing}`, error=>{
-            if(error) return reject(error)
-            else resolve()
-        })
-    })
+    // await new Promise((resolve, reject)=>{
+    //     exec(`comm -3 ${fichierActifs} ${fichierActifsPrimaire} > ${fichierMissing}`, error=>{
+    //         if(error) return reject(error)
+    //         else resolve()
+    //     })
+    // })
 
     try {
         const readStreamFichiers = fs.createReadStream(fichierMissing)
         const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
         for await (const line of rlFichiers) {
-            const fuuid = line.trim()
-            debug("uploaderFichiersVersPrimaire Transferer fichier manquant %s vers primaire", fuuid)
-            _transfertPrimaire.ajouterItem(fuuid)
+            // Detecter changement distant avec un fuuid dans la premiere colonne du fichier (pas d'espaces vides)
+            if( ! line.startsWith(' ')) {
+                const fuuid = line.trim()
+                debug("uploaderFichiersVersPrimaire Transferer fichier manquant %s vers primaire", fuuid)
+                _transfertPrimaire.ajouterItem(fuuid)
+            }
         }
     } catch(err) {
         debug("uploaderFichiersVersPrimaire Erreur traitement ", err)

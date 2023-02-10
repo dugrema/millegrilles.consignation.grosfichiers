@@ -83,9 +83,13 @@ TransfertPrimaire.prototype.putFichier = async function(fuuid) {
 }
 
 TransfertPrimaire.prototype.putAxios = async function(fuuid, statItem) {
-    const filePath = statItem.filePath,
-          size = statItem.stat.size
-    debug("PUT Axios %s size %d", fuuid, size)
+    debug("PUT Axios %s info %O", fuuid, statItem)
+    const filePath = statItem.filePath
+    const statContent = statItem.stat || {}
+    const size = statContent.size
+    const fileRedirect = statItem.fileRedirect
+
+    // debug("PUT Axios %s size %d", fuuid, size)
 
     const correlation = this.storeConsignation.getInstanceId() + '_' + fuuid,
           httpsAgent = this.storeConsignation.getHttpsAgent(),
@@ -93,8 +97,12 @@ TransfertPrimaire.prototype.putAxios = async function(fuuid, statItem) {
 
     // S'assurer que le fichier n'existe pas deja
     try {
-        const urlFuuid = new URL(urlConsignationTransfert.href)
-        urlFuuid.pathname = path.join(urlFuuid.pathname, fuuid)
+        let urlFuuid = new URL(urlConsignationTransfert.href)
+        if(fileRedirect) {
+            urlFuuid = new URL(fileRedirect)
+        } else {
+            urlFuuid.pathname = path.join(urlFuuid.pathname, fuuid)
+        }
         await axios({method: 'HEAD', url: urlFuuid.href, httpsAgent})
         console.error(new Date() + "transfertPrimaire.putAxios Fichier %s existe deja sur le primaire, annuler transfert", fuuid)
         return false
