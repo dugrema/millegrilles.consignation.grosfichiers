@@ -10,6 +10,7 @@ const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/
 
 const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
+const StoreConsignationAwsS3 = require('./storeConsignationAwsS3')
 
 const TransfertPrimaire = require('./transfertPrimaire')
 const { dechiffrerConfiguration } = require('./pki')
@@ -73,7 +74,7 @@ async function changerStoreConsignation(typeStore, params, opts) {
 
     switch(typeStore) {
         case 'sftp': _storeConsignation = StoreConsignationSftp; break
-        case 'awss3': throw new Error('todo'); break
+        case 'awss3': _storeConsignation = StoreConsignationAwsS3; break
         case 'local':
         case 'millegrille': 
             _storeConsignation = StoreConsignationLocal
@@ -101,11 +102,9 @@ async function chargerConfiguration(opts) {
 
         const data_chiffre = configuration.data_chiffre
         if(data_chiffre) {
-            // Aller chercher la cle de dechiffrage
-            const dataDechiffre = await dechiffrerConfiguration(_mq, configuration)
-            debug("Cle dechiffrage configuration ", dataDechiffre)
+            // Dechiffrer configuration - mis dans configuration.data_dechiffre
+            configuration.data_dechiffre = await dechiffrerConfiguration(_mq, configuration)
         }
-
 
         await _storeConsignation.modifierConfiguration(configuration, {override: true})
         return configuration

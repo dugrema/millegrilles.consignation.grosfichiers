@@ -32,11 +32,7 @@ async function recupererCle(mq, ref_hachage_bytes, opts) {
 async function dechiffrerConfiguration(mq, configuration) {
     const data_chiffre = configuration.data_chiffre
     const cle = await recupererCle(mq, data_chiffre.ref_hachage_bytes)
-    const doc = await dechiffrerChampsChiffres(data_chiffre, cle)
-    
-    configuration.data_dechiffre = doc
-
-    return doc
+    return await dechiffrerChampsChiffres(data_chiffre, cle)
 }
 
 module.exports = { recupererCle, dechiffrerConfiguration }
