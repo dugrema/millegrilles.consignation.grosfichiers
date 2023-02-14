@@ -12,6 +12,7 @@ const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
 
 const TransfertPrimaire = require('./transfertPrimaire')
+const { dechiffrerConfiguration } = require('./pki')
 
 const { startConsuming: startConsumingBackup, stopConsuming: stopConsumingBackup } = require('../messages/backup')
 
@@ -97,6 +98,15 @@ async function chargerConfiguration(opts) {
         const configuration = await _mq.transmettreRequete('CoreTopologie', requete, {action, exchange: '2.prive'})
         // await _mq.transmettreRequete({instance_id: FichiersTransfertBackingStore.getInstanceId()})
         debug("Configuration recue ", configuration)
+
+        const data_chiffre = configuration.data_chiffre
+        if(data_chiffre) {
+            // Aller chercher la cle de dechiffrage
+            const dataDechiffre = await dechiffrerConfiguration(_mq, configuration)
+            debug("Cle dechiffrage configuration ", dataDechiffre)
+        }
+
+
         await _storeConsignation.modifierConfiguration(configuration, {override: true})
         return configuration
     } catch(err) {
