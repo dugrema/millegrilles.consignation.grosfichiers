@@ -11,7 +11,7 @@ const { Upload } = require("@aws-sdk/lib-storage")
 const { 
     S3Client, ListObjectsCommand, GetObjectCommand,
     CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, 
-    ListMultipartUploadsCommand, PutObjectAclCommand,
+    ListMultipartUploadsCommand, PutObjectAclCommand, HeadObjectCommand,
 } = require('@aws-sdk/client-s3')
 const fs = require('fs')
 const fsPromises = require('fs/promises')
@@ -80,18 +80,73 @@ async function init(params) {
     if(s3_endpoint) configurationAws.endpoint = s3_endpoint
     
     _s3_client = new S3Client(configurationAws)
+
+    // Tester connexion en nettoyant uploads incomplets
+    await abortMultipartUploads()
 }
 
 function fermer() {
 }
 
-async function getInfoFichier(fuuid) {
-    debug("getInfoFichier %s", fuuid)
-    const url = new URL(_urlDownload)
-    url.pathname = path.join(url.pathname, fuuid)
-    const fileRedirect = url.href
-    debug("File redirect : %O", fileRedirect)
-    return { fileRedirect }
+/** Supprimer tous les uploads incomplets. */
+async function abortMultipartUploads(opts) {
+    opts = opts || {}
+    const bucket = opts.bucket || _s3_bucket
+
+    debug("abortMultipartUploads Debut")
+
+    const command = new ListMultipartUploadsCommand({
+        Bucket: bucket,
+    })
+    const reponseListe = await _s3_client.send(command)
+
+    const uploads = reponseListe.Uploads
+    if(uploads) {
+        for await(let u of uploads) {
+            const command = new AbortMultipartUploadCommand({
+                Bucket: bucket,
+                Key: u.Key,
+                UploadId: u.UploadId,
+            })
+            const response = await _s3_client.send(command)
+            debug("abortMultipartUpload Retirer upload incomplet de ", response.Key)
+        }
+    }
+
+    debug("abortMultipartUploads Complete")
+}
+
+async function getInfoFichier(fuuid, opts) {
+    opts = opts || {}
+    const prefix = opts.prefix || 'c/'
+    const keyPath = path.join(prefix, fuuid)
+    try {
+        const command = new HeadObjectCommand({
+            Bucket: bucket,
+            Key: keyPath,
+        })
+
+        const reponse = await _s3_client.send(command)
+        const stat = {
+            mTimeMs: reponse.LastModified.getTime(),
+            mtime: reponse.LastModified,
+            size: reponse.ContentLength,
+        }
+
+        return { stat, filePath: keyPath }
+    } catch(err) {
+        const metadata = err['$metadata']
+        if(!metadata) throw err
+        const httpStatusCode = metadata.httpStatusCode
+        if(httpStatusCode === 404) {
+            if(opts.recover === true)  {
+                // Verifier si le fichier est encore disponible
+                return recoverFichierSupprime(fuuid)
+            }
+            return null
+        }
+        else throw err
+    }
 }
 
 async function recoverFichierSupprime(fuuid) {
@@ -274,9 +329,9 @@ async function _parcourir(bucketParams, callback, opts) {
         const command = new ListObjectsCommand(bucketParams)
         const response = await _s3_client.send(command)
 
-        debug("_parcourir Response ", response)
         const contents = response.Contents
         if(contents) {
+            debug("_parcourir Response %d items", contents.length)
             for await (let f of response.Contents) {
                 const pathFichier = path.parse(f.Key)
                 const data = { 
