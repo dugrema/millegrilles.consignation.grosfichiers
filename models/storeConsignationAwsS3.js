@@ -165,8 +165,8 @@ async function uploadMultipart(fuuid, listeParts, bucket, opts) {
     const localPartSize = localPartStat.size
     if(localPartSize < BATCH_SIZE_MIN) {
         // Combiner parts en multistreams si individuellement
-        const numPartsStream = Math.ceil(MIN_PART_SIZE / localPartSize)
-        debug("Combiner parts de %d bytes en groupes de %d parts (min %d)", localPartSize, numPartsStream, MIN_PART_SIZE)
+        const numPartsStream = Math.ceil(BATCH_SIZE_MIN / localPartSize)
+        debug("Combiner parts de %d bytes en groupes de %d parts (min %d)", localPartSize, numPartsStream, BATCH_SIZE_MIN)
         const partsOriginal = listeParts
         listeParts = []
         while(partsOriginal.length > 0) {
