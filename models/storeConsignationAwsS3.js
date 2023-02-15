@@ -483,7 +483,19 @@ async function getFichiersBackupTransactionsCourant(mq, replyTo) {
 }
 
 async function getBackupTransaction(pathBackupTransaction) {
-    throw new Error('not implemented')
+    const readStream = await getBackupTransactionStream(pathBackupTransaction)
+    try {
+        let contenu = await lzma.decompress(readStream)
+
+        debug("Contenu archive str : %O", contenu)
+        contenu = JSON.parse(contenu)
+
+        debug("Contenu archive : %O", contenu)
+        return contenu
+    } catch(err) {
+        readStream.destroy()
+        throw err
+    }
 }
 
 async function getBackupTransactionStream(pathBackupTransaction) {
