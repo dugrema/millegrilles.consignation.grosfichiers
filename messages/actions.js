@@ -1,7 +1,8 @@
 const debug = require('debug')('messages:actions')
 
 var _mq = null,
-    _storeConsignation
+    _storeConsignation,
+    _qDownloadSync = []
 
 function init(mq, storeConsignation) {
     debug("messages actions init()")
@@ -9,11 +10,20 @@ function init(mq, storeConsignation) {
     _storeConsignation = storeConsignation
 }
 
+async function startConsuming() {
+    await _mq.startConsumingCustomQ('actions')
+}
+  
+async function stopConsuming() {
+    await _mq.stopConsumingCustomQ('actions')
+}
+  
 function on_connecter() {
     debug("on_connecter Enregistrer 'evenement.global.cedule'")
     // ajouterCb('evenement.global.cedule', traiterCedule, {direct: true})
-    ajouterCb('evenement.grosfichiers.fuuidSupprimerDocument', traiterFichiersSupprimes)
-    ajouterCb('evenement.grosfichiers.fuuidRecuperer', traiterFichiersRecuperes)
+    // ajouterCb('evenement.grosfichiers.fuuidSupprimerDocument', traiterFichiersSupprimes)
+    // ajouterCb('evenement.grosfichiers.fuuidRecuperer', traiterFichiersRecuperes)
+    // ajouterCb('evenement.fichiers.consignationPrimaire', consignationPrimaire)
     ajouterCb('requete.fichiers.fuuidVerifierExistance', verifierExistanceFichiers)
 }
 
@@ -89,4 +99,10 @@ async function verifierExistanceFichiers(message, rk, opts) {
     
 }
 
-module.exports = { init, on_connecter }
+async function consignationPrimaire(message, rk, opts) {
+    if(!_storeConsignation.estPrimaire())  return  // Rien a faire si primaire
+    const { fuuid } = message
+    _storeConsignation.ajouterDownloadPrimaire(fuuid)
+}
+
+module.exports = { init, on_connecter, startConsuming, stopConsuming }

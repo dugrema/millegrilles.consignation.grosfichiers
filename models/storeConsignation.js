@@ -16,6 +16,7 @@ const TransfertPrimaire = require('./transfertPrimaire')
 const { dechiffrerConfiguration } = require('./pki')
 
 const { startConsuming: startConsumingBackup, stopConsuming: stopConsumingBackup } = require('../messages/backup')
+const { startConsuming: startConsumingActions, stopConsuming: stopConsumingActions } = require('../messages/actions')
 
 const BATCH_SIZE = 100
 const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
@@ -50,7 +51,7 @@ async function init(mq, opts) {
     // Pour consignationFichiers, toujours faire un lien vers la consignation primaire
     FichiersTransfertBackingStore.configurerThreadPutFichiersConsignation(
         mq, 
-        {...opts, consignerFichier: transfererFichierVersConsignation, primaire: true}
+        {...opts, consignerFichier: transfererFichierVersConsignation}
     )
 
     await changerStoreConsignation(typeStore, params)
@@ -187,7 +188,10 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
         console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
     }
 
-    if(_estPrimaire !== true) {
+    if(_estPrimaire) {
+        // Emettre un message
+        await evenementFichierPrimaire(mq, fuuid)
+    } else {
         // Le fichier a ete transfere avec succes (aucune exception)
         _transfertPrimaire.ajouterItem(fuuid)
     }
@@ -195,6 +199,17 @@ async function transfererFichierVersConsignation(mq, pathReady, item) {
     fsPromises.rm(pathFichierStaging, {recursive: true})
         .catch(err=>console.error("Erreur suppression repertoire %s apres consignation reussie : %O", fuuid, err))
 
+}
+
+async function evenementFichierPrimaire(mq, fuuid) {
+    // Emettre evenement aux secondaires pour indiquer qu'un nouveau fichier est pret
+    debug("Evenement consignation primaire sur", fuuid)
+    const evenement = {fuuid}
+    try {
+    mq.emettreEvenement(evenement, 'fichiers', {action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
+    } catch(err) {
+        console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err)
+    }
 }
 
 var _batchFichiersFuuids = null, // Dict { [fuuid]: false/{fuuid, supprime: bool} }
@@ -359,23 +374,10 @@ async function entretien() {
         // Determiner si on est la consignation primaire
         const instance_id_consignation = FichiersTransfertBackingStore.getInstanceId()
         const instance_id_local = _mq.pki.cert.subject.getField('CN').value
-        debug("entetien Instance consignation : %s, instance_id local %s", instance_id_consignation, instance_id_local)
+        debug("entretien Instance consignation : %s, instance_id local %s", instance_id_consignation, instance_id_local)
         
         const courant = _estPrimaire
-        _estPrimaire = instance_id_consignation === instance_id_local
-        if(courant !== _estPrimaire) {
-            debug('entretien Toggle estPrimaire => %s', _estPrimaire)
-            if(_estPrimaire === true) {
-                // Ecouter Q de backup sur MQ
-                startConsumingBackup().catch(err=>console.error(new Date() + ' Erreur start consuming backup', err))
-            } else {
-                // Arret ecoute de Q de backup sur MQ
-                stopConsumingBackup().catch(err=>console.error(new Date() + ' Erreur stop consuming backup', err))
-            }
-        }
-
-        FichiersTransfertBackingStore.setEstPrimaire(_estPrimaire)
-        debug("entetien estPrimaire? %s", _estPrimaire)
+        await setEstConsignationPrimaire(instance_id_consignation === instance_id_local)
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
     }
@@ -1009,12 +1011,16 @@ async function setEstConsignationPrimaire(primaire) {
     const courant = _estPrimaire
     _estPrimaire = primaire
     if(courant !== primaire) {
+        FichiersTransfertBackingStore.setEstPrimaire(_estPrimaire)
         debug("Changement role consignation : primaire => %s", primaire)
+        FichiersTransfertBackingStore.setEstPrimaire(primaire)
         if(_estPrimaire === true) {
             // Ecouter Q de backup sur MQ
+            startConsumingActions().catch(err=>console.error(new Date() + ' Erreur start consuming actions', err))
             startConsumingBackup().catch(err=>console.error(new Date() + ' Erreur start consuming backup', err))
         } else {
             // Arret ecoute de Q de backup sur MQ
+            stopConsumingActions().catch(err=>console.error(new Date() + ' Erreur stop consuming actions', err))
             stopConsumingBackup().catch(err=>console.error(new Date() + ' Erreur stop consuming backup', err))
         }
     }

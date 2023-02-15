@@ -24,7 +24,7 @@ async function init(storeConsignation, opts) {
   const qCustom = {
     'backup': {name: 'fichiers/backup', autostart: false},
     'publication': {name: 'fichiers/publication'},
-    'actions': {name: 'fichiers/actions'},
+    'actions': {name: 'fichiers/actions', autostart: false},
   }
   const amqpdao = new MilleGrillesAmqpDAO(instPki, {qCustom, exchange: '2.prive'})
   await instPki.initialiserPkiPEMS(certPems)
@@ -67,13 +67,17 @@ async function initialiserMessageHandlers(rabbitMQ, storeConsignation) {
   // const {PublicateurAWS} = require('../messages/aws');
   // rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
 
+  const local = require('../messages/local')
+  local.init(rabbitMQ, storeConsignation)
+  rabbitMQ.enregistrerListenerConnexion(local)
+
   const backup = require('../messages/backup')
   backup.init(rabbitMQ, storeConsignation)
   rabbitMQ.enregistrerListenerConnexion(backup)
 
-  const publication = require('../messages/publication')
-  publication.init(rabbitMQ, storeConsignation)
-  rabbitMQ.enregistrerListenerConnexion(publication)
+  // const publication = require('../messages/publication')
+  // publication.init(rabbitMQ, storeConsignation)
+  // rabbitMQ.enregistrerListenerConnexion(publication)
 
   const entretien = require('../messages/entretien')
   entretien.init(rabbitMQ, storeConsignation)
