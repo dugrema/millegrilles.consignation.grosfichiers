@@ -120,7 +120,13 @@ async function abortMultipartUploads(opts) {
 async function getInfoFichier(fuuid, opts) {
     opts = opts || {}
     const prefix = opts.prefix || 'c/'
+    const bucket = opts.bucket || _s3_bucket
     const keyPath = path.join(prefix, fuuid)
+
+    const url = new URL(_urlDownload)
+    url.pathname = path.join(url.pathname, fuuid)
+    const fileRedirect = url.href
+
     try {
         const command = new HeadObjectCommand({
             Bucket: bucket,
@@ -128,13 +134,14 @@ async function getInfoFichier(fuuid, opts) {
         })
 
         const reponse = await _s3_client.send(command)
+        debug("getInfoFichier Reponse ", reponse)
         const stat = {
             mTimeMs: reponse.LastModified.getTime(),
             mtime: reponse.LastModified,
             size: reponse.ContentLength,
         }
 
-        return { stat, filePath: keyPath }
+        return { stat, filePath: keyPath, fileRedirect }
     } catch(err) {
         const metadata = err['$metadata']
         if(!metadata) throw err
