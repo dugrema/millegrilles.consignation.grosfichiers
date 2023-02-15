@@ -30,7 +30,9 @@ var _mq = null,
     _derniere_sync = 0,
     _transfertPrimaire = null,
     _queueDownloadFuuids = new Set(),
-    _timeoutStartThreadDownload = null
+    _timeoutStartThreadDownload = null,
+    _intervalleSync = INTERVALLE_SYNC,
+    _syncActif = true
 
 async function init(mq, opts) {
     opts = opts || {}
@@ -69,6 +71,15 @@ async function changerStoreConsignation(typeStore, params, opts) {
     params = params || {}
     typeStore = typeStore?typeStore.toLowerCase():'millegrille'
     debug("changerStoreConsignation type: %s, params: %O", typeStore, params)
+
+    if(params.sync_actif !== undefined) {
+        _syncActif = params.sync_actif
+        debug("changerStoreConsignation Set sync actif ", _syncActif)
+    }
+    if(params.sync_intervalle !== undefined) {
+        _intervalleSync = params.sync_intervalle
+        debug("changerStoreConsignation Set sync intervalle %d secs", _intervalleSync)
+    }
 
     if(_storeConsignation && _storeConsignation.fermer) await _storeConsignation.fermer()
 
@@ -376,7 +387,7 @@ async function entretien() {
     }
 
     const now = new Date().getTime()
-    if(now > _derniere_sync + INTERVALLE_SYNC) {
+    if(_syncActif && now > _derniere_sync + _intervalleSync) {
         _derniere_sync = now  // Temporaire, pour eviter loop si un probleme survient
 
         demarrerSynchronization()
