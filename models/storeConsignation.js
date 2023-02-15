@@ -1008,7 +1008,6 @@ async function setEstConsignationPrimaire(primaire) {
     const courant = _estPrimaire
     _estPrimaire = primaire
     if(courant !== primaire) {
-        FichiersTransfertBackingStore.setEstPrimaire(_estPrimaire)
         debug("Changement role consignation : primaire => %s", primaire)
         FichiersTransfertBackingStore.setEstPrimaire(primaire)
         if(_estPrimaire === true) {
