@@ -59,8 +59,10 @@ async function traiterFichiersRecuperes(message, rk, opts) {
 }
 
 async function consignationPrimaire(message, rk, opts) {
+    debug("Message consignation primaire (estPrimaire? %s) : %O", _storeConsignation.estPrimaire(), message)
     if(_storeConsignation.estPrimaire())  return  // Rien a faire si primaire
     const { fuuid } = message
+    debug("Message consignation primaire ajouterDownload ", fuuid)
     _storeConsignation.ajouterDownloadPrimaire(fuuid)
 }
 
