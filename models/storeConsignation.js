@@ -375,8 +375,6 @@ async function entretien() {
         const instance_id_consignation = FichiersTransfertBackingStore.getInstanceId()
         const instance_id_local = _mq.pki.cert.subject.getField('CN').value
         debug("entretien Instance consignation : %s, instance_id local %s", instance_id_consignation, instance_id_local)
-        
-        const courant = _estPrimaire
         await setEstConsignationPrimaire(instance_id_consignation === instance_id_local)
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
@@ -1007,7 +1005,6 @@ function estPrimaire() {
 
 async function setEstConsignationPrimaire(primaire) {
     debug('setEstConsignationPrimaire %s', primaire)
-    FichiersTransfertBackingStore.setEstPrimaire(primaire)
     const courant = _estPrimaire
     _estPrimaire = primaire
     if(courant !== primaire) {
