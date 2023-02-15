@@ -4,19 +4,33 @@ const debugTrace = debugLib('consignation:store:s3Trace')
 const path = require('path')
 const { Readable } = require('stream')
 const lzma = require('lzma-native')
+const readdirp = require('readdirp')
 
-const S3 = require('aws-sdk/clients/s3')
+// const S3 = require('aws-sdk/clients/s3')
+const { Upload } = require("@aws-sdk/lib-storage")
+const { 
+    S3Client, ListObjectsCommand, GetObjectCommand,
+    CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, 
+    ListMultipartUploadsCommand, PutObjectAclCommand,
+} = require('@aws-sdk/client-s3')
+const fs = require('fs')
+const fsPromises = require('fs/promises')
+const MultiStream = require('multistream')
+const tmpPromises = require('tmp-promise')
 
 const { Hacheur, VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 const { chargerConfiguration, modifierConfiguration } = require('./storeConsignationLocal')
 
 // Creer un pool de connexions a reutiliser
-const AWS_API_VERSION = '2006-03-01'
-// const CONNEXION_TIMEOUT = 10 * 60 * 1000  // 10 minutes
-
-let _s3 = null,
+const AWS_API_VERSION = '2006-03-01',
+      MAX_PAGES = 50_000,
+      BATCH_SIZE_MIN = 1024 * 1024 * 5,
+      BATCH_SIZE_MAX = 1024 * 1024 * 200,
+      BATCH_SIZE_RECOMMENDED = 1024 * 1024 * 30
+      
+let _s3_client = null,
     _s3_bucket = null,
-    _s3_bucket_backup = 'backup',
+    _s3_bucket_backup = null,
     _urlDownload = null
 
 function toStream(bytes) {
@@ -53,7 +67,7 @@ async function init(params) {
     // Conserver params de configuration
     _urlDownload = new URL(''+url_download).href
     _s3_bucket = s3_bucket
-    _s3_bucket_backup = s3_bucket_backup || 'backup'
+    _s3_bucket_backup = s3_bucket_backup || s3_bucket
 
     const configurationAws = {
         apiVersion: AWS_API_VERSION,
@@ -65,7 +79,7 @@ async function init(params) {
     if(s3_region) configurationAws.region = s3_region
     if(s3_endpoint) configurationAws.endpoint = s3_endpoint
     
-    _s3 = new S3(configurationAws)    
+    _s3_client = new S3Client(configurationAws)
 }
 
 function fermer() {
@@ -87,60 +101,223 @@ async function recoverFichierSupprime(fuuid) {
 
 async function consignerFichier(pathFichierStaging, fuuid) {
     debug("Consigner fichier fuuid %s", fuuid)
-    throw new Error('not implemented')
+
+    // Determiner si on a une seule .part ou plusieurs
+    const promiseReaddirp = readdirp(pathFichierStaging, {
+        type: 'files',
+        fileFilter: '*.part',
+        depth: 1,
+    })
+    const listeParts = []
+    for await (const entry of promiseReaddirp) {
+        const fichierPart = entry.basename
+        const position = Number(fichierPart.split('.').shift())
+        listeParts.push({position, fullPath: entry.fullPath})
+    }
+    listeParts.sort((a,b)=>{return a.position-b.position})
+
+    if(listeParts.length === 1) {
+        debug("consignerFichier Upload simple vers AWS pour %s", fuuid)
+        await uploadSimple(fuuid, listeParts[0].fullPath, _s3_bucket, {prefix: 'c/'})
+    } else {
+        debug("consignerFichier Upload multipart vers AWS pour %s", fuuid)
+        await uploadMultipart(fuuid, listeParts, _s3_bucket, {prefix: 'c/'})
+    }
+
+}
+
+async function uploadSimple(fuuid, pathFichier, bucket, opts) {
+    opts = opts || {}
+    const keyPrefix = opts.prefix || 'c/'
+    const fileStream = fs.createReadStream(pathFichier)
+
+    const pathKey = path.join(keyPrefix, fuuid)
+
+    const parallelUploads3 = new Upload({
+        client: _s3_client,
+        params: { 
+            Bucket: bucket, 
+            Key: pathKey, 
+            Body: fileStream,
+            ACL: 'public-read',
+        },
+        tags: [
+            /*...*/
+        ], // optional tags
+        queueSize: 1, // optional concurrency configuration
+        partSize: BATCH_SIZE_RECOMMENDED,
+        leavePartsOnError: false, // optional manually handle dropped parts
+    })
+    
+    parallelUploads3.on("httpUploadProgress", (progress) => {
+        console.log(progress)
+    });
+    
+    await parallelUploads3.done()
+}
+
+async function uploadMultipart(fuuid, listeParts, bucket, opts) {
+    const keyPrefix = opts.prefix || 'c/'
+    const pathKey = path.join(keyPrefix, fuuid)
+
+    const localPartStat = await fsPromises.stat(listeParts[0].fullPath)
+    debug("Local part stat : ", localPartStat)
+    const localPartSize = localPartStat.size
+    if(localPartSize < BATCH_SIZE_MIN) {
+        // Combiner parts en multistreams si individuellement
+        const numPartsStream = Math.ceil(MIN_PART_SIZE / localPartSize)
+        debug("Combiner parts de %d bytes en groupes de %d parts (min %d)", localPartSize, numPartsStream, MIN_PART_SIZE)
+        const partsOriginal = listeParts
+        listeParts = []
+        while(partsOriginal.length > 0) {
+            let subpart = []
+            listeParts.push(subpart)
+            for(let i=0; i<numPartsStream; i++) {
+                const nextPart = partsOriginal.shift()
+                if(!nextPart) break
+                subpart.push(nextPart)
+            }
+        }
+    } else if(localPartSize > BATCH_SIZE_MAX) {
+        throw new Error("part > MAX_PART_SIZE. Not supported")
+    }
+
+    debug("Parts a uploader : ", listeParts)
+
+    const command = new CreateMultipartUploadCommand({
+        Bucket: bucket,
+        Key: pathKey,
+    })
+    const response = await _s3_client.send(command)
+    debug("multipartUploadFile ", response)
+
+    const etags = []
+    const uploadId = response.UploadId
+    let partNumberCount = 1
+    let tmpFolder = null,
+        tmpFile = null
+
+    try {
+        for await (const p of listeParts) {
+            let partNumber = partNumberCount++
+            let stream = null
+            if(Array.isArray(p)) {
+                debug("Multistream upload de ", p)
+                const ms = new MultiStream(p.map(item=>fs.createReadStream(item.fullPath)))
+                if(!tmpFolder) {
+                    tmpFolder = await tmpPromises.dir()
+                    tmpFile = path.join(tmpFolder.path, 'tmp.work')
+                    debug("TMP Folder : %s, tmpFile %s", tmpFolder, tmpFile)
+                }
+                const writer = fs.createWriteStream(tmpFile)
+                await new Promise((resolve, reject) => {
+                    writer.on('close', resolve)
+                    writer.on('error', reject)
+                    ms.pipe(writer)
+                })
+                stream = fs.createReadStream(tmpFile)
+            } else {
+                debug("Single part upload de ", p)
+                stream = fs.createReadStream(p.fullPath)
+            }
+
+            const commandUpload = new UploadPartCommand({
+                Bucket: bucket,
+                Key: pathKey,
+                Body: stream,
+                UploadId: uploadId,
+                PartNumber: partNumber,
+            })
+
+            const responseUpload = await _s3_client.send(commandUpload)
+            etags.push({ETag: responseUpload.ETag, PartNumber: partNumber})
+            debug("multipartUploadFile part %d: %O", partNumber, responseUpload)
+        }
+    } catch(err) {
+        console.error("Erreur upload multiparts ", err)
+    } finally {
+        if(tmpFile !== null) await fsPromises.unlink(tmpFile)
+        if(tmpFolder !== null) tmpFolder.cleanup()
+    }
+
+    debug("Etags : ", etags)
+
+    const commandeComplete = new CompleteMultipartUploadCommand({
+        Bucket: bucket,
+        Key: pathKey,
+        UploadId: uploadId,
+        MultipartUpload: {
+            Parts: etags,
+        },
+    })
+    const responseComplete = await _s3_client.send(commandeComplete)
+    debug("multipartUploadFile Complete ", responseComplete)
+
+    const commandeAcl = new PutObjectAclCommand({
+        Bucket: bucket,
+        Key: pathKey,
+        ACL: 'public-read'
+    })
+    const responseAcl = await _s3_client.send(commandeAcl)
+    debug("multipartUploadFile ACL ", responseAcl)
 }
 
 async function marquerSupprime(fuuid) {
     throw new Error('not implemented')
 }
 
+async function _parcourir(bucketParams, callback, opts) {
+    debug("_parcourir: Faire lecture AWS S3 sous %s", bucketParams.Bucket)
+    let isTruncated = true
+    let count = 0
+    while(isTruncated === true && count++ < MAX_PAGES) {
+        const command = new ListObjectsCommand(bucketParams)
+        const response = await _s3_client.send(command)
+
+        debug("_parcourir Response ", response)
+        const contents = response.Contents
+        if(contents) {
+            for await (let f of response.Contents) {
+                const pathFichier = path.parse(f.Key)
+                const data = { 
+                    filename: pathFichier.base, 
+                    directory: pathFichier.dir, 
+                    modified: f.LastModified.getTime(), 
+                    size: f.Size
+                }
+                await callback(data)
+            }
+        } else {
+            debug("_parcourir No contents")
+        }
+        isTruncated = response.IsTruncated
+        bucketParams.Marker = response.NextMarker
+    }
+    
+    await callback()  // Dernier call, vide
+}
+
 async function parcourirFichiers(callback, opts) {
     debug("Parcourir fichiers")
     
-    const paramsListing = {
-        Bucket: bucketName,
+    const bucketParams = {
+        Bucket: _s3_bucket,
         MaxKeys: 1000,
-        Prefix: repertoire,
-    }
-    if(opts.ContinuationToken) paramsListing.ContinuationToken = opts.ContinuationToken
-
-    debug("awss3.listerConsignation: Faire lecture AWS S3 sous %s / %s", bucketName, repertoire)
-    const data = await new Promise ((resolve, reject) => {
-        _s3.listObjectsV2(paramsListing, async (err, data)=>{
-            if(err) {
-                console.error("awss3.listerConsignation: Erreur demande liste fichiers")
-                return reject(err)
-            }
-            resolve(data)
-        })
-    })
-
-    // console.log("Listing fichiers bucket " + paramsListing.Bucket);
-    for await (const contents of data.Contents) {
-    // debug("Contents : %O", contents)
-    const pathFichier = path.parse(contents.Key)
-    // debug("Path fichier : %s", pathFichier)
-    const fuuid = pathFichier.name
-    // debug("Fuuid : %s", fuuid)
-    const contentFichier = {
-        ...contents,
-        fuuid,
-    }
-    if(res) {
-        res.write(JSON.stringify(contentFichier) + '\n')
-    }
+        Prefix: 'c/',  // Path de consignation
     }
 
-    if(data.IsTruncated) {
-    // debug("Continuer listing");
-    opts.ContinuationToken = data.NextContinuationToken
-    await listerConsignation(s3, bucketName, repertoire, opts)
-    }    
+    return _parcourir(bucketParams, callback, opts)
 }
 
 async function parcourirBackup(callback, opts) {
     debug("Parcourir backup")
-    throw new Error('not implemented')
+    const bucketParams = {
+        Bucket: _s3_bucket,
+        MaxKeys: 1000,
+        Prefix: 'b/',  // Path de consignation
+    }
+
+    return _parcourir(bucketParams, callback, opts)
 }
 
 async function sauvegarderBackupTransactions(message) {

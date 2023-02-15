@@ -3,6 +3,7 @@ const fs = require('fs')
 const fsPromises = require('fs/promises')
 const path = require('path')
 const S3 = require('aws-sdk/clients/s3')
+
 const { trouverExtension, trouverMimetype } = require('../util/traitementFichier')
 const { preparerPublicationRepertoire } = require('./publierUtils')
 const { dechiffrerDocumentAvecMq } = require('@dugrema/millegrilles.nodejs/src/chiffrage')
