@@ -151,11 +151,12 @@ async function getInfoFichier(fuuid, opts) {
 }
 
 async function renameFichier(fichierOld, fichierNew, opts) {
+    opts = opts || {}
     const bucket = opts.bucket || _s3_bucket
     const commandeCopy = new CopyObjectCommand({
         Bucket: bucket,
         Key: fichierNew,
-        Source: fichierOld,
+        CopySource: path.join(bucket, fichierOld),
     })
     const resultatCopie = await _s3_client.send(commandeCopy)
     debug("renameFichier Resultat copie ", resultatCopie)
@@ -170,7 +171,14 @@ async function renameFichier(fichierOld, fichierNew, opts) {
 
 async function recoverFichierSupprime(fuuid) {
     debug("recoverFichierSupprime %s", fuuid)
-    throw new Error('not implemented')
+    const keyFile = path.join('c', fuuid),
+          keyFileCorbeille = path.join('c', fuuid + '.corbeille')
+    try {
+        await rename(keyFileCorbeille, keyFile)
+        return await getInfoFichier(fuuid)
+    } catch(err) {
+        return null
+    }
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
@@ -404,7 +412,7 @@ async function sauvegarderBackupTransactions(message) {
 
     const dateFinBackup = new Date(date_transactions_fin * 1000)
     debug("Sauvegarde du backup %s date %O", domaine, dateFinBackup)
-
+    
     // Formatter le nom du fichier avec domaine_partition_DATE
     const dateFinString = dateFinBackup.toISOString().replaceAll('-', '').replaceAll(':', '')
     const nomFichierList = [domaine]
@@ -428,12 +436,12 @@ async function rotationBackupTransactions(message) {
     debug("rotationBackupTransactions", domaine, partition)
 
     const listeFichiers = []
-    await parcourirBackup(info=>listeFichiers.push(info))
+    await parcourirBackup(info=>listeFichiers.push(info), {prefix: path.join('b/transactions', domaine)})
 
     // Supprimer archives
     if(listeFichiers.length > 0) {
         const listeFichiers = []
-        await parcourirBackup(info=>listeFichiers.push(info), {prefix: 'b/transactions_archives'})
+        await parcourirBackup(info=>listeFichiers.push(info), {prefix: path.join('b/archives', domaine)})
         debug("Liste fichiers backup archives ", listeFichiers)
         if(listeFichiers.length > 0) {
             const params = {
@@ -458,11 +466,16 @@ async function rotationBackupTransactions(message) {
         debug("Liste fichiers backup ", listeFichiers)
         if(listeFichiers.length > 0) {
             for await (f of listeFichiers) {
-                await renameFichier(path.join(f.directory, f.filename), path.join('b/archives', f.directory, f.filename))
+                if(!f) continue
+                const dirDest = f.directory.replace('b/transactions/', '')
+                await renameFichier(
+                    path.join(f.directory, f.filename), 
+                    path.join('b/archives', dirDest, f.filename), 
+                    {bucket: _s3_bucket_backup}
+                )
             }
         }
     }
-
 }
 
 async function getFichiersBackupTransactionsCourant(mq, replyTo) {
