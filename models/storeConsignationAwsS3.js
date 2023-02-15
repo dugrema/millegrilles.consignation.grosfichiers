@@ -11,7 +11,8 @@ const { Upload } = require("@aws-sdk/lib-storage")
 const { 
     S3Client, ListObjectsCommand, GetObjectCommand,
     CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, 
-    ListMultipartUploadsCommand, PutObjectAclCommand, HeadObjectCommand,
+    ListMultipartUploadsCommand, PutObjectAclCommand, 
+    CopyObjectCommand, HeadObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, 
 } = require('@aws-sdk/client-s3')
 const fs = require('fs')
 const fsPromises = require('fs/promises')
@@ -149,6 +150,24 @@ async function getInfoFichier(fuuid, opts) {
     }
 }
 
+async function renameFichier(fichierOld, fichierNew, opts) {
+    const bucket = opts.bucket || _s3_bucket
+    const commandeCopy = new CopyObjectCommand({
+        Bucket: bucket,
+        Key: fichierNew,
+        Source: fichierOld,
+    })
+    const resultatCopie = await _s3_client.send(commandeCopy)
+    debug("renameFichier Resultat copie ", resultatCopie)
+
+    const commandeDeleteOld = new DeleteObjectCommand({
+        Bucket: bucket,
+        Key: fichierOld,
+    })
+    const resultatDelete = await _s3_client.send(commandeDeleteOld)
+    debug("renameFichier Resultat cleanup ", resultatDelete)
+}
+
 async function recoverFichierSupprime(fuuid) {
     debug("recoverFichierSupprime %s", fuuid)
     throw new Error('not implemented')
@@ -205,7 +224,7 @@ async function uploadSimple(fuuid, pathFichier, bucket, opts) {
     })
     
     parallelUploads3.on("httpUploadProgress", (progress) => {
-        console.log(progress)
+        debug(progress)
     });
     
     await parallelUploads3.done()
@@ -318,7 +337,8 @@ async function uploadMultipart(fuuid, listeParts, bucket, opts) {
 }
 
 async function marquerSupprime(fuuid) {
-    throw new Error('not implemented')
+    const keyFile = path.join('c/', fuuid)
+    await renameFichier(keyFile, keyFile + '.corbeille')
 }
 
 async function _parcourir(bucketParams, callback, opts) {
@@ -366,10 +386,12 @@ async function parcourirFichiers(callback, opts) {
 
 async function parcourirBackup(callback, opts) {
     debug("Parcourir backup")
+    opts = opts || {}
+    const prefix = opts.prefix || 'b/transactions'
     const bucketParams = {
         Bucket: _s3_bucket,
         MaxKeys: 1000,
-        Prefix: 'b/',  // Path de consignation
+        Prefix: prefix,
     }
 
     return _parcourir(bucketParams, callback, opts)
@@ -404,7 +426,43 @@ async function sauvegarderBackupTransactions(message) {
 async function rotationBackupTransactions(message) {
     const { domaine, partition } = message
     debug("rotationBackupTransactions", domaine, partition)
-    throw new Error('not implemented')
+
+    const listeFichiers = []
+    await parcourirBackup(info=>listeFichiers.push(info))
+
+    // Supprimer archives
+    if(listeFichiers.length > 0) {
+        const listeFichiers = []
+        await parcourirBackup(info=>listeFichiers.push(info), {prefix: 'b/transactions_archives'})
+        debug("Liste fichiers backup archives ", listeFichiers)
+        if(listeFichiers.length > 0) {
+            const params = {
+                Bucket: _s3_bucket_backup,
+                Delete: {
+                    Objects: listeFichiers.filter(item=>!!item).map(item=>{
+                        return {Key: path.join(item.directory, item.filename)}
+                    })
+                },
+            }
+            debug("rotationBackupTransactions Params ", params)
+            const command = new DeleteObjectsCommand(params)
+            const reponse = await _s3_client.send(command)
+            debug("rotationBackupTransactions Reponse delete backups ", reponse)
+        }
+    } else {
+        debug("rotationBackupTransactions Aucuns fichiers de backup courant, on conserve archives (si presentes)")
+    }
+
+    // Copier fichiers courant vers archives
+    {
+        debug("Liste fichiers backup ", listeFichiers)
+        if(listeFichiers.length > 0) {
+            for await (f of listeFichiers) {
+                await renameFichier(path.join(f.directory, f.filename), path.join('b/archives', f.directory, f.filename))
+            }
+        }
+    }
+
 }
 
 async function getFichiersBackupTransactionsCourant(mq, replyTo) {
@@ -416,15 +474,63 @@ async function getBackupTransaction(pathBackupTransaction) {
 }
 
 async function getBackupTransactionStream(pathBackupTransaction) {
-    throw new Error('not implemented')
+    debug('getBackupTransactionStream path ', pathBackupTransaction)
+    try {
+        const keyPath = path.join('b/transactions', pathBackupTransaction)
+        const command = new GetObjectCommand({
+            Bucket: _s3_bucket_backup,
+            Key: keyPath
+        })
+        const response = await _s3_client.send(command)
+        try {
+            debug("getBackupTransactionStream response : ", response)
+            // const writer = fs.createWriteStream('./output.txt')
+            // response.Body.pipe(writer)
+            return response.Body
+        } catch(err) {
+            console.error("Download error, destroy stream")
+            await response.Body.destroy()
+            throw err
+        }
+    } catch(err) {
+        console.error("Error get test file", err)
+    }
 }
 
-async function pipeBackupTransactionStream(pathFichier, stream) {
-    throw new Error('not implemented')
+async function pipeBackupTransactionStream(pathFichier, stream, opts) {
+    opts = opts || {}
+    const keyPrefix = opts.prefix || 'b/transactions'
+    const pathKey = path.join(keyPrefix, pathFichier)
+
+    const parallelUploads3 = new Upload({
+        client: _s3_client,
+        params: { 
+            Bucket: _s3_bucket_backup, 
+            Key: pathKey, 
+            Body: stream,
+        },
+        tags: [
+            /*...*/
+        ], // optional tags
+        queueSize: 1, // optional concurrency configuration
+        partSize: BATCH_SIZE_RECOMMENDED,
+        leavePartsOnError: false, // optional manually handle dropped parts
+    })
+    
+    parallelUploads3.on("httpUploadProgress", (progress) => {
+        debug(progress)
+    });
+    
+    await parallelUploads3.done()
 }
 
 async function deleteBackupTransaction(pathBackupTransaction) {
-    throw new Error('not implemented')
+    const commande = new DeleteObjectCommand({
+        Bucket: _s3_bucket_backup,
+        Key: path.join('b', pathBackupTransaction),
+    })
+    const resultatDelete = await _s3_client.send(commande)
+    debug("deleteBackupTransaction Resultat cleanup ", resultatDelete)
 }
 
 module.exports = {

@@ -97,7 +97,7 @@ async function getFichierTransaction(req, res) {
     const { domaine, fichier } = req.params
     const pathFichier = path.join(domaine, fichier)
     const stream = await _storeConsignation.getBackupTransactionStream(pathFichier)
-    debug("Stream fichier transactions ", stream)
+    // debug("Stream fichier transactions ", stream)
     res.status(200)
     // res.set('Content-Length', ...)
     stream.pipe(res)
