@@ -79,7 +79,7 @@ async function changerStoreConsignation(typeStore, params, opts) {
     }
     if(params.sync_intervalle !== undefined) {
         _intervalleSync = params.sync_intervalle * 1000  // Convertir de secondes en millisecs
-        debug("changerStoreConsignation Set sync intervalle %d secs", _intervalleSync)
+        debug("changerStoreConsignation Set sync intervalle %d msecs", _intervalleSync)
     }
 
     if(_storeConsignation && _storeConsignation.fermer) await _storeConsignation.fermer()
@@ -576,7 +576,7 @@ async function downloadFichiersSync() {
     const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
     for await (const line of rlFichiers) {
         // Detecter fichiers manquants localement par espaces vide au debut de la ligne
-        if( line.startsWith(' ') || line.startsWith('\t') ) {
+        if( line.startsWith('	') || line.startsWith('\t') ) {
             const fuuid = line.trim()
             debug('downloadFichiersSync ajouter ', fuuid)
             _queueDownloadFuuids.add(fuuid)
@@ -702,7 +702,7 @@ async function uploaderFichiersVersPrimaire() {
         const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
         for await (const line of rlFichiers) {
             // Detecter changement distant avec un fuuid dans la premiere colonne du fichier (pas d'espaces vides)
-            if( ! line.startsWith(' ') && ! line.startsWith('\t') ) {
+            if( ! line.startsWith('	') && ! line.startsWith('\t') ) {
                 const fuuid = line.trim()
                 debug("uploaderFichiersVersPrimaire Transferer fichier manquant %s vers primaire", fuuid)
                 _transfertPrimaire.ajouterItem(fuuid)
