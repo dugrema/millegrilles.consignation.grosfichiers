@@ -94,6 +94,11 @@ async function changerStoreConsignation(typeStore, params, opts) {
         default: _storeConsignation = StoreConsignationLocal
     }
 
+    if(params.data_chiffre && !params.data_dechiffre) {
+        // Dechiffrer configuration - mis dans configuration.data_dechiffre
+        params.data_dechiffre = await dechiffrerConfiguration(_mq, params)
+    }
+
     // Changer methode de consignation
     await _storeConsignation.init(params)
 
@@ -112,12 +117,6 @@ async function chargerConfiguration(opts) {
         // await _mq.transmettreRequete({instance_id: FichiersTransfertBackingStore.getInstanceId()})
         debug("Configuration recue ", configuration)
 
-        const data_chiffre = configuration.data_chiffre
-        if(data_chiffre) {
-            // Dechiffrer configuration - mis dans configuration.data_dechiffre
-            configuration.data_dechiffre = await dechiffrerConfiguration(_mq, configuration)
-        }
-
         await _storeConsignation.modifierConfiguration(configuration, {override: true})
         return configuration
     } catch(err) {
@@ -128,9 +127,11 @@ async function chargerConfiguration(opts) {
 }
 
 async function modifierConfiguration(params, opts) {
+
     if(params.type_store) {
         return await changerStoreConsignation(params.type_store, params, opts)
     }
+
     return await _storeConsignation.modifierConfiguration(params, opts)
 }
 

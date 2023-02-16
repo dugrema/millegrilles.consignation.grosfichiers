@@ -49,12 +49,15 @@ async function chargerConfiguration() {
 async function modifierConfiguration(params, opts) {
     opts = opts || {}
     let config
+
+    // Retirer le data dechiffre si present
     if(opts.override !== true) {
         let configCourante = await chargerConfiguration()
-        config = {...configCourante, ...params}
+        config = {...configCourante, ...params, data_dechiffre: undefined}
     } else {
-        config = {...params}
+        config = {...params, data_dechiffre: undefined}
     }
+
     await fsPromises.writeFile(PATH_CONFIG_FICHIER, JSON.stringify(config))
 }
 

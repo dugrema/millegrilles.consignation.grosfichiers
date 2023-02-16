@@ -1,4 +1,7 @@
 const debug = require('debug')('messages:local')
+const { getPublicKey } = require('../util/ssh')
+
+const CONST_CHAMPS_CONFIG = ['typeStore', 'urlDownload', 'consignationUrl']
 
 var _mq = null,
     _storeConsignation = null,
@@ -81,21 +84,22 @@ async function emettrePresence() {
 async function modifierConfiguration(message, rk, opts) {
     opts = opts || {}
     const properties = opts.properties || {}
-    debug("publication.modifierConfiguration (replyTo: %s)", properties.replyTo)
+    debug("local.modifierConfiguration (config: %s)", message)
   
-    let reponse = {ok: false}
-    try {
-      await _storeConsignation.modifierConfiguration(message, {override: true})
-  
-      reponse = {ok: true}
-    } catch(err) {
-      console.error("%O storeConsignation.modifierConfiguration, Erreur store modifierConfiguration : %O", new Date(), err)
-      reponse = {ok: false, err: ''+err}
-    }
-    _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
-  
-    emettrePresence()
-      .catch(err=>console.error("publication.getConfiguration Erreur emission presence ", err))
+    _storeConsignation.modifierConfiguration(message, {override: true})
+        .then(async ()=>{
+            try {
+              await _storeConsignation.modifierConfiguration(message, {override: true})
+            } catch(err) {
+              console.error(new Date() + " %O storeConsignation.modifierConfiguration, Erreur store modifierConfiguration : %O", new Date(), err)
+            }
+            emettrePresence()
+              .catch(err=>console.error("publication.getConfiguration Erreur emission presence ", err))
+        })
+        .catch(err=>console.error(new Date() + ' local.modifierConfiguration Erreur ', err))
+
+    _mq.transmettreReponse({ok: true}, properties.replyTo, properties.correlationId)
+
 }
   
 function getPublicKeySsh(message, rk, opts) {
