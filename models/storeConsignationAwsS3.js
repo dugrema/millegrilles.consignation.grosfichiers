@@ -27,13 +27,15 @@ const AWS_API_VERSION = '2006-03-01',
       MAX_PAGES = 50_000,
       BATCH_SIZE_MIN = 1024 * 1024 * 5,
       BATCH_SIZE_MAX = 1024 * 1024 * 200,
-      BATCH_SIZE_RECOMMENDED = 1024 * 1024 * 30
+      BATCH_SIZE_RECOMMENDED = 1024 * 1024 * 30,
+      INTERVALLE_CLEANUP_MULTIPART_UPLOAD = 1000 * 60 * 60 * 12
       
 let _s3_client = null,
     _s3_bucket = null,
     _s3_bucket_backup = null,
     _urlDownload = null,
-    _upload_en_cours = false
+    _upload_en_cours = false,
+    _dernier_cleanup_multipart = 0
 
 function toStream(bytes) {
     const byteReader = new Readable()
@@ -574,8 +576,11 @@ async function deleteBackupTransaction(pathBackupTransaction) {
 async function entretien() {
     debug("Entretien debut")
 
-    if(!_upload_en_cours) {
+    const now = new Date().getTime()
+
+    if(!_upload_en_cours && now > _dernier_cleanup_multipart + INTERVALLE_CLEANUP_MULTIPART_UPLOAD) {
         debug("Entretien abortMultipartUploads")
+        _dernier_cleanup_multipart = now
         try {
             await abortMultipartUploads()
         } catch(err) {
