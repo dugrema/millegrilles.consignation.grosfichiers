@@ -84,14 +84,15 @@ async function changerStoreConsignation(typeStore, params, opts) {
 
     if(_storeConsignation && _storeConsignation.fermer) await _storeConsignation.fermer()
 
+    let storeConsignation = null
     switch(typeStore) {
-        case 'sftp': _storeConsignation = StoreConsignationSftp; break
-        case 'awss3': _storeConsignation = StoreConsignationAwsS3; break
+        case 'sftp': storeConsignation = StoreConsignationSftp; break
+        case 'awss3': storeConsignation = StoreConsignationAwsS3; break
         case 'local':
         case 'millegrille': 
-            _storeConsignation = StoreConsignationLocal
+            storeConsignation = StoreConsignationLocal
             break
-        default: _storeConsignation = StoreConsignationLocal
+        default: storeConsignation = StoreConsignationLocal
     }
 
     if(params.data_chiffre && !params.data_dechiffre) {
@@ -100,9 +101,14 @@ async function changerStoreConsignation(typeStore, params, opts) {
     }
 
     // Changer methode de consignation
-    await _storeConsignation.init(params)
+    try {
+        await storeConsignation.init(params)
+        _storeConsignation = storeConsignation
 
-    await _storeConsignation.modifierConfiguration({...params, type_store: typeStore})
+        await _storeConsignation.modifierConfiguration({...params, type_store: typeStore})
+    } catch(err) {
+        console.error(new Date() + ' changerStoreConsignation Configuration invalide')
+    }
 }
 
 async function chargerConfiguration(opts) {
