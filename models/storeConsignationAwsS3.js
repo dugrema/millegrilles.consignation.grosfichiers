@@ -32,7 +32,8 @@ const AWS_API_VERSION = '2006-03-01',
 let _s3_client = null,
     _s3_bucket = null,
     _s3_bucket_backup = null,
-    _urlDownload = null
+    _urlDownload = null,
+    _upload_en_cours = false
 
 function toStream(bytes) {
     const byteReader = new Readable()
@@ -205,12 +206,17 @@ async function consignerFichier(pathFichierStaging, fuuid) {
     }
     listeParts.sort((a,b)=>{return a.position-b.position})
 
-    if(listeParts.length === 1) {
-        debug("consignerFichier Upload simple vers AWS pour %s", fuuid)
-        await uploadSimple(fuuid, listeParts[0].fullPath, _s3_bucket, {prefix: 'c/'})
-    } else {
-        debug("consignerFichier Upload multipart vers AWS pour %s", fuuid)
-        await uploadMultipart(fuuid, listeParts, _s3_bucket, {prefix: 'c/'})
+    _upload_en_cours = true
+    try {
+        if(listeParts.length === 1) {
+            debug("consignerFichier Upload simple vers AWS pour %s", fuuid)
+            await uploadSimple(fuuid, listeParts[0].fullPath, _s3_bucket, {prefix: 'c/'})
+        } else {
+            debug("consignerFichier Upload multipart vers AWS pour %s", fuuid)
+            await uploadMultipart(fuuid, listeParts, _s3_bucket, {prefix: 'c/'})
+        }
+    } finally {
+        _upload_en_cours = false
     }
 
 }
@@ -565,12 +571,29 @@ async function deleteBackupTransaction(pathBackupTransaction) {
     debug("deleteBackupTransaction Resultat cleanup ", resultatDelete)
 }
 
+async function entretien() {
+    debug("Entretien debut")
+
+    if(!_upload_en_cours) {
+        debug("Entretien abortMultipartUploads")
+        try {
+            await abortMultipartUploads()
+        } catch(err) {
+            console.error(new Date() + ' Erreur abort multiparts ', err)
+        }
+    }
+
+    debug("Entretien fin")
+}
+
 module.exports = {
     init, fermer,
     chargerConfiguration, modifierConfiguration,
     getInfoFichier, consignerFichier, 
     marquerSupprime, recoverFichierSupprime,
     parcourirFichiers,
+
+    entretien,
 
     // Backup
     parcourirBackup,

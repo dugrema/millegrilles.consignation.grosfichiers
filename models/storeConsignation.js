@@ -393,6 +393,13 @@ async function entretien() {
         console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
     }
 
+    // Entretien specifique a la consignation
+    try {
+        if(_storeConsignation.entretien) await _storeConsignation.entretien()
+    } catch(err) {
+        console.error(new Date() + ' Erreur entretien _storeConsignation ', err)
+    }
+
     const now = new Date().getTime()
     if(_syncActif && now > _derniere_sync + _intervalleSync) {
         _derniere_sync = now  // Temporaire, pour eviter loop si un probleme survient
