@@ -1,5 +1,6 @@
 const debug = require('debug')('transfertPrimaire')
 const fs = require('fs')
+const fsPromises = require('fs/promises')
 const path = require('path')
 const axios = require('axios')
 
@@ -95,15 +96,12 @@ TransfertPrimaire.prototype.putAxios = async function(fuuid, statItem) {
           httpsAgent = this.storeConsignation.getHttpsAgent(),
           urlConsignationTransfert = this.storeConsignation.getUrlTransfert()
 
+    const urlPrimaireFuuid = new URL(urlConsignationTransfert.href)
+    urlPrimaireFuuid.pathname = path.join(urlPrimaireFuuid.pathname, fuuid)
+
     // S'assurer que le fichier n'existe pas deja
     try {
-        let urlFuuid = new URL(urlConsignationTransfert.href)
-        if(fileRedirect) {
-            urlFuuid = new URL(fileRedirect)
-        } else {
-            urlFuuid.pathname = path.join(urlFuuid.pathname, fuuid)
-        }
-        await axios({method: 'HEAD', url: urlFuuid.href, httpsAgent})
+        await axios({method: 'HEAD', url: urlPrimaireFuuid.href, httpsAgent})
         console.error(new Date() + "transfertPrimaire.putAxios Fichier %s existe deja sur le primaire, annuler transfert", fuuid)
         return false
     } catch(err) {
@@ -116,29 +114,59 @@ TransfertPrimaire.prototype.putAxios = async function(fuuid, statItem) {
         }
     }
 
-    for (let position=0; position < size; position += CONST_TAILLE_SPLIT_MAX_DEFAULT) {
-        // Creer output stream
-        const start = position,
-              end = Math.min(position+CONST_TAILLE_SPLIT_MAX_DEFAULT, size) - 1
-        debug("PUT fuuid %s positions %d a %d", correlation, start, end)
+    let srcFilePath = null,
+        tmpFile = null
 
-        const urlPosition = new URL(urlConsignationTransfert.href)
-        urlPosition.pathname = path.join(urlPosition.pathname, correlation, ''+position)
-
-        const readStream = fs.createReadStream(filePath, {start, end})
-        try {
-            await axios({
-                method: 'PUT',
-                httpsAgent,
-                url: urlPosition.href,
-                headers: {'content-type': 'application/stream', 'X-fuuid': fuuid},
-                data: readStream,
+    try {
+        if(fileRedirect) {
+            debug("putAxios Source transfert via %s", fileRedirect)
+            tmpFile = path.join('/tmp/', fuuid + '.primaire')
+            const sourceReponse = await axios({method: 'GET', url: fileRedirect, responseType: 'stream' })
+            if(sourceReponse.status !== 200) {
+                throw new Error("Mauvaise reponse source (code %d) %s", sourceReponse.status, fileRedirect)
+            }
+            const writeStream = fs.createWriteStream(tmpFile)
+            await new Promise((resolve, reject)=>{
+                writeStream.on('close', resolve)
+                writeStream.on('error', reject)
+                sourceReponse.data.pipe(writeStream)
             })
-        } finally {
-            readStream.close()
+            srcFilePath = tmpFile
+        } else {
+            srcFilePath = filePath
+        }
+
+        debug("putAxios Source transfert %s", srcFilePath)
+        for (let position=0; position < size; position += CONST_TAILLE_SPLIT_MAX_DEFAULT) {
+            // Creer output stream
+            const start = position,
+                end = Math.min(position+CONST_TAILLE_SPLIT_MAX_DEFAULT, size) - 1
+            debug("PUT fuuid %s positions %d a %d", correlation, start, end)
+    
+            const urlPosition = new URL(urlConsignationTransfert.href)
+            urlPosition.pathname = path.join(urlPosition.pathname, correlation, ''+position)
+    
+            const readStream = fs.createReadStream(srcFilePath, {start, end})
+            try {
+                await axios({
+                    method: 'PUT',
+                    httpsAgent,
+                    url: urlPosition.href,
+                    headers: {'content-type': 'application/stream', 'X-fuuid': fuuid},
+                    data: readStream,
+                })
+            } finally {
+                readStream.close()
+            }
+        }        
+
+    } finally {
+        if(tmpFile) {
+            debug("putAxios Cleanup ", tmpFile)
+            await fsPromises.unlink(tmpFile)
         }
     }
-    
+        
     // Emettre message POST pour indiquer que le fichier est complete
     const transactions = { etat: { hachage: fuuid } }
     const urlCorrelation = new URL(urlConsignationTransfert.href)
