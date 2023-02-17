@@ -13,6 +13,7 @@ const StoreConsignationSftp = require('./storeConsignationSftp')
 const StoreConsignationAwsS3 = require('./storeConsignationAwsS3')
 
 const TransfertPrimaire = require('./transfertPrimaire')
+const BackupSftp = require('./backupSftp')
 const { dechiffrerConfiguration } = require('./pki')
 
 const { startConsuming: startConsumingBackup, stopConsuming: stopConsumingBackup } = require('../messages/backup')
@@ -30,6 +31,7 @@ var _mq = null,
     _sync_lock = false,
     _derniere_sync = 0,
     _transfertPrimaire = null,
+    _backupSftp = null,
     _queueDownloadFuuids = new Set(),
     _timeoutStartThreadDownload = null,
     _intervalleSync = INTERVALLE_SYNC,
@@ -59,6 +61,10 @@ async function init(mq, opts) {
     // Objet responsable de l'upload vers le primaire (si local est secondaire)
     _transfertPrimaire = new TransfertPrimaire(mq, this)
     _transfertPrimaire.threadPutFichiersConsignation()  // Premiere run, initialise loop
+
+    // Handler backup sftp
+    _backupSftp = new BackupSftp(mq, this)
+    _backupSftp.threadBackup()  // Demarrer thread
 
     // Entretien - emet la presence (premiere apres 10 secs, apres sous intervalles)
     setTimeout(entretien, 10_000)
@@ -107,7 +113,8 @@ async function changerStoreConsignation(typeStore, params, opts) {
 
         await _storeConsignation.modifierConfiguration({...params, type_store: typeStore})
     } catch(err) {
-        console.error(new Date() + ' changerStoreConsignation Configuration invalide')
+        debug("Erreur setup store configuration ", err)
+        console.error(new Date() + ' changerStoreConsignation Configuration invalide ', err)
     }
 }
 
@@ -867,7 +874,7 @@ async function genererListeLocale() {
 
         await _storeConsignation.parcourirFichiers(callbackTraiterFichier)
     } catch(err) {
-        console.error(new Date() + " ERROR genererListeLocale() : %O", err)
+        console.error(new Date() + " storeConsignation.genererListeLocale ERROR : %O", err)
         ok = false
     } finally {
         await fichierFuuidsActifsHandle.close()
