@@ -1065,4 +1065,5 @@ module.exports = {
     processusSynchronisation, demarrerSynchronization, 
     parcourirFichiers, parcourirBackup, 
     getPathStaging,
+    downloadFichiersBackup,
 }

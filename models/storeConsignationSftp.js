@@ -445,10 +445,23 @@ async function parcourirBackup(callback, opts) {
     debug("Parcourir backup")
     
     try {
+
         // var sftp = await sftpClient()
         const pathLocal = getRemotePathBackup()
+
+        // Init repertoires backup
+        await _sftpDao.mkdir(pathLocal)
+        await _sftpDao.mkdir(getRemotePathBackupTransactions())
+
         await _sftpDao.parcourirFichiersRecursif(pathLocal, callback, opts)
         await callback()  // Dernier appel avec aucune valeur (fin traitement)
+    } catch(err) {
+        if(err.code === 2) {
+            debug("Repertoire backup n'existe pas (OK)")
+            await callback()
+        } else {
+            throw err
+        }
     } finally {
         debug("parcourirBackup fermer sftp")
         // sftp.end(err=>debug("SFTP end : %O", err))

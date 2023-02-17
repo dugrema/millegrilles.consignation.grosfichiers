@@ -19,6 +19,7 @@ function BackupSftp(mq, storeConsignation) {
     this.storeConsignation = storeConsignation
 
     this.queueItems = new Set()
+    this.fichiersBackupItem = new Set()
     this.timerBackup = null
     this.backupEnCours = false
 
@@ -70,11 +71,13 @@ BackupSftp.prototype.runBackup = async function(configuration) {
     // S'assurer que le path remote existe
     await this.sftpDao.mkdir(configuration.remote_path_sftp_backup)
 
-    // Detecter differences dans les listes de fichier
+    // Detecter differences dans les listes de fichier et transferer
     await this.genererListeFuuids(configuration)
-
-    // Transferer fichiers
     await this.transfererFuuids(configuration)
+
+    // Detecter differences dans liste de backups et transferer
+    await this.genererListeBackups(configuration)
+    await this.transfererFichiersBackup(configuration)
 
     debug("runBackup Fin backup")
 }
@@ -149,6 +152,8 @@ BackupSftp.prototype.transfererFuuids = async function(configuration) {
             console.error(new Date() + " backupSftp.transfererFuuids Erreur upload %s vers backup %O", fuuid, err)
         }
     }
+
+    debug("transfererFuuids Fin")
 }
 
 BackupSftp.prototype.uploadFuuidBackup = async function(pathConsignationRemote, pathWorkRemote, fuuid) {
@@ -176,6 +181,128 @@ BackupSftp.prototype.uploadFuuidBackup = async function(pathConsignationRemote, 
 
     await this.sftpDao.writeFileStream(pathFichierWorkRemote, stream)
     await this.sftpDao.rename(pathFichierWorkRemote, pathFichierRemote)
+}
+
+BackupSftp.prototype.genererListeBackups = async function(configuration) {
+    const pathStaging = this.storeConsignation.getPathStaging()
+    const pathFichiers = path.join(pathStaging, 'liste')
+    const fichiersBackupMissing = path.join(pathFichiers, '/fichiersBackupMissing.txt')
+
+    {
+        const fichiersBackupLocal = path.join(pathFichiers, '/fichiersBackupLocal.txt')
+        const fichiersBackupLocalWork = path.join(pathFichiers, '/fichiersBackupLocal.txt.work')
+        const fichiersBackupSftp = path.join(pathFichiers, '/fichiersBackupSftp.txt')
+        const fichiersBackupSftpWork = path.join(pathFichiers, '/fichiersBackupSftp.txt.work')
+
+        const pathRemoteBackup = path.join(configuration.remote_path_sftp_backup, 'backup'),
+              pathRemoteTransactions = path.join(pathRemoteBackup, 'transactions')
+
+        debug("Creation repertoires remote %s", pathRemoteTransactions)
+        await this.sftpDao.mkdir(pathRemoteBackup)
+        await this.sftpDao.mkdir(pathRemoteTransactions)
+
+        // Conserver backups locaux
+        const writeStreamBackupLocal = fs.createWriteStream(fichiersBackupLocalWork)
+        const cbBackupLocal = info => {
+            if(!info) return  // Callback vide (generalement dernier)
+            debug("genererListeBackups Fichier backup local ", info)
+            const domaine = info.directory.split('/').pop()
+            writeStreamBackupLocal.write(path.join(domaine, info.filename) + '\n')
+        }
+        await this.storeConsignation.parcourirBackup(cbBackupLocal)
+
+        const writeFuuidsBackupStream = fs.createWriteStream(fichiersBackupSftpWork)
+        const fichierBackupCb = info => {
+            debug("Fichiers backup present info ", info)
+            const domaine = info.directory.split('/').pop()
+            writeFuuidsBackupStream.write(path.join(domaine, info.filename) + '\n')
+        }
+
+        await this.sftpDao.parcourirFichiersRecursif(pathRemoteTransactions, fichierBackupCb)
+        writeFuuidsBackupStream.close()
+
+        await new Promise((resolve, reject)=>{
+            exec(`sort -o ${fichiersBackupSftp} ${fichiersBackupSftpWork}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
+        })
+
+        await new Promise((resolve, reject)=>{
+            exec(`sort -o ${fichiersBackupLocal} ${fichiersBackupLocalWork}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
+        })
+
+        await new Promise((resolve, reject)=>{
+            exec(`comm -3 ${fichiersBackupLocal} ${fichiersBackupSftp} > ${fichiersBackupMissing}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
+        })
+
+        const readStreamFichiers = fs.createReadStream(fichiersBackupMissing)
+        const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
+        for await (const line of rlFichiers) {
+            // Detecter fichiers manquants localement par espaces vide au debut de la ligne
+            if( ! (line.startsWith('	') || line.startsWith('\t')) ) {
+                // Manquant
+                const fuuid = line.trim()
+                debug('Transferer fichier transactions manquant du backup ', fuuid)
+                this.fichiersBackupItem.add(fuuid)
+            }
+        }
+    
+    }    
+}
+
+BackupSftp.prototype.transfererFichiersBackup = async function(configuration) {
+
+    const pathSftpRemote = configuration.remote_path_sftp_backup,
+          pathBackup = path.join(pathSftpRemote, 'backup'),
+          pathBackupTransactions = path.join(pathBackup, 'transactions'),
+          pathWorkRemote = path.join(pathSftpRemote, 'work')
+
+    await this.sftpDao.mkdir(pathBackupTransactions)
+    await this.sftpDao.mkdir(pathWorkRemote)
+
+    while(true) {
+        // Recuperer un fuuid a partir du Set
+        let fichier = null
+        for(fichier of this.fichiersBackupItem.values()) break
+        if(!fichier) break
+        this.fichiersBackupItem.delete(fichier)
+
+        try {
+            debug("transfererFichiersBackup ", fichier)
+            await this.uploadFuuidBackup(fichier, pathBackupTransactions, pathWorkRemote)
+        } catch(err) {
+            console.error(new Date() + " backupSftp.transfererFichiersBackup Erreur upload %s vers backup %O", fichier, err)
+        }
+    }
+
+    debug("transfererFichiersBackup Fin")
+}
+
+BackupSftp.prototype.uploadFuuidBackup = async function(fichierBackup, pathBackupTransactions, pathWorkRemote) {
+    const fichierParsed = path.parse(fichierBackup)
+    debug('uploadFuuidBackup fichierBackup %s, parsed %O', fichierBackup, fichierParsed)
+    const pathWorkFichier = path.join(pathWorkRemote, fichierParsed.base)
+    const domaine = fichierParsed.dir
+    const pathDestinationDomaine = path.join(pathBackupTransactions, domaine)
+    const pathDestinationFichier = path.join(pathDestinationDomaine, fichierParsed.base)
+
+    debug("Creer dir domaine ", pathDestinationDomaine)
+    await this.sftpDao.mkdir(pathDestinationDomaine)
+
+    debug("Transfert fichier backup vers de %O vers %O", fichierBackup, pathWorkFichier)
+    const streamFichier = await this.storeConsignation.getBackupTransactionStream(fichierBackup)
+
+    await this.sftpDao.writeFileStream(pathWorkFichier, streamFichier)
+
+    debug("Rename fichier backup vers de %O vers %O", pathWorkFichier, pathDestinationFichier)
+    await this.sftpDao.rename(pathWorkFichier, pathDestinationFichier)
 }
 
 module.exports = BackupSftp
