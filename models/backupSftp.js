@@ -97,8 +97,9 @@ BackupSftp.prototype.genererListeFuuids = async function(configuration) {
             debug("Fuuids backup present info ", info)
             writeFuuidsBackupStream.write(info.filename + '\n')
         }
-        const pathRemoteBackup = path.join(configuration.remote_path_sftp_backup, 'consignation')
-        await this.sftpDao.parcourirFichiersRecursif(pathRemoteBackup, fuuidsBackupCb)
+        const pathRemoteConsignation = path.join(configuration.remote_path_sftp_backup, 'consignation')
+        await this.sftpDao.mkdir(pathRemoteConsignation)
+        await this.sftpDao.parcourirFichiersRecursif(pathRemoteConsignation, fuuidsBackupCb)
         writeFuuidsBackupStream.close()
 
         await new Promise((resolve, reject)=>{
@@ -174,9 +175,10 @@ BackupSftp.prototype.uploadFuuidBackup = async function(pathConsignationRemote, 
         stream = reponseFichier.data
     } else {
         // Acces direct local
-        const pathFichierLocal = path.join(infoFichier.directory, infoFichier.name)
+        // const pathFichierLocal = path.join(infoFichier.directory, infoFichier.name)
+        const pathFichierLocal = infoFichier.filePath
         debug("Path fichier local pour upload backup ", pathFichierLocal)
-        throw new Error('not implemented')
+        stream = fs.createReadStream(pathFichierLocal)
     }
 
     await this.sftpDao.writeFileStream(pathFichierWorkRemote, stream)
@@ -276,7 +278,7 @@ BackupSftp.prototype.transfererFichiersBackup = async function(configuration) {
 
         try {
             debug("transfererFichiersBackup ", fichier)
-            await this.uploadFuuidBackup(fichier, pathBackupTransactions, pathWorkRemote)
+            await this.uploadFicherBackup(fichier, pathBackupTransactions, pathWorkRemote)
         } catch(err) {
             console.error(new Date() + " backupSftp.transfererFichiersBackup Erreur upload %s vers backup %O", fichier, err)
         }
@@ -285,7 +287,7 @@ BackupSftp.prototype.transfererFichiersBackup = async function(configuration) {
     debug("transfererFichiersBackup Fin")
 }
 
-BackupSftp.prototype.uploadFuuidBackup = async function(fichierBackup, pathBackupTransactions, pathWorkRemote) {
+BackupSftp.prototype.uploadFicherBackup = async function(fichierBackup, pathBackupTransactions, pathWorkRemote) {
     const fichierParsed = path.parse(fichierBackup)
     debug('uploadFuuidBackup fichierBackup %s, parsed %O', fichierBackup, fichierParsed)
     const pathWorkFichier = path.join(pathWorkRemote, fichierParsed.base)
