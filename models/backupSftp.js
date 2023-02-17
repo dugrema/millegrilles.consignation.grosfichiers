@@ -35,9 +35,18 @@ BackupSftp.prototype.threadBackup = async function() {
 
         const configuration = await this.storeConsignation.chargerConfiguration()
         if(configuration.type_backup === 'sftp') {
+            // Mapper champs sftp pour reutiliser modules
+            const configurationCustom = {
+                ...configuration,
+                hostname_sftp: configuration.hostname_sftp_backup, 
+                username_sftp: configuration.username_sftp_backup, 
+                port_sftp: configuration.port_sftp_backup, 
+                key_type_sftp: configuration.key_type_sftp_backup,
+            }
+
             // Run backup
-            await this.sftpDao.init(configuration)
-            await this.runBackup(configuration)
+            await this.sftpDao.init(configurationCustom)
+            await this.runBackup(configurationCustom)
         } else {
             debug("Type backup !== sftp, pas de backup")
         }
