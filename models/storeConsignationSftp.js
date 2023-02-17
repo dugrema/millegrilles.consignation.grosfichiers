@@ -1,10 +1,10 @@
 const debugLib = require('debug')
 const debug = debugLib('consignation:store:sftp')
-const debugSftp = debugLib('consignation:store:sftpTrace')
+// const debugSftp = debugLib('consignation:store:sftpTrace')
 const fs = require('fs')
 const path = require('path')
 const readdirp = require('readdirp')
-const {Client} = require('ssh2')
+// const {Client} = require('ssh2')
 const { Readable } = require('stream')
 const lzma = require('lzma-native')
 

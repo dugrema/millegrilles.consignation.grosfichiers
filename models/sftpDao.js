@@ -147,6 +147,15 @@ SftpDao.prototype.writeStream = async function(streamReader, writeHandle, callba
     return resultat
 }
 
+SftpDao.prototype.writeFileStream = async function(pathFichier, streamReader) {
+    var writeHandle = await this.open(pathFichier, 'w', 0o644)
+    try {
+        await this.writeStream(streamReader, writeHandle)
+    } finally {
+        await this.close(writeHandle)
+    }
+}
+
 SftpDao.prototype.connecterSSH = async function(host, port, username, opts) {
     opts = opts || {}
     host = host || this.hostname
@@ -180,13 +189,15 @@ SftpDao.prototype.connecterSSH = async function(host, port, username, opts) {
                 reject(err)
             }
         })
+
         conn.on('error', err=>{
-            debug("Erreur connexion SFTP : %O", err)
+            console.error(new Date() + " sftpDao.connecterSSH Erreur connexion SFTP : %O", err)
             this.connexionError = err
             this.channelSftp = null
             this.connexionSsh = null
             reject(err)
         })
+
         conn.on('end', ()=>{
             debug("connecterSSH.end Connexion %s fermee, nettoyage pool", connexionName)
             this.channelSftp = null
@@ -216,8 +227,9 @@ SftpDao.prototype.sftpClient = async function() {
                     debug("Channel SFTP end")
                     this.channelSftp = null
                 })
-                sftp.on('error', ()=>{
-                    debug("ERROR Channel SFTP : %O", err)
+
+                sftp.on('error', err=>{
+                    console.error(new Date() + " sftpDao.sftpClient ERROR Channel SFTP : %O", err)
                 })
 
                 resolve(sftp)

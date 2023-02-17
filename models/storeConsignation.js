@@ -64,7 +64,7 @@ async function init(mq, opts) {
 
     // Handler backup sftp
     _backupSftp = new BackupSftp(mq, this)
-    _backupSftp.threadBackup()  // Demarrer thread
+    _backupSftp.setTimeout(15_000)  // Demarrer thread dans 15 secondes
 
     // Entretien - emet la presence (premiere apres 10 secs, apres sous intervalles)
     setTimeout(entretien, 10_000)
@@ -748,7 +748,13 @@ async function downloadFichiersBackup() {
             fichiersBackupLocaux.add(fichierPath)
         }
     }
-    await parcourirBackup(addFichierLocal)
+
+    try {
+        await parcourirBackup(addFichierLocal)
+    } catch(err) {
+        console.error(new Date() + " storeConsignation.downloadFichiersBackup Erreur parcourir backup ", err)
+        return
+    }
 
     for(let fichierBackup of reponse) {
         if(!fichierBackup) continue  // Ligne vide, skip
@@ -981,6 +987,10 @@ function getInstanceId() {
     return FichiersTransfertBackingStore.getInstanceId()
 }
 
+function getPathStaging() {
+    return FichiersTransfertBackingStore.getPathStaging()
+}
+
 function getUrlTransfert() {
     return new URL(FichiersTransfertBackingStore.getUrlTransfert())
 }
@@ -1054,4 +1064,5 @@ module.exports = {
     getUrlTransfert, getHttpsAgent, getInstanceId, ajouterDownloadPrimaire,
     processusSynchronisation, demarrerSynchronization, 
     parcourirFichiers, parcourirBackup, 
+    getPathStaging,
 }
