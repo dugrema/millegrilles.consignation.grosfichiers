@@ -19,7 +19,9 @@ const { dechiffrerConfiguration } = require('./pki')
 const { startConsuming: startConsumingBackup, stopConsuming: stopConsumingBackup } = require('../messages/backup')
 const { startConsuming: startConsumingActions, stopConsuming: stopConsumingActions } = require('../messages/actions')
 
-const BATCH_SIZE = 100
+const BATCH_SIZE = 100,
+      TIMEOUT_AXIOS = 30_000
+
 const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 const INTERVALLE_SYNC = 3_600_000,  // 60 minutes
       INTERVALLE_THREAD_TRANSFERT = 1_200_000  // 20 minutes
@@ -461,6 +463,7 @@ async function getDataSynchronisation() {
         method: 'GET',
         httpsAgent,
         url: urlData.href,
+        timeout: TIMEOUT_AXIOS,
     })
     debug("Reponse GET data.json %s :\n%O", reponse.status, reponse.data)
     
@@ -472,7 +475,13 @@ async function getDataSynchronisation() {
         const fichierActifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE + '.work')
         try {
             const actifStream = fs.createWriteStream(fichierActifsPrimaire)
-            const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream' })
+            const reponseActifs = await axios({ 
+                method: 'GET', 
+                httpsAgent, 
+                url: urlData.href, 
+                responseType: 'stream',
+                timeout: TIMEOUT_AXIOS,
+            })
             debug("Reponse GET actifs %s", reponseActifs.status)
 
             await new Promise((resolve, reject)=>{
@@ -525,7 +534,13 @@ async function getDataSynchronisation() {
         urlData.pathname = urlData.pathname + '/data/fuuidsCorbeille.txt'
         debug("Download %s", urlData.href)
         const corbeilleStream = fs.createWriteStream(fichierCorbeillePrimaire)
-        const reponseCorbeille = await axios({method: 'GET', httpsAgent, url: urlData.href, responseType: 'stream'})
+        const reponseCorbeille = await axios({
+            method: 'GET', 
+            httpsAgent, 
+            url: urlData.href, 
+            responseType: 'stream',
+            timeout: TIMEOUT_AXIOS,
+        })
         debug("Reponse GET corbeille %s", reponseCorbeille.status)
         await new Promise((resolve, reject)=>{
             corbeilleStream.on('close', resolve)
@@ -690,7 +705,13 @@ async function downloadFichierDuPrimaire(fuuid) {
 
     try {
         const httpsAgent = getHttpsAgent()
-        const reponseActifs = await axios({ method: 'GET', httpsAgent, url: urlFuuid.href, responseType: 'stream' })
+        const reponseActifs = await axios({ 
+            method: 'GET', 
+            httpsAgent, 
+            url: urlFuuid.href, 
+            responseType: 'stream',
+            timeout: TIMEOUT_AXIOS,
+        })
         debug("Reponse GET actifs %s", reponseActifs.status)
         await new Promise((resolve, reject)=>{
             fuuidStream.on('close', resolve)
@@ -774,7 +795,7 @@ async function downloadFichiersBackup() {
 
     const urlListe = new URL(urlTransfert.href)
     urlListe.pathname = urlListe.pathname + '/backup/liste'
-    let reponse = await axios({method: 'GET', url: urlListe.href, httpsAgent})
+    let reponse = await axios({method: 'GET', url: urlListe.href, httpsAgent, timeout: TIMEOUT_AXIOS})
     debug("Reponse fichiers backup :\n%s", reponse.data)
     reponse = reponse.data.split('\n')
     debug("Reponse fichiers backup liste : %O", reponse)
@@ -810,7 +831,13 @@ async function downloadFichiersBackup() {
                 debug("downloadFichiersBackup Fichier backup manquant '%s'", fichierBackup)
                 const urlFichier = new URL(urlTransfert.href)
                 urlFichier.pathname = path.join(urlFichier.pathname, 'backup', fichierBackup)
-                const reponse = await axios({method: 'GET', url: urlFichier.href, httpsAgent, responseType: 'stream'})
+                const reponse = await axios({
+                    method: 'GET', 
+                    url: urlFichier.href, 
+                    httpsAgent, 
+                    responseType: 'stream',
+                    timeout: TIMEOUT_AXIOS,
+                })
                 debug("Reponse fichier backup ", reponse.status)
 
                 const pathFichierBase = fichierBackup.replace('transactions/', '')

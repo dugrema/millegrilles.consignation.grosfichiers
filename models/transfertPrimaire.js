@@ -5,7 +5,8 @@ const path = require('path')
 const axios = require('axios')
 
 const INTERVALLE_PUT_CONSIGNATION = 900_000,
-      CONST_TAILLE_SPLIT_MAX_DEFAULT = 5 * 1024 * 1024
+      CONST_TAILLE_SPLIT_MAX_DEFAULT = 5 * 1024 * 1024,
+      TIMEOUT_AXIOS = 30_000
 
 function TransfertPrimaire(mq, storeConsignation) {
     this.amqpdao = mq
@@ -101,7 +102,7 @@ TransfertPrimaire.prototype.putAxios = async function(fuuid, statItem) {
 
     // S'assurer que le fichier n'existe pas deja
     try {
-        await axios({method: 'HEAD', url: urlPrimaireFuuid.href, httpsAgent})
+        await axios({method: 'HEAD', url: urlPrimaireFuuid.href, httpsAgent, timeout: TIMEOUT_AXIOS})
         console.error(new Date() + "transfertPrimaire.putAxios Fichier %s existe deja sur le primaire, annuler transfert", fuuid)
         return false
     } catch(err) {
@@ -121,7 +122,7 @@ TransfertPrimaire.prototype.putAxios = async function(fuuid, statItem) {
         if(fileRedirect) {
             debug("putAxios Source transfert via %s", fileRedirect)
             tmpFile = path.join('/tmp/', fuuid + '.primaire')
-            const sourceReponse = await axios({method: 'GET', url: fileRedirect, responseType: 'stream' })
+            const sourceReponse = await axios({method: 'GET', url: fileRedirect, responseType: 'stream', timeout: TIMEOUT_AXIOS })
             if(sourceReponse.status !== 200) {
                 throw new Error("Mauvaise reponse source (code %d) %s", sourceReponse.status, fileRedirect)
             }
@@ -154,6 +155,7 @@ TransfertPrimaire.prototype.putAxios = async function(fuuid, statItem) {
                     url: urlPosition.href,
                     headers: {'content-type': 'application/stream', 'X-fuuid': fuuid},
                     data: readStream,
+                    timeout: TIMEOUT_AXIOS,
                 })
             } finally {
                 readStream.close()
@@ -176,6 +178,7 @@ TransfertPrimaire.prototype.putAxios = async function(fuuid, statItem) {
         httpsAgent,
         url: urlCorrelation.href,
         data: transactions,
+        timeout: TIMEOUT_AXIOS,
     })
 }
 
