@@ -439,10 +439,10 @@ async function processusSynchronisation() {
     try {
         _sync_lock = true
         const infoData = await getDataSynchronisation()
+        await marquerFichiersCorbeille()
         await uploaderFichiersVersPrimaire()
         await downloadFichiersBackup()
         await downloadFichiersSync()
-        await marquerFichiersCorbeille()
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur processusSynchronisation(2) ", err)
     } finally {
@@ -644,10 +644,12 @@ async function _threadDownloadFichiersDuPrimaire() {
 
     debug(new Date() + ' _threadDownloadFichiersDuPrimaire Demarrer download fichiers')
 
+    let intervalleRedemarrageThread = INTERVALLE_THREAD_TRANSFERT
+
     try {
         // Charger liste a downloader
         try {
-            //_queueDownloadFuuids.clear()
+            _queueDownloadFuuids.clear()
             await chargerListeFichiersMissing(fuuid=>_queueDownloadFuuids.add(fuuid))
         } catch(err) {
             console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur chargerListeFichiersMissing ', err)
@@ -665,6 +667,11 @@ async function _threadDownloadFichiersDuPrimaire() {
                 await downloadFichierDuPrimaire(fuuid)
             } catch(err) {
                 console.error(new Date() + " Erreur download %s du primaire %O", fuuid, err)
+                if(err.statusCode >= 500 && err.statusCode <= 600) {
+                    console.warn("Abandon _threadDownloadFichiersDuPrimaire sur erreur serveur, redemarrage pending")
+                    intervalleRedemarrageThread = 60_000  // Reessayer dans 1 minute
+                    return
+                }
             }
         }
 
@@ -675,7 +682,7 @@ async function _threadDownloadFichiersDuPrimaire() {
             _timeoutStartThreadDownload = null
             _threadDownloadFichiersDuPrimaire()
                 .catch(err=>{console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur ', err)})
-        }, INTERVALLE_THREAD_TRANSFERT)
+        }, intervalleRedemarrageThread)
         debug(new Date() + ' _threadDownloadFichiersDuPrimaire Fin')
     }
 }
@@ -698,7 +705,6 @@ async function downloadFichierDuPrimaire(fuuid) {
     const dirFuuid = path.join(getPathDataFolder(), 'syncDownload', fuuid)
     await fsPromises.mkdir(dirFuuid, {recursive: true})
     const fuuidFichier = path.join(dirFuuid, '0.part')  // Fichier avec position initiale - 1 seul fichier
-    const fuuidStream = fs.createWriteStream(fuuidFichier)
 
     const fichierActifsWork = path.join(getPathDataFolder(), path.join(FICHIER_FUUIDS_ACTIFS + '.work'))
     const writeCompletes = fs.createWriteStream(fichierActifsWork, {flags: 'a', encoding: 'utf8'})
@@ -713,12 +719,16 @@ async function downloadFichierDuPrimaire(fuuid) {
             timeout: TIMEOUT_AXIOS,
         })
         debug("Reponse GET actifs %s", reponseActifs.status)
+        const fuuidStream = fs.createWriteStream(fuuidFichier)
         await new Promise((resolve, reject)=>{
             fuuidStream.on('close', resolve)
             fuuidStream.on('error', err=>{
-                fuuidStream.close()
+                reject(err)
+                // fuuidStream.close()
                 fsPromises.unlink(fuuidFichier)
                     .catch(err=>console.warn("Erreur suppression fichier %s : %O", fuuidFichier, err))
+            })
+            reponseActifs.data.on('error', err=>{
                 reject(err)
             })
             reponseActifs.data.pipe(fuuidStream)
@@ -732,6 +742,10 @@ async function downloadFichierDuPrimaire(fuuid) {
 
     } catch(err) {
         console.info("Erreur sync fuuid %s : %O", fuuid, err)
+        if(err.statusCode >= 500 && err.statusCode < 600) {
+            console.error("Erreur serveur download fuuid %s", fuuid)
+            throw err
+        }
     } finally {
         await fsPromises.rm(dirFuuid, {recursive: true, force: true})
     }
@@ -741,19 +755,29 @@ async function marquerFichiersCorbeille() {
     const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
     await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
 
-    const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt')
+    // Comparer fuuids dans corbeille du primaire et fichier fuuids actifs local
+    const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt'),
+          fichierActifsLocal = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS),
+          fichierCorbeilleTraiter = path.join(getPathDataFolder(), 'fuuidsCorbeilleTraiter.txt')
+
+    await comparerFichiers(fichierCorbeillePrimaire, fichierActifsLocal, fichierCorbeilleTraiter)
+
     try {
-        const readStreamFichiers = fs.createReadStream(fichierCorbeillePrimaire)
+        const readStreamFichiers = fs.createReadStream(fichierCorbeilleTraiter)
         const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
 
         for await (const line of rlFichiers) {
-            const fuuid = line.trim()
-            try {
-                await _storeConsignation.marquerSupprime(fuuid)
-                debug("Fichier %s transfere a la corbeille", fuuid)
-            } catch(err) {
-                debug("Erreur transfert %s vers corbeille", fuuid, err)
+
+            if( ! line.startsWith('	') && ! line.startsWith('\t') ) {
+                try {
+                    const fuuid = line.trim()
+                    await _storeConsignation.marquerSupprime(fuuid)
+                    debug("Fichier %s transfere a la corbeille", fuuid)
+                } catch(err) {
+                    debug("Erreur transfert %s vers corbeille", fuuid, err)
+                }
             }
+
         }
     } catch(err) {
         debug("Erreur traitement sync corbeille ", err)
@@ -939,12 +963,13 @@ async function genererListeLocale() {
             }
 
             const corbeille = item.filename.endsWith('.corbeille')
+            const fuuid = item.filename.split('.').shift()
             if(corbeille) {
-                streamFuuidsCorbeille.write(item.filename + '\n')
+                streamFuuidsCorbeille.write(fuuid + '\n')
                 nombreFichiersCorbeille++
                 tailleCorbeille += item.size
             } else {
-                streamFuuidsActifs.write(item.filename + '\n')
+                streamFuuidsActifs.write(fuuid + '\n')
                 nombreFichiersActifs++
                 tailleActifs += item.size
             }
