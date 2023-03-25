@@ -39,9 +39,20 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   routerFichiersTransfert.get('/:fuuid', headersFichier, pipeReponse)
   routerFichiersTransfert.head('/:fuuid', headersFichier, returnOk)
 
-  routerFichiersTransfert.use(uploadFichier.init(mq, storeConsignation, opts))
+  routerFichiersTransfert.use(uploadFichier.init(mq, preparerConsigner(), opts))
 
   return router
+}
+
+function preparerConsigner(opts) {
+  opts = opts || {}
+
+  return (req, res, next) => {
+    const { hachage, pathFichier } = res
+    debug("consigner Fuuid %s, pathFichier %s", hachage, pathFichier)
+    return res.sendStatus(202)
+  }
+
 }
 
 function returnOk(req, res) {

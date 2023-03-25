@@ -667,7 +667,7 @@ async function _threadDownloadFichiersDuPrimaire() {
                 await downloadFichierDuPrimaire(fuuid)
             } catch(err) {
                 console.error(new Date() + " Erreur download %s du primaire %O", fuuid, err)
-                if(err.statusCode >= 500 && err.statusCode <= 600) {
+                if(err.response && err.response.status >= 500 && err.response.status <= 600) {
                     console.warn("Abandon _threadDownloadFichiersDuPrimaire sur erreur serveur, redemarrage pending")
                     intervalleRedemarrageThread = 60_000  // Reessayer dans 1 minute
                     return
@@ -740,12 +740,6 @@ async function downloadFichierDuPrimaire(fuuid) {
         // Ajouter a la liste de downloads completes
         writeCompletes.write(fuuid + '\n')
 
-    } catch(err) {
-        console.info("Erreur sync fuuid %s : %O", fuuid, err)
-        if(err.statusCode >= 500 && err.statusCode < 600) {
-            console.error("Erreur serveur download fuuid %s", fuuid)
-            throw err
-        }
     } finally {
         await fsPromises.rm(dirFuuid, {recursive: true, force: true})
     }
