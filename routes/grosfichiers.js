@@ -1,6 +1,7 @@
 const debug = require('debug')('fichiers:routeGrosfichiers')
 const express = require('express');
 const fs = require('fs');
+const fsPromises = require('fs/promises');
 const path = require('path')
 const readdirp = require('readdirp')
 
@@ -12,7 +13,8 @@ const uploadFichier = require('./uploadFichier')
 const STAGING_FILE_TIMEOUT_MSEC = 300000,
       L2PRIVE = '2.prive'
 
-let _storeConsignation = null
+let _storeConsignation = null,
+    _pathReady = '/var/opt/millegrilles/consignation/staging/fichiers/ready'
 
 function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   opts = opts || {}
@@ -39,17 +41,24 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   routerFichiersTransfert.get('/:fuuid', headersFichier, pipeReponse)
   routerFichiersTransfert.head('/:fuuid', headersFichier, returnOk)
 
-  routerFichiersTransfert.use(uploadFichier.init(mq, preparerConsigner(), opts))
+  routerFichiersTransfert.use(uploadFichier.init(mq, preparerConsigner(mq), opts))
 
   return router
 }
 
-function preparerConsigner(opts) {
+function preparerConsigner(mq, opts) {
   opts = opts || {}
 
-  return (req, res, next) => {
+  return async (req, res) => {
     const { hachage, pathFichier } = res
     debug("consigner Fuuid %s, pathFichier %s", hachage, pathFichier)
+
+    const pathDestination = path.join(_pathReady, hachage)
+    await fsPromises.rename(pathFichier, pathDestination)
+
+    debug("StoreConsignation ", _storeConsignation)
+    await _storeConsignation.ajouterFichierConsignation(hachage)
+
     return res.sendStatus(202)
   }
 

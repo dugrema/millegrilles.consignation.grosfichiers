@@ -194,6 +194,8 @@ async function recoverFichierSupprime(fuuid) {
 async function consignerFichier(pathFichierStaging, fuuid) {
     debug("Consigner fichier fuuid %s", fuuid)
 
+    throw new Error('fix me - refact')
+    
     // Determiner si on a une seule .part ou plusieurs
     const promiseReaddirp = readdirp(pathFichierStaging, {
         type: 'files',

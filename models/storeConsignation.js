@@ -155,7 +155,9 @@ async function modifierConfiguration(params, opts) {
 }
 
 async function transfererFichierVersConsignation(mq, pathReady, item) {
+    debug("transfererFichierVersConsignation Fichier %s/%s", pathReady, item)
     const transactions = await FichiersTransfertBackingStore.traiterTransactions(mq, pathReady, item)
+    debug("transfererFichierVersConsignation Info ", transactions)
     const {etat, transaction: transactionGrosFichiers, cles: commandeMaitreCles} = transactions
     
     // const fuuid = commandeMaitreCles.hachage_bytes
@@ -1184,6 +1186,10 @@ async function setEstConsignationPrimaire(primaire) {
     }
 }
 
+function ajouterFichierConsignation(item) {
+    FichiersTransfertBackingStore.ajouterFichierConsignation(item)
+}
+
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
     entretienFichiersSupprimes, supprimerFichier, recupererFichier, confirmerActiviteFuuids,
@@ -1196,4 +1202,6 @@ module.exports = {
     parcourirFichiers, parcourirBackup, 
     getPathStaging,
     downloadFichiersBackup,
+
+    ajouterFichierConsignation,
 }

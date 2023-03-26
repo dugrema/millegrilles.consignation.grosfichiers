@@ -8,7 +8,7 @@ const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachag
 
 const debug = require('debug')('fichiers:fichiersTransfertMiddleware')
 
-const PATH_STAGING_DEFAUT = '/var/opt/millegrilles/consignation/staging/commun',
+const PATH_STAGING_DEFAUT = '/var/opt/millegrilles/consignation/staging/fichiers',
       PATH_STAGING_UPLOAD = 'upload',
       PATH_STAGING_READY = 'ready',
       FICHIER_TRANSACTION_CLES = 'transactionCles.json',

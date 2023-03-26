@@ -17,7 +17,8 @@ const PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'back
 
 const DEFAULT_URL_CONSIGNATION = 'https://fichiers:443'
 
-let _pathConsignation = path.join(CONSIGNATION_PATH, 'local')
+let _pathConsignation = path.join(CONSIGNATION_PATH, 'local'),
+    _pathCorbeille = path.join(CONSIGNATION_PATH, 'corbeille')
 
 function init(params) {
     params = params || {}
@@ -62,7 +63,18 @@ async function modifierConfiguration(params, opts) {
 }
 
 function getPathFichier(fuuid) {
-    return path.join(_pathConsignation, fuuid)
+    // Split path en 4 derniers caracteres
+    const last2 = fuuid.slice(fuuid.length-2)
+    const sub1 = last2[1],
+          sub2 = last2[0]
+    return path.join(_pathConsignation, sub1, sub2, fuuid)
+}
+
+function getPathFichierCorbeille(fuuid) {
+    const last2 = fuuid.slice(fuuid.length-2)
+    const sub1 = last2[1],
+          sub2 = last2[0]
+    return path.join(_pathCorbeille, sub1, sub2, fuuid)
 }
 
 /**
@@ -99,10 +111,12 @@ async function getInfoFichier(fuuid, opts) {
 }
 
 async function recoverFichierSupprime(fuuid) {
+    const filePathCorbeille = getPathFichierCorbeille(fuuid)
     const filePath = getPathFichier(fuuid)
-    const filePathCorbeille = filePath + '.corbeille'
+    const dirDestPath = path.dir(filePath)
     try {
         await fsPromises.stat(filePathCorbeille)
+        await fsPromises.mkdir(dirDestPath, {recursive: true})
         await fsPromises.rename(filePathCorbeille, filePath)
         const stat = await fsPromises.stat(filePath)
         return { stat, filePath }
@@ -113,68 +127,42 @@ async function recoverFichierSupprime(fuuid) {
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
+    const pathSource = path.join(pathFichierStaging, fuuid)
     const pathFichier = getPathFichier(fuuid)
-
-    // Lire toutes les parts et combiner dans la destination
     const dirFichier = path.dirname(pathFichier)
     await fsPromises.mkdir(dirFichier, {recursive: true})
-    const writer = fs.createWriteStream(pathFichier)
 
-    const promiseReaddirp = readdirp(pathFichierStaging, {
-        type: 'files',
-        fileFilter: '*.part',
-        depth: 1,
-    })
-
-    const verificateurHachage = new VerificateurHachage(fuuid)
     try {
-        const listeParts = []
-        for await (const entry of promiseReaddirp) {
-            const fichierPart = entry.basename
-            const position = Number(fichierPart.split('.').shift())
-            listeParts.push({position, fullPath: entry.fullPath})
-        }
-        listeParts.sort((a,b)=>{return a.position-b.position})
-        for await (const entry of listeParts) {
-            const {position, fullPath} = entry
-            // debug("Entry path : %O", entry);
-            debug("Traiter consignation pour item %s position %d", fuuid, position)
-            const streamReader = fs.createReadStream(fullPath)
-            
-            let total = 0
-            streamReader.on('data', chunk=>{
-            // Verifier hachage
-            verificateurHachage.update(chunk)
-            writer.write(chunk)
-            total += chunk.length
-            })
-
-            const promise = new Promise((resolve, reject)=>{
-                streamReader.on('end', _=>resolve())
-                streamReader.on('error', err=>reject(err))
-            })
-
-            await promise
-            debug("Taille fichier %s : %d", pathFichier, total)
-        }
-
-        await verificateurHachage.verify()
-        debug("Fichier %s transfere avec succes vers consignation locale", fuuid)
+        // Methode simple, rename (move)
+        await fsPromises.rename(pathSource, pathFichier)
     } catch(err) {
-        fsPromises.rm(pathFichier).catch(err=>console.error("Erreur suppression fichier : %O", err))
-        throw err
+        debug("consignerFichier Erreur rename, tenter copy ", err)
+        const reader = fs.createReadStream(pathSource)
+        const writer = fs.createWriteStream(pathFichier)
+        const promise = new Promise((resolve, reject)=>{
+            writer.on('close', resolve)
+            writer.on('error', reject)
+        })
+        reader.pipe(writer)
+        await promise
+        fsPromises.rm(pathFichierStaging, {recursive: true})
+            .catch(err=>console.error("Erreur suppression fichier : %O", err))
     }
 
 }
 
-function marquerSupprime(fuuid) {
+async function marquerSupprime(fuuid) {
     const pathFichier = getPathFichier(fuuid)
-    const pathFichierSupprime = pathFichier + '.corbeille'
-    return fsPromises.rename(pathFichier, pathFichierSupprime)
+    const pathFichierCorbeille = getPathFichierCorbeille(fuuid)
+    const dirPathCorbeille = path.dir(pathFichierCorbeille)
+    // const pathFichierSupprime = pathFichier + '.corbeille'
+    await fsPromises.mkdir(dirPathCorbeille, {recursive: true})
+    return await fsPromises.rename(pathFichier, pathFichierCorbeille)
 }
 
 async function parcourirFichiers(callback, opts) {
-    await parcourirFichiersRecursif(_pathConsignation, callback, opts)
+    opts = opts || {}
+    await parcourirFichiersRecursif(_pathConsignation, callback, {...opts, depth: 3})
     await callback()  // Dernier appel avec aucune valeur (fin traitement)
 }
 
@@ -185,9 +173,10 @@ async function parcourirBackup(callback, opts) {
 
 async function parcourirFichiersRecursif(repertoire, callback, opts) {
     opts = opts || {}
+    const depth = opts.depth || 1
     debug("parcourirFichiers %s", repertoire)
   
-    const settingsReaddirp = { type: 'files', alwaysStat: true, depth: 1 }
+    const settingsReaddirp = { type: 'files', alwaysStat: true, depth }
 
     for await (const entry of readdirp(repertoire, settingsReaddirp)) {
         debug("Fichier : %O", entry)
