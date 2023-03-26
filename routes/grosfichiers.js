@@ -53,13 +53,19 @@ function preparerConsigner(mq, opts) {
     const { hachage, pathFichier } = res
     debug("consigner Fuuid %s, pathFichier %s", hachage, pathFichier)
 
-    const pathDestination = path.join(_pathReady, hachage)
-    await fsPromises.rename(pathFichier, pathDestination)
+    try {
+      await fsPromises.mkdir(_pathReady, {recursive: true})
+      const pathDestination = path.join(_pathReady, hachage)
+      await fsPromises.rename(pathFichier, pathDestination)
 
-    debug("StoreConsignation ", _storeConsignation)
-    await _storeConsignation.ajouterFichierConsignation(hachage)
-
-    return res.sendStatus(202)
+      debug("StoreConsignation ", _storeConsignation)
+      await _storeConsignation.ajouterFichierConsignation(hachage)
+      
+      return res.sendStatus(202)
+    } catch(err) {
+      console.error(new Date() + " ERROR Erreur consignation ", err)
+      return res.sendStatus(500)
+    }
   }
 
 }

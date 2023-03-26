@@ -305,28 +305,28 @@ async function readyStaging(amqpdao, pathStaging, fuuid, opts) {
     const pki = amqpdao.pki
     const pathUploadItem = path.join(pathStaging, PATH_STAGING_UPLOAD, fuuid)
 
-    if(opts.cles) {
-        // On a une commande de maitre des cles. Va etre acheminee et geree par le serveur de consignation.
-        let contenu = opts.cles
-        // contenu.corrompre = true
-        try { await validerMessage(pki, contenu) } 
-        catch(err) {
-            debug("readyStaging ERROR readyStaging Message cles invalide")
-            err.code = CODE_CLES_SIGNATURE_INVALIDE
-            throw err
-        }
+    // if(opts.cles) {
+    //     // On a une commande de maitre des cles. Va etre acheminee et geree par le serveur de consignation.
+    //     let contenu = opts.cles
+    //     // contenu.corrompre = true
+    //     try { await validerMessage(pki, contenu) } 
+    //     catch(err) {
+    //         debug("readyStaging ERROR readyStaging Message cles invalide")
+    //         err.code = CODE_CLES_SIGNATURE_INVALIDE
+    //         throw err
+    //     }
 
-        // Sauvegarder la transaction de cles
-        const pathCles = path.join(pathUploadItem, FICHIER_TRANSACTION_CLES)
-        if(typeof(contenu) !== 'string') contenu = JSON.stringify(contenu)
-        await fsPromises.writeFile(pathCles, contenu, {mode: 0o600})
-    }
+    //     // Sauvegarder la transaction de cles
+    //     const pathCles = path.join(pathUploadItem, FICHIER_TRANSACTION_CLES)
+    //     if(typeof(contenu) !== 'string') contenu = JSON.stringify(contenu)
+    //     await fsPromises.writeFile(pathCles, contenu, {mode: 0o600})
+    // }
 
     if(opts.transaction) {
         // On a une commande de transaction. Va etre acheminee et geree par le serveur de consignation.
         let contenu = opts.transaction
         // contenu.corrompre = true
-        try { await validerMessage(pki, contenu) } 
+        try { await pki.verifierMessage(contenu) } 
         catch(err) {
             debug("readyStaging ERROR readyStaging Message transaction invalide")
             err.code = CODE_TRANSACTION_SIGNATURE_INVALIDE
