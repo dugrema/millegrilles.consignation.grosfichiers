@@ -1,6 +1,5 @@
 const debugLib = require('debug')
 const debug = debugLib('consignation:store:sftp')
-// const fs = require('fs')
 const path = require('path')
 const readdirp = require('readdirp')
 const { Readable } = require('stream')
@@ -9,17 +8,6 @@ const lzma = require('lzma-native')
 const { Hacheur, VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 const { chargerConfiguration, modifierConfiguration } = require('./storeConsignationLocal')
 const SftpDao = require('./sftpDao')
-
-// Charger les cles privees utilisees pour se connecter par sftp
-// Ed25519 est prefere, RSA comme fallback
-// const _privateEd25519KeyPath = process.env.SFTP_ED25519_KEY || '/run/secrets/sftp.ed25519.key.pem'
-// const _privateEd25519Key = fs.readFileSync(_privateEd25519KeyPath)
-// const _privateRsaKeyPath = process.env.SFTP_RSA_KEY || '/run/secrets/sftp.rsa.key.pem'
-// const _privateRsaKey = fs.readFileSync(_privateRsaKeyPath)
-
-// Creer un pool de connexions a reutiliser
-// const CONNEXION_TIMEOUT = 10 * 60 * 1000  // 10 minutes
-// const CHUNK_SIZE = 32768 - 29  // Packet ssh est 32768 sur hostgator, 29 bytes overhead
 
 const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegrilles/consignation'
 const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
@@ -51,18 +39,18 @@ function fermer() {
 function getPathFichier(fuuid) {
     // Split path en 4 derniers caracteres
     const last2 = fuuid.slice(fuuid.length-2)
-    const sub1 = last2[1],
-          sub2 = last2[0]
+    // const sub1 = last2[1],
+    //       sub2 = last2[0]
     const pathFichiers = getRemotePathFichiers()
-    return path.join(pathFichiers, sub1, sub2, fuuid)
+    return path.join(pathFichiers, last2, fuuid)
 }
 
 function getPathFichierCorbeille(fuuid) {
     const last2 = fuuid.slice(fuuid.length-2)
-    const sub1 = last2[1],
-          sub2 = last2[0]
+    // const sub1 = last2[1],
+    //       sub2 = last2[0]
     const pathCorbeille = getRemotePathCorbeille()
-    return path.join(pathCorbeille, sub1, sub2, fuuid)
+    return path.join(pathCorbeille, last2, fuuid)
 }
 
 function getPathWork(fuuid) {
@@ -76,7 +64,8 @@ function getPathWork(fuuid) {
 async function getInfoFichier(fuuid) {
     debug("getInfoFichier %s", fuuid)
     const url = new URL(_urlDownload)
-    url.pathname = path.join(url.pathname, fuuid)
+    const last2 = fuuid.slice(fuuid.length-2)
+    url.pathname = path.join(url.pathname, last2, fuuid)
     const fileRedirect = url.href
     debug("File redirect : %O", fileRedirect)
     return { fileRedirect }
@@ -108,21 +97,11 @@ async function recoverFichierSupprime(fuuid) {
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
-    debug("Consigner fichier fuuid %s", fuuid)
+    debug("Consigner fichier fuuid %s (path %s)", fuuid, pathFichierStaging)
     // let sftp = await sftpClient()
     await _sftpDao.mkdir(getPathWork())
 
     const pathFichier = getPathWork(fuuid)
-
-    throw new Error('fix me - refact')
-
-    // Lire toutes les parts et combiner dans la destination
-
-    const promiseReaddirp = readdirp(pathFichierStaging, {
-        type: 'files',
-        fileFilter: '*.part',
-        depth: 1,
-    })
 
     // Creer hacheur en sha2-256 pour verifier avec sha256sums via ssh apres l'upload
     const hacheur = new Hacheur({encoding: 'base16', hash: 'sha2-256'})
@@ -145,36 +124,27 @@ async function consignerFichier(pathFichierStaging, fuuid) {
     try {
         var writeHandle = await _sftpDao.open(pathFichier, 'w', 0o644)
 
-        const listeParts = []
-        for await (const entry of promiseReaddirp) {
-            const fichierPart = entry.basename
-            const position = Number(fichierPart.split('.').shift())
-            listeParts.push({position, fullPath: entry.fullPath})
-        }
-        listeParts.sort((a,b)=>{return a.position-b.position})
+        const entry = { position: 0, fullPath: path.join(pathFichierStaging, fuuid) }
+        debug("Consigner fichier vers ftp %O", entry)
+        
+        let retryCount = 1
+        while(retryCount++ < 3) {
+            try {
+                const { total } = await _sftpDao.putFile(fuuid, entry, writeHandle, callbackVerif)
 
-        let retryCount = 0,
-            fileSize = 0
-        debug("consignerFichier Conserver %s avec parts %O", fuuid, listeParts)
-        for await (const entry of listeParts) {
-            while(retryCount++ < 3) {
-                try {
-                    const { total } = await _sftpDao.putFile(fuuid, entry, writeHandle, callbackVerif)
-
-                    // Succes, break boucle retry
-                    fileSize = total  // Total est la position finale a l'ecriture
-                    retryCount = 0
-                    break
-                } catch(err) {
-                    if(retryCount < 3) {
-                        debug("Erreur putfile %s, reessayer. Detail : %O", fuuid, err)
-                        // if(!_connexionSsh) {
-                        //     // Reconnecter, restaurer etat ecriture
-                        //     await connecterSSH()
-                        //     sftp = await sftpClient()
-                            writeHandle = await _sftpDao.open(pathFichier, 'r+', 0o644)
-                        // }
-                    }
+                // Succes, break boucle retry
+                fileSize = total  // Total est la position finale a l'ecriture
+                retryCount = 0
+                break
+            } catch(err) {
+                if(retryCount < 3) {
+                    debug("consignerFichier Erreur putfile %s, reessayer. Detail : %O", fuuid, err)
+                    // if(!_connexionSsh) {
+                    //     // Reconnecter, restaurer etat ecriture
+                    //     await connecterSSH()
+                    //     sftp = await sftpClient()
+                        writeHandle = await _sftpDao.open(pathFichier, 'r+', 0o644)
+                    // }
                 }
             }
         }
@@ -205,8 +175,16 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
         debug("Information fichier sftp : %O", infoFichier)
 
+        // S'assurer d'avoir le path ./local
+        const pathLocal = getRemotePathFichiers()
+        await _sftpDao.mkdir(pathLocal)
+
+        const pathFichierRemote = getPathFichier(fuuid)
+        const dirFichier = path.dirname(pathFichierRemote)
+        await _sftpDao.mkdir(dirFichier)
+
         // Renommer de work/fuuid a local/fuuid
-        await _sftpDao.rename(pathFichier, getPathFichier(fuuid))
+        await _sftpDao.rename(pathFichier, pathFichierRemote)
 
     } catch(err) {
         try {

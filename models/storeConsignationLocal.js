@@ -5,10 +5,6 @@ const path = require('path')
 const readdirp = require('readdirp')
 const lzma = require('lzma-native')
 
-const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
-const { WritableStreamBuffer } = require('stream-buffers')
-const { execPath } = require('process')
-
 const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegrilles/consignation'
 const PATH_CONFIG_DIR = path.join(CONSIGNATION_PATH, 'config')
 const PATH_CONFIG_FICHIER = path.join(PATH_CONFIG_DIR, 'store.json')
