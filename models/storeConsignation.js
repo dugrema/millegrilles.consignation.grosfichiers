@@ -1167,6 +1167,10 @@ function estPrimaire() {
     return _estPrimaire
 }
 
+function getFichierStream(fuuid) {
+    return _storeConsignation.getFichierStream(fuuid)
+}
+
 async function setEstConsignationPrimaire(primaire) {
     debug('setEstConsignationPrimaire %s', primaire)
     const courant = _estPrimaire
@@ -1202,6 +1206,7 @@ module.exports = {
     parcourirFichiers, parcourirBackup, 
     getPathStaging,
     downloadFichiersBackup,
+    getFichierStream,
 
     ajouterFichierConsignation,
 }

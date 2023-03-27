@@ -158,9 +158,12 @@ async function getFichierTransaction(req, res) {
 // }
 
 async function headersFichier(req, res, next) {
-  const fuuid = req.params.fuuid
+  const {params, query} = req
+  const fuuid = params.fuuid
+  const internal = query.internal === '1'
+  debug("HEAD fichier %s (params: %O, query: %O)", fuuid, params, query)
+
   res.fuuid = fuuid
-  debug("HEAD fichier %s", fuuid)
 
   try {
     const infoFichier = await _storeConsignation.getInfoFichier(fuuid, {recover: true})
@@ -173,7 +176,7 @@ async function headersFichier(req, res, next) {
       }
 
       return res.sendStatus(404)
-    } else if(infoFichier.fileRedirect) {
+    } else if(infoFichier.fileRedirect && (!infoFichier.stat || !internal)) {
       res.setHeader('Cache-Control', 'public, max-age=300, immutable')
       return res.redirect(307, infoFichier.fileRedirect)
     }
@@ -476,11 +479,22 @@ async function headersFichier(req, res, next) {
 // }
 
 // Sert a preparer un fichier temporaire local pour determiner la taille, supporter slicing
-function pipeReponse(req, res) {
+async function pipeReponse(req, res) {
   // const header = res.responseHeader
   const { range, filePath, fileRedirect, stat } = res
+  const fuuid = req.params.fuuid
 
-  if(range) {
+  debug("pipeReponse ", {range, filePath, fileRedirect, stat})
+
+  if(fileRedirect) {
+    // Redirection
+    res.status(307).send(fileRedirect)
+  } else if(range) {
+    if(!filePath) {
+      console.error(new Date() + " pipeResponse ERROR Range non supporte")
+      res.writeHead(416)  // Return the 416 'Requested Range Not Satisfiable'.
+    }
+
     // Implicitement un fichier 1.public, staging local
     var start = range.Start,
         end = range.End
@@ -501,14 +515,24 @@ function pipeReponse(req, res) {
     const readStream = fs.createReadStream(filePath, { start: start, end: end })
     res.status(206)
     readStream.pipe(res)
-  } else if(fileRedirect) {
-    // Redirection
-    res.status(307).send(fileRedirect)
   } else if(filePath) {
     // Transmission directe du fichier
     const readStream = fs.createReadStream(filePath)
     res.writeHead(200)
     readStream.pipe(res)
+  } else if(_storeConsignation.getFichierStream) {
+    try {
+      debug("pipeReponse Stream fichier %s via pass interne", fuuid)
+      const readStream = await _storeConsignation.getFichierStream(fuuid)
+      res.writeHead(200)
+      readStream.pipe(res)
+    } catch(err) {
+      debug("pipeReponse Erreur getFichierStream %s : %O", fuuid, err)
+      return res.sendStatus(500)
+    }
+  } else {
+    debug("pipeReponse Aucune source disponible pour le fichier ", fuuid)
+    return res.sendStatus(500)
   }
 
 }

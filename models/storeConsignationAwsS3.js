@@ -144,7 +144,7 @@ async function getInfoFichier(fuuid, opts) {
             size: reponse.ContentLength,
         }
 
-        return { stat, filePath: keyPath, fileRedirect }
+        return { stat, remoteFilePath: keyPath, fileRedirect }
     } catch(err) {
         const metadata = err['$metadata']
         if(!metadata) throw err
@@ -182,7 +182,7 @@ async function renameFichier(fichierOld, fichierNew, opts) {
 async function recoverFichierSupprime(fuuid) {
     debug("recoverFichierSupprime %s", fuuid)
     const keyFile = path.join('c', fuuid),
-          keyFileCorbeille = path.join('c', fuuid + '.corbeille')
+          keyFileCorbeille = path.join('d', fuuid)
     try {
         await rename(keyFileCorbeille, keyFile)
         return await getInfoFichier(fuuid)
@@ -194,31 +194,22 @@ async function recoverFichierSupprime(fuuid) {
 async function consignerFichier(pathFichierStaging, fuuid) {
     debug("Consigner fichier fuuid %s", fuuid)
 
-    throw new Error('fix me - refact')
-    
-    // Determiner si on a une seule .part ou plusieurs
-    const promiseReaddirp = readdirp(pathFichierStaging, {
-        type: 'files',
-        fileFilter: '*.part',
-        depth: 1,
-    })
-    const listeParts = []
-    for await (const entry of promiseReaddirp) {
-        const fichierPart = entry.basename
-        const position = Number(fichierPart.split('.').shift())
-        listeParts.push({position, fullPath: entry.fullPath})
-    }
-    listeParts.sort((a,b)=>{return a.position-b.position})
-
-    _upload_en_cours = true
     try {
-        if(listeParts.length === 1) {
-            debug("consignerFichier Upload simple vers AWS pour %s", fuuid)
-            await uploadSimple(fuuid, listeParts[0].fullPath, _s3_bucket, {prefix: 'c/'})
-        } else {
-            debug("consignerFichier Upload multipart vers AWS pour %s", fuuid)
-            await uploadMultipart(fuuid, listeParts, _s3_bucket, {prefix: 'c/'})
-        }
+        const pathFichierLocal = path.join(pathFichierStaging, fuuid)
+
+        // Charger information fichier pur obtenir la taille
+        _upload_en_cours = true
+        debug("consignerFichier Upload simple vers AWS pour %s", fuuid)
+        await uploadSimple(fuuid, pathFichierLocal, _s3_bucket, {prefix: 'c/'})
+
+        // Verifier si on split les fichiers (>200M)
+        // if(tailleFichier <= BATCH_SIZE_MAX) {
+        //     debug("consignerFichier Upload simple vers AWS pour %s", fuuid)
+        //     await uploadSimple(fuuid, pathFichierLocal, _s3_bucket, {prefix: 'c/'})
+        // } else {
+        //     debug("consignerFichier Upload multipart vers AWS pour %s", fuuid)
+        //     await uploadMultipart(fuuid, pathFichierLocal, _s3_bucket, {prefix: 'c/'})
+        // }
     } finally {
         _upload_en_cours = false
     }
@@ -255,115 +246,142 @@ async function uploadSimple(fuuid, pathFichier, bucket, opts) {
     await parallelUploads3.done()
 }
 
-async function uploadMultipart(fuuid, listeParts, bucket, opts) {
-    const keyPrefix = opts.prefix || 'c/'
-    const pathKey = path.join(keyPrefix, fuuid)
+// async function uploadMultipart(fuuid, listeParts, bucket, opts) {
+//     const keyPrefix = opts.prefix || 'c/'
+//     const pathKey = path.join(keyPrefix, fuuid)
 
-    const localPartStat = await fsPromises.stat(listeParts[0].fullPath)
-    debug("Local part stat : ", localPartStat)
-    const localPartSize = localPartStat.size
-    if(localPartSize < BATCH_SIZE_MIN) {
-        // Combiner parts en multistreams si individuellement
-        const numPartsStream = Math.ceil(BATCH_SIZE_MIN / localPartSize)
-        debug("Combiner parts de %d bytes en groupes de %d parts (min %d)", localPartSize, numPartsStream, BATCH_SIZE_MIN)
-        const partsOriginal = listeParts
-        listeParts = []
-        while(partsOriginal.length > 0) {
-            let subpart = []
-            listeParts.push(subpart)
-            for(let i=0; i<numPartsStream; i++) {
-                const nextPart = partsOriginal.shift()
-                if(!nextPart) break
-                subpart.push(nextPart)
-            }
-        }
-    } else if(localPartSize > BATCH_SIZE_MAX) {
-        throw new Error("part > MAX_PART_SIZE. Not supported")
-    }
+//     const localPartStat = await fsPromises.stat(listeParts[0].fullPath)
+//     debug("Local part stat : ", localPartStat)
+//     const localPartSize = localPartStat.size
+//     if(localPartSize < BATCH_SIZE_MIN) {
+//         // Combiner parts en multistreams si individuellement
+//         const numPartsStream = Math.ceil(BATCH_SIZE_MIN / localPartSize)
+//         debug("Combiner parts de %d bytes en groupes de %d parts (min %d)", localPartSize, numPartsStream, BATCH_SIZE_MIN)
+//         const partsOriginal = listeParts
+//         listeParts = []
+//         while(partsOriginal.length > 0) {
+//             let subpart = []
+//             listeParts.push(subpart)
+//             for(let i=0; i<numPartsStream; i++) {
+//                 const nextPart = partsOriginal.shift()
+//                 if(!nextPart) break
+//                 subpart.push(nextPart)
+//             }
+//         }
+//     } else if(localPartSize > BATCH_SIZE_MAX) {
+//         throw new Error("part > MAX_PART_SIZE. Not supported")
+//     }
 
-    debug("Parts a uploader : ", listeParts)
+//     debug("Parts a uploader : ", listeParts)
 
-    const command = new CreateMultipartUploadCommand({
-        Bucket: bucket,
-        Key: pathKey,
-    })
-    const response = await _s3_client.send(command)
-    debug("multipartUploadFile ", response)
+//     const command = new CreateMultipartUploadCommand({
+//         Bucket: bucket,
+//         Key: pathKey,
+//     })
+//     const response = await _s3_client.send(command)
+//     debug("multipartUploadFile ", response)
 
-    const etags = []
-    const uploadId = response.UploadId
-    let partNumberCount = 1
-    let tmpFolder = null,
-        tmpFile = null
+//     const etags = []
+//     const uploadId = response.UploadId
+//     let partNumberCount = 1
+//     let tmpFolder = null,
+//         tmpFile = null
+
+//     try {
+//         for await (const p of listeParts) {
+//             let partNumber = partNumberCount++
+//             let stream = null
+//             if(Array.isArray(p)) {
+//                 debug("Multistream upload de ", p)
+//                 const ms = new MultiStream(p.map(item=>fs.createReadStream(item.fullPath)))
+//                 if(!tmpFolder) {
+//                     tmpFolder = await tmpPromises.dir()
+//                     tmpFile = path.join(tmpFolder.path, 'tmp.work')
+//                     debug("TMP Folder : %s, tmpFile %s", tmpFolder, tmpFile)
+//                 }
+//                 const writer = fs.createWriteStream(tmpFile)
+//                 await new Promise((resolve, reject) => {
+//                     writer.on('close', resolve)
+//                     writer.on('error', reject)
+//                     ms.pipe(writer)
+//                 })
+//                 stream = fs.createReadStream(tmpFile)
+//             } else {
+//                 debug("Single part upload de ", p)
+//                 stream = fs.createReadStream(p.fullPath)
+//             }
+
+//             const commandUpload = new UploadPartCommand({
+//                 Bucket: bucket,
+//                 Key: pathKey,
+//                 Body: stream,
+//                 UploadId: uploadId,
+//                 PartNumber: partNumber,
+//             })
+
+//             const responseUpload = await _s3_client.send(commandUpload)
+//             etags.push({ETag: responseUpload.ETag, PartNumber: partNumber})
+//             debug("multipartUploadFile part %d: %O", partNumber, responseUpload)
+//         }
+//     } catch(err) {
+//         console.error("Erreur upload multiparts ", err)
+//     } finally {
+//         if(tmpFile !== null) await fsPromises.unlink(tmpFile)
+//         if(tmpFolder !== null) tmpFolder.cleanup()
+//     }
+
+//     debug("Etags : ", etags)
+
+//     const commandeComplete = new CompleteMultipartUploadCommand({
+//         Bucket: bucket,
+//         Key: pathKey,
+//         UploadId: uploadId,
+//         MultipartUpload: {
+//             Parts: etags,
+//         },
+//     })
+//     const responseComplete = await _s3_client.send(commandeComplete)
+//     debug("multipartUploadFile Complete ", responseComplete)
+
+//     const commandeAcl = new PutObjectAclCommand({
+//         Bucket: bucket,
+//         Key: pathKey,
+//         ACL: 'public-read'
+//     })
+//     const responseAcl = await _s3_client.send(commandeAcl)
+//     debug("multipartUploadFile ACL ", responseAcl)
+// }
+
+async function getFichierStream(fuuid, opts) {
+    opts = opts || {}
+    debug('getFichierStream ', fuuid)
+
+    const prefix = opts.prefix || 'c/'
+    const bucket = opts.bucket || _s3_bucket
 
     try {
-        for await (const p of listeParts) {
-            let partNumber = partNumberCount++
-            let stream = null
-            if(Array.isArray(p)) {
-                debug("Multistream upload de ", p)
-                const ms = new MultiStream(p.map(item=>fs.createReadStream(item.fullPath)))
-                if(!tmpFolder) {
-                    tmpFolder = await tmpPromises.dir()
-                    tmpFile = path.join(tmpFolder.path, 'tmp.work')
-                    debug("TMP Folder : %s, tmpFile %s", tmpFolder, tmpFile)
-                }
-                const writer = fs.createWriteStream(tmpFile)
-                await new Promise((resolve, reject) => {
-                    writer.on('close', resolve)
-                    writer.on('error', reject)
-                    ms.pipe(writer)
-                })
-                stream = fs.createReadStream(tmpFile)
-            } else {
-                debug("Single part upload de ", p)
-                stream = fs.createReadStream(p.fullPath)
-            }
-
-            const commandUpload = new UploadPartCommand({
-                Bucket: bucket,
-                Key: pathKey,
-                Body: stream,
-                UploadId: uploadId,
-                PartNumber: partNumber,
-            })
-
-            const responseUpload = await _s3_client.send(commandUpload)
-            etags.push({ETag: responseUpload.ETag, PartNumber: partNumber})
-            debug("multipartUploadFile part %d: %O", partNumber, responseUpload)
+        const keyPath = path.join(prefix, fuuid)
+        const command = new GetObjectCommand({
+            Bucket: bucket,
+            Key: keyPath
+        })
+        const response = await _s3_client.send(command)
+        try {
+            return response.Body
+        } catch(err) {
+            console.error(new Date() + " getFichierStream ERROR Download error, destroy stream")
+            await response.Body.destroy()
+            throw err
         }
     } catch(err) {
-        console.error("Erreur upload multiparts ", err)
-    } finally {
-        if(tmpFile !== null) await fsPromises.unlink(tmpFile)
-        if(tmpFolder !== null) tmpFolder.cleanup()
+        console.error(new Date() + " getFichierStream ERROR Error get test file", err)
     }
-
-    debug("Etags : ", etags)
-
-    const commandeComplete = new CompleteMultipartUploadCommand({
-        Bucket: bucket,
-        Key: pathKey,
-        UploadId: uploadId,
-        MultipartUpload: {
-            Parts: etags,
-        },
-    })
-    const responseComplete = await _s3_client.send(commandeComplete)
-    debug("multipartUploadFile Complete ", responseComplete)
-
-    const commandeAcl = new PutObjectAclCommand({
-        Bucket: bucket,
-        Key: pathKey,
-        ACL: 'public-read'
-    })
-    const responseAcl = await _s3_client.send(commandeAcl)
-    debug("multipartUploadFile ACL ", responseAcl)
 }
 
 async function marquerSupprime(fuuid) {
     const keyFile = path.join('c/', fuuid)
-    await renameFichier(keyFile, keyFile + '.corbeille')
+    const corbeilleKeyFile = path.join('d/', fuuid)
+    await renameFichier(keyFile, corbeilleKeyFile)
 }
 
 async function _parcourir(bucketParams, callback, opts) {
@@ -596,7 +614,7 @@ async function entretien() {
 module.exports = {
     init, fermer,
     chargerConfiguration, modifierConfiguration,
-    getInfoFichier, consignerFichier, 
+    getFichierStream, getInfoFichier, consignerFichier, 
     marquerSupprime, recoverFichierSupprime,
     parcourirFichiers,
 
