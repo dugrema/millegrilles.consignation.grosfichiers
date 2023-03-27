@@ -301,7 +301,7 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
  */
 async function readyStaging(amqpdao, pathStaging, fuuid, opts) {
     opts = opts || {}
-    debug("readyStaging item %s", fuuid)
+    debug("readyStaging fuuid %s", fuuid)
     const pki = amqpdao.pki
     const pathUploadItem = path.join(pathStaging, PATH_STAGING_UPLOAD, fuuid)
 

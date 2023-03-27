@@ -113,7 +113,7 @@ async function getInfoFichier(fuuid, opts) {
 async function recoverFichierSupprime(fuuid) {
     const filePathCorbeille = getPathFichierCorbeille(fuuid)
     const filePath = getPathFichier(fuuid)
-    const dirDestPath = path.dir(filePath)
+    const dirDestPath = path.dirname(filePath)
     try {
         await fsPromises.stat(filePathCorbeille)
         await fsPromises.mkdir(dirDestPath, {recursive: true})
@@ -136,6 +136,10 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         // Methode simple, rename (move)
         await fsPromises.rename(pathSource, pathFichier)
     } catch(err) {
+        // if(err.code === 'ENOENT') {
+        //     console.error(new Date() + " storeConsignationLocal.consignerFichier Fichier %s introuvable ", pathSource)
+        //     return
+        // }
         debug("consignerFichier Erreur rename, tenter copy ", err)
         const reader = fs.createReadStream(pathSource)
         const writer = fs.createWriteStream(pathFichier)
@@ -154,7 +158,7 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 async function marquerSupprime(fuuid) {
     const pathFichier = getPathFichier(fuuid)
     const pathFichierCorbeille = getPathFichierCorbeille(fuuid)
-    const dirPathCorbeille = path.dir(pathFichierCorbeille)
+    const dirPathCorbeille = path.dirname(pathFichierCorbeille)
     // const pathFichierSupprime = pathFichier + '.corbeille'
     await fsPromises.mkdir(dirPathCorbeille, {recursive: true})
     return await fsPromises.rename(pathFichier, pathFichierCorbeille)
