@@ -65,16 +65,16 @@ async function modifierConfiguration(params, opts) {
 function getPathFichier(fuuid) {
     // Split path en 4 derniers caracteres
     const last2 = fuuid.slice(fuuid.length-2)
-    const sub1 = last2[1],
-          sub2 = last2[0]
-    return path.join(_pathConsignation, sub1, sub2, fuuid)
+    // const sub1 = last2[1],
+    //       sub2 = last2[0]
+    return path.join(_pathConsignation, last2, fuuid)
 }
 
 function getPathFichierCorbeille(fuuid) {
     const last2 = fuuid.slice(fuuid.length-2)
-    const sub1 = last2[1],
-          sub2 = last2[0]
-    return path.join(_pathCorbeille, sub1, sub2, fuuid)
+    // const sub1 = last2[1],
+    //       sub2 = last2[0]
+    return path.join(_pathCorbeille, last2, fuuid)
 }
 
 /**
