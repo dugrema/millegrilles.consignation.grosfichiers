@@ -7,6 +7,7 @@ const axios = require('axios')
 const { exec } = require('child_process')
 
 const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
+const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 
 const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
@@ -706,12 +707,13 @@ async function downloadFichierDuPrimaire(fuuid) {
 
     const dirFuuid = path.join(getPathDataFolder(), 'syncDownload', fuuid)
     await fsPromises.mkdir(dirFuuid, {recursive: true})
-    const fuuidFichier = path.join(dirFuuid, '0.part')  // Fichier avec position initiale - 1 seul fichier
+    const fuuidFichier = path.join(dirFuuid, fuuid)  // Fichier avec position initiale - 1 seul fichier
 
     const fichierActifsWork = path.join(getPathDataFolder(), path.join(FICHIER_FUUIDS_ACTIFS + '.work'))
     const writeCompletes = fs.createWriteStream(fichierActifsWork, {flags: 'a', encoding: 'utf8'})
 
     try {
+        const verificateurHachage = new VerificateurHachage(fuuid)
         const httpsAgent = getHttpsAgent()
         const reponseActifs = await axios({ 
             method: 'GET', 
@@ -723,6 +725,7 @@ async function downloadFichierDuPrimaire(fuuid) {
         debug("Reponse GET actifs %s", reponseActifs.status)
         const fuuidStream = fs.createWriteStream(fuuidFichier)
         await new Promise((resolve, reject)=>{
+            reponseActifs.data.on('data', chunk=>verificateurHachage.update(chunk))
             fuuidStream.on('close', resolve)
             fuuidStream.on('error', err=>{
                 reject(err)
@@ -735,6 +738,10 @@ async function downloadFichierDuPrimaire(fuuid) {
             })
             reponseActifs.data.pipe(fuuidStream)
         })
+
+        // Verifier hachage - lance une exception si la verification echoue
+        await verificateurHachage.verify()
+        // Aucune exception, hachage OK
 
         debug("Fichier %s download complete", fuuid)
         await _storeConsignation.consignerFichier(dirFuuid, fuuid)

@@ -132,10 +132,10 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         // Methode simple, rename (move)
         await fsPromises.rename(pathSource, pathFichier)
     } catch(err) {
-        // if(err.code === 'ENOENT') {
-        //     console.error(new Date() + " storeConsignationLocal.consignerFichier Fichier %s introuvable ", pathSource)
-        //     return
-        // }
+        if(err.code === 'ENOENT') {
+            console.error(new Date() + " storeConsignationLocal.consignerFichier Fichier %s introuvable ", pathSource)
+            throw err
+        }
         debug("consignerFichier Erreur rename, tenter copy ", err)
         const reader = fs.createReadStream(pathSource)
         const writer = fs.createWriteStream(pathFichier)
