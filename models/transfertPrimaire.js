@@ -93,7 +93,8 @@ TransfertPrimaire.prototype.putAxios = async function(fuuid, statItem) {
 
     // debug("PUT Axios %s size %d", fuuid, size)
 
-    const correlation = this.storeConsignation.getInstanceId() + '_' + fuuid,
+    const // correlation = this.storeConsignation.getInstanceId() + '_' + fuuid,
+          correlation = fuuid,
           httpsAgent = this.storeConsignation.getHttpsAgent(),
           urlConsignationTransfert = this.storeConsignation.getUrlTransfert()
 
