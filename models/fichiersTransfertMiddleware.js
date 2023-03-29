@@ -253,10 +253,14 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
     if(ArrayBuffer.isView(inputStream)) {
         // Traiter buffer directement
         await new Promise((resolve, reject)=>{
-            writer.write(inputStream, err=>{
-                if(err) return reject(err)
-                resolve()
+            writer.on('close', resolve)
+            writer.on('error', err=>{ 
+                fsPromises.unlink(pathFichierPut).catch(err=>{
+                    console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
+                })
+                reject(err)
             })
+            writer.write(inputStream)
         })
 
         const nouvellePosition = inputStream.length + contenuStatus.position
@@ -279,7 +283,7 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
                 compteurTaille += chunk.length
                 return chunk
             })
-            
+
             inputStream.on('end', ()=>{ 
                 // Resultat OK
                 const nouvellePosition = compteurTaille + contenuStatus.position
