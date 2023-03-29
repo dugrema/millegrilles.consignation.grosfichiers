@@ -36,6 +36,7 @@ const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
       FICHIER_FUUIDS_UPLOAD_PRIMAIRE = 'fuuidsUploadPrimaire.txt',
+      FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE = 'fuuidsDownloadPrimaire.txt',
       FICHIER_FUUIDS_RECLAMES_ACTIFS = 'fuuidsReclamesActifs.txt',
       FICHIER_FUUIDS_RECLAMES_ARCHIVES = 'fuuidsReclamesArchives.txt'
 
@@ -497,6 +498,9 @@ async function getDataSynchronisation() {
         })
     })
 
+    // Generer listes pour upload et download
+    await chargerListeFichiersMissing()
+
     return reponse.data
 }
 
@@ -667,6 +671,17 @@ function ajouterDownloadPrimaire(fuuid) {
     }
 }
 
+async function chargerFuuidsListe(pathFichier, cb) {
+    const readStreamFichiers = fs.createReadStream(pathFichier)
+    const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
+    for await (let fuuid of rlFichiers) {
+        // Detecter fichiers manquants localement par espaces vide au debut de la ligne
+        fuuid = fuuid.trim()
+        debug('chargerFuuidsListe ajouter ', fuuid)
+        cb(fuuid)
+    }
+}
+
 async function downloadFichiersSync() {
     const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
     if(!httpsAgent) throw new Error("processusSynchronisation: httpsAgent n'est pas initialise")
@@ -674,51 +689,67 @@ async function downloadFichiersSync() {
     const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
     await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
 
-    const fichierActifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
+    const fichierDownloadPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE)
     _queueDownloadFuuids.clear()
-    await chargerListeFichiersMissing(fuuid=>_queueDownloadFuuids.add(fuuid))
+    await chargerFuuidsListe(fichierDownloadPrimaire, fuuid=>_queueDownloadFuuids.add(fuuid))
     
-    // const fichierMissing = path.join(getPathDataFolder(), 'fuuidsMissing.txt')
-    // const readStreamFichiers = fs.createReadStream(fichierMissing)
-    // const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
-    // for await (const line of rlFichiers) {
-    //     // Detecter fichiers manquants localement par espaces vide au debut de la ligne
-    //     if( line.startsWith('	') || line.startsWith('\t') ) {
-    //         const fuuid = line.trim()
-    //         debug('downloadFichiersSync ajouter ', fuuid)
-    //         _queueDownloadFuuids.add(fuuid)
-    //     }
-    // }
-
     if(_timeoutStartThreadDownload) {
         _threadDownloadFichiersDuPrimaire()
             .catch(err=>{console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur ', err)})
     }
 }
 
-async function chargerListeFichiersMissing(cb) {
+async function chargerListeFichiersMissing() {
 
-    const fuuidsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
+    // const fuuidsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
+    const fuuidsManquantsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
     const fuuidsLocaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS)
     const fuuidsUploadPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_UPLOAD_PRIMAIRE)
+    const fuuidsActifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
+    const fuuidsDownloadPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE)
 
-    await new Promise((resolve, reject) => {
-        exec(`comm -23 ${fuuidsLocaux} ${fuuidsPrimaire} > ${fuuidsUploadPrimaire}`, error=>{
-            if(error) return reject(error)
-            else resolve()
+    try {
+        await fsPromises.stat(fuuidsLocaux)
+    } catch(err) {
+        debug("chargerListeFichiersMissing Fichier fuuids manquants locaux, pas de sync")
+        return
+    }
+
+    try {
+        // Trouver les fichiers actifs qui sont sur le primaire mais pas localement
+        await fsPromises.stat(fuuidsActifsPrimaire)
+        await new Promise((resolve, reject) => {
+            exec(`comm -13 ${fuuidsLocaux} ${fuuidsActifsPrimaire} > ${fuuidsDownloadPrimaire}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
         })
-    })
+    } catch(err) {
+        if(err.code === 'ENOENT') {
+            debug("chargerListeFichiersMissing Fichier fuuids primaire absent, pas de sync download")            
+        } else {
+            throw err
+        }
+    }
 
-    const readStreamFichiers = fs.createReadStream(fuuidsUploadPrimaire)
-    const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
-    for await (let fuuid of rlFichiers) {
-        // Detecter fichiers manquants localement par espaces vide au debut de la ligne
-        fuuid = fuuid.trim()
-        if(!fuuid) continue  // Ligne vide
+    // Trouver fichiers qui sont presents localement et manquants sur le primaire
+    try {
+        // Test de presence des fichiers de fuuids
+        await fsPromises.stat(fuuidsManquantsPrimaire)
+        await new Promise((resolve, reject) => {
+            exec(`comm -12 ${fuuidsLocaux} ${fuuidsManquantsPrimaire} > ${fuuidsUploadPrimaire}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
+        })
+    } catch(err) {
+        if(err.code === 'ENOENT') {
+            debug("chargerListeFichiersMissing Fichier manquants primaire absent, pas de sync download")            
+        } else {
+            throw err
+        }
+    }
 
-        debug('chargerListeFichiersMissing fuuid manquant du primaire ', fuuid)
-        await cb(fuuid)
-    }    
 }
 
 async function _threadDownloadFichiersDuPrimaire() {
@@ -731,12 +762,12 @@ async function _threadDownloadFichiersDuPrimaire() {
 
     try {
         // Charger liste a downloader
-        try {
-            _queueDownloadFuuids.clear()
-            await chargerListeFichiersMissing(fuuid=>_queueDownloadFuuids.add(fuuid))
-        } catch(err) {
-            console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur chargerListeFichiersMissing ', err)
-        }
+        // try {
+        //     _queueDownloadFuuids.clear()
+        //     await chargerListeFichiersMissing(fuuid=>_queueDownloadFuuids.add(fuuid))
+        // } catch(err) {
+        //     console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur chargerListeFichiersMissing ', err)
+        // }
     
         while(true) {
             // Recuperer un fuuid a partir du Set
@@ -837,27 +868,8 @@ async function downloadFichierDuPrimaire(fuuid) {
 async function uploaderFichiersVersPrimaire() {
     debug("uploaderFichiersVersPrimaire Debut")
 
-    // // Detecter fichiers locaux (actifs) qui ne sont pas sur le primaire
-    const actifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
-    const fuuidsLocaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS)
-    const fichierMissing = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS)
-
-    try {
-        await comparerFichiers(fuuidsLocaux, actifsPrimaire, fichierMissing)
-
-        const readStreamFichiers = fs.createReadStream(fichierMissing)
-        const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
-        for await (const line of rlFichiers) {
-            // Detecter changement distant avec un fuuid dans la premiere colonne du fichier (pas d'espaces vides)
-            if( ! line.startsWith('	') && ! line.startsWith('\t') ) {
-                const fuuid = line.trim()
-                debug("uploaderFichiersVersPrimaire Transferer fichier manquant %s vers primaire", fuuid)
-                _transfertPrimaire.ajouterItem(fuuid)
-            }
-        }
-    } catch(err) {
-        debug("uploaderFichiersVersPrimaire Erreur traitement ", err)
-    }
+    const fichierUploadPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_UPLOAD_PRIMAIRE)
+    await chargerFuuidsListe(fichierUploadPrimaire, fuuid=>_transfertPrimaire.ajouterItem(fuuid))
 
     debug("uploaderFichiersVersPrimaire Fin")
 }
