@@ -11,10 +11,12 @@ const PATH_CONFIG_FICHIER = path.join(PATH_CONFIG_DIR, 'store.json')
 const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
 const PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions_archives')
 
-const DEFAULT_URL_CONSIGNATION = 'https://fichiers:443'
+const DEFAULT_URL_CONSIGNATION = 'https://fichiers:443',
+      CONST_EXPIRATION_ORPHELINS = 300_000
 
 let _pathConsignation = path.join(CONSIGNATION_PATH, 'local'),
-    _pathCorbeille = path.join(CONSIGNATION_PATH, 'corbeille')
+    _pathOrphelins = path.join(CONSIGNATION_PATH, 'orphelins')
+    // _pathCorbeille = path.join(CONSIGNATION_PATH, 'corbeille')
 
 function init(params) {
     params = params || {}
@@ -66,11 +68,11 @@ function getPathFichier(fuuid) {
     return path.join(_pathConsignation, last2, fuuid)
 }
 
-function getPathFichierCorbeille(fuuid) {
+function getPathFichierOrphelins(fuuid) {
     const last2 = fuuid.slice(fuuid.length-2)
     // const sub1 = last2[1],
     //       sub2 = last2[0]
-    return path.join(_pathCorbeille, last2, fuuid)
+    return path.join(_pathOrphelins, last2, fuuid)
 }
 
 /**
@@ -78,10 +80,10 @@ function getPathFichierCorbeille(fuuid) {
  * @param {} fuuid 
  * @returns ReadStream
  */
-async function getFichier(fuuid) {
+async function getFichierStream(fuuid) {
     const pathFichier = getPathFichier(fuuid)
     try {
-        const stream = fs.createReadStream(pathFichier)
+        return fs.createReadStream(pathFichier)
     } catch(err) {
         if(err.errno === -2) return null
         else throw err
@@ -98,7 +100,7 @@ async function getInfoFichier(fuuid, opts) {
         if(err.errno === -2) {
             if(opts.recover === true)  {
                 // Verifier si le fichier est encore disponible
-                return recoverFichierSupprime(fuuid)
+                //return recoverFichierSupprime(fuuid)
             }
             return null
         }
@@ -106,21 +108,21 @@ async function getInfoFichier(fuuid, opts) {
     }
 }
 
-async function recoverFichierSupprime(fuuid) {
-    const filePathCorbeille = getPathFichierCorbeille(fuuid)
-    const filePath = getPathFichier(fuuid)
-    const dirDestPath = path.dirname(filePath)
-    try {
-        await fsPromises.stat(filePathCorbeille)
-        await fsPromises.mkdir(dirDestPath, {recursive: true})
-        await fsPromises.rename(filePathCorbeille, filePath)
-        const stat = await fsPromises.stat(filePath)
-        return { stat, filePath }
-    } catch(err) {
-        debug("Erreur recoverFichierSupprime %s : %O", fuuid, err)
-        return null
-    }
-}
+// async function recoverFichierSupprime(fuuid) {
+//     const filePathCorbeille = getPathFichierCorbeille(fuuid)
+//     const filePath = getPathFichier(fuuid)
+//     const dirDestPath = path.dirname(filePath)
+//     try {
+//         await fsPromises.stat(filePathCorbeille)
+//         await fsPromises.mkdir(dirDestPath, {recursive: true})
+//         await fsPromises.rename(filePathCorbeille, filePath)
+//         const stat = await fsPromises.stat(filePath)
+//         return { stat, filePath }
+//     } catch(err) {
+//         debug("Erreur recoverFichierSupprime %s : %O", fuuid, err)
+//         return null
+//     }
+// }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
     const pathSource = path.join(pathFichierStaging, fuuid)
@@ -151,13 +153,33 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
 }
 
-async function marquerSupprime(fuuid) {
+async function marquerOrphelin(fuuid) {
     const pathFichier = getPathFichier(fuuid)
-    const pathFichierCorbeille = getPathFichierCorbeille(fuuid)
-    const dirPathCorbeille = path.dirname(pathFichierCorbeille)
-    // const pathFichierSupprime = pathFichier + '.corbeille'
-    await fsPromises.mkdir(dirPathCorbeille, {recursive: true})
-    return await fsPromises.rename(pathFichier, pathFichierCorbeille)
+    const pathFichierOrphelins = getPathFichierOrphelins(fuuid)
+    const dirPathOrphelins = path.dirname(pathFichierOrphelins)
+    await fsPromises.mkdir(dirPathOrphelins, {recursive: true})
+    return await fsPromises.rename(pathFichier, pathFichierOrphelins)
+}
+
+async function purgerOrphelinsExpires(opts) {
+    opts = opts || {}
+    const expiration = opts.expiration || CONST_EXPIRATION_ORPHELINS
+
+    const expirationDate = new Date().getTime() - expiration
+
+    const repertoireOrphelins = _pathOrphelins
+    const settingsReaddirp = { type: 'files', alwaysStat: true, depth: 1 }
+    for await (const entry of readdirp(repertoireOrphelins, settingsReaddirp)) {
+        debug("Marquer orphelin entry : ", entry)
+        if( entry.stats.ctimeMs < expirationDate ) {
+            try {
+                debug("Supprimer fichier orphelin : ", entry.basename)
+                await fsPromises.rm(entry.fullPath)
+            } catch(err) {
+                console.warn(new Date() + " WARN Echec suppression fichier orphelin expire ", err)
+            }
+        }
+    }
 }
 
 async function parcourirFichiers(callback, opts) {
@@ -372,9 +394,13 @@ module.exports = {
     PATH_CONFIG_DIR, PATH_CONFIG_FICHIER, DEFAULT_URL_CONSIGNATION, 
 
     init, chargerConfiguration, modifierConfiguration,
-    getInfoFichier, consignerFichier,
-    marquerSupprime, recoverFichierSupprime, 
-    parcourirFichiers, parcourirBackup,
+    
+    getInfoFichier, getFichierStream, 
+    consignerFichier, marquerOrphelin, 
+    // recoverFichierSupprime, 
+    
+    parcourirFichiers, parcourirBackup, purgerOrphelinsExpires,
+
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
     getBackupTransactionStream, pipeBackupTransactionStream, deleteBackupTransaction,

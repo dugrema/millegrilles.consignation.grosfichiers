@@ -705,6 +705,28 @@ async function rotationOrphelins(pathOrphelins, fichierReclames) {
     if(fichiersOrphelins.length >= NOMBRE_ARCHIVES_ORPHELINS) {
         const fichierOrphelins = fichiersOrphelins[0]  // Premier fichier est le plus vieux
         debug("Deplacer fichiers de la derniere archive orphelins : %s", fichierOrphelins)
+        const readStreamFichiers = fs.createReadStream(fichierOrphelins)
+        const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
+        for await (let fuuid of rlFichiers) {
+            fuuid = fuuid.trim()
+            if(!fuuid) continue  // Ligne vide
+            debug("Deplacer fuuid vers orphelins : ", fuuid)
+            try {
+                await _storeConsignation.marquerOrphelin(fuuid)
+            } catch(err) {
+                if(err.code === 'ENOENT') {
+                    // Ok, fichier deja retire
+                } else {
+                    console.warn(new Date() + " WARN Echec marquer fichier %s comme orphelin", fuuid)
+                }
+            }
+        }
+    }
+
+    try {
+        await _storeConsignation.purgerOrphelinsExpires()
+    } catch(err) {
+        console.error(new Date() + " ERROR Purger orphelins ", err)
     }
 
 }
