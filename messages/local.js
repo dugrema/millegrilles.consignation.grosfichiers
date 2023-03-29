@@ -20,6 +20,7 @@ function on_connecter() {
     ajouterCb('evenement.fichiers.consignationPrimaire', consignationPrimaire)
     ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration)
     ajouterCb(`commande.fichiers.declencherSync`, declencherSyncPrimaire)
+    ajouterCb(`commande.fichiers.confirmerActiviteFuuids`, confirmerActiviteFuuids)
     ajouterCb(`evenement.CoreTopologie.changementConsignationPrimaire`, changementConsignationPrimaire)
     ajouterCb(`evenement.fichiers.syncPret`, declencherSyncSecondaire)
   
@@ -135,6 +136,15 @@ async function declencherSyncSecondaire(message, rk, opts) {
         .catch(err=>console.error("publication.declencherSyncSecondaire Erreur traitement sync : %O", err))
     } else {
       debug("syncPret recu - mais on est le primaire (ignore)")
+    }
+}
+
+async function confirmerActiviteFuuids(message, rk, opts) {
+    if(_storeConsignation.estPrimaire()) {
+        const fuuids = message.fuuids || []
+        const archive = message.archive || false
+        debug("confirmerActiviteFuuids recu - ajouter a la liste %d fuuids (archive : %s)", fuuids.length, archive)
+        await _storeConsignation.recevoirFuuidsDomaines(fuuids, {archive})
     }
 }
 

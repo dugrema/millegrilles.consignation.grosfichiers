@@ -179,7 +179,7 @@ async function parcourirFichiersRecursif(repertoire, callback, opts) {
     const settingsReaddirp = { type: 'files', alwaysStat: true, depth }
 
     for await (const entry of readdirp(repertoire, settingsReaddirp)) {
-        debug("Fichier : %O", entry)
+        debug("Fichier : %O", entry.fullPath)
         const { basename, fullPath, stats } = entry
         const { mtimeMs, size } = stats
         const repertoire = path.dirname(fullPath)

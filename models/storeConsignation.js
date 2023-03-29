@@ -5,6 +5,7 @@ const fs = require('fs')
 const readline = require('readline')
 const axios = require('axios')
 const { exec } = require('child_process')
+const readdirp = require('readdirp')
 
 const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
 const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
@@ -25,11 +26,14 @@ const BATCH_SIZE = 100,
 
 const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 const INTERVALLE_SYNC = 3_600_000,  // 60 minutes
-      INTERVALLE_THREAD_TRANSFERT = 1_200_000  // 20 minutes
+      INTERVALLE_THREAD_TRANSFERT = 1_200_000  // 20 minutes,
+      NOMBRE_ARCHIVES_ORPHELINS = 4
 
 const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'actifsPrimaire.txt',
-      FICHIER_FUUIDS_MISSING = 'fuuidsMissing.txt'
+      FICHIER_FUUIDS_MISSING = 'fuuidsMissing.txt',
+      FICHIER_FUUIDS_RECLAMES_ACTIFS = 'fuuidsReclamesActifs.txt',
+      FICHIER_FUUIDS_RECLAMES_ARCHIVES = 'fuuidsReclamesArchives.txt'
 
 var _mq = null,
     _storeConsignation = null,
@@ -42,7 +46,8 @@ var _mq = null,
     _queueDownloadFuuids = new Set(),
     _timeoutStartThreadDownload = null,
     _intervalleSync = INTERVALLE_SYNC,
-    _syncActif = true
+    _syncActif = true,
+    _timeoutTraiterConfirmes = null
 
 async function init(mq, opts) {
     opts = opts || {}
@@ -235,162 +240,162 @@ async function evenementFichierPrimaire(mq, fuuid) {
     }
 }
 
-var _batchFichiersFuuids = null, // Dict { [fuuid]: false/{fuuid, supprime: bool} }
-    _triggerPromiseBatch = null  // Fonction, invoquer pour continuer batch avant timeout (e.g. all files accounted for)
+// var _batchFichiersFuuids = null, // Dict { [fuuid]: false/{fuuid, supprime: bool} }
+//     _triggerPromiseBatch = null  // Fonction, invoquer pour continuer batch avant timeout (e.g. all files accounted for)
 
-async function entretienFichiersSupprimes() {
-    debug("Debut entretien des fichiers supprimes")
+// async function entretienFichiersSupprimes() {
+//     debug("Debut entretien des fichiers supprimes")
 
-    // Detecter les fichiers qui devraient etre mis en attente de suppression    
-    await traiterSupprimer()
+//     // Detecter les fichiers qui devraient etre mis en attente de suppression    
+//     await traiterSupprimer()
 
-    // Verifier les fichiers dans la corbeille (pour les recuperer au besoin)
-    traiterRecuperer()
+//     // Verifier les fichiers dans la corbeille (pour les recuperer au besoin)
+//     traiterRecuperer()
 
-    // Supprimer les fichiers en attente depuis plus de 14 jours
+//     // Supprimer les fichiers en attente depuis plus de 14 jours
 
-}
+// }
 
-async function traiterSupprimer() {
-    debug("Traitement des fichiers a supprimer")
-    let batchFichiers = []
+// async function traiterSupprimer() {
+//     debug("Traitement des fichiers a supprimer")
+//     let batchFichiers = []
     
-    const callbackActionSupprimer = async item => {
-        const {fuuid, supprime} = item
-        if(supprime === true) {
-            debug("Le fichier %s est supprime, on le deplace vers la corbeille", fuuid)
-            await _storeConsignation.marquerSupprime(fuuid)
-        }
-    }
+//     const callbackActionSupprimer = async item => {
+//         const {fuuid, supprime} = item
+//         if(supprime === true) {
+//             debug("Le fichier %s est supprime, on le deplace vers la corbeille", fuuid)
+//             await _storeConsignation.marquerSupprime(fuuid)
+//         }
+//     }
 
-    const callbackTraiterFichiersASupprimer = async item => {
-        if(!item) {
-            // Derniere batch
-            if(batchFichiers.length > 0) await traiterBatch(batchFichiers, callbackActionSupprimer)
-        } else {
-            batchFichiers.push(item.filename)
-            while(batchFichiers.length > BATCH_SIZE) {
-                const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
-                batchFichiers = batchFichiers.slice(BATCH_SIZE)
-                await traiterBatch(batchCourante, callbackActionSupprimer)
-            }
-        }
-    }
+//     const callbackTraiterFichiersASupprimer = async item => {
+//         if(!item) {
+//             // Derniere batch
+//             if(batchFichiers.length > 0) await traiterBatch(batchFichiers, callbackActionSupprimer)
+//         } else {
+//             batchFichiers.push(item.filename)
+//             while(batchFichiers.length > BATCH_SIZE) {
+//                 const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
+//                 batchFichiers = batchFichiers.slice(BATCH_SIZE)
+//                 await traiterBatch(batchCourante, callbackActionSupprimer)
+//             }
+//         }
+//     }
     
-    try {
-        const filtre = item => !item.filename.endsWith('.corbeille')
-        await _storeConsignation.parcourirFichiers(callbackTraiterFichiersASupprimer, {filtre})
-    } catch(err) {
-        console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
-    }
-}
+//     try {
+//         const filtre = item => !item.filename.endsWith('.corbeille')
+//         await _storeConsignation.parcourirFichiers(callbackTraiterFichiersASupprimer, {filtre})
+//     } catch(err) {
+//         console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
+//     }
+// }
 
-async function traiterRecuperer() {
-    debug("Traitement des fichiers a recuperer")
-    let batchFichiers = []
+// async function traiterRecuperer() {
+//     debug("Traitement des fichiers a recuperer")
+//     let batchFichiers = []
     
-    const callbackActionRecuperer = async item => {
-        const {fuuid, supprime} = item
-        if(supprime === false) {
-            debug("Le fichier supprime %s est requis par un module, on le recupere", fuuid)
-            await _storeConsignation.recoverFichierSupprime(fuuid)
-        }
-    }
+//     const callbackActionRecuperer = async item => {
+//         const {fuuid, supprime} = item
+//         if(supprime === false) {
+//             debug("Le fichier supprime %s est requis par un module, on le recupere", fuuid)
+//             await _storeConsignation.recoverFichierSupprime(fuuid)
+//         }
+//     }
 
-    const callbackTraiterFichiersARecuperer = async item => {
-        if(!item) {
-            // Derniere batch
-            if(batchFichiers.length > 0) await traiterBatch(batchFichiers, callbackActionRecuperer)
-        } else {
-            batchFichiers.push(path.basename(item.filename, '.corbeille'))
-            while(batchFichiers.length > BATCH_SIZE) {
-                const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
-                batchFichiers = batchFichiers.slice(BATCH_SIZE)
-                await traiterBatch(batchCourante, callbackActionRecuperer)
-            }
-        }
-    }
+//     const callbackTraiterFichiersARecuperer = async item => {
+//         if(!item) {
+//             // Derniere batch
+//             if(batchFichiers.length > 0) await traiterBatch(batchFichiers, callbackActionRecuperer)
+//         } else {
+//             batchFichiers.push(path.basename(item.filename, '.corbeille'))
+//             while(batchFichiers.length > BATCH_SIZE) {
+//                 const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
+//                 batchFichiers = batchFichiers.slice(BATCH_SIZE)
+//                 await traiterBatch(batchCourante, callbackActionRecuperer)
+//             }
+//         }
+//     }
     
-    try {
-        const filtre = item => item.filename.endsWith('.corbeille')
-        await _storeConsignation.parcourirFichiers(callbackTraiterFichiersARecuperer, {filtre})
-    } catch(err) {
-        console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
-    }
-}
+//     try {
+//         const filtre = item => item.filename.endsWith('.corbeille')
+//         await _storeConsignation.parcourirFichiers(callbackTraiterFichiersARecuperer, {filtre})
+//     } catch(err) {
+//         console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
+//     }
+// }
 
-async function traiterBatch(fuuids, callbackAction) {
-    debug("Traiter batch : %O", fuuids)
+// async function traiterBatch(fuuids, callbackAction) {
+//     debug("Traiter batch : %O", fuuids)
 
-    _batchFichiersFuuids = fuuids.reduce((acc, item)=>{
-        acc[item]=false 
-        return acc
-    }, {})
-    debug("Traiter batch fichiers : %O", _batchFichiersFuuids)
+//     _batchFichiersFuuids = fuuids.reduce((acc, item)=>{
+//         acc[item]=false 
+//         return acc
+//     }, {})
+//     debug("Traiter batch fichiers : %O", _batchFichiersFuuids)
 
-    const evenement = { fuuids }
-    //const domaine = 'GrosFichiers',
-    const action = 'confirmerEtatFuuids',
-          domaine = 'fichiers'
-    // const reponse = await _mq.transmettreRequete(domaine, requete, {action})
-    await _mq.emettreEvenement(evenement, domaine, {action})
+//     const evenement = { fuuids }
+//     //const domaine = 'GrosFichiers',
+//     const action = 'confirmerEtatFuuids',
+//           domaine = 'fichiers'
+//     // const reponse = await _mq.transmettreRequete(domaine, requete, {action})
+//     await _mq.emettreEvenement(evenement, domaine, {action})
 
-    // Attendre reponses, timeout de 10 secondes pour collecter tous les messages
-    await new Promise(resolve=>{
-        let timeoutBatch = setTimeout(resolve, 10000)
-        _triggerPromiseBatch = () => {
-            clearTimeout(timeoutBatch)
-            resolve()
-        }
-    })
+//     // Attendre reponses, timeout de 10 secondes pour collecter tous les messages
+//     await new Promise(resolve=>{
+//         let timeoutBatch = setTimeout(resolve, 10000)
+//         _triggerPromiseBatch = () => {
+//             clearTimeout(timeoutBatch)
+//             resolve()
+//         }
+//     })
 
-    const resultatBatch = _batchFichiersFuuids
-    _batchFichiersFuuids = null
-    _triggerPromiseBatch = null
-    debug("Resultat verification : %O", resultatBatch)
+//     const resultatBatch = _batchFichiersFuuids
+//     _batchFichiersFuuids = null
+//     _triggerPromiseBatch = null
+//     debug("Resultat verification : %O", resultatBatch)
 
-    // Reassembler resultat
-    const resultatFuuids = {}
-    for(const fuuid in resultatBatch) {
-        const resultat = resultatBatch[fuuid]
-        if(resultat === false) {
-            resultatFuuids[fuuid] = {fuuid, supprime: true}
-        } else {
-            resultatFuuids[fuuid] = resultat
-        }
-    }
+//     // Reassembler resultat
+//     const resultatFuuids = {}
+//     for(const fuuid in resultatBatch) {
+//         const resultat = resultatBatch[fuuid]
+//         if(resultat === false) {
+//             resultatFuuids[fuuid] = {fuuid, supprime: true}
+//         } else {
+//             resultatFuuids[fuuid] = resultat
+//         }
+//     }
     
-    const resultatListe = Object.values(resultatFuuids)
+//     const resultatListe = Object.values(resultatFuuids)
 
-    debug("Appliquer callback a liste : %O", resultatListe)
+//     debug("Appliquer callback a liste : %O", resultatListe)
 
-    for await (const reponseFichier of resultatListe) {
-        await callbackAction(reponseFichier)
-    }
+//     for await (const reponseFichier of resultatListe) {
+//         await callbackAction(reponseFichier)
+//     }
 
-}
+// }
 
 // Callback via commande pour que multiple domaines/modules puissent confirmer leur utilisation
 // courante de fichiers
-async function confirmerActiviteFuuids(fuuids) {
-    debug("confirmerActiviteFuuids fuuids %O", fuuids)
-    if(fuuids) {
-        fuuids.forEach(item=>{
-            _batchFichiersFuuids[item.fuuid] = item
-        })
-    }
-    // debug("Liste fuuids locale : %O", _batchFichiersFuuids)
+// async function confirmerActiviteFuuids(fuuids) {
+//     debug("confirmerActiviteFuuids fuuids %O", fuuids)
+//     if(fuuids) {
+//         fuuids.forEach(item=>{
+//             _batchFichiersFuuids[item.fuuid] = item
+//         })
+//     }
+//     // debug("Liste fuuids locale : %O", _batchFichiersFuuids)
 
-    // Detecter si la liste est complete
-    let complete = Object.values(_batchFichiersFuuids).reduce((acc, item)=>{
-        acc = acc && item?true:false
-        return acc
-    }, true)
-    if(complete) {
-        debug("Liste fichiers est complete : %s", complete)
-        _triggerPromiseBatch()
-    }
-}
+//     // Detecter si la liste est complete
+//     let complete = Object.values(_batchFichiersFuuids).reduce((acc, item)=>{
+//         acc = acc && item?true:false
+//         return acc
+//     }, true)
+//     if(complete) {
+//         debug("Liste fichiers est complete : %s", complete)
+//         _triggerPromiseBatch()
+//     }
+// }
 
 async function entretien() {
     try {
@@ -442,7 +447,7 @@ async function processusSynchronisation() {
     try {
         _sync_lock = true
         const infoData = await getDataSynchronisation()
-        await marquerFichiersCorbeille()
+        // await marquerFichiersCorbeille()
         await uploaderFichiersVersPrimaire()
         await downloadFichiersBackup()
         await downloadFichiersSync()
@@ -504,26 +509,9 @@ async function getDataSynchronisation() {
             }
         } finally {
             const fichierActifsPrimaireDest = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
-            // try { await fsPromises.unlink(fichierActifsPrimaireDest) } catch(err) {}
             try { 
-                // await fsPromises.rename(fichierActifsPrimaire, fichierActifsPrimaireDest) 
-                await new Promise((resolve, reject)=>{
-                    exec(`sort -o ${fichierActifsPrimaireDest} ${fichierActifsPrimaire}`, error=>{
-                        if(error) return reject(error)
-                        else resolve()
-                    })
-                })
-
-                // // Detecter fichiers locaux (actifs) qui ne sont pas sur le primaire
-                // const fichierActifs = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS)
-                // const fichierMissing = path.join(getPathDataFolder(), 'fuuidsMissing.txt')
-                // await new Promise((resolve, reject)=>{
-                //     exec(`comm -3 ${fichierActifs} ${fichierActifsPrimaireDest} > ${fichierMissing}`, error=>{
-                //         if(error) return reject(error)
-                //         else resolve()
-                //     })
-                // })
-
+                await sortFile(fichierActifsPrimaire, fichierActifsPrimaireDest)
+                await fsPromises.rm(fichierActifsPrimaire)
             } 
             catch(err) {
                 console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
@@ -531,57 +519,194 @@ async function getDataSynchronisation() {
         }
     }
 
-    const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt.work')
-    try {
-        const urlData = new URL(urlTransfert.href)
-        urlData.pathname = urlData.pathname + '/data/fuuidsCorbeille.txt'
-        debug("Download %s", urlData.href)
-        const corbeilleStream = fs.createWriteStream(fichierCorbeillePrimaire)
-        const reponseCorbeille = await axios({
-            method: 'GET', 
-            httpsAgent, 
-            url: urlData.href, 
-            responseType: 'stream',
-            timeout: TIMEOUT_AXIOS,
-        })
-        debug("Reponse GET corbeille %s", reponseCorbeille.status)
-        await new Promise((resolve, reject)=>{
-            corbeilleStream.on('close', resolve)
-            corbeilleStream.on('error', err=>{
-                corbeilleStream.close()
-                reject(err)
-            })
-            reponseCorbeille.data.pipe(corbeilleStream)
-        })
-    } catch(err) {
-        const response = err.response
-        if(response ) {
-            if(response.status === 416) {
-                // OK, fichier vide
-            } else {
-                console.info("Erreur recuperation fichier corbeille HTTP %d", err.response.status)
-            }
-        } else {
-            console.warn("Erreur recuperation fichier corbeille - ", err)
+    // const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt.work')
+    // try {
+    //     const urlData = new URL(urlTransfert.href)
+    //     urlData.pathname = urlData.pathname + '/data/fuuidsCorbeille.txt'
+    //     debug("Download %s", urlData.href)
+    //     const corbeilleStream = fs.createWriteStream(fichierCorbeillePrimaire)
+    //     const reponseCorbeille = await axios({
+    //         method: 'GET', 
+    //         httpsAgent, 
+    //         url: urlData.href, 
+    //         responseType: 'stream',
+    //         timeout: TIMEOUT_AXIOS,
+    //     })
+    //     debug("Reponse GET corbeille %s", reponseCorbeille.status)
+    //     await new Promise((resolve, reject)=>{
+    //         corbeilleStream.on('close', resolve)
+    //         corbeilleStream.on('error', err=>{
+    //             corbeilleStream.close()
+    //             reject(err)
+    //         })
+    //         reponseCorbeille.data.pipe(corbeilleStream)
+    //     })
+    // } catch(err) {
+    //     const response = err.response
+    //     if(response ) {
+    //         if(response.status === 416) {
+    //             // OK, fichier vide
+    //         } else {
+    //             console.info("Erreur recuperation fichier corbeille HTTP %d", err.response.status)
+    //         }
+    //     } else {
+    //         console.warn("Erreur recuperation fichier corbeille - ", err)
+    //     }
+    // } finally {
+    //     try { await fsPromises.unlink(fichierCorbeillePrimaireDest) } catch(err) {}
+    //     const fichierCorbeillePrimaireDest = path.join(getPathDataFolder(), 'corbeillePrimaire.txt')
+    //     try { 
+    //         // await fsPromises.rename(fichierCorbeillePrimaire, fichierCorbeillePrimaireDest) 
+    //         await new Promise((resolve, reject)=>{
+    //             exec(`sort -o ${fichierCorbeillePrimaireDest} ${fichierCorbeillePrimaire}`, error=>{
+    //                 if(error) return reject(error)
+    //                 else resolve()
+    //             })
+    //         })
+    //     } 
+    //     catch(err) {
+    //         console.error("storeConsignation.getDataSynchronisation Erreur renaming corbeille ", err)
+    //     }
+    // }
+    
+    return reponse.data
+}
+
+async function recevoirFuuidsDomaines(fuuids, opts) {
+    opts = opts || {}
+    const archive = opts.archive || false
+    debug("recevoirFuuidsDomaines %d fuuids (archive %s)", fuuids.length, archive)
+
+    let fichierFuuids = null
+    if(archive) {
+        fichierFuuids = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ARCHIVES)
+    } else {
+        fichierFuuids = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ACTIFS)
+    }
+
+    const writeStream = fs.createWriteStream(fichierFuuids, {flags: 'a'})
+    await new Promise((resolve, reject) => {
+        writeStream.on('error', reject)
+        writeStream.on('close', resolve)
+        for (let fuuid of fuuids) {
+            writeStream.write(fuuid + '\n')
         }
-    } finally {
-        try { await fsPromises.unlink(fichierCorbeillePrimaireDest) } catch(err) {}
-        const fichierCorbeillePrimaireDest = path.join(getPathDataFolder(), 'corbeillePrimaire.txt')
-        try { 
-            // await fsPromises.rename(fichierCorbeillePrimaire, fichierCorbeillePrimaireDest) 
+        writeStream.close()
+    })
+
+    if(_timeoutTraiterConfirmes) clearTimeout(_timeoutTraiterConfirmes)
+    debug("traiterFichiersConfirmes dans 5 secs")
+    _timeoutTraiterConfirmes = setTimeout(()=>traiterFichiersConfirmes().catch(err=>console.error("ERREUR ", err)), 5_000)
+}
+
+async function traiterFichiersConfirmes() {
+    try {
+        debug("traiterFichiersConfirmes")
+        if(_timeoutTraiterConfirmes) clearTimeout(_timeoutTraiterConfirmes)
+        _timeoutTraiterConfirmes = null
+
+        const fichierActifs = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS)
+
+        const fichierFuuidsReclamesActifs = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ACTIFS)
+        const fichierFuuidsReclamesActifsTmp = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ACTIFS + '.tmp')
+        const fichierFuuidsReclamesActifsCourants = path.join(getPathDataFolder(), 'fuuidsReclamesActifs.courant.txt')
+
+        const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
+        await fsPromises.mkdir(pathOrphelins, {recursive: true})
+
+        //const fichierFuuidsReclamesArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ARCHIVES)
+
+        try {
+            // Trier, retirer doubles des fuuids reclames actifs
+            await fsPromises.rename(fichierFuuidsReclamesActifs, fichierFuuidsReclamesActifsTmp)
+            await sortFile(fichierFuuidsReclamesActifsTmp, fichierFuuidsReclamesActifsCourants)
+            await fsPromises.rm(fichierFuuidsReclamesActifsTmp)
+        } catch(err) {
+            debug("Aucun fichier de fuuids reclames, skip")
+            return
+        }
+
+        try {
+            // Faire la liste des fuuids inconnus (reclames mais pas dans actifs / archives)
+            const fichierInconnus = path.join(getPathDataFolder(), 'inconnus.txt')
             await new Promise((resolve, reject)=>{
-                exec(`sort -o ${fichierCorbeillePrimaireDest} ${fichierCorbeillePrimaire}`, error=>{
+                exec(`comm -13 ${fichierActifs} ${fichierFuuidsReclamesActifsCourants} > ${fichierInconnus}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })
             })
-        } 
-        catch(err) {
-            console.error("storeConsignation.getDataSynchronisation Erreur renaming corbeille ", err)
+        } catch(err) {
+            console.error(new Date() + " traiterFichiersConfirmes ERROR Traitement fichiers inconnus : ", err)
         }
+
+        try {
+            // Faire une rotation des fichiers orphelins existants (fait la diff avec actifs pour retirer fichiers reactives)
+            await rotationOrphelins(pathOrphelins, fichierFuuidsReclamesActifsCourants)
+
+            // Extraire liste de fuuids orphelins (reclames par aucun domaine, e.g. fichiers supprimes)
+            // Les orphelins (non reclames par un domaine) sont dans la liste 1 (actifs) mais pas dans la liste 2 (reclames)
+            const fichierOrphelins = path.join(pathOrphelins, 'orphelins.00')
+            await new Promise((resolve, reject)=>{
+                exec(`comm -23 ${fichierActifs} ${fichierFuuidsReclamesActifsCourants} > ${fichierOrphelins}`, error=>{
+                    if(error) return reject(error)
+                    else resolve()
+                })
+            })
+
+        } catch(err) {
+            console.error(new Date() + " traiterFichiersConfirmes ERROR Traitement orphelins : ", err)
+        }
+    } catch(err) {
+        console.error(new Date() + " traiterFichiersConfirmes ERROR Erreur traitement : ", err)
+    }
+
+}
+
+/** Fait une rotation des fichiers orphelins. Compare le resultat avec fuuids reclames courants */
+async function rotationOrphelins(pathOrphelins, fichierReclames) {
+    const fichiersOrphelins = []
+    for await (const entry of readdirp(pathOrphelins, { type: 'files', depth: 0 })) {
+        fichiersOrphelins.push(entry.fullPath)
     }
     
-    return reponse.data
+    // Les fichiers sont nommes avec extension numerique "orphelins.00, orphelins.01, etc"
+    // Trier en ordre inverse pour traiter le plus vieux en premier
+    fichiersOrphelins.sort((a, b) => -1 * a.localeCompare(b))
+    debug("Liste trie (desc) de fichiers orphelins : ", fichiersOrphelins)
+
+    for await (let fichierOrphelin of fichiersOrphelins) {
+        const pathFichierOrphelinSuivant = path.parse(fichierOrphelin)
+        debug("pathFichierOrphelin (prep suivant) ", pathFichierOrphelinSuivant)
+        let extSuivante = Number.parseInt(pathFichierOrphelinSuivant.ext.slice(1))
+
+        if(extSuivante >= NOMBRE_ARCHIVES_ORPHELINS) {
+            // Nombre d'archives est trop grand, supprimer le fichier et passer au prochain
+            await fsPromises.rm(fichierOrphelin)
+            continue
+        }
+
+        extSuivante++  // Prochain numero
+        if(extSuivante<10) pathFichierOrphelinSuivant.ext = '.0' + extSuivante
+        else pathFichierOrphelinSuivant.ext = '.' + extSuivante
+        pathFichierOrphelinSuivant.base = undefined
+        const pathFichierOrphelinSuivantStr = path.format(pathFichierOrphelinSuivant)
+        debug("pathFichierOrphelinSuivantStr ", pathFichierOrphelinSuivantStr)
+
+        // Conserver les fuuids qui sont uniquement presents dans le fichier orphelin
+        // Retirer ceux nouvellement reclames du fichier orphelin
+        await new Promise((resolve, reject)=>{
+            exec(`comm -13 ${fichierReclames} ${fichierOrphelin} > ${pathFichierOrphelinSuivantStr}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
+        })
+    }
+
+    if(fichiersOrphelins.length >= NOMBRE_ARCHIVES_ORPHELINS) {
+        const fichierOrphelins = fichiersOrphelins[0]  // Premier fichier est le plus vieux
+        debug("Deplacer fichiers de la derniere archive orphelins : %s", fichierOrphelins)
+    }
+
 }
 
 function ajouterDownloadPrimaire(fuuid) {
@@ -754,39 +879,39 @@ async function downloadFichierDuPrimaire(fuuid) {
     }
 }
 
-async function marquerFichiersCorbeille() {
-    const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
-    await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
+// async function marquerFichiersCorbeille() {
+//     const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
+//     await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
 
-    // Comparer fuuids dans corbeille du primaire et fichier fuuids actifs local
-    const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt'),
-          fichierActifsLocal = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS),
-          fichierCorbeilleTraiter = path.join(getPathDataFolder(), 'fuuidsCorbeilleTraiter.txt')
+//     // Comparer fuuids dans corbeille du primaire et fichier fuuids actifs local
+//     const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt'),
+//           fichierActifsLocal = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS),
+//           fichierCorbeilleTraiter = path.join(getPathDataFolder(), 'fuuidsCorbeilleTraiter.txt')
 
-    await comparerFichiers(fichierCorbeillePrimaire, fichierActifsLocal, fichierCorbeilleTraiter)
+//     await comparerFichiers(fichierCorbeillePrimaire, fichierActifsLocal, fichierCorbeilleTraiter)
 
-    try {
-        const readStreamFichiers = fs.createReadStream(fichierCorbeilleTraiter)
-        const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
+//     try {
+//         const readStreamFichiers = fs.createReadStream(fichierCorbeilleTraiter)
+//         const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
 
-        for await (const line of rlFichiers) {
+//         for await (const line of rlFichiers) {
 
-            if( ! line.startsWith('	') && ! line.startsWith('\t') ) {
-                try {
-                    const fuuid = line.trim()
-                    await _storeConsignation.marquerSupprime(fuuid)
-                    debug("Fichier %s transfere a la corbeille", fuuid)
-                } catch(err) {
-                    debug("Erreur transfert %s vers corbeille", fuuid, err)
-                }
-            }
+//             if( ! line.startsWith('	') && ! line.startsWith('\t') ) {
+//                 try {
+//                     const fuuid = line.trim()
+//                     await _storeConsignation.marquerSupprime(fuuid)
+//                     debug("Fichier %s transfere a la corbeille", fuuid)
+//                 } catch(err) {
+//                     debug("Erreur transfert %s vers corbeille", fuuid, err)
+//                 }
+//             }
 
-        }
-    } catch(err) {
-        debug("Erreur traitement sync corbeille ", err)
-    }
+//         }
+//     } catch(err) {
+//         debug("Erreur traitement sync corbeille ", err)
+//     }
 
-}
+// }
 
 async function uploaderFichiersVersPrimaire() {
     debug("uploaderFichiersVersPrimaire Debut")
@@ -920,9 +1045,9 @@ async function emettrePresence() {
             const fichierData = await fsPromises.readFile(pathData, 'utf-8')
             const data = JSON.parse(fichierData)
             info.fichiers_nombre = data.nombreFichiersActifs
-            info.corbeille_nombre = data.nombreFichiersCorbeille
+            // info.corbeille_nombre = data.nombreFichiersCorbeille
             info.fichiers_taille = data.tailleActifs
-            info.corbeille_taille = data.tailleCorbeille
+            // info.corbeille_taille = data.tailleCorbeille
 
         } catch(err) {
             console.error("storeConsignationLocal.emettrePresence ERROR Erreur chargement fichier data.json : %O", err)
@@ -943,39 +1068,39 @@ async function genererListeLocale() {
     debug("genererListeLocale Fichiers sous ", pathFichiers)
     await fsPromises.mkdir(pathFichiers, {recursive: true})
 
-    const fichierActifsNew = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS + '.work'),
-          fichierCorbeilleNew = path.join(pathFichiers, 'fuuidsCorbeille.txt.work')
+    const fichierActifsNew = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS + '.work')
+          //fichierCorbeilleNew = path.join(pathFichiers, 'fuuidsCorbeille.txt.work')
 
-    const fichierFuuidsActifsHandle = await fsPromises.open(fichierActifsNew, 'w'),
-          fichierFuuidsCorbeilleHandle = await fsPromises.open(fichierCorbeilleNew, 'w')
+    const fichierFuuidsActifsHandle = await fsPromises.open(fichierActifsNew, 'w')
+          //fichierFuuidsCorbeilleHandle = await fsPromises.open(fichierCorbeilleNew, 'w')
 
     let ok = true,
         nombreFichiersActifs = 0,
-        nombreFichiersCorbeille = 0,
-        tailleActifs = 0,
-        tailleCorbeille = 0
+        //nombreFichiersCorbeille = 0,
+        tailleActifs = 0
+        //tailleCorbeille = 0
     try {
-        const streamFuuidsActifs = fichierFuuidsActifsHandle.createWriteStream(),
-              streamFuuidsCorbeille = fichierFuuidsCorbeilleHandle.createWriteStream()
+        const streamFuuidsActifs = fichierFuuidsActifsHandle.createWriteStream()
+              //streamFuuidsCorbeille = fichierFuuidsCorbeilleHandle.createWriteStream()
 
         const callbackTraiterFichier = async item => {
             if(!item) {
                 streamFuuidsActifs.close()
-                streamFuuidsCorbeille.close()
+                //streamFuuidsCorbeille.close()
                 return  // Dernier fichier
             }
 
-            const corbeille = item.filename.endsWith('.corbeille')
+            //const corbeille = item.filename.endsWith('.corbeille')
             const fuuid = item.filename.split('.').shift()
-            if(corbeille) {
-                streamFuuidsCorbeille.write(fuuid + '\n')
-                nombreFichiersCorbeille++
-                tailleCorbeille += item.size
-            } else {
+            // if(corbeille) {
+            //     streamFuuidsCorbeille.write(fuuid + '\n')
+            //     nombreFichiersCorbeille++
+            //     tailleCorbeille += item.size
+            // } else {
                 streamFuuidsActifs.write(fuuid + '\n')
                 nombreFichiersActifs++
                 tailleActifs += item.size
-            }
+            //}
         }
 
         await _storeConsignation.parcourirFichiers(callbackTraiterFichier)
@@ -984,30 +1109,31 @@ async function genererListeLocale() {
         ok = false
     } finally {
         await fichierFuuidsActifsHandle.close()
-        await fichierFuuidsCorbeilleHandle.close()
+        // await fichierFuuidsCorbeilleHandle.close()
     }
 
     if(ok) {
         debug("genererListeLocale Terminer information liste")
         const info = {
             nombreFichiersActifs, 
-            nombreFichiersCorbeille,
-            tailleActifs,
-            tailleCorbeille,
+            // nombreFichiersCorbeille,
+            tailleActifs
+            // tailleCorbeille,
         }
         const messageFormatte = await _mq.pki.formatterMessage(info, 'fichiers', {action: 'liste', ajouterCertificat: true})
         debug("genererListeLocale messageFormatte : ", messageFormatte)
         fsPromises.writeFile(path.join(pathFichiers, 'data.json'), JSON.stringify(messageFormatte))
 
         // Renommer fichiers .new
-        const fichierActifs = path.join(pathFichiers, '/fuuidsActifs.txt'),
-              fichierCorbeille = path.join(pathFichiers, 'fuuidsCorbeille.txt')
+        const fichierActifs = path.join(pathFichiers, '/fuuidsActifs.txt')
+              // fichierCorbeille = path.join(pathFichiers, 'fuuidsCorbeille.txt')
         // try { await fsPromises.rm(fichierActifs) } catch(err) { }
         // try { await fsPromises.rm(fichierCorbeille) } catch(err) { }
         
         try { 
             // Copier le fichier de .work.txt a .txt, trier en meme temps
             await sortFile(fichierActifsNew, fichierActifs, {gzip: true})
+            await fsPromises.rm(fichierActifsNew)
             // await new Promise((resolve, reject)=>{
             //     exec(`sort -o ${fichierActifs} ${fichierActifsNew} && gzip -fk ${fichierActifs}`, error=>{
             //         if(error) return reject(error)
@@ -1028,32 +1154,32 @@ async function genererListeLocale() {
             // }
         }
 
-        try { 
-            // Copier le fichier de .work.txt a .txt, trier en meme temps
-            await sortFile(fichierCorbeilleNew, fichierCorbeille, {gzip: true})
-            // await new Promise((resolve, reject)=>{
-            //     exec(`sort -o ${fichierCorbeille} ${fichierCorbeilleNew} && gzip -fk ${fichierCorbeille}`, error=>{
-            //         if(error) return reject(error)
-            //         else resolve()
-            //     })
-            // })
-        } catch(err) { 
-            if(err.code === 'ENOENT') {
-                // Ok, fichier n'existe pas
-            } else {
-                console.error("storeConsignation.genererListeLocale Erreur copie fichiers corbeille : ", err)
-            }
-        } finally {
-            // Supprimer .work.txt
-            try { await fsPromises.rm(fichierCorbeilleNew) }
-            catch(err) {
-                if(err.code === 'ENOENT') {
-                    // Ok, fichier n'existe pas
-                } else {
-                    console.error("storeConsignation.genererListeLocale Erreur suppression fichiers actifs work : ", err)
-                }
-            }
-        }
+        // try { 
+        //     // Copier le fichier de .work.txt a .txt, trier en meme temps
+        //     await sortFile(fichierCorbeilleNew, fichierCorbeille, {gzip: true})
+        //     // await new Promise((resolve, reject)=>{
+        //     //     exec(`sort -o ${fichierCorbeille} ${fichierCorbeilleNew} && gzip -fk ${fichierCorbeille}`, error=>{
+        //     //         if(error) return reject(error)
+        //     //         else resolve()
+        //     //     })
+        //     // })
+        // } catch(err) { 
+        //     if(err.code === 'ENOENT') {
+        //         // Ok, fichier n'existe pas
+        //     } else {
+        //         console.error("storeConsignation.genererListeLocale Erreur copie fichiers corbeille : ", err)
+        //     }
+        // } finally {
+        //     // Supprimer .work.txt
+        //     try { await fsPromises.rm(fichierCorbeilleNew) }
+        //     catch(err) {
+        //         if(err.code === 'ENOENT') {
+        //             // Ok, fichier n'existe pas
+        //         } else {
+        //             console.error("storeConsignation.genererListeLocale Erreur suppression fichiers actifs work : ", err)
+        //         }
+        //     }
+        // }
 
         if(_estPrimaire) {
             debug("Emettre evenement de fin du creation de liste du primaire")
@@ -1090,7 +1216,7 @@ async function sortFile(src, dest, opts) {
     opts = opts || {}
     const gzip = opts.gzip || false
 
-    let command = `sort -o ${dest} ${src}`
+    let command = `sort -u -o ${dest} ${src}`
     if(gzip) command += ` && gzip -fk ${dest}`
 
     await new Promise((resolve, reject)=>{
@@ -1203,7 +1329,9 @@ function ajouterFichierConsignation(item) {
 
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
-    entretienFichiersSupprimes, supprimerFichier, recupererFichier, confirmerActiviteFuuids,
+    //entretienFichiersSupprimes, 
+    supprimerFichier, recupererFichier, 
+    //confirmerActiviteFuuids,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
@@ -1214,6 +1342,7 @@ module.exports = {
     getPathStaging,
     downloadFichiersBackup,
     getFichierStream,
+    recevoirFuuidsDomaines,
 
     ajouterFichierConsignation,
 }
