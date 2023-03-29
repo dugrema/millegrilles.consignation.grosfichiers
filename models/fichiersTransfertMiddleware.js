@@ -443,8 +443,14 @@ async function verifierFichier(hachage, pathUploadItem, opts) {
         })
 
         const promise = new Promise((resolve, reject)=>{
-            fileReader.on('end', resolve)
-            fileReader.on('error', reject)
+            if(opts.writeStream) {
+                opts.writeStream.on('close', resolve)
+                opts.writeStream.on('error', reject)
+                fileReader.on('end', ()=>opts.writeStream.close())
+            } else {
+                fileReader.on('end', resolve)
+                fileReader.on('error', reject)
+            }
         })
 
         await promise
