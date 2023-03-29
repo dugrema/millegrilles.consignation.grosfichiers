@@ -34,6 +34,8 @@ const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'fuuidsActifsPrimaire.txt',
       FICHIER_FUUIDS_MANQUANTS = 'fuuidsManquants.txt',
       FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
+      FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
+      FICHIER_FUUIDS_UPLOAD_PRIMAIRE = 'fuuidsUploadPrimaire.txt',
       FICHIER_FUUIDS_RECLAMES_ACTIFS = 'fuuidsReclamesActifs.txt',
       FICHIER_FUUIDS_RECLAMES_ARCHIVES = 'fuuidsReclamesArchives.txt'
 
@@ -242,56 +244,6 @@ async function evenementFichierPrimaire(mq, fuuid) {
     }
 }
 
-// var _batchFichiersFuuids = null, // Dict { [fuuid]: false/{fuuid, supprime: bool} }
-//     _triggerPromiseBatch = null  // Fonction, invoquer pour continuer batch avant timeout (e.g. all files accounted for)
-
-// async function entretienFichiersSupprimes() {
-//     debug("Debut entretien des fichiers supprimes")
-
-//     // Detecter les fichiers qui devraient etre mis en attente de suppression    
-//     await traiterSupprimer()
-
-//     // Verifier les fichiers dans la corbeille (pour les recuperer au besoin)
-//     traiterRecuperer()
-
-//     // Supprimer les fichiers en attente depuis plus de 14 jours
-
-// }
-
-// async function traiterSupprimer() {
-//     debug("Traitement des fichiers a supprimer")
-//     let batchFichiers = []
-    
-//     const callbackActionSupprimer = async item => {
-//         const {fuuid, supprime} = item
-//         if(supprime === true) {
-//             debug("Le fichier %s est supprime, on le deplace vers la corbeille", fuuid)
-//             await _storeConsignation.marquerSupprime(fuuid)
-//         }
-//     }
-
-//     const callbackTraiterFichiersASupprimer = async item => {
-//         if(!item) {
-//             // Derniere batch
-//             if(batchFichiers.length > 0) await traiterBatch(batchFichiers, callbackActionSupprimer)
-//         } else {
-//             batchFichiers.push(item.filename)
-//             while(batchFichiers.length > BATCH_SIZE) {
-//                 const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
-//                 batchFichiers = batchFichiers.slice(BATCH_SIZE)
-//                 await traiterBatch(batchCourante, callbackActionSupprimer)
-//             }
-//         }
-//     }
-    
-//     try {
-//         const filtre = item => !item.filename.endsWith('.corbeille')
-//         await _storeConsignation.parcourirFichiers(callbackTraiterFichiersASupprimer, {filtre})
-//     } catch(err) {
-//         console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
-//     }
-// }
-
 // async function traiterRecuperer() {
 //     debug("Traitement des fichiers a recuperer")
 //     let batchFichiers = []
@@ -375,28 +327,6 @@ async function evenementFichierPrimaire(mq, fuuid) {
 //         await callbackAction(reponseFichier)
 //     }
 
-// }
-
-// Callback via commande pour que multiple domaines/modules puissent confirmer leur utilisation
-// courante de fichiers
-// async function confirmerActiviteFuuids(fuuids) {
-//     debug("confirmerActiviteFuuids fuuids %O", fuuids)
-//     if(fuuids) {
-//         fuuids.forEach(item=>{
-//             _batchFichiersFuuids[item.fuuid] = item
-//         })
-//     }
-//     // debug("Liste fuuids locale : %O", _batchFichiersFuuids)
-
-//     // Detecter si la liste est complete
-//     let complete = Object.values(_batchFichiersFuuids).reduce((acc, item)=>{
-//         acc = acc && item?true:false
-//         return acc
-//     }, true)
-//     if(complete) {
-//         debug("Liste fichiers est complete : %s", complete)
-//         _triggerPromiseBatch()
-//     }
 // }
 
 async function entretien() {
@@ -485,7 +415,7 @@ async function traiterOrphelinsSecondaire() {
     await fsPromises.mkdir(pathOrphelins, {recursive: true})
 
     // Generer une liste combinee de tous les fichiers requis (primaire actifs + manquants)
-    
+
 
     // await rotationOrphelins(pathOrphelins, fichierReclames)
 
@@ -512,13 +442,17 @@ async function downloadFichierListe(fichierDestination, remotePathnameFichier) {
         await new Promise((resolve, reject)=>{
             writeStream.on('close', resolve)
             writeStream.on('error', reject)
-            // actifStream.on('close', resolve)
-            actifStream.on('error', err=>{
-                // actifStream.close()
-                reject(err)
-            })
             reponseActifs.data.pipe(writeStream)
         })
+
+        try {
+            debug("Sort fichier %s vers %s", fichierTmp.path, fichierDestination)
+            await sortFile(fichierTmp.path, fichierDestination, {gzipsrc: true})
+        } 
+        catch(err) {
+            console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
+        }
+
     } catch(err) {
         const response = err.response
         if(response && response.status === 416) {
@@ -527,14 +461,7 @@ async function downloadFichierListe(fichierDestination, remotePathnameFichier) {
             throw err
         }
     } finally {
-        try { 
-            await sortFile(fichierTmp.path, fichierDestination)
-        } 
-        catch(err) {
-            console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
-        } finally {
-            fichierTmp.cleanup().catch(err=>console.error(new Date() + "ERROR Cleanup fichier tmp : ", err))
-        }
+        fichierTmp.cleanup().catch(err=>console.error(new Date() + "ERROR Cleanup fichier tmp : ", err))
     }
 }
 
@@ -556,9 +483,20 @@ async function getDataSynchronisation() {
     debug("Reponse GET data.json %s :\n%O", reponse.status, reponse.data)
     
     // Charger listes
-    await downloadFichierListe(FICHIER_FUUIDS_ACTIFS_PRIMAIRE, '/data/fuuidsActifs.txt.gz')
-    await downloadFichierListe(FICHIER_FUUIDS_MANQUANTS_PRIMAIRE, '/data/fuuidsManquants.txt.gz')
+    const fuuidsActifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
+    const fuuidsManquantsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
+    await downloadFichierListe(fuuidsActifsPrimaire, '/data/fuuidsActifs.txt.gz')
+    await downloadFichierListe(fuuidsManquantsPrimaire, '/data/fuuidsManquants.txt.gz')
     
+    // Combiner listes, dedupe
+    const fuuidsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
+    await new Promise((resolve, reject)=>{
+        exec(`cat ${fuuidsActifsPrimaire} ${fuuidsManquantsPrimaire} | sort -u -o ${fuuidsPrimaire}`, error=>{
+            if(error) return reject(error)
+            else resolve()
+        })
+    })
+
     return reponse.data
 }
 
@@ -760,21 +698,26 @@ async function downloadFichiersSync() {
 
 async function chargerListeFichiersMissing(cb) {
 
-    const actifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE + '.work')
-    const fuuidsLocaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS + '.work')
-    const fichierMissing = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS)
+    const fuuidsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
+    const fuuidsLocaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS)
+    const fuuidsUploadPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_UPLOAD_PRIMAIRE)
 
-    await comparerFichiers(fuuidsLocaux, actifsPrimaire, fichierMissing)
+    await new Promise((resolve, reject) => {
+        exec(`comm -23 ${fuuidsLocaux} ${fuuidsPrimaire} > ${fuuidsUploadPrimaire}`, error=>{
+            if(error) return reject(error)
+            else resolve()
+        })
+    })
 
-    const readStreamFichiers = fs.createReadStream(fichierMissing)
+    const readStreamFichiers = fs.createReadStream(fuuidsUploadPrimaire)
     const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
-    for await (const line of rlFichiers) {
+    for await (let fuuid of rlFichiers) {
         // Detecter fichiers manquants localement par espaces vide au debut de la ligne
-        if( line.startsWith('	') || line.startsWith('\t') ) {
-            const fuuid = line.trim()
-            debug('fuuid missing ', fuuid)
-            await cb(fuuid)
-        }
+        fuuid = fuuid.trim()
+        if(!fuuid) continue  // Ligne vide
+
+        debug('chargerListeFichiersMissing fuuid manquant du primaire ', fuuid)
+        await cb(fuuid)
     }    
 }
 
@@ -830,11 +773,11 @@ async function _threadDownloadFichiersDuPrimaire() {
 async function downloadFichierDuPrimaire(fuuid) {
 
     // Tenter de recuperer le fichier localement
-    const recuperation = await recupererFichier(fuuid)
-    if(recuperation !== null)  {
-        debug("downloadFichierDuPrimaire Fichier %O recupere avec succes sans download", recuperation)
-        return
-    }
+    // const recuperation = await recupererFichier(fuuid)
+    // if(recuperation !== null)  {
+    //     debug("downloadFichierDuPrimaire Fichier %O recupere avec succes sans download", recuperation)
+    //     return
+    // }
 
     debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
     const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
@@ -895,8 +838,8 @@ async function uploaderFichiersVersPrimaire() {
     debug("uploaderFichiersVersPrimaire Debut")
 
     // // Detecter fichiers locaux (actifs) qui ne sont pas sur le primaire
-    const actifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE + '.work')
-    const fuuidsLocaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS + '.work')
+    const actifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
+    const fuuidsLocaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS)
     const fichierMissing = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS)
 
     try {
@@ -1131,7 +1074,12 @@ async function sortFile(src, dest, opts) {
     opts = opts || {}
     const gzip = opts.gzip || false
 
-    let command = `sort -u -o ${dest} ${src}`
+    let command = null
+    if(src.endsWith('.gz') || opts.gzipsrc ) {
+        command = `zcat ${src} | sort -u -o ${dest}`
+    } else {
+        command = `sort -u -o ${dest} ${src}`
+    }
     if(gzip) command += ` && gzip -9fk ${dest}`
 
     await new Promise((resolve, reject)=>{
