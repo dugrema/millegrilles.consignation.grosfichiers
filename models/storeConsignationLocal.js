@@ -12,11 +12,10 @@ const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'tra
 const PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions_archives')
 
 const DEFAULT_URL_CONSIGNATION = 'https://fichiers:443',
-      CONST_EXPIRATION_ORPHELINS = 300_000
+      CONST_EXPIRATION_ORPHELINS = 86_400_000 * 3
 
 let _pathConsignation = path.join(CONSIGNATION_PATH, 'local'),
     _pathOrphelins = path.join(CONSIGNATION_PATH, 'orphelins')
-    // _pathCorbeille = path.join(CONSIGNATION_PATH, 'corbeille')
 
 function init(params) {
     params = params || {}
@@ -61,17 +60,14 @@ async function modifierConfiguration(params, opts) {
 }
 
 function getPathFichier(fuuid) {
-    // Split path en 4 derniers caracteres
+    // Split path en 2 derniers caracteres
     const last2 = fuuid.slice(fuuid.length-2)
-    // const sub1 = last2[1],
-    //       sub2 = last2[0]
     return path.join(_pathConsignation, last2, fuuid)
 }
 
 function getPathFichierOrphelins(fuuid) {
+    // Split path en 2 derniers caracteres
     const last2 = fuuid.slice(fuuid.length-2)
-    // const sub1 = last2[1],
-    //       sub2 = last2[0]
     return path.join(_pathOrphelins, last2, fuuid)
 }
 
@@ -107,22 +103,6 @@ async function getInfoFichier(fuuid, opts) {
         else throw err
     }
 }
-
-// async function recoverFichierSupprime(fuuid) {
-//     const filePathCorbeille = getPathFichierCorbeille(fuuid)
-//     const filePath = getPathFichier(fuuid)
-//     const dirDestPath = path.dirname(filePath)
-//     try {
-//         await fsPromises.stat(filePathCorbeille)
-//         await fsPromises.mkdir(dirDestPath, {recursive: true})
-//         await fsPromises.rename(filePathCorbeille, filePath)
-//         const stat = await fsPromises.stat(filePath)
-//         return { stat, filePath }
-//     } catch(err) {
-//         debug("Erreur recoverFichierSupprime %s : %O", fuuid, err)
-//         return null
-//     }
-// }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
     const pathSource = path.join(pathFichierStaging, fuuid)
@@ -396,10 +376,9 @@ module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     
     getInfoFichier, getFichierStream, 
-    consignerFichier, marquerOrphelin, 
-    // recoverFichierSupprime, 
+    consignerFichier, marquerOrphelin, purgerOrphelinsExpires,
     
-    parcourirFichiers, parcourirBackup, purgerOrphelinsExpires,
+    parcourirFichiers, parcourirBackup, 
 
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,

@@ -6,6 +6,7 @@ const readline = require('readline')
 const axios = require('axios')
 const { exec } = require('child_process')
 const readdirp = require('readdirp')
+const tmpPromises = require('tmp-promise')
 
 const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
 const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
@@ -30,8 +31,9 @@ const INTERVALLE_SYNC = 3_600_000,  // 60 minutes
       NOMBRE_ARCHIVES_ORPHELINS = 4
 
 const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
-      FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'actifsPrimaire.txt',
-      FICHIER_FUUIDS_MISSING = 'fuuidsMissing.txt',
+      FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'fuuidsActifsPrimaire.txt',
+      FICHIER_FUUIDS_MANQUANTS = 'fuuidsManquants.txt',
+      FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
       FICHIER_FUUIDS_RECLAMES_ACTIFS = 'fuuidsReclamesActifs.txt',
       FICHIER_FUUIDS_RECLAMES_ARCHIVES = 'fuuidsReclamesArchives.txt'
 
@@ -446,15 +448,93 @@ async function processusSynchronisation() {
 
     try {
         _sync_lock = true
-        const infoData = await getDataSynchronisation()
-        // await marquerFichiersCorbeille()
-        await uploaderFichiersVersPrimaire()
-        await downloadFichiersBackup()
-        await downloadFichiersSync()
+        await getDataSynchronisation()
+        
+        try {
+            await uploaderFichiersVersPrimaire()
+        } catch(err) {
+            console.error(new Date() + " ERROR uploadFichiersVersPrimaire ", err)
+        }
+        
+        try {
+            await downloadFichiersBackup()
+        } catch(err) {
+            console.error(new Date() + " ERROR downloadFichiersBackup ", err)
+        }
+
+        try {
+            await downloadFichiersSync()
+        } catch(err) {
+            console.error(new Date() + " ERROR downloadFichiersSync ", err)
+        }
+
+        try {
+            await traiterOrphelinsSecondaire()
+        } catch(err) {
+            console.error(new Date() + " ERROR traiterOrphelinsSecondaire ", err)
+        }
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur processusSynchronisation(2) ", err)
     } finally {
         _sync_lock = false
+    }
+}
+
+async function traiterOrphelinsSecondaire() {
+    const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
+    await fsPromises.mkdir(pathOrphelins, {recursive: true})
+
+    // Generer une liste combinee de tous les fichiers requis (primaire actifs + manquants)
+    
+
+    // await rotationOrphelins(pathOrphelins, fichierReclames)
+
+}
+
+async function downloadFichierListe(fichierDestination, remotePathnameFichier) {
+    const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
+    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
+    const urlData = new URL(urlTransfert.href)
+    urlData.pathname = urlData.pathname + remotePathnameFichier
+    debug("downloadFichierListe Download %s", urlData.href)
+    const fichierTmp = await tmpPromises.file()
+    try {
+        const writeStream = fs.createWriteStream('', {fd: fichierTmp.fd})
+        const reponseActifs = await axios({ 
+            method: 'GET', 
+            httpsAgent, 
+            url: urlData.href, 
+            responseType: 'stream',
+            timeout: TIMEOUT_AXIOS,
+        })
+        debug("Reponse GET actifs %s", reponseActifs.status)
+
+        await new Promise((resolve, reject)=>{
+            writeStream.on('close', resolve)
+            writeStream.on('error', reject)
+            // actifStream.on('close', resolve)
+            actifStream.on('error', err=>{
+                // actifStream.close()
+                reject(err)
+            })
+            reponseActifs.data.pipe(writeStream)
+        })
+    } catch(err) {
+        const response = err.response
+        if(response && response.status === 416) {
+            // OK, le fichier est vide
+        } else {
+            throw err
+        }
+    } finally {
+        try { 
+            await sortFile(fichierTmp.path, fichierDestination)
+        } 
+        catch(err) {
+            console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
+        } finally {
+            fichierTmp.cleanup().catch(err=>console.error(new Date() + "ERROR Cleanup fichier tmp : ", err))
+        }
     }
 }
 
@@ -476,98 +556,8 @@ async function getDataSynchronisation() {
     debug("Reponse GET data.json %s :\n%O", reponse.status, reponse.data)
     
     // Charger listes
-    {
-        const urlData = new URL(urlTransfert.href)
-        urlData.pathname = urlData.pathname + '/data/fuuidsActifs.txt'
-        debug("Download %s", urlData.href)
-        const fichierActifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE + '.work')
-        try {
-            const actifStream = fs.createWriteStream(fichierActifsPrimaire)
-            const reponseActifs = await axios({ 
-                method: 'GET', 
-                httpsAgent, 
-                url: urlData.href, 
-                responseType: 'stream',
-                timeout: TIMEOUT_AXIOS,
-            })
-            debug("Reponse GET actifs %s", reponseActifs.status)
-
-            await new Promise((resolve, reject)=>{
-                actifStream.on('close', resolve)
-                actifStream.on('error', err=>{
-                    actifStream.close()
-                    reject(err)
-                })
-                reponseActifs.data.pipe(actifStream)
-            })
-        } catch(err) {
-            const response = err.response
-            if(response && response.status === 416) {
-                // OK, le fichier est vide
-            } else {
-                throw err
-            }
-        } finally {
-            const fichierActifsPrimaireDest = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
-            try { 
-                await sortFile(fichierActifsPrimaire, fichierActifsPrimaireDest)
-                await fsPromises.rm(fichierActifsPrimaire)
-            } 
-            catch(err) {
-                console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
-            }
-        }
-    }
-
-    // const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt.work')
-    // try {
-    //     const urlData = new URL(urlTransfert.href)
-    //     urlData.pathname = urlData.pathname + '/data/fuuidsCorbeille.txt'
-    //     debug("Download %s", urlData.href)
-    //     const corbeilleStream = fs.createWriteStream(fichierCorbeillePrimaire)
-    //     const reponseCorbeille = await axios({
-    //         method: 'GET', 
-    //         httpsAgent, 
-    //         url: urlData.href, 
-    //         responseType: 'stream',
-    //         timeout: TIMEOUT_AXIOS,
-    //     })
-    //     debug("Reponse GET corbeille %s", reponseCorbeille.status)
-    //     await new Promise((resolve, reject)=>{
-    //         corbeilleStream.on('close', resolve)
-    //         corbeilleStream.on('error', err=>{
-    //             corbeilleStream.close()
-    //             reject(err)
-    //         })
-    //         reponseCorbeille.data.pipe(corbeilleStream)
-    //     })
-    // } catch(err) {
-    //     const response = err.response
-    //     if(response ) {
-    //         if(response.status === 416) {
-    //             // OK, fichier vide
-    //         } else {
-    //             console.info("Erreur recuperation fichier corbeille HTTP %d", err.response.status)
-    //         }
-    //     } else {
-    //         console.warn("Erreur recuperation fichier corbeille - ", err)
-    //     }
-    // } finally {
-    //     try { await fsPromises.unlink(fichierCorbeillePrimaireDest) } catch(err) {}
-    //     const fichierCorbeillePrimaireDest = path.join(getPathDataFolder(), 'corbeillePrimaire.txt')
-    //     try { 
-    //         // await fsPromises.rename(fichierCorbeillePrimaire, fichierCorbeillePrimaireDest) 
-    //         await new Promise((resolve, reject)=>{
-    //             exec(`sort -o ${fichierCorbeillePrimaireDest} ${fichierCorbeillePrimaire}`, error=>{
-    //                 if(error) return reject(error)
-    //                 else resolve()
-    //             })
-    //         })
-    //     } 
-    //     catch(err) {
-    //         console.error("storeConsignation.getDataSynchronisation Erreur renaming corbeille ", err)
-    //     }
-    // }
+    await downloadFichierListe(FICHIER_FUUIDS_ACTIFS_PRIMAIRE, '/data/fuuidsActifs.txt.gz')
+    await downloadFichierListe(FICHIER_FUUIDS_MANQUANTS_PRIMAIRE, '/data/fuuidsManquants.txt.gz')
     
     return reponse.data
 }
@@ -628,9 +618,9 @@ async function traiterFichiersConfirmes() {
 
         try {
             // Faire la liste des fuuids inconnus (reclames mais pas dans actifs / archives)
-            const fichierInconnus = path.join(getPathDataFolder(), 'inconnus.txt')
+            const fuuidsManquants = path.join(getPathDataFolder(), 'fuuidsManquants.txt')
             await new Promise((resolve, reject)=>{
-                exec(`comm -13 ${fichierActifs} ${fichierFuuidsReclamesActifsCourants} > ${fichierInconnus}`, error=>{
+                exec(`comm -13 ${fichierActifs} ${fichierFuuidsReclamesActifsCourants} > ${fuuidsManquants} && gzip -9fk ${fuuidsManquants}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })
@@ -746,9 +736,9 @@ async function downloadFichiersSync() {
     const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
     await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
 
-    // const fichierActifsPrimaire = path.join(getPathDataFolder(), 'actifsPrimaire.txt')
-    // _queueDownloadFuuids.clear()
-    // await chargerListeFichiersMissing(fuuid=>_queueDownloadFuuids.add(fuuid))
+    const fichierActifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
+    _queueDownloadFuuids.clear()
+    await chargerListeFichiersMissing(fuuid=>_queueDownloadFuuids.add(fuuid))
     
     // const fichierMissing = path.join(getPathDataFolder(), 'fuuidsMissing.txt')
     // const readStreamFichiers = fs.createReadStream(fichierMissing)
@@ -772,7 +762,7 @@ async function chargerListeFichiersMissing(cb) {
 
     const actifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE + '.work')
     const fuuidsLocaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS + '.work')
-    const fichierMissing = path.join(getPathDataFolder(), FICHIER_FUUIDS_MISSING)
+    const fichierMissing = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS)
 
     await comparerFichiers(fuuidsLocaux, actifsPrimaire, fichierMissing)
 
@@ -901,47 +891,13 @@ async function downloadFichierDuPrimaire(fuuid) {
     }
 }
 
-// async function marquerFichiersCorbeille() {
-//     const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
-//     await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
-
-//     // Comparer fuuids dans corbeille du primaire et fichier fuuids actifs local
-//     const fichierCorbeillePrimaire = path.join(getPathDataFolder(), 'corbeillePrimaire.txt'),
-//           fichierActifsLocal = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS),
-//           fichierCorbeilleTraiter = path.join(getPathDataFolder(), 'fuuidsCorbeilleTraiter.txt')
-
-//     await comparerFichiers(fichierCorbeillePrimaire, fichierActifsLocal, fichierCorbeilleTraiter)
-
-//     try {
-//         const readStreamFichiers = fs.createReadStream(fichierCorbeilleTraiter)
-//         const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
-
-//         for await (const line of rlFichiers) {
-
-//             if( ! line.startsWith('	') && ! line.startsWith('\t') ) {
-//                 try {
-//                     const fuuid = line.trim()
-//                     await _storeConsignation.marquerSupprime(fuuid)
-//                     debug("Fichier %s transfere a la corbeille", fuuid)
-//                 } catch(err) {
-//                     debug("Erreur transfert %s vers corbeille", fuuid, err)
-//                 }
-//             }
-
-//         }
-//     } catch(err) {
-//         debug("Erreur traitement sync corbeille ", err)
-//     }
-
-// }
-
 async function uploaderFichiersVersPrimaire() {
     debug("uploaderFichiersVersPrimaire Debut")
 
     // // Detecter fichiers locaux (actifs) qui ne sont pas sur le primaire
     const actifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE + '.work')
     const fuuidsLocaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS + '.work')
-    const fichierMissing = path.join(getPathDataFolder(), FICHIER_FUUIDS_MISSING)
+    const fichierMissing = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS)
 
     try {
         await comparerFichiers(fuuidsLocaux, actifsPrimaire, fichierMissing)
@@ -1091,38 +1047,24 @@ async function genererListeLocale() {
     await fsPromises.mkdir(pathFichiers, {recursive: true})
 
     const fichierActifsNew = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS + '.work')
-          //fichierCorbeilleNew = path.join(pathFichiers, 'fuuidsCorbeille.txt.work')
-
     const fichierFuuidsActifsHandle = await fsPromises.open(fichierActifsNew, 'w')
-          //fichierFuuidsCorbeilleHandle = await fsPromises.open(fichierCorbeilleNew, 'w')
 
     let ok = true,
         nombreFichiersActifs = 0,
-        //nombreFichiersCorbeille = 0,
         tailleActifs = 0
-        //tailleCorbeille = 0
     try {
         const streamFuuidsActifs = fichierFuuidsActifsHandle.createWriteStream()
-              //streamFuuidsCorbeille = fichierFuuidsCorbeilleHandle.createWriteStream()
 
         const callbackTraiterFichier = async item => {
             if(!item) {
                 streamFuuidsActifs.close()
-                //streamFuuidsCorbeille.close()
                 return  // Dernier fichier
             }
 
-            //const corbeille = item.filename.endsWith('.corbeille')
             const fuuid = item.filename.split('.').shift()
-            // if(corbeille) {
-            //     streamFuuidsCorbeille.write(fuuid + '\n')
-            //     nombreFichiersCorbeille++
-            //     tailleCorbeille += item.size
-            // } else {
-                streamFuuidsActifs.write(fuuid + '\n')
-                nombreFichiersActifs++
-                tailleActifs += item.size
-            //}
+            streamFuuidsActifs.write(fuuid + '\n')
+            nombreFichiersActifs++
+            tailleActifs += item.size
         }
 
         await _storeConsignation.parcourirFichiers(callbackTraiterFichier)
@@ -1131,16 +1073,13 @@ async function genererListeLocale() {
         ok = false
     } finally {
         await fichierFuuidsActifsHandle.close()
-        // await fichierFuuidsCorbeilleHandle.close()
     }
 
     if(ok) {
         debug("genererListeLocale Terminer information liste")
         const info = {
             nombreFichiersActifs, 
-            // nombreFichiersCorbeille,
             tailleActifs
-            // tailleCorbeille,
         }
         const messageFormatte = await _mq.pki.formatterMessage(info, 'fichiers', {action: 'liste', ajouterCertificat: true})
         debug("genererListeLocale messageFormatte : ", messageFormatte)
@@ -1148,60 +1087,14 @@ async function genererListeLocale() {
 
         // Renommer fichiers .new
         const fichierActifs = path.join(pathFichiers, '/fuuidsActifs.txt')
-              // fichierCorbeille = path.join(pathFichiers, 'fuuidsCorbeille.txt')
-        // try { await fsPromises.rm(fichierActifs) } catch(err) { }
-        // try { await fsPromises.rm(fichierCorbeille) } catch(err) { }
         
         try { 
             // Copier le fichier de .work.txt a .txt, trier en meme temps
             await sortFile(fichierActifsNew, fichierActifs, {gzip: true})
             await fsPromises.rm(fichierActifsNew)
-            // await new Promise((resolve, reject)=>{
-            //     exec(`sort -o ${fichierActifs} ${fichierActifsNew} && gzip -fk ${fichierActifs}`, error=>{
-            //         if(error) return reject(error)
-            //         else resolve()
-            //     })
-            // })
         } catch(err) {
             console.error("storeConsignation.genererListeLocale Erreur copie fichiers actifs : ", err)
-        } finally {
-            // Supprimer .work.txt
-            // try { await fsPromises.rm(fichierActifsNew) }
-            // catch(err) {
-            //     if(err.code === 'ENOENT') {
-            //         // Ok, fichier n'existe pas
-            //     } else {
-            //         console.error("storeConsignation.genererListeLocale Erreur suppression fichiers actifs work : ", err)
-            //     }
-            // }
         }
-
-        // try { 
-        //     // Copier le fichier de .work.txt a .txt, trier en meme temps
-        //     await sortFile(fichierCorbeilleNew, fichierCorbeille, {gzip: true})
-        //     // await new Promise((resolve, reject)=>{
-        //     //     exec(`sort -o ${fichierCorbeille} ${fichierCorbeilleNew} && gzip -fk ${fichierCorbeille}`, error=>{
-        //     //         if(error) return reject(error)
-        //     //         else resolve()
-        //     //     })
-        //     // })
-        // } catch(err) { 
-        //     if(err.code === 'ENOENT') {
-        //         // Ok, fichier n'existe pas
-        //     } else {
-        //         console.error("storeConsignation.genererListeLocale Erreur copie fichiers corbeille : ", err)
-        //     }
-        // } finally {
-        //     // Supprimer .work.txt
-        //     try { await fsPromises.rm(fichierCorbeilleNew) }
-        //     catch(err) {
-        //         if(err.code === 'ENOENT') {
-        //             // Ok, fichier n'existe pas
-        //         } else {
-        //             console.error("storeConsignation.genererListeLocale Erreur suppression fichiers actifs work : ", err)
-        //         }
-        //     }
-        // }
 
         if(_estPrimaire) {
             debug("Emettre evenement de fin du creation de liste du primaire")
@@ -1239,7 +1132,7 @@ async function sortFile(src, dest, opts) {
     const gzip = opts.gzip || false
 
     let command = `sort -u -o ${dest} ${src}`
-    if(gzip) command += ` && gzip -fk ${dest}`
+    if(gzip) command += ` && gzip -9fk ${dest}`
 
     await new Promise((resolve, reject)=>{
         exec(command, error=>{
@@ -1351,9 +1244,7 @@ function ajouterFichierConsignation(item) {
 
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
-    //entretienFichiersSupprimes, 
     supprimerFichier, recupererFichier, 
-    //confirmerActiviteFuuids,
     middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
