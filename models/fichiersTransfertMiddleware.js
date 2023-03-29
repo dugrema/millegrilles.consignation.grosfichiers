@@ -252,7 +252,12 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
 
     if(ArrayBuffer.isView(inputStream)) {
         // Traiter buffer directement
-        writer.write(inputStream)
+        await new Promise((resolve, reject)=>{
+            writer.write(inputStream, err=>{
+                if(err) return reject(err)
+                resolve()
+            })
+        })
 
         const nouvellePosition = inputStream.length + contenuStatus.position
         await majFichierEtatUpload(pathStaging, fuuid, {position: nouvellePosition})
@@ -262,26 +267,29 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
         // Assumer stream
         let compteurTaille = 0
         const promise = new Promise((resolve, reject)=>{
+            writer.on('close', resolve)
+            writer.on('error', err=>{ 
+                fsPromises.unlink(pathFichierPut).catch(err=>{
+                    console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
+                })
+                reject(err)
+            })
+
             inputStream.on('data', chunk=>{ 
                 compteurTaille += chunk.length
                 return chunk
             })
+            
             inputStream.on('end', ()=>{ 
                 // Resultat OK
                 const nouvellePosition = compteurTaille + contenuStatus.position
                 majFichierEtatUpload(pathStaging, fuuid, {position: nouvellePosition})
                     .then(()=>{
                         debug("stagingPut Rename fichier work vers ", pathFichierPut)
+                        writer.close()
                         return fsPromises.rename(pathFichierPutWork, pathFichierPut)
                     })
-                    .then(()=>resolve())
                     .catch(err=>reject(err))
-            })
-            inputStream.on('error', err=>{ 
-                fsPromises.unlink(pathFichierPut).catch(err=>{
-                    console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
-                })
-                reject(err)
             })
         })
         inputStream.pipe(writer)
