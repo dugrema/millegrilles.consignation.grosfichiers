@@ -97,13 +97,6 @@ async function init(mq, opts) {
 
     const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
 
-    // Configuration thread
-    // Pour consignationFichiers, toujours faire un lien vers la consignation primaire
-    // FichiersTransfertBackingStore.configurerThreadPutFichiersConsignation(
-    //     mq, 
-    //     {...opts, consignerFichier: transfererFichierVersConsignation}
-    // )
-
     await changerStoreConsignation(typeStore, params)
 
     // Objet responsable de l'upload vers le primaire (si local est secondaire)
@@ -199,85 +192,6 @@ async function modifierConfiguration(params, opts) {
     return await _storeConsignationHandler.modifierConfiguration(params, opts)
 }
 
-// async function transfererFichierVersConsignation(mq, pathReady, item) {
-//     debug("transfererFichierVersConsignation Fichier %s/%s", pathReady, item)
-//     const transactions = await FichiersTransfertBackingStore.traiterTransactions(mq, pathReady, item)
-//     debug("transfererFichierVersConsignation Info ", transactions)
-//     const {etat, transaction: transactionGrosFichiers, cles: commandeMaitreCles} = transactions
-    
-//     // const fuuid = commandeMaitreCles.hachage_bytes
-//     const fuuid = etat.hachage
-
-//     // Conserver cle
-//     if(commandeMaitreCles) {
-//         // Transmettre la cle
-//         debug("Transmettre commande cle pour le fichier: %O", commandeMaitreCles)
-//         try {
-//             await mq.transmettreEnveloppeCommande(commandeMaitreCles)
-//         } catch(err) {
-//             console.error("%O ERROR Erreur sauvegarde cle fichier %s : %O", new Date(), fuuid, err)
-//             return
-//         }
-//     }
-
-//     // Conserver le fichier
-//     const pathFichierStaging = path.join(pathReady, item)
-//     try {
-//         await _storeConsignation.consignerFichier(pathFichierStaging, fuuid)
-//     } catch(err) {
-//         console.error("%O ERROR Erreur consignation fichier : %O", new Date(), err)
-//         return
-//     }
-
-//     // Conserver transaction contenu (grosfichiers)
-//     // Note : en cas d'echec, on laisse le fichier en place. Il sera mis dans la corbeille automatiquement au besoin.
-//     if(transactionGrosFichiers) {
-//         debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
-//         try {
-//             const domaine = transactionGrosFichiers['en-tete'].domaine
-//             const reponseGrosfichiers = await mq.transmettreEnveloppeCommande(transactionGrosFichiers, domaine, {exchange: '2.prive'})
-//             debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
-//         } catch(err) {
-//             console.error("%O ERROR Erreur sauvegarde fichier (commande) %s : %O", new Date(), fuuid, err)
-//             return
-//         }
-//     }
-
-//     // Emettre un evenement de consignation, peut etre utilise par domaines connexes (e.g. messagerie)
-//     try {
-//         const domaine = 'fichiers',
-//               action = 'consigne'
-//         const contenu = { 'hachage_bytes': etat.hachage }
-//         mq.emettreEvenement(contenu, domaine, {action, exchange: '2.prive'}).catch(err=>{
-//             console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
-//         })
-//     } catch(err) {
-//         console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
-//     }
-
-//     if(_estPrimaire) {
-//         // Emettre un message
-//         await evenementFichierPrimaire(mq, fuuid)
-//     } else {
-//         // Le fichier a ete transfere avec succes (aucune exception)
-//         _transfertPrimaire.ajouterItem(fuuid)
-//     }
-
-//     fsPromises.rm(pathFichierStaging, {recursive: true})
-//         .catch(err=>console.error("Erreur suppression repertoire %s apres consignation reussie : %O", fuuid, err))
-
-// }
-
-// async function evenementFichierPrimaire(mq, fuuid) {
-//     // Emettre evenement aux secondaires pour indiquer qu'un nouveau fichier est pret
-//     debug("Evenement consignation primaire sur", fuuid)
-//     const evenement = {fuuid}
-//     try {
-//     mq.emettreEvenement(evenement, 'fichiers', {action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
-//     } catch(err) {
-//         console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err)
-//     }
-// }
 
 // async function traiterRecuperer() {
 //     debug("Traitement des fichiers a recuperer")
@@ -311,57 +225,6 @@ async function modifierConfiguration(params, opts) {
 //     } catch(err) {
 //         console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
 //     }
-// }
-
-// async function traiterBatch(fuuids, callbackAction) {
-//     debug("Traiter batch : %O", fuuids)
-
-//     _batchFichiersFuuids = fuuids.reduce((acc, item)=>{
-//         acc[item]=false 
-//         return acc
-//     }, {})
-//     debug("Traiter batch fichiers : %O", _batchFichiersFuuids)
-
-//     const evenement = { fuuids }
-//     //const domaine = 'GrosFichiers',
-//     const action = 'confirmerEtatFuuids',
-//           domaine = 'fichiers'
-//     // const reponse = await _mq.transmettreRequete(domaine, requete, {action})
-//     await _mq.emettreEvenement(evenement, domaine, {action})
-
-//     // Attendre reponses, timeout de 10 secondes pour collecter tous les messages
-//     await new Promise(resolve=>{
-//         let timeoutBatch = setTimeout(resolve, 10000)
-//         _triggerPromiseBatch = () => {
-//             clearTimeout(timeoutBatch)
-//             resolve()
-//         }
-//     })
-
-//     const resultatBatch = _batchFichiersFuuids
-//     _batchFichiersFuuids = null
-//     _triggerPromiseBatch = null
-//     debug("Resultat verification : %O", resultatBatch)
-
-//     // Reassembler resultat
-//     const resultatFuuids = {}
-//     for(const fuuid in resultatBatch) {
-//         const resultat = resultatBatch[fuuid]
-//         if(resultat === false) {
-//             resultatFuuids[fuuid] = {fuuid, supprime: true}
-//         } else {
-//             resultatFuuids[fuuid] = resultat
-//         }
-//     }
-    
-//     const resultatListe = Object.values(resultatFuuids)
-
-//     debug("Appliquer callback a liste : %O", resultatListe)
-
-//     for await (const reponseFichier of resultatListe) {
-//         await callbackAction(reponseFichier)
-//     }
-
 // }
 
 async function entretien() {
@@ -427,17 +290,17 @@ async function processusSynchronisation() {
         } catch(err) {
             console.error(new Date() + " ERROR uploadFichiersVersPrimaire ", err)
         }
-        
-        try {
-            await downloadFichiersBackup()
-        } catch(err) {
-            console.error(new Date() + " ERROR downloadFichiersBackup ", err)
-        }
 
         try {
             await _transfertPrimaire.downloaderFichiersDuPrimaire()
         } catch(err) {
             console.error(new Date() + " ERROR downloaderFichiersDuPrimaire ", err)
+        }
+
+        try {
+            await downloadFichiersBackup()
+        } catch(err) {
+            console.error(new Date() + " ERROR downloadFichiersBackup ", err)
         }
 
         try {

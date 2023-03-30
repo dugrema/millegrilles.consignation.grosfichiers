@@ -32,7 +32,7 @@ class TransfertPrimaire {
 
         // Q memoire pour upload et download (fuuid)
         this.queueUploadsFuuids = []
-        this.queueDownloadFuuids = []
+        this.queueDownloadsFuuids = []
 
         this.timerUploadFichiers = null
         this.timerDownloadFichiers = null
@@ -109,11 +109,10 @@ class TransfertPrimaire {
 
     /** Lit tous les fichiers a uploader vers le primaire et les ajoute dans la Q */
     async uploaderFichiersVersPrimaire() {
-        debug("uploaderFichiersVersPrimaire Debut")
+        debug("uploaderFichiersVersPrimaire")
         const pathDataFolder = this.consignationManager.getPathDataFolder()
         const fichierUploadPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_UPLOAD_PRIMAIRE)
         await chargerFuuidsListe(fichierUploadPrimaire, fuuid=>this.ajouterUpload(fuuid))
-        debug("uploaderFichiersVersPrimaire Fin")
     }
     
     /** Lit tous les fichiers a download du primaire et les ajoute dans la Q */
@@ -128,7 +127,7 @@ class TransfertPrimaire {
     ajouterUpload(fuuid) {
         if(this.ready !== true) throw new Error("Non disponible - Erreur init transfertPrimaire")
 
-        if( ! fuuid in this.queueDownloadFuuids ) {
+        if( ! this.queueUploadsFuuids.includes(fuuid) ) {
             this.queueUploadsFuuids.push(fuuid)
             debug('transfertPrimaire.ajouterUpload %O, Q: %O', fuuid, this.queueUploadsFuuids)
 
@@ -142,7 +141,7 @@ class TransfertPrimaire {
     ajouterDownload(fuuid) {
         if(this.ready !== true) throw new Error("Non disponible - Erreur init transfertPrimaire")
 
-        if( ! fuuid in this.queueDownloadFuuids ) {
+        if( ! this.queueDownloadsFuuids.includes(fuuid) ) {
             this.queueDownloadsFuuids.push(fuuid)
             debug('transfertPrimaire.ajouterDownload %O, Q: %O', fuuid, this.queueDownloadsFuuids)
 
@@ -155,8 +154,8 @@ class TransfertPrimaire {
 
     /** Vide les q de traitement. */
     clearQueues() {
-        this.queueDownloadFuuids.clear()
-        this.queueUploadFuuids.clear()
+        this.queueDownloadsFuuids.clear()
+        this.queueUploadsFuuids.clear()
     }
 
     async threadUploadFichiersConsignation() {
@@ -168,10 +167,10 @@ class TransfertPrimaire {
             // Process les items de la Q
             debug("threadPutFichiersConsignation Queue avec %d items", this.queueUploadsFuuids.length)
             while(this.queueUploadsFuuids.length > 0) {
+                const fuuid = this.queueUploadsFuuids.shift()  // FIFO
                 try {
-                    const item = this.queueUploadsFuuids.shift()  // FIFO
-                    debug("Traiter PUT pour item %s", item)
-                    await this.putFichier(item)
+                    debug("Traiter PUT pour item %s", fuuid)
+                    await this.putFichier(fuuid)
                 } catch(err) {
                     console.error(new Date() + " Erreur download %s du primaire %O", fuuid, err)
                     if(err.response && err.response.status >= 400 && err.response.status <= 599) {
@@ -233,10 +232,9 @@ class TransfertPrimaire {
         // debug("PUT Axios %s size %d", fuuid, size)
 
         const correlation = fuuid,
-            httpsAgent = this.consignationManager.getHttpsAgent(),
-            urlConsignationTransfert = this.consignationManager.getUrlTransfert()
+            httpsAgent = this.consignationManager.getHttpsAgent()
 
-        const urlPrimaireFuuid = new URL(urlConsignationTransfert.href)
+        const urlPrimaireFuuid = new URL(this.urlConsignationTransfert.href)
         urlPrimaireFuuid.pathname = path.join(urlPrimaireFuuid.pathname, fuuid)
 
         // S'assurer que le fichier n'existe pas deja
@@ -283,22 +281,18 @@ class TransfertPrimaire {
                     end = Math.min(position+CONST_TAILLE_SPLIT_MAX_DEFAULT, size) - 1
                 debug("PUT fuuid %s positions %d a %d", correlation, start, end)
         
-                const urlPosition = new URL(urlConsignationTransfert.href)
+                const urlPosition = new URL(this.urlConsignationTransfert.href)
                 urlPosition.pathname = path.join(urlPosition.pathname, correlation, ''+position)
         
                 const readStream = fs.createReadStream(srcFilePath, {start, end})
-                try {
-                    await axios({
-                        method: 'PUT',
-                        httpsAgent,
-                        url: urlPosition.href,
-                        headers: {'content-type': 'application/stream', 'X-fuuid': fuuid},
-                        data: readStream,
-                        timeout: TIMEOUT_AXIOS,
-                    })
-                } finally {
-                    readStream.close()
-                }
+                await axios({
+                    method: 'PUT',
+                    httpsAgent,
+                    url: urlPosition.href,
+                    headers: {'content-type': 'application/stream', 'X-fuuid': fuuid},
+                    data: readStream,
+                    timeout: TIMEOUT_AXIOS,
+                })
             }        
 
         } finally {
@@ -310,7 +304,7 @@ class TransfertPrimaire {
             
         // Emettre message POST pour indiquer que le fichier est complete
         const transactions = { etat: { hachage: fuuid } }
-        const urlCorrelation = new URL(urlConsignationTransfert.href)
+        const urlCorrelation = new URL(this.urlConsignationTransfert.href)
         urlCorrelation.pathname = path.join(urlCorrelation.pathname, correlation)
         await axios({
             method: 'POST',
