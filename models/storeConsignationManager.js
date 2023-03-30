@@ -34,6 +34,7 @@ const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 
 const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'fuuidsActifsPrimaire.txt',
+      FICHIER_FUUIDS_NOUVEAUX = 'fuuidsNouveaux.txt'
       FICHIER_FUUIDS_MANQUANTS = 'fuuidsManquants.txt',
       FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
@@ -488,7 +489,14 @@ async function rotationOrphelins(pathOrphelins, fichierReclames) {
 }
 
 function ajouterDownloadPrimaire(fuuid) {
-    _transfertPrimaire.ajouterDownload(fuuid)
+    if(_transfertPrimaire.ready === true) {
+        _transfertPrimaire.ajouterDownload(fuuid)
+    } else {
+        _transfertPrimaire.ready.then(()=>{
+            _transfertPrimaire.ajouterDownload(fuuid)
+        })
+        .catch(err=>console.error("Erreur ajouterDownloadPrimaire %s : %O", fuuid, err))
+    }
 }
 
 async function downloadFichiersBackup() {
@@ -622,8 +630,10 @@ function evenementConsignationFichierPrimaire(mq, fuuid) {
 async function genererListeLocale() {
     debug("genererListeLocale Debut")
 
-    const pathStaging = getPathStaging()
-    const pathFichiers = path.join(pathStaging, 'liste')
+    const pathFichiers = getPathDataFolder()
+    const pathFichierNouveaux = path.join(pathFichiers, FICHIER_FUUIDS_NOUVEAUX)
+    fsPromises.rm(pathFichierNouveaux)
+        .catch(()=>debug("Echec suppression fichier fuuidsNouveaux.txt (OK)"))
     debug("genererListeLocale Fichiers sous ", pathFichiers)
     await fsPromises.mkdir(pathFichiers, {recursive: true})
 
@@ -777,9 +787,14 @@ function ajouterFichierConsignation(fuuid) {
     _threadConsignation.ajouterFichierConsignation(fuuid)
 }
 
-function consignerFichier(pathFichierStaging, fuuid) {
+async function consignerFichier(pathFichierStaging, fuuid) {
     debug("storeConsignationManager Consigner %s a partir de %s", fuuid, pathFichierStaging)
-    _storeConsignationHandler.consignerFichier(pathFichierStaging, fuuid)
+    await _storeConsignationHandler.consignerFichier(pathFichierStaging, fuuid)
+
+    // Ajouter fichier a la fuuidsActifs.nouveau.txt
+    const pathFichierNouveaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_NOUVEAUX)
+    const writeStream = fs.createWriteStream(pathFichierNouveaux, {flags: 'a'})
+    writeStream.write(fuuid + '\n')
 }
 
 module.exports = { 
