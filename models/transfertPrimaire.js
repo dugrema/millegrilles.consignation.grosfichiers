@@ -17,6 +17,7 @@ const INTERVALLE_PUT_CONSIGNATION = 900_000,    // millisecs
 
 const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'fuuidsActifsPrimaire.txt',
+      FICHIER_FUUIDS_NOUVEAUX_PRIMAIRE = 'fuuidsNouveauxPrimaire.txt',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
       FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
@@ -318,7 +319,9 @@ class TransfertPrimaire {
         })
     }
 
-    async downloadFichierListe(fichierDestination, remotePathnameFichier) {
+    async downloadFichierListe(fichierDestination, remotePathnameFichier, opts) {
+        opts = opts || {}
+        const gzipsrc = opts.gzipsrc!==undefined?opts.gzipsrc:true
         const httpsAgent = this.consignationManager.getHttpsAgent()
         const urlData = new URL(this.urlConsignationTransfert.href)
         urlData.pathname = urlData.pathname + remotePathnameFichier
@@ -343,15 +346,15 @@ class TransfertPrimaire {
 
             try {
                 debug("Sort fichier %s vers %s", fichierTmp.path, fichierDestination)
-                await sortFile(fichierTmp.path, fichierDestination, {gzipsrc: true})
-            } 
-            catch(err) {
+                await sortFile(fichierTmp.path, fichierDestination, {gzipsrc})
+            } catch(err) {
                 console.error("consignationManager.getDataSynchronisation Erreur renaming actifs ", err)
             }
-
         } catch(err) {
-            const response = err.response
-            if(response && response.status === 416) {
+            const response = err.response || {}
+            const status = response.status
+            debug("Reponse GET status %s", status)
+            if(status === 416) {
                 // OK, le fichier est vide
             } else {
                 throw err
@@ -379,10 +382,36 @@ class TransfertPrimaire {
         // Charger listes
         const pathDataFolder = this.consignationManager.getPathDataFolder()
         const fuuidsActifsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
+        const fuuidsActifsPrimaireOriginal = fuuidsActifsPrimaire + '.original'
+        const fuuidsNouveauxPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_NOUVEAUX_PRIMAIRE)
         const fuuidsManquantsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
-        await this.downloadFichierListe(fuuidsActifsPrimaire, '/data/fuuidsActifs.txt.gz')
+        await this.downloadFichierListe(fuuidsActifsPrimaireOriginal, '/data/fuuidsActifs.txt.gz')
         await this.downloadFichierListe(fuuidsManquantsPrimaire, '/data/fuuidsManquants.txt.gz')
-        
+
+        try {
+            await fsPromises.rm(fuuidsNouveauxPrimaire)
+        } catch(err) {
+            if(err.code === 'ENOENT') { }  // Ok
+            else throw err
+        }
+        try {
+            await this.downloadFichierListe(fuuidsNouveauxPrimaire, '/data/fuuidsNouveaux.txt', {gzipsrc: false})
+        } catch(err) {
+            const response = err.response || {}
+            if(response.status === 404) { 
+                await fsPromises.writeFile(fuuidsNouveauxPrimaire, '')  // Ecrire fichier vide
+            } // Ok
+            else throw err
+        }
+
+        // Combiner actifs avec nouveaux
+        await new Promise((resolve, reject)=>{
+            exec(`cat ${fuuidsActifsPrimaireOriginal} ${fuuidsNouveauxPrimaire} | sort -u -o ${fuuidsActifsPrimaire}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
+        })
+
         // Combiner listes, dedupe
         const fuuidsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_PRIMAIRE)
         await new Promise((resolve, reject)=>{
