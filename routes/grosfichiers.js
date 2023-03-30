@@ -56,14 +56,24 @@ function preparerConsigner(mq, opts) {
     try {
       await fsPromises.mkdir(_pathReady, {recursive: true})
       const pathDestination = path.join(_pathReady, fuuid)
-      await fsPromises.rename(pathFichier, pathDestination)
+      try {
+        await fsPromises.rename(pathFichier, pathDestination)
+      } catch(err) {
+        if(err.code === 'ENOTEMPTY') {
+          debug("Destination %s n'est pas vide, on supprime pour re-appliquer ready du nouvel upload", pathDestination)
+          await fsPromises.rm(pathDestination, {recursive: true})
+          await fsPromises.rename(pathFichier, pathDestination)
+        } else {
+          throw err
+        }
+      }
 
       debug("consignationManager ", _consignationManager)
       await _consignationManager.ajouterFichierConsignation(fuuid)
       
       return res.sendStatus(202)
     } catch(err) {
-      console.error(new Date() + " ERROR Erreur consignation ", err)
+      console.error(new Date() + " ERROR grosfichiers.preparerConsigner Erreur consignation ", err)
       return res.sendStatus(500)
     }
   }

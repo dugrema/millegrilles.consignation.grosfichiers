@@ -16,6 +16,7 @@ const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
 const StoreConsignationAwsS3 = require('./storeConsignationAwsS3')
 
+const StoreConsignationThread = require('./storeConsignationThread')
 const TransfertPrimaire = require('./transfertPrimaire')
 const BackupSftp = require('./backupSftp')
 const { dechiffrerConfiguration } = require('./pki')
@@ -44,6 +45,7 @@ const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
 
 var _mq = null,
     _storeConsignationHandler = null,  // Local, sftp, aws3, etc
+    _threadConsignation = null,
     _estPrimaire = false,
     _sync_lock = false,
     _derniere_sync = 0,
@@ -56,6 +58,14 @@ var _mq = null,
     _timeoutTraiterConfirmes = null,
     _pathStaging = PATH_STAGING_DEFAUT,
     _httpsAgent = null
+
+class ManagerFacade {
+
+    estPrimaire() { return _estPrimaire }
+    getTransfertPrimaire() { return _transfertPrimaire }
+    getPathStaging() { return getPathStaging() }
+    consignerFichier(pathFichierStaging, fuuid) { return consignerFichier(pathFichierStaging, fuuid) }
+}
 
 function _preparerHttpsAgent(mq) {
     const pki = mq.pki
@@ -99,6 +109,11 @@ async function init(mq, opts) {
     // Objet responsable de l'upload vers le primaire (si local est secondaire)
     _transfertPrimaire = new TransfertPrimaire(mq, this)
     _transfertPrimaire.threadUploadFichiersConsignation()  // Premiere run, initialise loop
+
+    const managerFacade = new ManagerFacade()
+
+    // Creer thread qui transfere les fichiers recus vers le systeme de consignation
+    _threadConsignation = new StoreConsignationThread(mq, managerFacade)
 
     // Handler backup sftp
     _backupSftp = new BackupSftp(mq, this)
@@ -253,16 +268,16 @@ async function modifierConfiguration(params, opts) {
 
 // }
 
-async function evenementFichierPrimaire(mq, fuuid) {
-    // Emettre evenement aux secondaires pour indiquer qu'un nouveau fichier est pret
-    debug("Evenement consignation primaire sur", fuuid)
-    const evenement = {fuuid}
-    try {
-    mq.emettreEvenement(evenement, 'fichiers', {action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
-    } catch(err) {
-        console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err)
-    }
-}
+// async function evenementFichierPrimaire(mq, fuuid) {
+//     // Emettre evenement aux secondaires pour indiquer qu'un nouveau fichier est pret
+//     debug("Evenement consignation primaire sur", fuuid)
+//     const evenement = {fuuid}
+//     try {
+//     mq.emettreEvenement(evenement, 'fichiers', {action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
+//     } catch(err) {
+//         console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err)
+//     }
+// }
 
 // async function traiterRecuperer() {
 //     debug("Traitement des fichiers a recuperer")
@@ -352,10 +367,25 @@ async function evenementFichierPrimaire(mq, fuuid) {
 async function entretien() {
     try {
         // Determiner si on est la consignation primaire
-        const instance_id_primaire = _transfertPrimaire.getInstanceIdPrimaire()
-        const instance_id_local = _mq.pki.cert.subject.getField('CN').value
-        debug("entretien Instance consignation : %s, instance_id local %s", instance_id_primaire, instance_id_local)
-        await setEstConsignationPrimaire(instance_id_primaire === instance_id_local)
+        if(await _transfertPrimaire.ready === true) {
+            const instance_id_primaire = _transfertPrimaire.getInstanceIdPrimaire()
+            const instance_id_local = _mq.pki.cert.subject.getField('CN').value
+            debug("entretien Instance consignation : %s, instance_id local %s", instance_id_primaire, instance_id_local)
+            await setEstConsignationPrimaire(instance_id_primaire === instance_id_local)
+
+            // Demarrer thread de consignation (aucun effet si deja en cours)
+            _threadConsignation.demarrer()
+
+            const now = new Date().getTime()
+            if(_syncActif && now > _derniere_sync + _intervalleSync) {
+                _derniere_sync = now  // Temporaire, pour eviter loop si un probleme survient
+        
+                demarrerSynchronization()
+                    .catch(err=>console.error("storeConsignation.entretien() Erreur processusSynchronisation(1) ", err))
+            }
+        } else {
+            debug("Erreur chargement information transfertPrimaire - pas de sync")
+        }
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
     }
@@ -371,14 +401,6 @@ async function entretien() {
         if(_storeConsignationHandler.entretien) await _storeConsignationHandler.entretien()
     } catch(err) {
         console.error(new Date() + ' Erreur entretien _storeConsignation ', err)
-    }
-
-    const now = new Date().getTime()
-    if(_syncActif && now > _derniere_sync + _intervalleSync) {
-        _derniere_sync = now  // Temporaire, pour eviter loop si un probleme survient
-
-        demarrerSynchronization()
-            .catch(err=>console.error("storeConsignation.entretien() Erreur processusSynchronisation(1) ", err))
     }
 }
 
@@ -591,7 +613,7 @@ async function rotationOrphelins(pathOrphelins, fichierReclames) {
             }            
         }
         
-        await chargerFuuidsListe(fichiersOrphelins, cb)
+        await chargerFuuidsListe(fichierOrphelins, cb)
     }
 
     try {
@@ -886,7 +908,12 @@ async function setEstConsignationPrimaire(primaire) {
 }
 
 function ajouterFichierConsignation(fuuid) {
-    _transfertPrimaire.ajouterItem(fuuid)
+    _threadConsignation.ajouterFichierConsignation(fuuid)
+}
+
+function consignerFichier(pathFichierStaging, fuuid) {
+    debug("storeConsignationManager Consigner %s a partir de %s", fuuid, pathFichierStaging)
+    _storeConsignationHandler.consignerFichier(pathFichierStaging, fuuid)
 }
 
 module.exports = { 

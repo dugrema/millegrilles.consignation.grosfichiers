@@ -98,3 +98,7 @@ async function healthCheck(server, instAmqpdao) {
 }
 
 init()
+  .catch(err=>{
+    console.error("** ERREUR INITIALISATION ** ", err)
+    process.exit(1)
+  })
