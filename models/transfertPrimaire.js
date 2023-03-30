@@ -6,6 +6,8 @@ const axios = require('axios')
 const tmpPromises = require('tmp-promise')
 const { exec } = require('child_process')
 
+const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
+
 const { chargerFuuidsListe, sortFile } = require('./fileutils')
 
 const INTERVALLE_PUT_CONSIGNATION = 900_000,    // millisecs
@@ -34,8 +36,8 @@ class TransfertPrimaire {
         this.queueUploadsFuuids = []
         this.queueDownloadsFuuids = []
 
-        this.timerUploadFichiers = null
-        this.timerDownloadFichiers = null
+        this.timerUploadFichiers = true
+        this.timerDownloadFichiers = true
 
         // Information sur consignation primaire
         this.urlConsignationTransfert = null
@@ -292,6 +294,7 @@ class TransfertPrimaire {
                     headers: {'content-type': 'application/stream', 'X-fuuid': fuuid},
                     data: readStream,
                     timeout: TIMEOUT_AXIOS,
+                    maxRedirects: 0,  // Eviter redirect buffer (max 10mb)
                 })
             }        
 
@@ -404,10 +407,10 @@ class TransfertPrimaire {
         let intervalleRedemarrageThread = INTERVALLE_THREAD_TRANSFERT
 
         try {
-            while(this.queueDownloadFuuids.length > 0) {
-                const fuuid = this.queueDownloadFuuids.shift()
+            while(this.queueDownloadsFuuids.length > 0) {
+                const fuuid = this.queueDownloadsFuuids.shift()
                 try {
-                    await downloadFichierDuPrimaire(fuuid)
+                    await this.downloadFichierDuPrimaire(fuuid)
                 } catch(err) {
                     console.error(new Date() + " Erreur download %s du primaire %O", fuuid, err)
                     if(err.response && err.response.status >= 400 && err.response.status <= 599) {
@@ -433,8 +436,7 @@ class TransfertPrimaire {
     async downloadFichierDuPrimaire(fuuid) {
 
         debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
-        const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
-        const urlFuuid = new URL(urlTransfert.href)
+        const urlFuuid = new URL(this.urlConsignationTransfert.href)
         urlFuuid.pathname = urlFuuid.pathname + '/' + fuuid
         debug("Download %s", urlFuuid.href)
 
@@ -449,7 +451,7 @@ class TransfertPrimaire {
 
         try {
             const verificateurHachage = new VerificateurHachage(fuuid)
-            const httpsAgent = getHttpsAgent()
+            const httpsAgent = this.consignationManager.getHttpsAgent()
             const reponseActifs = await axios({ 
                 method: 'GET', 
                 httpsAgent, 
@@ -479,7 +481,7 @@ class TransfertPrimaire {
             // Aucune exception, hachage OK
 
             debug("Fichier %s download complete", fuuid)
-            await _storeConsignationHandler.consignerFichier(dirFuuid, fuuid)
+            await this.consignationManager.consignerFichier(dirFuuid, fuuid)
 
             // Ajouter a la liste de downloads completes
             writeCompletes.write(fuuid + '\n')

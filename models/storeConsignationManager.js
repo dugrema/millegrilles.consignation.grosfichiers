@@ -8,7 +8,7 @@ const { exec } = require('child_process')
 const readdirp = require('readdirp')
 
 // const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
-const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
+// const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 
 const { chargerFuuidsListe, sortFile } = require('./fileutils')
 
@@ -791,6 +791,7 @@ module.exports = {
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
     // getUrlTransfert, getInstanceId, 
     getHttpsAgent, ajouterDownloadPrimaire,
+    consignerFichier,
     
     processusSynchronisation, demarrerSynchronization, 
     parcourirFichiers, parcourirBackup, ajouterFichierConsignation,
