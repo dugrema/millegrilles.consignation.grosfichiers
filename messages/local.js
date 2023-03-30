@@ -116,7 +116,7 @@ function getPublicKeySsh(message, rk, opts) {
   
 async function changementConsignationPrimaire(message, rk, opts) {
     const instanceIdPrimaire = message.instance_id
-    await _consignationManager.setEstConsignationPrimaire(instanceIdPrimaire===_instanceId)
+    await _consignationManager.setEstConsignationPrimaire(instanceIdPrimaire===_instanceId, instanceIdPrimaire)
 }
   
 async function declencherSyncPrimaire(message, rk, opts) {

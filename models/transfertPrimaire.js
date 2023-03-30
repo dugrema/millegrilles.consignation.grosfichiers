@@ -59,6 +59,18 @@ class TransfertPrimaire {
         await this.reloadUrlTransfert()
     }
 
+    estPrimare() {
+        return this.instanceIdPrimaire === this.instance_id
+    }
+
+    setInstanceIdPrimaire(instanceId) {
+        if(this.instanceIdPrimaire !== instanceId) {
+            this.reloadUrlTransfert()
+                .catch(err => console.error(new Date() + " ERROR Reload url transfert ", err))
+        }
+        // this.instanceIdPrimaire = instanceId
+    }
+
     getInstanceIdPrimaire() {
         return this.instanceIdPrimaire
     }

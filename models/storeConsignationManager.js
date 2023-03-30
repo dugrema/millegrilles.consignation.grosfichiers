@@ -888,10 +888,13 @@ function getFichierStream(fuuid) {
     return _storeConsignationHandler.getFichierStream(fuuid)
 }
 
-async function setEstConsignationPrimaire(primaire) {
+async function setEstConsignationPrimaire(primaire, instanceIdPrimaire) {
     debug('setEstConsignationPrimaire %s', primaire)
     const courant = _estPrimaire
     _estPrimaire = primaire
+    if(instanceIdPrimaire) {
+        _transfertPrimaire.setInstanceIdPrimaire(instanceIdPrimaire)
+    }
     if(courant !== primaire) {
         debug("Changement role consignation : primaire => %s", primaire)
         // FichiersTransfertBackingStore.setEstPrimaire(primaire)
