@@ -261,6 +261,7 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
                 reject(err)
             })
             writer.write(inputStream)
+            writer.close()
         })
 
         const nouvellePosition = inputStream.length + contenuStatus.position
@@ -435,6 +436,15 @@ async function verifierFichier(hachage, pathUploadItem, opts) {
     // Trier en ordre numerique
     filesNumero.sort((a,b)=>{return a-b})
 
+    const promiseClose = new Promise((resolve, reject)=>{
+        if(opts.writeStream) {
+            opts.writeStream.on('close', resolve)
+            opts.writeStream.on('error', reject)
+        } else {
+            resolve()
+        }
+    })
+
     let total = 0
     for(let idx in filesNumero) {
         const fileNumero = filesNumero[idx]
@@ -455,14 +465,8 @@ async function verifierFichier(hachage, pathUploadItem, opts) {
         })
 
         const promise = new Promise((resolve, reject)=>{
-            if(opts.writeStream) {
-                opts.writeStream.on('close', resolve)
-                opts.writeStream.on('error', reject)
-                fileReader.on('end', ()=>opts.writeStream.close())
-            } else {
-                fileReader.on('end', resolve)
-                fileReader.on('error', reject)
-            }
+            fileReader.on('end', resolve)
+            fileReader.on('error', reject)
         })
 
         await promise
@@ -470,7 +474,9 @@ async function verifierFichier(hachage, pathUploadItem, opts) {
 
         if(opts.deleteParts ===  true) await fsPromises.unlink(pathFichier)
     }
-
+    if(opts.writeStream) opts.writeStream.close()
+    await promiseClose
+    
     // Verifier hachage - lance une exception si la verification echoue
     await verificateurHachage.verify()
     // Aucune exception, hachage OK
