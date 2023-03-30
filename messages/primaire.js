@@ -1,37 +1,36 @@
-const debug = require('debug')('messages:actions')
+// Messages pour la consignation **primaire**
+const debug = require('debug')('messages:primaire')
 
 var _mq = null,
-    _storeConsignation,
-    _qDownloadSync = []
+    _consignationManager
 
-function init(mq, storeConsignation) {
-    debug("messages actions init()")
+function init(mq, consignationManager) {
+    debug("messages primaire init()")
     _mq = mq
-    _storeConsignation = storeConsignation
+    _consignationManager = consignationManager
 }
 
 async function startConsuming() {
-    await _mq.startConsumingCustomQ('actions')
+    await _mq.startConsumingCustomQ('primaire')
 }
   
 async function stopConsuming() {
-    await _mq.stopConsumingCustomQ('actions')
+    await _mq.stopConsumingCustomQ('primaire')
 }
   
 function on_connecter() {
     debug("on_connecter Enregistrer 'evenement.global.cedule'")
     // ajouterCb('evenement.global.cedule', traiterCedule, {direct: true})
-    // ajouterCb('evenement.grosfichiers.fuuidSupprimerDocument', traiterFichiersSupprimes)
     // ajouterCb('evenement.grosfichiers.fuuidRecuperer', traiterFichiersRecuperes)
-    // ajouterCb('evenement.fichiers.consignationPrimaire', consignationPrimaire)
     ajouterCb('requete.fichiers.fuuidVerifierExistance', verifierExistanceFichiers)
+    ajouterCb(`commande.fichiers.confirmerActiviteFuuids`, confirmerActiviteFuuids)
 }
 
 function ajouterCb(rk, cb, opts) {
     opts = opts || {}
   
     let paramsSup = {exchange: '2.prive'}
-    if(!opts.direct) paramsSup.qCustom = 'actions'
+    if(!opts.direct) paramsSup.qCustom = 'primaire'
   
     _mq.routingKeyManager.addRoutingKeyCallback(
         (routingKey, message, opts)=>{return cb(message, routingKey, opts)},
@@ -40,24 +39,12 @@ function ajouterCb(rk, cb, opts) {
     )
 }
 
-async function traiterFichiersSupprimes(message, rk, opts) {
-    const fuuids = message.fuuids
-    debug("traiterFichiersSupprimes, fuuids : %O", fuuids)
-    for(let fuuid of fuuids) {
-        try {
-            await _storeConsignation.supprimerFichier(fuuid)
-        } catch(err) {
-            debug("Erreur suppression fichier : %O", err)
-        }
-    }
-}
-
 async function traiterFichiersRecuperes(message, rk, opts) {
     const fuuids = message.fuuids
     debug("traiterFichiersRecuperes, fuuids : %O", fuuids)
     for(let fuuid of fuuids) {
         try {
-            await _storeConsignation.recupererFichier(fuuid)
+            await _consignationManager.recupererFichier(fuuid)
         } catch(err) {
             debug("Erreur recuperation fichier : %O", err)
         }
@@ -78,7 +65,7 @@ async function verifierExistanceFichiers(message, rk, opts) {
     debug("verifierExistanceFichiers, fuuids : %O", fuuids)
     for(let fuuid of fuuids) {
         try {
-            const infoFichier = await _storeConsignation.getInfoFichier(fuuid)
+            const infoFichier = await _consignationManager.getInfoFichier(fuuid)
             if(!infoFichier) {
                 reponse.fuuids[fuuid] = false
             } else if(infoFichier.redirect) {
@@ -99,10 +86,13 @@ async function verifierExistanceFichiers(message, rk, opts) {
     
 }
 
-async function consignationPrimaire(message, rk, opts) {
-    if(!_storeConsignation.estPrimaire())  return  // Rien a faire si primaire
-    const { fuuid } = message
-    _storeConsignation.ajouterDownloadPrimaire(fuuid)
+async function confirmerActiviteFuuids(message, rk, opts) {
+    if(_consignationManager.estPrimaire()) {
+        const fuuids = message.fuuids || []
+        const archive = message.archive || false
+        debug("confirmerActiviteFuuids recu - ajouter a la liste %d fuuids (archive : %s)", fuuids.length, archive)
+        await _consignationManager.recevoirFuuidsDomaines(fuuids, {archive})
+    }
 }
 
 module.exports = { init, on_connecter, startConsuming, stopConsuming }

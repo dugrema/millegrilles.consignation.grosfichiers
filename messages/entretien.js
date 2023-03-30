@@ -1,12 +1,12 @@
 const debug = require('debug')('messages:entretien')
 
 var _mq = null,
-    _storeConsignation
+    _consignationManager
 
-function init(mq, storeConsignation) {
+function init(mq, consignationManager) {
     debug("entretien init()")
     _mq = mq
-    _storeConsignation = storeConsignation
+    _consignationManager = consignationManager
 }
 
 function on_connecter() {
@@ -34,7 +34,7 @@ function traiterCedule(message, rk, opts) {
 
     if( flag_jour ) {
         // Entretien fichiers supprimes
-        _storeConsignation.entretienFichiersSupprimes()
+        _consignationManager.entretienFichiersSupprimes()
             .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
     }
 

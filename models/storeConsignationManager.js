@@ -1,15 +1,16 @@
-const debug = require('debug')('consignation:store:root')
+const debug = require('debug')('consignation:store:manager')
 const path = require('path')
+const https = require('https')
 const fsPromises = require('fs/promises')
 const fs = require('fs')
-const readline = require('readline')
 const axios = require('axios')
 const { exec } = require('child_process')
 const readdirp = require('readdirp')
-const tmpPromises = require('tmp-promise')
 
-const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
+// const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
 const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
+
+const { chargerFuuidsListe, sortFile } = require('./fileutils')
 
 const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
@@ -20,15 +21,15 @@ const BackupSftp = require('./backupSftp')
 const { dechiffrerConfiguration } = require('./pki')
 
 const { startConsuming: startConsumingBackup, stopConsuming: stopConsumingBackup } = require('../messages/backup')
-const { startConsuming: startConsumingActions, stopConsuming: stopConsumingActions } = require('../messages/actions')
+const { startConsuming: startConsumingPrimaire, stopConsuming: stopConsumingPrimaire } = require('../messages/primaire')
 
 const BATCH_SIZE = 100,
-      TIMEOUT_AXIOS = 30_000
-
-const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
-const INTERVALLE_SYNC = 3_600_000,  // 60 minutes
+      TIMEOUT_AXIOS = 30_000,
+      INTERVALLE_SYNC = 3_600_000,  // 60 minutes
       INTERVALLE_THREAD_TRANSFERT = 1_200_000  // 20 minutes,
       NOMBRE_ARCHIVES_ORPHELINS = 4
+
+const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 
 const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'fuuidsActifsPrimaire.txt',
@@ -38,46 +39,66 @@ const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_UPLOAD_PRIMAIRE = 'fuuidsUploadPrimaire.txt',
       FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE = 'fuuidsDownloadPrimaire.txt',
       FICHIER_FUUIDS_RECLAMES_ACTIFS = 'fuuidsReclamesActifs.txt',
-      FICHIER_FUUIDS_RECLAMES_ARCHIVES = 'fuuidsReclamesArchives.txt'
+      FICHIER_FUUIDS_RECLAMES_ARCHIVES = 'fuuidsReclamesArchives.txt',
+      PATH_STAGING_DEFAUT = '/var/opt/millegrilles/consignation/staging/fichiers'
 
 var _mq = null,
-    _storeConsignation = null,
-    // _storeConsignationLocal = null,
+    _storeConsignationHandler = null,  // Local, sftp, aws3, etc
     _estPrimaire = false,
     _sync_lock = false,
     _derniere_sync = 0,
     _transfertPrimaire = null,
     _backupSftp = null,
-    _queueDownloadFuuids = new Set(),
-    _timeoutStartThreadDownload = null,
+    // _queueDownloadFuuids = new Set(),
+    // _timeoutStartThreadDownload = null,
     _intervalleSync = INTERVALLE_SYNC,
     _syncActif = true,
-    _timeoutTraiterConfirmes = null
+    _timeoutTraiterConfirmes = null,
+    _pathStaging = PATH_STAGING_DEFAUT,
+    _httpsAgent = null
+
+function _preparerHttpsAgent(mq) {
+    const pki = mq.pki
+    const {chainePEM: cert, cle: key } = pki
+    if(!cert) throw new Error("storeConsignation._preparerHttpsAgent Certificat non disponible")
+    if(!key) throw new Error("storeConsignation._preparerHttpsAgent Cle non disponible")
+    debug("storeConsignation._preparerHttpsAgent _https.Agent cert : %s", '\n' + cert)
+    _httpsAgent = new https.Agent({
+        rejectUnauthorized: false,
+        cert, key,
+        ca: pki.ca,
+    })
+}
 
 async function init(mq, opts) {
     opts = opts || {}
     _mq = mq
 
     // Toujours initialiser le type local - utilise pour stocker/charger la configuration
-    _storeConsignation = StoreConsignationLocal
-    _storeConsignation.init(opts)
-    const configuration = await _storeConsignation.chargerConfiguration(opts)
+    _storeConsignationHandler = StoreConsignationLocal
+    _storeConsignationHandler.init(opts)
+
+    _pathStaging = opts.PATH_STAGING || PATH_STAGING_DEFAUT
+
+    _preparerHttpsAgent(mq)  // Genere _httpsAgent
+
+    const configuration = await _storeConsignationHandler.chargerConfiguration(opts)
     const typeStore = configuration.type_store
 
     const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
 
     // Configuration thread
     // Pour consignationFichiers, toujours faire un lien vers la consignation primaire
-    FichiersTransfertBackingStore.configurerThreadPutFichiersConsignation(
-        mq, 
-        {...opts, consignerFichier: transfererFichierVersConsignation}
-    )
+    // FichiersTransfertBackingStore.configurerThreadPutFichiersConsignation(
+    //     mq, 
+    //     {...opts, consignerFichier: transfererFichierVersConsignation}
+    // )
 
     await changerStoreConsignation(typeStore, params)
 
     // Objet responsable de l'upload vers le primaire (si local est secondaire)
     _transfertPrimaire = new TransfertPrimaire(mq, this)
-    _transfertPrimaire.threadPutFichiersConsignation()  // Premiere run, initialise loop
+    _transfertPrimaire.threadUploadFichiersConsignation()  // Premiere run, initialise loop
 
     // Handler backup sftp
     _backupSftp = new BackupSftp(mq, this)
@@ -86,8 +107,6 @@ async function init(mq, opts) {
     // Entretien - emet la presence (premiere apres 10 secs, apres sous intervalles)
     setTimeout(entretien, 10_000)
     setInterval(entretien, 180_000)
-    _threadDownloadFichiersDuPrimaire()
-        .catch(err=>console.error("init Erreur initialisation _threadDownloadFichiersDuPrimaire ", err))
 }
 
 async function changerStoreConsignation(typeStore, params, opts) {
@@ -105,7 +124,7 @@ async function changerStoreConsignation(typeStore, params, opts) {
         debug("changerStoreConsignation Set sync intervalle %d msecs", _intervalleSync)
     }
 
-    if(_storeConsignation && _storeConsignation.fermer) await _storeConsignation.fermer()
+    if('fermer' in _storeConsignationHandler) await _storeConsignationHandler.fermer()
 
     let storeConsignation = null
     switch(typeStore) {
@@ -126,9 +145,9 @@ async function changerStoreConsignation(typeStore, params, opts) {
     // Changer methode de consignation
     try {
         await storeConsignation.init(params)
-        _storeConsignation = storeConsignation
+        _storeConsignationHandler = storeConsignation
 
-        await _storeConsignation.modifierConfiguration({...params, type_store: typeStore})
+        await _storeConsignationHandler.modifierConfiguration({...params, type_store: typeStore})
     } catch(err) {
         debug("Erreur setup store configuration ", err)
         console.error(new Date() + ' changerStoreConsignation Configuration invalide ', err)
@@ -147,11 +166,11 @@ async function chargerConfiguration(opts) {
         // await _mq.transmettreRequete({instance_id: FichiersTransfertBackingStore.getInstanceId()})
         debug("Configuration recue ", configuration)
 
-        await _storeConsignation.modifierConfiguration(configuration, {override: true})
+        await _storeConsignationHandler.modifierConfiguration(configuration, {override: true})
         return configuration
     } catch(err) {
         console.warn("Erreur chargement configuration via CoreTopologie, chargement local ", err)
-        return await _storeConsignation.chargerConfiguration(opts)
+        return await _storeConsignationHandler.chargerConfiguration(opts)
     }
     
 }
@@ -162,77 +181,77 @@ async function modifierConfiguration(params, opts) {
         return await changerStoreConsignation(params.type_store, params, opts)
     }
 
-    return await _storeConsignation.modifierConfiguration(params, opts)
+    return await _storeConsignationHandler.modifierConfiguration(params, opts)
 }
 
-async function transfererFichierVersConsignation(mq, pathReady, item) {
-    debug("transfererFichierVersConsignation Fichier %s/%s", pathReady, item)
-    const transactions = await FichiersTransfertBackingStore.traiterTransactions(mq, pathReady, item)
-    debug("transfererFichierVersConsignation Info ", transactions)
-    const {etat, transaction: transactionGrosFichiers, cles: commandeMaitreCles} = transactions
+// async function transfererFichierVersConsignation(mq, pathReady, item) {
+//     debug("transfererFichierVersConsignation Fichier %s/%s", pathReady, item)
+//     const transactions = await FichiersTransfertBackingStore.traiterTransactions(mq, pathReady, item)
+//     debug("transfererFichierVersConsignation Info ", transactions)
+//     const {etat, transaction: transactionGrosFichiers, cles: commandeMaitreCles} = transactions
     
-    // const fuuid = commandeMaitreCles.hachage_bytes
-    const fuuid = etat.hachage
+//     // const fuuid = commandeMaitreCles.hachage_bytes
+//     const fuuid = etat.hachage
 
-    // Conserver cle
-    if(commandeMaitreCles) {
-        // Transmettre la cle
-        debug("Transmettre commande cle pour le fichier: %O", commandeMaitreCles)
-        try {
-            await mq.transmettreEnveloppeCommande(commandeMaitreCles)
-        } catch(err) {
-            console.error("%O ERROR Erreur sauvegarde cle fichier %s : %O", new Date(), fuuid, err)
-            return
-        }
-    }
+//     // Conserver cle
+//     if(commandeMaitreCles) {
+//         // Transmettre la cle
+//         debug("Transmettre commande cle pour le fichier: %O", commandeMaitreCles)
+//         try {
+//             await mq.transmettreEnveloppeCommande(commandeMaitreCles)
+//         } catch(err) {
+//             console.error("%O ERROR Erreur sauvegarde cle fichier %s : %O", new Date(), fuuid, err)
+//             return
+//         }
+//     }
 
-    // Conserver le fichier
-    const pathFichierStaging = path.join(pathReady, item)
-    try {
-        await _storeConsignation.consignerFichier(pathFichierStaging, fuuid)
-    } catch(err) {
-        console.error("%O ERROR Erreur consignation fichier : %O", new Date(), err)
-        return
-    }
+//     // Conserver le fichier
+//     const pathFichierStaging = path.join(pathReady, item)
+//     try {
+//         await _storeConsignation.consignerFichier(pathFichierStaging, fuuid)
+//     } catch(err) {
+//         console.error("%O ERROR Erreur consignation fichier : %O", new Date(), err)
+//         return
+//     }
 
-    // Conserver transaction contenu (grosfichiers)
-    // Note : en cas d'echec, on laisse le fichier en place. Il sera mis dans la corbeille automatiquement au besoin.
-    if(transactionGrosFichiers) {
-        debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
-        try {
-            const domaine = transactionGrosFichiers['en-tete'].domaine
-            const reponseGrosfichiers = await mq.transmettreEnveloppeCommande(transactionGrosFichiers, domaine, {exchange: '2.prive'})
-            debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
-        } catch(err) {
-            console.error("%O ERROR Erreur sauvegarde fichier (commande) %s : %O", new Date(), fuuid, err)
-            return
-        }
-    }
+//     // Conserver transaction contenu (grosfichiers)
+//     // Note : en cas d'echec, on laisse le fichier en place. Il sera mis dans la corbeille automatiquement au besoin.
+//     if(transactionGrosFichiers) {
+//         debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
+//         try {
+//             const domaine = transactionGrosFichiers['en-tete'].domaine
+//             const reponseGrosfichiers = await mq.transmettreEnveloppeCommande(transactionGrosFichiers, domaine, {exchange: '2.prive'})
+//             debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
+//         } catch(err) {
+//             console.error("%O ERROR Erreur sauvegarde fichier (commande) %s : %O", new Date(), fuuid, err)
+//             return
+//         }
+//     }
 
-    // Emettre un evenement de consignation, peut etre utilise par domaines connexes (e.g. messagerie)
-    try {
-        const domaine = 'fichiers',
-              action = 'consigne'
-        const contenu = { 'hachage_bytes': etat.hachage }
-        mq.emettreEvenement(contenu, domaine, {action, exchange: '2.prive'}).catch(err=>{
-            console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
-        })
-    } catch(err) {
-        console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
-    }
+//     // Emettre un evenement de consignation, peut etre utilise par domaines connexes (e.g. messagerie)
+//     try {
+//         const domaine = 'fichiers',
+//               action = 'consigne'
+//         const contenu = { 'hachage_bytes': etat.hachage }
+//         mq.emettreEvenement(contenu, domaine, {action, exchange: '2.prive'}).catch(err=>{
+//             console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
+//         })
+//     } catch(err) {
+//         console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
+//     }
 
-    if(_estPrimaire) {
-        // Emettre un message
-        await evenementFichierPrimaire(mq, fuuid)
-    } else {
-        // Le fichier a ete transfere avec succes (aucune exception)
-        _transfertPrimaire.ajouterItem(fuuid)
-    }
+//     if(_estPrimaire) {
+//         // Emettre un message
+//         await evenementFichierPrimaire(mq, fuuid)
+//     } else {
+//         // Le fichier a ete transfere avec succes (aucune exception)
+//         _transfertPrimaire.ajouterItem(fuuid)
+//     }
 
-    fsPromises.rm(pathFichierStaging, {recursive: true})
-        .catch(err=>console.error("Erreur suppression repertoire %s apres consignation reussie : %O", fuuid, err))
+//     fsPromises.rm(pathFichierStaging, {recursive: true})
+//         .catch(err=>console.error("Erreur suppression repertoire %s apres consignation reussie : %O", fuuid, err))
 
-}
+// }
 
 async function evenementFichierPrimaire(mq, fuuid) {
     // Emettre evenement aux secondaires pour indiquer qu'un nouveau fichier est pret
@@ -333,10 +352,10 @@ async function evenementFichierPrimaire(mq, fuuid) {
 async function entretien() {
     try {
         // Determiner si on est la consignation primaire
-        const instance_id_consignation = FichiersTransfertBackingStore.getInstanceId()
+        const instance_id_primaire = _transfertPrimaire.getInstanceIdPrimaire()
         const instance_id_local = _mq.pki.cert.subject.getField('CN').value
-        debug("entretien Instance consignation : %s, instance_id local %s", instance_id_consignation, instance_id_local)
-        await setEstConsignationPrimaire(instance_id_consignation === instance_id_local)
+        debug("entretien Instance consignation : %s, instance_id local %s", instance_id_primaire, instance_id_local)
+        await setEstConsignationPrimaire(instance_id_primaire === instance_id_local)
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
     }
@@ -349,7 +368,7 @@ async function entretien() {
 
     // Entretien specifique a la consignation
     try {
-        if(_storeConsignation.entretien) await _storeConsignation.entretien()
+        if(_storeConsignationHandler.entretien) await _storeConsignationHandler.entretien()
     } catch(err) {
         console.error(new Date() + ' Erreur entretien _storeConsignation ', err)
     }
@@ -379,10 +398,10 @@ async function processusSynchronisation() {
 
     try {
         _sync_lock = true
-        await getDataSynchronisation()
+        await _transfertPrimaire.getDataSynchronisation()
         
         try {
-            await uploaderFichiersVersPrimaire()
+            await _transfertPrimaire.uploaderFichiersVersPrimaire()
         } catch(err) {
             console.error(new Date() + " ERROR uploadFichiersVersPrimaire ", err)
         }
@@ -394,9 +413,9 @@ async function processusSynchronisation() {
         }
 
         try {
-            await downloadFichiersSync()
+            await _transfertPrimaire.downloaderFichiersDuPrimaire()
         } catch(err) {
-            console.error(new Date() + " ERROR downloadFichiersSync ", err)
+            console.error(new Date() + " ERROR downloaderFichiersDuPrimaire ", err)
         }
 
         try {
@@ -415,95 +434,15 @@ async function traiterOrphelinsSecondaire() {
     const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
     await fsPromises.mkdir(pathOrphelins, {recursive: true})
 
-    // Generer une liste combinee de tous les fichiers requis (primaire actifs + manquants)
+    // Supprimer tous les orphelins dans la liste
+
 
 
     // await rotationOrphelins(pathOrphelins, fichierReclames)
 
 }
 
-async function downloadFichierListe(fichierDestination, remotePathnameFichier) {
-    const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
-    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
-    const urlData = new URL(urlTransfert.href)
-    urlData.pathname = urlData.pathname + remotePathnameFichier
-    debug("downloadFichierListe Download %s", urlData.href)
-    const fichierTmp = await tmpPromises.file()
-    try {
-        const writeStream = fs.createWriteStream('', {fd: fichierTmp.fd})
-        const reponseActifs = await axios({ 
-            method: 'GET', 
-            httpsAgent, 
-            url: urlData.href, 
-            responseType: 'stream',
-            timeout: TIMEOUT_AXIOS,
-        })
-        debug("Reponse GET actifs %s", reponseActifs.status)
-
-        await new Promise((resolve, reject)=>{
-            writeStream.on('close', resolve)
-            writeStream.on('error', reject)
-            reponseActifs.data.pipe(writeStream)
-        })
-
-        try {
-            debug("Sort fichier %s vers %s", fichierTmp.path, fichierDestination)
-            await sortFile(fichierTmp.path, fichierDestination, {gzipsrc: true})
-        } 
-        catch(err) {
-            console.error("storeConsignation.getDataSynchronisation Erreur renaming actifs ", err)
-        }
-
-    } catch(err) {
-        const response = err.response
-        if(response && response.status === 416) {
-            // OK, le fichier est vide
-        } else {
-            throw err
-        }
-    } finally {
-        fichierTmp.cleanup().catch(err=>console.error(new Date() + "ERROR Cleanup fichier tmp : ", err))
-    }
-}
-
-async function getDataSynchronisation() {
-    const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
-    if(!httpsAgent) throw new Error("processusSynchronisation: httpsAgent n'est pas initialise")
-
-    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
-
-    const urlData = new URL(urlTransfert.href)
-    urlData.pathname = urlData.pathname + '/data/data.json'
-    debug("Download %s", urlData.href)
-    const reponse = await axios({
-        method: 'GET',
-        httpsAgent,
-        url: urlData.href,
-        timeout: TIMEOUT_AXIOS,
-    })
-    debug("Reponse GET data.json %s :\n%O", reponse.status, reponse.data)
-    
-    // Charger listes
-    const fuuidsActifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
-    const fuuidsManquantsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
-    await downloadFichierListe(fuuidsActifsPrimaire, '/data/fuuidsActifs.txt.gz')
-    await downloadFichierListe(fuuidsManquantsPrimaire, '/data/fuuidsManquants.txt.gz')
-    
-    // Combiner listes, dedupe
-    const fuuidsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
-    await new Promise((resolve, reject)=>{
-        exec(`cat ${fuuidsActifsPrimaire} ${fuuidsManquantsPrimaire} | sort -u -o ${fuuidsPrimaire}`, error=>{
-            if(error) return reject(error)
-            else resolve()
-        })
-    })
-
-    // Generer listes pour upload et download
-    await chargerListeFichiersMissing()
-
-    return reponse.data
-}
-
+/** Reception de listes de fuuids a partir de chaque domaine. */
 async function recevoirFuuidsDomaines(fuuids, opts) {
     opts = opts || {}
     const archive = opts.archive || false
@@ -531,6 +470,7 @@ async function recevoirFuuidsDomaines(fuuids, opts) {
     _timeoutTraiterConfirmes = setTimeout(()=>traiterFichiersConfirmes().catch(err=>console.error("ERREUR ", err)), 5_000)
 }
 
+/** Compare les fichiers reclames (confirmes) par chaque domaine au contenu consigne. */
 async function traiterFichiersConfirmes() {
     try {
         debug("traiterFichiersConfirmes")
@@ -560,7 +500,7 @@ async function traiterFichiersConfirmes() {
 
         try {
             // Faire la liste des fuuids inconnus (reclames mais pas dans actifs / archives)
-            const fuuidsManquants = path.join(getPathDataFolder(), 'fuuidsManquants.txt')
+            const fuuidsManquants = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS)
             await new Promise((resolve, reject)=>{
                 exec(`comm -13 ${fichierActifs} ${fichierFuuidsReclamesActifsCourants} > ${fuuidsManquants} && gzip -9fk ${fuuidsManquants}`, error=>{
                     if(error) return reject(error)
@@ -637,26 +577,25 @@ async function rotationOrphelins(pathOrphelins, fichierReclames) {
     if(fichiersOrphelins.length >= NOMBRE_ARCHIVES_ORPHELINS) {
         const fichierOrphelins = fichiersOrphelins[0]  // Premier fichier est le plus vieux
         debug("Deplacer fichiers de la derniere archive orphelins : %s", fichierOrphelins)
-        const readStreamFichiers = fs.createReadStream(fichierOrphelins)
-        const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
-        for await (let fuuid of rlFichiers) {
-            fuuid = fuuid.trim()
-            if(!fuuid) continue  // Ligne vide
+        
+        const cb = async fuuid => {
             debug("Deplacer fuuid vers orphelins : ", fuuid)
             try {
-                await _storeConsignation.marquerOrphelin(fuuid)
+                await _storeConsignationHandler.marquerOrphelin(fuuid)
             } catch(err) {
                 if(err.code === 'ENOENT') {
                     // Ok, fichier deja retire
                 } else {
                     console.warn(new Date() + " WARN Echec marquer fichier %s comme orphelin", fuuid)
                 }
-            }
+            }            
         }
+        
+        await chargerFuuidsListe(fichiersOrphelins, cb)
     }
 
     try {
-        await _storeConsignation.purgerOrphelinsExpires()
+        await _storeConsignationHandler.purgerOrphelinsExpires()
     } catch(err) {
         console.error(new Date() + " ERROR Purger orphelins ", err)
     }
@@ -664,219 +603,12 @@ async function rotationOrphelins(pathOrphelins, fichierReclames) {
 }
 
 function ajouterDownloadPrimaire(fuuid) {
-    _queueDownloadFuuids.add(fuuid)
-    if(_timeoutStartThreadDownload) {
-        _threadDownloadFichiersDuPrimaire()
-            .catch(err=>{console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur ', err)})
-    }
-}
-
-async function chargerFuuidsListe(pathFichier, cb) {
-    const readStreamFichiers = fs.createReadStream(pathFichier)
-    const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
-    for await (let fuuid of rlFichiers) {
-        // Detecter fichiers manquants localement par espaces vide au debut de la ligne
-        fuuid = fuuid.trim()
-        debug('chargerFuuidsListe ajouter ', fuuid)
-        cb(fuuid)
-    }
-}
-
-async function downloadFichiersSync() {
-    const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
-    if(!httpsAgent) throw new Error("processusSynchronisation: httpsAgent n'est pas initialise")
-
-    const repertoireDownloadSync = path.join(getPathDataFolder(), 'syncDownload')
-    await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
-
-    const fichierDownloadPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE)
-    _queueDownloadFuuids.clear()
-    await chargerFuuidsListe(fichierDownloadPrimaire, fuuid=>_queueDownloadFuuids.add(fuuid))
-    
-    if(_timeoutStartThreadDownload) {
-        _threadDownloadFichiersDuPrimaire()
-            .catch(err=>{console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur ', err)})
-    }
-}
-
-async function chargerListeFichiersMissing() {
-
-    // const fuuidsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
-    const fuuidsManquantsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
-    const fuuidsLocaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS)
-    const fuuidsUploadPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_UPLOAD_PRIMAIRE)
-    const fuuidsActifsPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
-    const fuuidsDownloadPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE)
-
-    try {
-        await fsPromises.stat(fuuidsLocaux)
-    } catch(err) {
-        debug("chargerListeFichiersMissing Fichier fuuids manquants locaux, pas de sync")
-        return
-    }
-
-    try {
-        // Trouver les fichiers actifs qui sont sur le primaire mais pas localement
-        await fsPromises.stat(fuuidsActifsPrimaire)
-        await new Promise((resolve, reject) => {
-            exec(`comm -13 ${fuuidsLocaux} ${fuuidsActifsPrimaire} > ${fuuidsDownloadPrimaire}`, error=>{
-                if(error) return reject(error)
-                else resolve()
-            })
-        })
-    } catch(err) {
-        if(err.code === 'ENOENT') {
-            debug("chargerListeFichiersMissing Fichier fuuids primaire absent, pas de sync download")            
-        } else {
-            throw err
-        }
-    }
-
-    // Trouver fichiers qui sont presents localement et manquants sur le primaire
-    try {
-        // Test de presence des fichiers de fuuids
-        await fsPromises.stat(fuuidsManquantsPrimaire)
-        await new Promise((resolve, reject) => {
-            exec(`comm -12 ${fuuidsLocaux} ${fuuidsManquantsPrimaire} > ${fuuidsUploadPrimaire}`, error=>{
-                if(error) return reject(error)
-                else resolve()
-            })
-        })
-    } catch(err) {
-        if(err.code === 'ENOENT') {
-            debug("chargerListeFichiersMissing Fichier manquants primaire absent, pas de sync download")            
-        } else {
-            throw err
-        }
-    }
-
-}
-
-async function _threadDownloadFichiersDuPrimaire() {
-    if(_timeoutStartThreadDownload) clearTimeout(_timeoutStartThreadDownload)
-    _timeoutStartThreadDownload = null
-
-    debug(new Date() + ' _threadDownloadFichiersDuPrimaire Demarrer download fichiers')
-
-    let intervalleRedemarrageThread = INTERVALLE_THREAD_TRANSFERT
-
-    try {
-        // Charger liste a downloader
-        // try {
-        //     _queueDownloadFuuids.clear()
-        //     await chargerListeFichiersMissing(fuuid=>_queueDownloadFuuids.add(fuuid))
-        // } catch(err) {
-        //     console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur chargerListeFichiersMissing ', err)
-        // }
-    
-        while(true) {
-            // Recuperer un fuuid a partir du Set
-            let fuuid = null
-            for(fuuid of _queueDownloadFuuids.values()) break
-            if(!fuuid) break
-
-            _queueDownloadFuuids.delete(fuuid)
-
-            try {
-                await downloadFichierDuPrimaire(fuuid)
-            } catch(err) {
-                console.error(new Date() + " Erreur download %s du primaire %O", fuuid, err)
-                if(err.response && err.response.status >= 500 && err.response.status <= 600) {
-                    console.warn("Abandon _threadDownloadFichiersDuPrimaire sur erreur serveur, redemarrage pending")
-                    intervalleRedemarrageThread = 60_000  // Reessayer dans 1 minute
-                    return
-                }
-            }
-        }
-
-    } catch(err) {
-        console.error(new Date() + ' _threadDownloadFichiersDuPrimaire Erreur ', err)
-    } finally {
-        _timeoutStartThreadDownload = setTimeout(()=>{
-            _timeoutStartThreadDownload = null
-            _threadDownloadFichiersDuPrimaire()
-                .catch(err=>{console.error(new Date() + ' storeConsignation._threadDownloadFichiersDuPrimaire Erreur ', err)})
-        }, intervalleRedemarrageThread)
-        debug(new Date() + ' _threadDownloadFichiersDuPrimaire Fin')
-    }
-}
-
-async function downloadFichierDuPrimaire(fuuid) {
-
-    // Tenter de recuperer le fichier localement
-    // const recuperation = await recupererFichier(fuuid)
-    // if(recuperation !== null)  {
-    //     debug("downloadFichierDuPrimaire Fichier %O recupere avec succes sans download", recuperation)
-    //     return
-    // }
-
-    debug("storeConsignation.downloadFichiersSync Fuuid %s manquant, debut download", fuuid)
-    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
-    const urlFuuid = new URL(urlTransfert.href)
-    urlFuuid.pathname = urlFuuid.pathname + '/' + fuuid
-    debug("Download %s", urlFuuid.href)
-
-    const dirFuuid = path.join(getPathDataFolder(), 'syncDownload', fuuid)
-    await fsPromises.mkdir(dirFuuid, {recursive: true})
-    const fuuidFichier = path.join(dirFuuid, fuuid)  // Fichier avec position initiale - 1 seul fichier
-
-    const fichierActifsWork = path.join(getPathDataFolder(), path.join(FICHIER_FUUIDS_ACTIFS + '.work'))
-    const writeCompletes = fs.createWriteStream(fichierActifsWork, {flags: 'a', encoding: 'utf8'})
-
-    try {
-        const verificateurHachage = new VerificateurHachage(fuuid)
-        const httpsAgent = getHttpsAgent()
-        const reponseActifs = await axios({ 
-            method: 'GET', 
-            httpsAgent, 
-            url: urlFuuid.href, 
-            responseType: 'stream',
-            timeout: TIMEOUT_AXIOS,
-        })
-        debug("Reponse GET actifs %s", reponseActifs.status)
-        const fuuidStream = fs.createWriteStream(fuuidFichier)
-        await new Promise((resolve, reject)=>{
-            reponseActifs.data.on('data', chunk=>verificateurHachage.update(chunk))
-            fuuidStream.on('close', resolve)
-            fuuidStream.on('error', err=>{
-                reject(err)
-                // fuuidStream.close()
-                fsPromises.unlink(fuuidFichier)
-                    .catch(err=>console.warn("Erreur suppression fichier %s : %O", fuuidFichier, err))
-            })
-            reponseActifs.data.on('error', err=>{
-                reject(err)
-            })
-            reponseActifs.data.pipe(fuuidStream)
-        })
-
-        // Verifier hachage - lance une exception si la verification echoue
-        await verificateurHachage.verify()
-        // Aucune exception, hachage OK
-
-        debug("Fichier %s download complete", fuuid)
-        await _storeConsignation.consignerFichier(dirFuuid, fuuid)
-
-        // Ajouter a la liste de downloads completes
-        writeCompletes.write(fuuid + '\n')
-
-    } finally {
-        await fsPromises.rm(dirFuuid, {recursive: true, force: true})
-    }
-}
-
-async function uploaderFichiersVersPrimaire() {
-    debug("uploaderFichiersVersPrimaire Debut")
-
-    const fichierUploadPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_UPLOAD_PRIMAIRE)
-    await chargerFuuidsListe(fichierUploadPrimaire, fuuid=>_transfertPrimaire.ajouterItem(fuuid))
-
-    debug("uploaderFichiersVersPrimaire Fin")
+    _transfertPrimaire.ajouterDownload(fuuid)
 }
 
 async function downloadFichiersBackup() {
-    const urlTransfert = new URL(FichiersTransfertBackingStore.getUrlTransfert())
-    const httpsAgent = FichiersTransfertBackingStore.getHttpsAgent()
+    const urlTransfert = new URL(_transfertPrimaire.getUrlTransfert())
+    const httpsAgent = getHttpsAgent()
 
     const urlListe = new URL(urlTransfert.href)
     urlListe.pathname = urlListe.pathname + '/backup/liste'
@@ -929,7 +661,7 @@ async function downloadFichiersBackup() {
 
                 const downloadStream = reponse.data
                 // Ouvrir fichier pour conserver bytes
-                await _storeConsignation.pipeBackupTransactionStream(pathFichierBase, downloadStream)
+                await _storeConsignationHandler.pipeBackupTransactionStream(pathFichierBase, downloadStream)
 
             } else {
                 debug("downloadFichiersBackup Ficher backup existe localement (OK) '%s'", fichierBackup)
@@ -947,7 +679,7 @@ async function downloadFichiersBackup() {
         try {
             debug("Retirer fichier ", fichierBackup)
             const pathFichierBase = fichierBackup.replace('transactions/', '')
-            await _storeConsignation.deleteBackupTransaction(pathFichierBase)
+            await _storeConsignationHandler.deleteBackupTransaction(pathFichierBase)
         } catch(err) {
             console.error(new Date() + ' Erreur suppression fichier backup ', fichierBackup)
         }
@@ -955,7 +687,8 @@ async function downloadFichiersBackup() {
 }
 
 function getPathDataFolder() {
-    return path.join(FichiersTransfertBackingStore.getPathStaging(), 'liste')
+    // return path.join(FichiersTransfertBackingStore.getPathStaging(), 'liste')
+    return path.join(_pathStaging, 'liste')
 }
 
 async function emettrePresence() {
@@ -992,11 +725,19 @@ async function emettrePresence() {
     }
 }
 
+function evenementConsignationFichierPrimaire(mq, fuuid) {
+    // Emettre evenement aux secondaires pour indiquer qu'un nouveau fichier est pret
+    debug("Evenement consignation primaire sur", fuuid)
+    const evenement = {fuuid}
+    mq.emettreEvenement(evenement, 'fichiers', {action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
+        .catch(err => console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err))
+}
+
 /** Genere une liste locale de tous les fuuids */
 async function genererListeLocale() {
     debug("genererListeLocale Debut")
 
-    const pathStaging = FichiersTransfertBackingStore.getPathStaging()
+    const pathStaging = getPathStaging()
     const pathFichiers = path.join(pathStaging, 'liste')
     debug("genererListeLocale Fichiers sous ", pathFichiers)
     await fsPromises.mkdir(pathFichiers, {recursive: true})
@@ -1022,7 +763,7 @@ async function genererListeLocale() {
             tailleActifs += item.size
         }
 
-        await _storeConsignation.parcourirFichiers(callbackTraiterFichier)
+        await _storeConsignationHandler.parcourirFichiers(callbackTraiterFichier)
     } catch(err) {
         console.error(new Date() + " storeConsignation.genererListeLocale ERROR : %O", err)
         ok = false
@@ -1060,115 +801,61 @@ async function genererListeLocale() {
     debug("genererListeLocale Fin")
 }
 
-/** Trie et compare 2 fichiers avec OS sort et comm */
-async function comparerFichiers(source1, source2, destination) {
-
-    const source1Sorted = source1 + '.sorted',
-          source2Sorted = source2 + '.sorted'
-
-    await sortFile(source1, source1Sorted)
-    await sortFile(source2, source2Sorted)
-
-    await new Promise((resolve, reject)=>{
-        exec(`comm -3 ${source1Sorted} ${source2Sorted} > ${destination}`, error=>{
-            if(error) return reject(error)
-            else resolve()
-        })
-    })
-
-    await Promise.all([
-        fsPromises.unlink(source1Sorted),
-        fsPromises.unlink(source2Sorted),
-    ])
-}
-
-async function sortFile(src, dest, opts) {
-    opts = opts || {}
-    const gzip = opts.gzip || false
-
-    let command = null
-    if(src.endsWith('.gz') || opts.gzipsrc ) {
-        command = `zcat ${src} | sort -u -o ${dest}`
-    } else {
-        command = `sort -u -o ${dest} ${src}`
-    }
-    if(gzip) command += ` && gzip -9fk ${dest}`
-
-    await new Promise((resolve, reject)=>{
-        exec(command, error=>{
-            if(error) return reject(error)
-            else resolve()
-        })
-    })
-}
-
 function parcourirFichiers(callback, opts) {
-    return _storeConsignation.parcourirFichiers(callback, opts)
+    return _storeConsignationHandler.parcourirFichiers(callback, opts)
 }
 
 function parcourirBackup(callback, opts) {
-    return _storeConsignation.parcourirBackup(callback, opts)
+    return _storeConsignationHandler.parcourirBackup(callback, opts)
 }
 
 function supprimerFichier(fuuid) {
-    return _storeConsignation.marquerSupprime(fuuid)
+    return _storeConsignationHandler.marquerSupprime(fuuid)
 }
 
 function recupererFichier(fuuid) {
-    return _storeConsignation.recoverFichierSupprime(fuuid)
+    return _storeConsignationHandler.recoverFichierSupprime(fuuid)
 }
 
 function getInfoFichier(fuuid, opts) {
     opts = opts || {}
-    return _storeConsignation.getInfoFichier(fuuid, opts)
+    return _storeConsignationHandler.getInfoFichier(fuuid, opts)
 }
 
-function getInstanceId() {
-    return FichiersTransfertBackingStore.getInstanceId()
-}
+// function getInstanceId() {
+//     return FichiersTransfertBackingStore.getInstanceId()
+// }
 
 function getPathStaging() {
-    return FichiersTransfertBackingStore.getPathStaging()
+    return _pathStaging
 }
 
-function getUrlTransfert() {
-    return new URL(FichiersTransfertBackingStore.getUrlTransfert())
-}
+// function getUrlTransfert() {
+//     return new URL(FichiersTransfertBackingStore.getUrlTransfert())
+// }
 
 function getHttpsAgent() {
-    return FichiersTransfertBackingStore.getHttpsAgent()
-}
-
-function middlewareRecevoirFichier(opts) {
-    return FichiersTransfertBackingStore.middlewareRecevoirFichier(opts)
-}
-
-function middlewareReadyFichier(amqpdao, opts) {
-    return FichiersTransfertBackingStore.middlewareReadyFichier(amqpdao, opts)
-}
-
-function middlewareDeleteStaging(opts) {
-    return FichiersTransfertBackingStore.middlewareDeleteStaging(opts)
+    return _httpsAgent
 }
 
 function sauvegarderBackupTransactions(message) {
-    return _storeConsignation.sauvegarderBackupTransactions(message)
+    return _storeConsignationHandler.sauvegarderBackupTransactions(message)
 }
 
 function rotationBackupTransactions(message) {
-    return _storeConsignation.rotationBackupTransactions(message)
+    return _storeConsignationHandler.rotationBackupTransactions(message)
 }
 
 function getFichiersBackupTransactionsCourant(mq, replyTo) {
-    return _storeConsignation.getFichiersBackupTransactionsCourant(mq, replyTo)
+    return _storeConsignationHandler.getFichiersBackupTransactionsCourant(mq, replyTo)
 }
 
 function getBackupTransaction(pathBackupTransaction) {
-    return _storeConsignation.getBackupTransaction(pathBackupTransaction)
+    return _storeConsignationHandler.getBackupTransaction(pathBackupTransaction)
 }
 
 function getBackupTransactionStream(pathBackupTransaction) {
-    return _storeConsignation.getBackupTransactionStream(pathBackupTransaction)
+    return _storeConsignationHandler.getBackupTransactionStream(pathBackupTransaction)
 }
 
 function estPrimaire() {
@@ -1176,7 +863,7 @@ function estPrimaire() {
 }
 
 function getFichierStream(fuuid) {
-    return _storeConsignation.getFichierStream(fuuid)
+    return _storeConsignationHandler.getFichierStream(fuuid)
 }
 
 async function setEstConsignationPrimaire(primaire) {
@@ -1185,37 +872,39 @@ async function setEstConsignationPrimaire(primaire) {
     _estPrimaire = primaire
     if(courant !== primaire) {
         debug("Changement role consignation : primaire => %s", primaire)
-        FichiersTransfertBackingStore.setEstPrimaire(primaire)
+        // FichiersTransfertBackingStore.setEstPrimaire(primaire)
         if(_estPrimaire === true) {
             // Ecouter Q de backup sur MQ
-            startConsumingActions().catch(err=>console.error(new Date() + ' Erreur start consuming actions', err))
+            startConsumingPrimaire().catch(err=>console.error(new Date() + ' Erreur start consuming primaire', err))
             startConsumingBackup().catch(err=>console.error(new Date() + ' Erreur start consuming backup', err))
         } else {
             // Arret ecoute de Q de backup sur MQ
-            stopConsumingActions().catch(err=>console.error(new Date() + ' Erreur stop consuming actions', err))
+            stopConsumingPrimaire().catch(err=>console.error(new Date() + ' Erreur stop consuming primaire', err))
             stopConsumingBackup().catch(err=>console.error(new Date() + ' Erreur stop consuming backup', err))
         }
     }
 }
 
-function ajouterFichierConsignation(item) {
-    FichiersTransfertBackingStore.ajouterFichierConsignation(item)
+function ajouterFichierConsignation(fuuid) {
+    _transfertPrimaire.ajouterItem(fuuid)
 }
 
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
     supprimerFichier, recupererFichier, 
-    middlewareRecevoirFichier, middlewareReadyFichier, middlewareDeleteStaging, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
+    
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
-    getUrlTransfert, getHttpsAgent, getInstanceId, ajouterDownloadPrimaire,
+    // getUrlTransfert, getInstanceId, 
+    getHttpsAgent, ajouterDownloadPrimaire,
+    
     processusSynchronisation, demarrerSynchronization, 
-    parcourirFichiers, parcourirBackup, 
+    parcourirFichiers, parcourirBackup, ajouterFichierConsignation,
+    
     getPathStaging,
     downloadFichiersBackup,
     getFichierStream,
     recevoirFuuidsDomaines,
 
-    ajouterFichierConsignation,
 }

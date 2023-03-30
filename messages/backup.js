@@ -6,12 +6,12 @@ const { conserverBackup, rotationBackupTransactions,
 } = require('../util/traitementBackup')
 
 var _mq = null,
-    _storeConsignation
+    _consignationManager
 
-function init(mq, storeConsignation) {
+function init(mq, consignationManager) {
     debug("messages backup init()")
     _mq = mq
-    _storeConsignation = storeConsignation
+    _consignationManager = consignationManager
 }
 
 // Appele lors d'une reconnexion MQ
@@ -71,8 +71,8 @@ async function recevoirConserverBackup(message, opts) {
 
     let reponse = {ok: false}
     try {
-        reponse = await conserverBackup(_mq, _storeConsignation, message)
-        if(_storeConsignation.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
+        reponse = await conserverBackup(_mq, _consignationManager, message)
+        if(_consignationManager.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
     } catch(err) {
         console.error("ERROR recevoirConserverBackup: %O", err)
         reponse = {ok: false, err: ''+err}
@@ -85,8 +85,8 @@ async function recevoirRotationBackupTransactions(message, opts) {
   debug("recevoirRotationBackupTransactions, message : %O\nopts %O", message, opts)
   let reponse = {ok: false}
   try {
-      reponse = await rotationBackupTransactions(_mq, _storeConsignation, message)
-      if(_storeConsignation.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
+      reponse = await rotationBackupTransactions(_mq, _consignationManager, message)
+      if(_consignationManager.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
   } catch(err) {
       console.error("ERROR recevoirRotationBackupTransactions: %O", err)
       reponse = {ok: false, err: ''+err}
@@ -101,8 +101,8 @@ async function getClesBackupTransactions(message, opts) {
   debug("getClesBackupTransactions, message : %O\nopts %O", message, opts)
   let reponse = {ok: false}
   try {
-      reponse = await getClesBackupTransactionsRun(_mq, _storeConsignation, message, opts)
-      if(_storeConsignation.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
+      reponse = await getClesBackupTransactionsRun(_mq, _consignationManager, message, opts)
+      if(_consignationManager.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
   } catch(err) {
       console.error("ERROR getClesBackupTransactions: %O", err)
       reponse = {ok: false, err: ''+err}
@@ -114,11 +114,11 @@ async function getClesBackupTransactions(message, opts) {
 }
 
 async function getBackupTransaction(message, opts) {
-  if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
+  if(_consignationManager.estPrimaire() !== true) return  // Skip, secondaire
   debug("getBackupTransaction, message : %O\nopts %O", message, opts)
   let reponse = {ok: false}
   try {
-      reponse = await getBackupTransactionRun(_mq, _storeConsignation, message, opts)
+      reponse = await getBackupTransactionRun(_mq, _consignationManager, message, opts)
   } catch(err) {
       console.error("ERROR getBackupTransaction: %O", err)
       reponse = {ok: false, err: ''+err}
@@ -130,7 +130,7 @@ async function getBackupTransaction(message, opts) {
 }
 
 async function demarrerBackupTransactions(message, opts) {
-  if(_storeConsignation.estPrimaire() !== true) return  // Skip, secondaire
+  if(_consignationManager.estPrimaire() !== true) return  // Skip, secondaire
   debug("demarrerBackupTransactions, message : %O\nopts %O", message, opts)
 
   // Verifier autorisation
@@ -152,7 +152,7 @@ async function demarrerBackupTransactions(message, opts) {
       debug("emettreMessagesBackup Declencher un backup complet avec rotation des archives")
 
       // Entretien fichiers supprimes
-      _storeConsignation.entretienFichiersSupprimes()
+      _consignationManager.entretienFichiersSupprimes()
         .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
 
       const evenement = { complet: true }

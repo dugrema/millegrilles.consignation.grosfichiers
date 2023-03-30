@@ -13,12 +13,12 @@ const uploadFichier = require('./uploadFichier')
 const STAGING_FILE_TIMEOUT_MSEC = 300000,
       L2PRIVE = '2.prive'
 
-let _storeConsignation = null,
+let _consignationManager = null,
     _pathReady = '/var/opt/millegrilles/consignation/staging/fichiers/ready'
 
-function InitialiserGrosFichiers(mq, storeConsignation, opts) {
+function InitialiserGrosFichiers(mq, consignationManager, opts) {
   opts = opts || {}
-  _storeConsignation = storeConsignation
+  _consignationManager = consignationManager
 
   const router = express.Router();
   const routerFichiersTransfert = express.Router()
@@ -37,7 +37,7 @@ function InitialiserGrosFichiers(mq, storeConsignation, opts) {
   // pour faire une authentification systeme avec cert SSL (en amont,
   // deja valide rendu ici)
   //router.get('/fichiers_transfert/backup/liste', getListeFichiers)
-  staticRouteData(router, storeConsignation)
+  staticRouteData(router, consignationManager)
   routerFichiersTransfert.get('/:fuuid', headersFichier, pipeReponse)
   routerFichiersTransfert.head('/:fuuid', headersFichier, returnOk)
 
@@ -50,16 +50,16 @@ function preparerConsigner(mq, opts) {
   opts = opts || {}
 
   return async (req, res) => {
-    const { hachage, pathFichier } = res
-    debug("consigner Fuuid %s, pathFichier %s", hachage, pathFichier)
+    const { hachage: fuuid, pathFichier } = res
+    debug("consigner Fuuid %s, pathFichier %s", fuuid, pathFichier)
 
     try {
       await fsPromises.mkdir(_pathReady, {recursive: true})
-      const pathDestination = path.join(_pathReady, hachage)
+      const pathDestination = path.join(_pathReady, fuuid)
       await fsPromises.rename(pathFichier, pathDestination)
 
-      debug("StoreConsignation ", _storeConsignation)
-      await _storeConsignation.ajouterFichierConsignation(hachage)
+      debug("consignationManager ", _consignationManager)
+      await _consignationManager.ajouterFichierConsignation(fuuid)
       
       return res.sendStatus(202)
     } catch(err) {
@@ -74,9 +74,9 @@ function returnOk(req, res) {
   res.sendStatus(200)
 }
 
-function staticRouteData(route, storeConsignation) {
+function staticRouteData(route, consignationManager) {
   // Route utilisee pour transmettre fichiers react de la messagerie en production
-  const folderStatic = storeConsignation.getPathDataFolder()
+  const folderStatic = consignationManager.getPathDataFolder()
   const router2 = new express.Router()
   route.use('/fichiers_transfert/data', router2)
   router2.use((req, res, next)=>{
@@ -112,7 +112,7 @@ async function getListeBackup(req, res) {
 
   res.status(200)
   // res.set('Content-Type', 'text/plain')
-  await _storeConsignation.parcourirBackup(traiterFichier)
+  await _consignationManager.parcourirBackup(traiterFichier)
   res.end()
   console.debug("getListeBackup done")
 }
@@ -122,7 +122,7 @@ async function getFichierTransaction(req, res) {
   try {
     const { domaine, fichier } = req.params
     const pathFichier = path.join(domaine, fichier)
-    const stream = await _storeConsignation.getBackupTransactionStream(pathFichier)
+    const stream = await _consignationManager.getBackupTransactionStream(pathFichier)
     // debug("Stream fichier transactions ", stream)
     res.status(200)
     // res.set('Content-Length', ...)
@@ -166,13 +166,13 @@ async function headersFichier(req, res, next) {
   res.fuuid = fuuid
 
   try {
-    const infoFichier = await _storeConsignation.getInfoFichier(fuuid, {recover: true})
+    const infoFichier = await _consignationManager.getInfoFichier(fuuid, {recover: true})
     debug("Info fichier %s: %O", fuuid, infoFichier)
     if(!infoFichier) {
 
-      if(_storeConsignation.estPrimaire() !== true) {
+      if(_consignationManager.estPrimaire() !== true) {
         debug("Tenter transferer fichier %s a partir primaire", fuuid)
-        _storeConsignation.ajouterDownloadPrimaire(fuuid)
+        _consignationManager.ajouterDownloadPrimaire(fuuid)
       }
 
       return res.sendStatus(404)
@@ -520,10 +520,10 @@ async function pipeReponse(req, res) {
     const readStream = fs.createReadStream(filePath)
     res.writeHead(200)
     readStream.pipe(res)
-  } else if(_storeConsignation.getFichierStream) {
+  } else if(_consignationManager.getFichierStream) {
     try {
       debug("pipeReponse Stream fichier %s via pass interne", fuuid)
-      const readStream = await _storeConsignation.getFichierStream(fuuid)
+      const readStream = await _consignationManager.getFichierStream(fuuid)
       res.writeHead(200)
       readStream.pipe(res)
     } catch(err) {

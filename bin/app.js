@@ -9,7 +9,7 @@ const {InitialiserGrosFichiers} = require('../routes/grosfichiers')
 const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki')
 // const {PathConsignation} = require('../util/traitementFichier')
 
-function initialiser(mq, storeConsignation, opts) {
+function initialiser(mq, consignationManager, opts) {
   debug("Initialiser app, opts : %O", opts)
   opts = opts || {}
   const middleware = opts.middleware,
@@ -31,7 +31,7 @@ function initialiser(mq, storeConsignation, opts) {
 
   // Inject RabbitMQ pour la MilleGrille detectee sous etape SSL
   app.use((req, res, next)=>{
-    req.storeConsignation = storeConsignation
+    req.consignationManager = consignationManager
     next()
   })
 
@@ -42,7 +42,7 @@ function initialiser(mq, storeConsignation, opts) {
   app.use(express.static(path.join(__dirname, 'public')))
 
   // app.all('/backup/*', InitialiserBackup())
-  const traitementGrosFichiers = InitialiserGrosFichiers(mq, storeConsignation, opts)
+  const traitementGrosFichiers = InitialiserGrosFichiers(mq, consignationManager, opts)
   // app.all('/fichiers/*', traitementGrosFichiers)
   app.all('/fichiers_transfert/*', traitementGrosFichiers)
   // app.all('/publier/*', InitialiserPublier(mq, pathConsignation))

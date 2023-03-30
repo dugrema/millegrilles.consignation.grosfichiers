@@ -4,7 +4,7 @@ const { MilleGrillesPKI, MilleGrillesAmqpDAO } = require('@dugrema/millegrilles.
 
 const EXPIRATION_MESSAGE_DEFAUT = 30 * 60 * 1000  // 15 minutes en millisec
 
-async function init(storeConsignation, opts) {
+async function init(consignationManager, opts) {
   opts = opts || {}
 
   // Preparer certificats
@@ -24,7 +24,7 @@ async function init(storeConsignation, opts) {
   const qCustom = {
     'backup': {name: 'fichiers/backup', autostart: false},
     'publication': {name: 'fichiers/publication'},
-    'actions': {name: 'fichiers/actions', autostart: false},
+    'primaire': {name: 'fichiers/primaire', autostart: false},
   }
   const amqpdao = new MilleGrillesAmqpDAO(instPki, {qCustom, exchange: '2.prive'})
   await instPki.initialiserPkiPEMS(certPems)
@@ -39,7 +39,7 @@ async function init(storeConsignation, opts) {
   await amqpdao.connect(mqConnectionUrl)
 
   // Attacher les evenements, cles de routage
-  await initialiserMessageHandlers(amqpdao, storeConsignation)
+  await initialiserMessageHandlers(amqpdao, consignationManager)
 
   // Middleware, injecte l'instance
   const middleware = (req, res, next) => {
@@ -50,42 +50,26 @@ async function init(storeConsignation, opts) {
   return {middleware, amqpdao}
 }
 
-async function initialiserMessageHandlers(rabbitMQ, storeConsignation) {
+async function initialiserMessageHandlers(rabbitMQ, consignationManager) {
   // Creer objets de connexion a MQ - importer librairies requises
   const {PkiMessages} = require('../messages/pki');
   rabbitMQ.enregistrerListenerConnexion(new PkiMessages(rabbitMQ));
 
-  // const {TorrentMessages} = require('../messages/torrent');
-  // rabbitMQ.enregistrerListenerConnexion(new TorrentMessages(rabbitMQ));
-
-  // const {DecrypterFichier} = require('../messages/crypto');
-  // rabbitMQ.enregistrerListenerConnexion(new DecrypterFichier(rabbitMQ));
-
-  // const {GenerateurMedia} = require('../messages/media');
-  // rabbitMQ.enregistrerListenerConnexion(new GenerateurMedia(rabbitMQ));
-
-  // const {PublicateurAWS} = require('../messages/aws');
-  // rabbitMQ.enregistrerListenerConnexion(new PublicateurAWS(rabbitMQ));
-
   const local = require('../messages/local')
-  local.init(rabbitMQ, storeConsignation)
+  local.init(rabbitMQ, consignationManager)
   rabbitMQ.enregistrerListenerConnexion(local)
 
   const backup = require('../messages/backup')
-  backup.init(rabbitMQ, storeConsignation)
+  backup.init(rabbitMQ, consignationManager)
   rabbitMQ.enregistrerListenerConnexion(backup)
 
-  // const publication = require('../messages/publication')
-  // publication.init(rabbitMQ, storeConsignation)
-  // rabbitMQ.enregistrerListenerConnexion(publication)
-
   const entretien = require('../messages/entretien')
-  entretien.init(rabbitMQ, storeConsignation)
+  entretien.init(rabbitMQ, consignationManager)
   rabbitMQ.enregistrerListenerConnexion(entretien)
 
-  const actions = require('../messages/actions')
-  actions.init(rabbitMQ, storeConsignation)
-  rabbitMQ.enregistrerListenerConnexion(actions)
+  const primaire = require('../messages/primaire')
+  primaire.init(rabbitMQ, consignationManager)
+  rabbitMQ.enregistrerListenerConnexion(primaire)
 
   return {rabbitMQ};
 }

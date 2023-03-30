@@ -8,7 +8,7 @@ const fs = require('fs')
 const {initialiser: initialiserServer} = require('./server')
 const {initialiser: initialiserApp} = require('./app');
 const amqpdao = require('../models/amqpdao')
-const StoreConsignation = require('../models/storeConsignation')
+const ConsignationManager = require('../models/storeConsignationManager')
 
 const CERT_CA_FILE = process.env.MG_MQ_CAFILE,
       CERT_FILE = process.env.MG_MQ_CERTFILE,
@@ -52,16 +52,16 @@ async function init() {
   await redisClient.connect()
   await redisClient.ping()
 
-  const storeConsignation = StoreConsignation
+  const consignationManager = ConsignationManager
 
   // Connexion AMQ
-  const {amqpdao: instAmqpdao} = await amqpdao.init(storeConsignation, {redisClient})
+  const {amqpdao: instAmqpdao} = await amqpdao.init(consignationManager, {redisClient})
   const idmg = instAmqpdao.pki.idmg
 
   debug("Initialisation serveur IDMG : %s\n%O", idmg, instAmqpdao)
 
   if(instAmqpdao.transmettreRequete === undefined) throw new Error("Tada")
-  await storeConsignation.init(instAmqpdao, {PATH_STAGING})
+  await consignationManager.init(instAmqpdao, {PATH_STAGING})
 
   //const root = express()
   const middleware = [
@@ -74,7 +74,7 @@ async function init() {
     }
   ]
 
-  const root = await initialiserApp(instAmqpdao, storeConsignation, {middleware})
+  const root = await initialiserApp(instAmqpdao, consignationManager, {middleware})
   const serverInstance = initialiserServer(root)
 
   // Hook pour un health check regulier (surtout pour connexion MQ)
