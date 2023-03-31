@@ -34,7 +34,7 @@ const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 
 const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'fuuidsActifsPrimaire.txt',
-      FICHIER_FUUIDS_NOUVEAUX = 'fuuidsNouveaux.txt'
+      FICHIER_FUUIDS_NOUVEAUX = 'fuuidsNouveaux.txt',
       FICHIER_FUUIDS_MANQUANTS = 'fuuidsManquants.txt',
       FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
