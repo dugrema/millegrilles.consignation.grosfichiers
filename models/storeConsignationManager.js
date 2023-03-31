@@ -38,6 +38,7 @@ const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_MANQUANTS = 'fuuidsManquants.txt',
       FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
+      FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
       FICHIER_FUUIDS_UPLOAD_PRIMAIRE = 'fuuidsUploadPrimaire.txt',
       FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE = 'fuuidsDownloadPrimaire.txt',
       FICHIER_FUUIDS_RECLAMES_ACTIFS = 'fuuidsReclamesActifs.txt',
@@ -317,15 +318,14 @@ async function processusSynchronisation() {
 }
 
 async function traiterOrphelinsSecondaire() {
+    const pathFichiersPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
+    const pathFichierOrphelins = path.join(getPathDataFolder(), FICHIER_FUUIDS_ORPHELINS)
     const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
     await fsPromises.mkdir(pathOrphelins, {recursive: true})
 
     // Supprimer tous les orphelins dans la liste
-
-
-
-    // await rotationOrphelins(pathOrphelins, fichierReclames)
-
+    await rotationOrphelins(pathOrphelins, pathFichiersPrimaire)
+    await fsPromises.rename(pathFichierOrphelins, path.join(pathOrphelins, 'orphelins.00'))
 }
 
 /** Reception de listes de fuuids a partir de chaque domaine. */
