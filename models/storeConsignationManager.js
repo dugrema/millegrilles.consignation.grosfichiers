@@ -28,7 +28,8 @@ const BATCH_SIZE = 100,
       TIMEOUT_AXIOS = 30_000,
       INTERVALLE_SYNC = 3_600_000,  // 60 minutes
       INTERVALLE_THREAD_TRANSFERT = 1_200_000  // 20 minutes,
-      NOMBRE_ARCHIVES_ORPHELINS = 4
+      NOMBRE_ARCHIVES_ORPHELINS = 4,
+      DUREE_ATTENTE_RECLAMATIONS = 10_000
 
 const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 
@@ -352,8 +353,11 @@ async function recevoirFuuidsDomaines(fuuids, opts) {
     })
 
     if(_timeoutTraiterConfirmes) clearTimeout(_timeoutTraiterConfirmes)
-    debug("traiterFichiersConfirmes dans 5 secs")
-    _timeoutTraiterConfirmes = setTimeout(()=>traiterFichiersConfirmes().catch(err=>console.error("ERREUR ", err)), 5_000)
+    debug("traiterFichiersConfirmes dans %d secs", DUREE_ATTENTE_RECLAMATIONS / 1000)
+    _timeoutTraiterConfirmes = setTimeout(()=>{
+        traiterFichiersConfirmes()
+            .catch(err=>console.error("ERREUR ", err))
+    }, DUREE_ATTENTE_RECLAMATIONS)
 }
 
 /** Compare les fichiers reclames (confirmes) par chaque domaine au contenu consigne. */
