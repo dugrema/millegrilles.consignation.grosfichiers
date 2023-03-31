@@ -16,8 +16,9 @@ function init(mq, consignationManager) {
 
 function on_connecter() {
     ajouterCb('evenement.grosfichiers.fuuidSupprimerDocument', traiterFichiersSupprimes)
-    ajouterCb('evenement.grosfichiers.fuuidRecuperer', traiterFichiersRecuperes)
+    // ajouterCb('evenement.grosfichiers.fuuidRecuperer', traiterFichiersRecuperes)
     ajouterCb('evenement.fichiers.consignationPrimaire', consignationPrimaire)
+    ajouterCb('commande.fichiers.reactiverFuuids', reactiverFuuids)
     ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration)
     ajouterCb(`commande.fichiers.declencherSync`, declencherSyncPrimaire)
     ajouterCb(`evenement.CoreTopologie.changementConsignationPrimaire`, changementConsignationPrimaire)
@@ -114,6 +115,7 @@ function getPublicKeySsh(message, rk, opts) {
   
     const reponse = {clePubliqueEd25519, clePubliqueRsa}
     _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
+        .catch(err=>console.error(new Date() + " ERROR getPublicKeySSh Erreur reponse ", err))
 }
   
 async function changementConsignationPrimaire(message, rk, opts) {
@@ -128,7 +130,7 @@ async function declencherSyncPrimaire(message, rk, opts) {
       _consignationManager.demarrerSynchronization()
         .catch(err=>console.error(new Date() + ' publication.declencherSyncPrimaire Erreur traitement ', err))
       const reponse = {ok: true}
-      _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
+      await _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
     }
 }
   
@@ -139,6 +141,15 @@ async function declencherSyncSecondaire(message, rk, opts) {
     } else {
       debug("syncPret recu - mais on est le primaire (ignore)")
     }
+}
+
+async function reactiverFuuids(message, rk, opts) {
+    const { fuuids, succesSeulement } = message
+    const resultat = await _consignationManager.reactiverFuuids(fuuids)
+    if(succesSeulement && resultat.recuperes.length === 0) {
+        return  // Aucuns resultats a rapporter
+    }
+    await _mq.transmettreReponse(resultat, properties.replyTo, properties.correlationId)
 }
 
 module.exports = { init, on_connecter }

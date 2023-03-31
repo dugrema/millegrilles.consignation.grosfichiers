@@ -718,8 +718,27 @@ function supprimerFichier(fuuid) {
     return _storeConsignationHandler.marquerSupprime(fuuid)
 }
 
-function recupererFichier(fuuid) {
-    return _storeConsignationHandler.recoverFichierSupprime(fuuid)
+// function recupererFichier(fuuid) {
+//     return _storeConsignationHandler.recoverFichierSupprime(fuuid)
+// }
+
+async function reactiverFuuids(fuuids) {
+    const recuperes = [], inconnus = [], errors = []
+
+    for await (const fuuid of fuuids) {
+        try {
+            await _storeConsignationHandler.reactiverFichier(fuuid)
+            recuperes.push(fuuid)
+        } catch(err) {
+            if(err.code === 1) {
+                inconnus.push(inconnus)
+            } else {
+                errors.push({fuuid, err: ''+err})
+            }
+        }
+    }
+
+    return {recuperes, inconnus, errors}
 }
 
 function getInfoFichier(fuuid, opts) {
@@ -809,14 +828,15 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
-    supprimerFichier, recupererFichier, 
+    supprimerFichier, 
+    // recupererFichier, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
     
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
     // getUrlTransfert, getInstanceId, 
     getHttpsAgent, ajouterDownloadPrimaire,
-    consignerFichier,
+    consignerFichier, reactiverFuuids,
     
     processusSynchronisation, demarrerSynchronization, 
     parcourirFichiers, parcourirBackup, ajouterFichierConsignation,

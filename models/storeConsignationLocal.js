@@ -12,10 +12,12 @@ const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'tra
 const PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions_archives')
 
 const DEFAULT_URL_CONSIGNATION = 'https://fichiers:443',
-      CONST_EXPIRATION_ORPHELINS = 86_400_000 * 3
+      CONST_EXPIRATION_ORPHELINS = 86_400_000 * 3,
+      ERROR_CODE_FICHIER_INCONNU = 1
 
 let _pathConsignation = path.join(CONSIGNATION_PATH, 'local'),
-    _pathOrphelins = path.join(CONSIGNATION_PATH, 'orphelins')
+    _pathOrphelins = path.join(CONSIGNATION_PATH, 'orphelins'),
+    _pathArchives = path.join(CONSIGNATION_PATH, 'archives')
 
 function init(params) {
     params = params || {}
@@ -69,6 +71,11 @@ function getPathFichierOrphelins(fuuid) {
     // Split path en 2 derniers caracteres
     const last2 = fuuid.slice(fuuid.length-2)
     return path.join(_pathOrphelins, last2, fuuid)
+}
+
+function getPathFichierArchives(fuuid) {
+    const last2 = fuuid.slice(fuuid.length-2)
+    return path.join(_pathArchives, last2, fuuid)
 }
 
 /**
@@ -158,6 +165,59 @@ async function purgerOrphelinsExpires(opts) {
             } catch(err) {
                 console.warn(new Date() + " WARN Echec suppression fichier orphelin expire ", err)
             }
+        }
+    }
+}
+
+/** Deplace un fichier actif vers le dossier archives */
+async function archiverFichier(fuuid) {
+    const pathFichierArchives = getPathFichierArchives(fuuid),
+          pathDirFichierArchives = path.dirname(pathFichierActif)
+    const pathFichierActif = getPathFichier(fuuid)
+
+    await fsPromises.mkdir(pathDirFichierArchives, {recursive: true})
+    await fsPromises.rename(pathFichierActif, pathFichierArchives)
+}
+
+/** Remet un fichier qui est sous orphelins ou archive dans le repertoire actif (e.g. local) */
+async function reactiverFichier(fuuid) {
+    const pathFichierActif = getPathFichier(fuuid),
+          pathDirFichierActif = path.dirname(pathFichierActif)
+    const pathFichierOrphelins = getPathFichierOrphelins(fuuid)
+    const pathFichierArchives = getPathFichierArchives(fuuid)
+
+    // Verifier si le fichier existe deja dans le repertoire actifs
+    try {
+        await fsPromises.stat(pathFichierActif)
+        return  // Ok, fichier existe
+    } catch(err) {
+        if(err.code === 'ENOENT') {
+            // Fichier n'existe pas, on continue
+        } else {
+            throw err  // Autre type d'erreur
+        }
+    }
+
+    await fsPromises.mkdir(pathDirFichierActif, {recursive: true})
+
+    try {
+        fsPromises.rename(pathFichierOrphelins, pathFichierActif)
+    } catch(err) {
+        if(err.code === 'ENOENT') {
+            try {
+                fsPromises.rename(pathFichierArchives, pathFichierActif)
+            } catch(err) {
+                if(err.code === 'ENOENT') {
+                    // Fichier inconnu (pas dans orphelins ni archives)
+                    const error = new Error(`Fichier ${fuuid} inconnu`)
+                    error.cause = err
+                    error.fuuid = fuuid
+                    error.code = ERROR_CODE_FICHIER_INCONNU
+                    throw error
+                }
+            }
+        } else {
+            throw err
         }
     }
 }
@@ -376,7 +436,7 @@ module.exports = {
     init, chargerConfiguration, modifierConfiguration,
     
     getInfoFichier, getFichierStream, 
-    consignerFichier, marquerOrphelin, purgerOrphelinsExpires,
+    consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
     
     parcourirFichiers, parcourirBackup, 
 
