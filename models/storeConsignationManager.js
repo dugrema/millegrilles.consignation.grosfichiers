@@ -395,6 +395,7 @@ async function traiterFichiersConfirmes() {
             })
         } catch(err) {
             console.error(new Date() + " traiterFichiersConfirmes ERROR Traitement fichiers inconnus : ", err)
+            return
         }
 
         try {
@@ -413,7 +414,12 @@ async function traiterFichiersConfirmes() {
 
         } catch(err) {
             console.error(new Date() + " traiterFichiersConfirmes ERROR Traitement orphelins : ", err)
+            return
         }
+
+        // Declencher sync sur les consignations secondaires
+        await _mq.emettreEvenement({}, 'fichiers', {action: 'declencherSyncSecondaire', ajouterCertificat: true})
+
     } catch(err) {
         console.error(new Date() + " traiterFichiersConfirmes ERROR Erreur traitement : ", err)
     }

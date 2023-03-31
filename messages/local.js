@@ -20,9 +20,11 @@ function on_connecter() {
     ajouterCb('evenement.fichiers.consignationPrimaire', consignationPrimaire)
     ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration)
     ajouterCb(`commande.fichiers.declencherSync`, declencherSyncPrimaire)
-    // ajouterCb(`commande.fichiers.confirmerActiviteFuuids`, confirmerActiviteFuuids)
     ajouterCb(`evenement.CoreTopologie.changementConsignationPrimaire`, changementConsignationPrimaire)
-    ajouterCb(`evenement.fichiers.syncPret`, declencherSyncSecondaire)
+
+    // Synchronisation
+    // ajouterCb(`evenement.fichiers.syncPret`, SYNCINFO)
+    ajouterCb(`evenement.fichiers.declencherSyncSecondaire`, declencherSyncSecondaire)
   
     // Commandes SSH/SFTP
     ajouterCb('requete.fichiers.getPublicKeySsh', getPublicKeySsh)
