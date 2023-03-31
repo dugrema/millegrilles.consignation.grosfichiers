@@ -144,11 +144,14 @@ async function declencherSyncSecondaire(message, rk, opts) {
 }
 
 async function reactiverFuuids(message, rk, opts) {
+    const properties = opts.properties || {}
     const { fuuids, succesSeulement } = message
     const resultat = await _consignationManager.reactiverFuuids(fuuids)
+    debug("reactiverFuuids Resultat ", resultat)
     if(succesSeulement && resultat.recuperes.length === 0) {
         return  // Aucuns resultats a rapporter
     }
+    debug("Repondre reactiverFuuids a %s / %s", properties.replyTo, properties.correlationId)
     await _mq.transmettreReponse(resultat, properties.replyTo, properties.correlationId)
 }
 

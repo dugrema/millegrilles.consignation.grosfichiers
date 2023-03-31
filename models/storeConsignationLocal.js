@@ -201,11 +201,11 @@ async function reactiverFichier(fuuid) {
     await fsPromises.mkdir(pathDirFichierActif, {recursive: true})
 
     try {
-        fsPromises.rename(pathFichierOrphelins, pathFichierActif)
+        await fsPromises.rename(pathFichierOrphelins, pathFichierActif)
     } catch(err) {
         if(err.code === 'ENOENT') {
             try {
-                fsPromises.rename(pathFichierArchives, pathFichierActif)
+                await fsPromises.rename(pathFichierArchives, pathFichierActif)
             } catch(err) {
                 if(err.code === 'ENOENT') {
                     // Fichier inconnu (pas dans orphelins ni archives)

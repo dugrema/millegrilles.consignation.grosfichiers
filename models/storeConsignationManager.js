@@ -731,7 +731,7 @@ async function reactiverFuuids(fuuids) {
             recuperes.push(fuuid)
         } catch(err) {
             if(err.code === 1) {
-                inconnus.push(inconnus)
+                inconnus.push(fuuid)
             } else {
                 errors.push({fuuid, err: ''+err})
             }
