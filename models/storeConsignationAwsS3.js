@@ -141,17 +141,18 @@ async function getInfoFichier(fuuid, opts) {
 
         return { stat, remoteFilePath: keyPath, fileRedirect }
     } catch(err) {
-        const metadata = err['$metadata']
-        if(!metadata) throw err
-        const httpStatusCode = metadata.httpStatusCode
-        if(httpStatusCode === 404) {
-            if(opts.recover === true)  {
-                // Verifier si le fichier est encore disponible
-                return recoverFichierSupprime(fuuid)
-            }
-            return null
-        }
-        else throw err
+        throw err
+        // const metadata = err['$metadata']
+        // if(!metadata) throw err
+        // const httpStatusCode = metadata.httpStatusCode
+        // if(httpStatusCode === 404) {
+        //     // if(opts.recover === true)  {
+        //     //     // Verifier si le fichier est encore disponible
+        //     //     return recoverFichierSupprime(fuuid)
+        //     // }
+        //     return null
+        // }
+        // else throw err
     }
 }
 
@@ -161,6 +162,7 @@ async function renameFichier(fichierOld, fichierNew, opts) {
     const commandeCopy = new CopyObjectCommand({
         Bucket: bucket,
         Key: fichierNew,
+        ACL: 'public-read',
         CopySource: path.join(bucket, fichierOld),
     })
     const resultatCopie = await _s3_client.send(commandeCopy)
@@ -174,15 +176,32 @@ async function renameFichier(fichierOld, fichierNew, opts) {
     debug("renameFichier Resultat cleanup ", resultatDelete)
 }
 
-async function recoverFichierSupprime(fuuid) {
-    debug("recoverFichierSupprime %s", fuuid)
+async function reactiverFichier(fuuid) {
+    debug("reactiverFichier %s", fuuid)
     const keyFile = path.join('c', fuuid),
-          keyFileCorbeille = path.join('d', fuuid)
+          keyFileCorbeille = path.join('o', fuuid),
+          keyFileArchives = path.join('a', fuuid)
+
     try {
-        await rename(keyFileCorbeille, keyFile)
-        return await getInfoFichier(fuuid)
+        const info = await getInfoFichier(fuuid)
+        debug("Reactivation %s info %O", fuuid, info) 
+        return info
     } catch(err) {
-        return null
+        // Ok, le fichier n'existe pas deja dans c/
+    }
+    
+    try {
+        await renameFichier(keyFileCorbeille, keyFile)
+        const info = await getInfoFichier(fuuid)
+        debug("Reactivation %s info %O", fuuid, info) 
+        return info
+    } catch(err) {
+        try {
+            await renameFichier(keyFileArchives, keyFile)
+            return await getInfoFichier(fuuid)
+        } catch(err) {
+          throw err
+        }
     }
 }
 
@@ -192,9 +211,11 @@ async function purgerOrphelinsExpires() {
     const bucketParams = {
         Bucket: bucketOrphelins,
         MaxKeys: 1000,
-        Prefix: prefix,
+        Prefix: 'o/',  // Path des orphelins
     }
     const callback = async info => {
+        if(!info) return  // Dernier callback (vide, termine)
+
         debug("Info orphelin : ", info)
         if(info.modified < expire) {
             debug("Supprimer orphelin %s (expire)", info.Key)
@@ -205,7 +226,7 @@ async function purgerOrphelinsExpires() {
             await _s3_client.send(commandeDeleteOld)
         }
     }
-    await _parcourir(bucketParams, callback, opts)
+    await _parcourir(bucketParams, callback)
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
@@ -407,9 +428,6 @@ async function archiverFichier(fuuid) {
     await renameFichier(keyFile, orphelinKeyFile)
 }
 
-async function reactiverFichier(fuuid) {
-    throw new Error('todo')
-}
 
 async function _parcourir(bucketParams, callback, opts) {
     debug("_parcourir: Faire lecture AWS S3 sous %s", bucketParams.Bucket)

@@ -119,7 +119,7 @@ async function reactiverFichier(fuuid) {
             return { stat: statInfo, filePath }
         } catch(err) {
             debug("Erreur reactiverFichier %s : %O", fuuid, err)
-            return null
+            throw err
         }
     } finally {
         try {
