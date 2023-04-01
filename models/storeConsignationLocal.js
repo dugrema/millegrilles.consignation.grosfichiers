@@ -9,7 +9,7 @@ const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegri
 const PATH_CONFIG_DIR = path.join(CONSIGNATION_PATH, 'config')
 const PATH_CONFIG_FICHIER = path.join(PATH_CONFIG_DIR, 'store.json')
 const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
-const PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions_archives')
+// const PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions_archives')
 
 const DEFAULT_URL_CONSIGNATION = 'https://fichiers:443',
       CONST_EXPIRATION_ORPHELINS = 86_400_000 * 3,
@@ -275,21 +275,19 @@ async function sauvegarderBackupTransactions(message) {
     debug("Backup %s date %O sauvegarde sous %O", domaine, dateFinBackup, pathFichier)
 }
 
-async function rotationBackupTransactions(message) {
-
-    const { domaine, partition } = message
+async function rotationBackupTransactions() {
 
     const maxArchives = 3
 
-    try {
-        await fsPromises.mkdir(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR)
-    } catch(err) {
-        // EEXIST est ok
-        if(err.code !== 'EEXIST') throw err
-    }
+    // try {
+    //     await fsPromises.mkdir(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR)
+    // } catch(err) {
+    //     // EEXIST est ok
+    //     if(err.code !== 'EEXIST') throw err
+    // }
 
-    const dirBackup = path.join(PATH_BACKUP_TRANSACTIONS_DIR, domaine)
-    const dirArchives = path.join(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR, domaine + '.1')
+    const dirBackup = path.join(PATH_BACKUP_TRANSACTIONS_DIR)
+    const dirArchives = path.join(PATH_BACKUP_TRANSACTIONS_DIR + '.1')
 
     try {
         await fsPromises.stat(dirBackup)
@@ -298,7 +296,7 @@ async function rotationBackupTransactions(message) {
         if(err.code === 'ENOENT') return
     }
 
-    const dirArchiveDernier = path.join(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR, domaine + '.' + maxArchives)
+    const dirArchiveDernier = path.join(PATH_BACKUP_TRANSACTIONS_DIR + '.' + maxArchives)
     try {
         await fsPromises.rm(dirArchiveDernier, {recursive: true})
     } catch(err) {
@@ -307,7 +305,7 @@ async function rotationBackupTransactions(message) {
     }
 
     try {
-        await pushRotateArchive(domaine, partition, 1, 2)
+        await pushRotateArchive(1, 2)
     } catch(err) {
         // Le code ENOENT (inexistant) est OK
         if(err.code != 'ENOENT') throw err
@@ -317,16 +315,16 @@ async function rotationBackupTransactions(message) {
     await fsPromises.rename(dirBackup, dirArchives)
 }
 
-async function pushRotateArchive(domaine, partition, idxFrom) {
-    const dirArchivesScr = path.join(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR, domaine + '.' + idxFrom)
-    const dirArchivesDst = path.join(PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR, domaine + '.' + (idxFrom+1))
+async function pushRotateArchive(idxFrom) {
+    const dirArchivesScr = path.join(PATH_BACKUP_TRANSACTIONS_DIR + '.' + idxFrom)
+    const dirArchivesDst = path.join(PATH_BACKUP_TRANSACTIONS_DIR + '.' + (idxFrom+1))
 
-    debug("pushRotateArchive domaine %s, partition %s, idxFrom %d", domaine, partition, idxFrom)
+    debug("pushRotateArchive idxFrom %d", idxFrom)
 
     try {
         await fsPromises.stat(dirArchivesDst)
         // Le repertoire existe, on le deplace en premier (recursivement)
-        await pushRotateArchive(domaine, partition, idxFrom+1)
+        await pushRotateArchive(idxFrom+1)
     } catch (err) {
         // Le code ENOENT (inexistant) est OK
         if(err.code != 'ENOENT') return  // Le code ENOENT (inexistant) est OK, rien a faire
