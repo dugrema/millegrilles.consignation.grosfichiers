@@ -176,7 +176,13 @@ async function headersFichier(req, res, next) {
   res.fuuid = fuuid
 
   try {
-    const infoFichier = await _consignationManager.getInfoFichier(fuuid, {recover: true})
+    var infoFichier = await _consignationManager.getInfoFichier(fuuid)
+  } catch(err) {
+    debug("headersFichier Erreur getInfoFichier (assumer 404)", err)
+    return res.sendStatus(404)
+  }
+  
+  try {
     debug("Info fichier %s: %O", fuuid, infoFichier)
     if(!infoFichier) {
 
