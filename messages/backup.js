@@ -83,14 +83,14 @@ async function recevoirConserverBackup(message, opts) {
 
 async function recevoirRotationBackupTransactions(message, opts) {
   debug("recevoirRotationBackupTransactions, message : %O\nopts %O", message, opts)
-  let reponse = {ok: false}
-  try {
-      reponse = await rotationBackupTransactions(_mq, _consignationManager, message)
-      if(_consignationManager.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
-  } catch(err) {
-      console.error("ERROR recevoirRotationBackupTransactions: %O", err)
-      reponse = {ok: false, err: ''+err}
-  }
+  let reponse = {ok: true}
+  // try {
+  //     reponse = await rotationBackupTransactions(_mq, _consignationManager, message)
+  //     if(_consignationManager.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
+  // } catch(err) {
+  //     console.error("ERROR recevoirRotationBackupTransactions: %O", err)
+  //     reponse = {ok: false, err: ''+err}
+  // }
 
   debug("recevoirRotationBackupTransactions reponse %O", reponse)
 
@@ -150,12 +150,11 @@ async function demarrerBackupTransactions(message, opts) {
 
   if(complet === true) {
       debug("emettreMessagesBackup Declencher un backup complet avec rotation des archives")
-
-      // Entretien fichiers supprimes
-      _consignationManager.entretienFichiersSupprimes()
-        .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
-
       const evenement = { complet: true }
+
+      // Rotation repertoire transactions
+      await _consignationManager.rotationBackupTransactions()
+
       await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
   } else {
       debug("emettreMessagesBackup Emettre trigger backup incremental")

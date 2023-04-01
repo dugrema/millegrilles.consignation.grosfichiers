@@ -766,8 +766,8 @@ function sauvegarderBackupTransactions(message) {
     return _storeConsignationHandler.sauvegarderBackupTransactions(message)
 }
 
-function rotationBackupTransactions(message) {
-    return _storeConsignationHandler.rotationBackupTransactions(message)
+function rotationBackupTransactions() {
+    return _storeConsignationHandler.rotationBackupTransactions()
 }
 
 function getFichiersBackupTransactionsCourant(mq, replyTo) {
@@ -829,12 +829,11 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 module.exports = { 
     init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
     supprimerFichier, 
-    // recupererFichier, 
+
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
     
     getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
-    // getUrlTransfert, getInstanceId, 
     getHttpsAgent, ajouterDownloadPrimaire,
     consignerFichier, reactiverFuuids,
     

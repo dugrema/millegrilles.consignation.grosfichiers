@@ -64,23 +64,6 @@ function getPathFichierArchives(fuuid) {
     return path.join(pathArchives, last2, fuuid)
 }
 
-// function getPathFichier(fuuid) {
-//     // Split path en 4 derniers caracteres
-//     const last2 = fuuid.slice(fuuid.length-2)
-//     // const sub1 = last2[1],
-//     //       sub2 = last2[0]
-//     const pathFichiers = getRemotePathFichiers()
-//     return path.join(pathFichiers, last2, fuuid)
-// }
-
-// function getPathFichierCorbeille(fuuid) {
-//     const last2 = fuuid.slice(fuuid.length-2)
-//     // const sub1 = last2[1],
-//     //       sub2 = last2[0]
-//     const pathCorbeille = getRemotePathCorbeille()
-//     return path.join(pathCorbeille, last2, fuuid)
-// }
-
 function getPathWork(fuuid) {
     if(fuuid) {
         return path.join(_remotePath, 'work', fuuid)
@@ -173,17 +156,11 @@ async function consignerFichier(pathFichierStaging, fuuid) {
             } catch(err) {
                 if(retryCount < 3) {
                     debug("consignerFichier Erreur putfile %s, reessayer. Detail : %O", fuuid, err)
-                    // if(!_connexionSsh) {
-                    //     // Reconnecter, restaurer etat ecriture
-                    //     await connecterSSH()
-                    //     sftp = await sftpClient()
-                        writeHandle = await _sftpDao.open(pathFichier, 'r+', 0o644)
-                    // }
+                    writeHandle = await _sftpDao.open(pathFichier, 'r+', 0o644)
                 }
             }
         }
 
-        // await writer.close()
         const multiHachageSha256 = await hacheur.finalize()
         const hachageSha256 = multiHachageSha256.slice(5)  // Retirer 5 premiers chars (f multibase, multihash)
         debug("Fichier %s sftp upload, sha-256 local = %s, taille %s", fuuid, hachageSha256, fileSize)
@@ -191,7 +168,6 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         debug("Fichier %s transfere avec succes vers consignation sftp, sha-256 local = %s", fuuid, hachageSha256)
 
         // Attendre que l'ecriture du fichier soit terminee (fs sync)
-        // const handle = await open(pathFichier, 'r')
         let infoFichier = null
         debug("Attente sync du fichier %s", pathFichier)
 
@@ -232,7 +208,6 @@ async function consignerFichier(pathFichierStaging, fuuid) {
         catch(err) { debug("Erreur fermeture writeHandle %s : %O", fuuid, err)}
         try { 
             debug("consignerFichier fermer sftp apres %s", fuuid)
-            // sftp.end(err=>debug("Fermeture sftp : %O", err)) 
         }
         catch(err) { debug("ERR fermerture sftp : %O", err)}
     }
@@ -374,18 +349,48 @@ function toStream(bytes) {
     return byteReader
 }
 
-async function rotationBackupTransactions(message) {
+async function rotationBackupTransactions() {
+    debug("rotationBackupTransactions")
 
-    const { domaine, partition } = message
-    debug("rotationBackupTransactions", domaine, partition)
+    const maxArchives = 3
+    const pathArchiveMax = getRemotePathBackupTransactions() + '.' +(maxArchives+1)
+    
+    try {
+        debug("rmdir ", pathArchiveMax)
+        await _sftpDao.rmdir(pathArchiveMax)
+    } catch(err) {
+        if(err.code === 2) {} // Ok, fichier introuvable
+        else {
+            debug("Erreur suppression archive max %s : %O", pathArchiveMax, err)
+        }
+    }
 
-    const maxArchives = 1
+    for(let i=maxArchives; i>0; i--) {
+        const pathArchive = getRemotePathBackupTransactions() + '.' + i
+        const pathArchiveSuivante = getRemotePathBackupTransactions() + '.'+(i+1)
+        try {
+            debug("rename ", pathArchive, pathArchiveSuivante)
+            await _sftpDao.rename(pathArchive, pathArchiveSuivante)
+        } catch(err) {
+            if(err.code === 2) {} // Ok, fichier introuvable
+            else {
+                debug("Erreur rename archive backup %s : %O", pathArchive, err)
+            }
+        }
+    }
 
-    const pathDomaine = path.join(getRemotePathBackupTransactions(), domaine)
-    // const sftp = await sftpClient()
-    await _sftpDao.rmdir(pathDomaine)
+    const pathArchive = getRemotePathBackupTransactions()
+    const pathArchive1 = getRemotePathBackupTransactions() + '.1'
+    try {
+        debug("rename ", pathArchive, pathArchive1)
+        await _sftpDao.rename(pathArchive, pathArchive1)
+    } catch(err) {
+        if(err.code === 2) {} // Ok, fichier introuvable
+        else {
+            debug("Erreur rename archive backup %s : %O", pathArchive, err)
+        }
+    }
 
-    console.warn(" !!! NOT IMPLEMENTED : storeConsignationSftp.rotationBackupTransactions !!! ")
 }
 
 async function getFichiersBackupTransactionsCourant(mq, replyTo) {
