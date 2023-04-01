@@ -1,23 +1,17 @@
 const debugLib = require('debug')
 const debug = debugLib('consignation:store:s3')
-const debugTrace = debugLib('consignation:store:s3Trace')
 const path = require('path')
 const { Readable } = require('stream')
 const lzma = require('lzma-native')
-const readdirp = require('readdirp')
 
-// const S3 = require('aws-sdk/clients/s3')
 const { Upload } = require("@aws-sdk/lib-storage")
 const { 
     S3Client, ListObjectsCommand, GetObjectCommand,
-    CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, 
-    ListMultipartUploadsCommand, PutObjectAclCommand, 
+    AbortMultipartUploadCommand, 
+    ListMultipartUploadsCommand,
     CopyObjectCommand, HeadObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, 
 } = require('@aws-sdk/client-s3')
 const fs = require('fs')
-const fsPromises = require('fs/promises')
-const MultiStream = require('multistream')
-const tmpPromises = require('tmp-promise')
 
 const { Hacheur, VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 const { chargerConfiguration, modifierConfiguration } = require('./storeConsignationLocal')
@@ -28,7 +22,8 @@ const AWS_API_VERSION = '2006-03-01',
       BATCH_SIZE_MIN = 1024 * 1024 * 5,
       BATCH_SIZE_MAX = 1024 * 1024 * 200,
       BATCH_SIZE_RECOMMENDED = 1024 * 1024 * 30,
-      INTERVALLE_CLEANUP_MULTIPART_UPLOAD = 1000 * 60 * 60 * 12
+      INTERVALLE_CLEANUP_MULTIPART_UPLOAD = 1000 * 60 * 60 * 12,
+      CONST_EXPIRATION_ORPHELINS = 86_400_000 * 3
       
 let _s3_client = null,
     _s3_bucket = null,
@@ -189,6 +184,28 @@ async function recoverFichierSupprime(fuuid) {
     } catch(err) {
         return null
     }
+}
+
+async function purgerOrphelinsExpires() {
+    const expire = new Date().getTime() - CONST_EXPIRATION_ORPHELINS
+    const bucketOrphelins = _s3_bucket
+    const bucketParams = {
+        Bucket: bucketOrphelins,
+        MaxKeys: 1000,
+        Prefix: prefix,
+    }
+    const callback = async info => {
+        debug("Info orphelin : ", info)
+        if(info.modified < expire) {
+            debug("Supprimer orphelin %s (expire)", info.Key)
+            const commandeDeleteOld = new DeleteObjectCommand({
+                Bucket: bucketOrphelins,
+                Key: info.Key,
+            })
+            await _s3_client.send(commandeDeleteOld)
+        }
+    }
+    await _parcourir(bucketParams, callback, opts)
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
@@ -378,10 +395,20 @@ async function getFichierStream(fuuid, opts) {
     }
 }
 
-async function marquerSupprime(fuuid) {
+async function marquerOrphelin(fuuid) {
     const keyFile = path.join('c/', fuuid)
-    const corbeilleKeyFile = path.join('d/', fuuid)
-    await renameFichier(keyFile, corbeilleKeyFile)
+    const orphelinKeyFile = path.join('o/', fuuid)
+    await renameFichier(keyFile, orphelinKeyFile)
+}
+
+async function archiverFichier(fuuid) {
+    const keyFile = path.join('c/', fuuid)
+    const orphelinKeyFile = path.join('a/', fuuid)
+    await renameFichier(keyFile, orphelinKeyFile)
+}
+
+async function reactiverFichier(fuuid) {
+    throw new Error('todo')
 }
 
 async function _parcourir(bucketParams, callback, opts) {
@@ -398,6 +425,7 @@ async function _parcourir(bucketParams, callback, opts) {
             for await (let f of response.Contents) {
                 const pathFichier = path.parse(f.Key)
                 const data = { 
+                    Key: f.Key,
                     filename: pathFichier.base, 
                     directory: pathFichier.dir, 
                     modified: f.LastModified.getTime(), 
@@ -614,8 +642,9 @@ async function entretien() {
 module.exports = {
     init, fermer,
     chargerConfiguration, modifierConfiguration,
-    getFichierStream, getInfoFichier, consignerFichier, 
-    marquerSupprime, recoverFichierSupprime,
+
+    getInfoFichier, getFichierStream, 
+    consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
     parcourirFichiers,
 
     entretien,

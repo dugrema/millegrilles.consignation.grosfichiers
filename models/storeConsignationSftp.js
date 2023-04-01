@@ -12,6 +12,8 @@ const SftpDao = require('./sftpDao')
 const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegrilles/consignation'
 const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
 
+const CONST_EXPIRATION_ORPHELINS = 86_400_000 * 3
+
 const _sftpDao = new SftpDao()
 
 let _urlDownload = null,
@@ -268,12 +270,19 @@ async function parcourirFichiers(callback, opts) {
 }
 
 async function purgerOrphelinsExpires() {
+    const expire = Math.floor((new Date().getTime() - CONST_EXPIRATION_ORPHELINS) / 1000)
     const pathOrphelins = getRemotePathOrphelins()
     debug("sftp.purgerOrphelinsExpires Path orphelins %s", pathOrphelins)
     const callback = async info => {
+        if(!info) return  // C'est le dernier callback (vide)
         debug("Info fichier orphelin : ", info)
+        if(info.modified < expire) {
+            const filePath = path.join(info.directory, info.filename)
+            debug("purgerOrphelinsExpires Retirer orphelin expire ", filePath)
+            await _sftpDao.unlink(filePath)
+        }
     }
-    await _sftpDao.parcourirFichiersRecursif(pathOrphelins, callback, opts)
+    await _sftpDao.parcourirFichiersRecursif(pathOrphelins, callback)
     await callback()  // Dernier appel avec aucune valeur (fin traitement)
 }
 
