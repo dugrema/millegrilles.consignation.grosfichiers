@@ -30,6 +30,12 @@ async function init(params) {
 
     _sftpDao.fermer()  // Si connexion deja ouverte (config change)
     return _sftpDao.init(params)
+        .then(()=>{
+            _sftpDao.mkdir(getPathWork())
+            _sftpDao.mkdir(getRemotePathFichiers())
+            _sftpDao.mkdir(getRemotePathOrphelins())
+            _sftpDao.mkdir(getRemotePathArchives())
+        })
 }
 
 function fermer() {
@@ -37,21 +43,41 @@ function fermer() {
 }
 
 function getPathFichier(fuuid) {
-    // Split path en 4 derniers caracteres
+    // Split path en 2 derniers caracteres
+    const pathConsignation = getRemotePathFichiers()
     const last2 = fuuid.slice(fuuid.length-2)
-    // const sub1 = last2[1],
-    //       sub2 = last2[0]
-    const pathFichiers = getRemotePathFichiers()
-    return path.join(pathFichiers, last2, fuuid)
+    return path.join(pathConsignation, last2, fuuid)
 }
 
-function getPathFichierCorbeille(fuuid) {
+function getPathFichierOrphelins(fuuid) {
+    // Split path en 2 derniers caracteres
+    const pathOrphelins = getRemotePathOrphelins()
     const last2 = fuuid.slice(fuuid.length-2)
-    // const sub1 = last2[1],
-    //       sub2 = last2[0]
-    const pathCorbeille = getRemotePathCorbeille()
-    return path.join(pathCorbeille, last2, fuuid)
+    return path.join(pathOrphelins, last2, fuuid)
 }
+
+function getPathFichierArchives(fuuid) {
+    const pathArchives = getRemotePathArchives()
+    const last2 = fuuid.slice(fuuid.length-2)
+    return path.join(pathArchives, last2, fuuid)
+}
+
+// function getPathFichier(fuuid) {
+//     // Split path en 4 derniers caracteres
+//     const last2 = fuuid.slice(fuuid.length-2)
+//     // const sub1 = last2[1],
+//     //       sub2 = last2[0]
+//     const pathFichiers = getRemotePathFichiers()
+//     return path.join(pathFichiers, last2, fuuid)
+// }
+
+// function getPathFichierCorbeille(fuuid) {
+//     const last2 = fuuid.slice(fuuid.length-2)
+//     // const sub1 = last2[1],
+//     //       sub2 = last2[0]
+//     const pathCorbeille = getRemotePathCorbeille()
+//     return path.join(pathCorbeille, last2, fuuid)
+// }
 
 function getPathWork(fuuid) {
     if(fuuid) {
@@ -71,25 +97,31 @@ async function getInfoFichier(fuuid) {
     return { fileRedirect }
 }
 
-async function recoverFichierSupprime(fuuid) {
-    debug("recoverFichierSupprime %s", fuuid)
-    const filePathCorbeille = getPathFichierCorbeille(fuuid)
+async function reactiverFichier(fuuid) {
+    debug("reactiverFichier %s", fuuid)
     const filePath = getPathFichier(fuuid)
     const filePathDir = path.dir(filePath)
     await _sftpDao.mkdir(filePathDir)
     try {
-        // var sftp = await sftpClient()
+        const filePathCorbeille = getPathFichierCorbeille(fuuid)
         await _sftpDao.stat(filePathCorbeille)
         await _sftpDao.rename(filePathCorbeille, filePath)
         const statInfo = await _sftpDao.stat(filePath)
         return { stat: statInfo, filePath }
     } catch(err) {
-        debug("Erreur recoverFichierSupprime %s : %O", fuuid, err)
-        return null
+        try {
+            const filePathArchives = getPathFichierArchives(fuuid)
+            await _sftpDao.stat(filePathArchives)
+            await _sftpDao.rename(filePathArchives, filePath)
+            const statInfo = await _sftpDao.stat(filePath)
+            return { stat: statInfo, filePath }
+        } catch(err) {
+            debug("Erreur reactiverFichier %s : %O", fuuid, err)
+            return null
+        }
     } finally {
         try {
-            debug("recoverFichierSupprime fermer sftp apres %s", fuuid)
-            // sftp.end(err=>console.debug("SFTP end, resultat : %O", err))
+            debug("reactiverFichier fermer sftp apres %s", fuuid)
         } catch(err) {
             debug("ERR sftp.end: %O", err)
         }
@@ -205,17 +237,20 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 
 }
 
-async function marquerSupprime(fuuid) {
-    try {
-        // var sftp = await sftpClient()
-        const pathFichier = getPathFichier(fuuid)
-        const pathFichierSupprime = getPathFichierCorbeille(fuuid)
-        const pathFichierSupprimerDir = path.dir(pathFichierSupprime)
-        await _sftpDao.mkdir(pathFichierSupprimerDir)
-        await _sftpDao.rename(pathFichier, pathFichierSupprime)
-    } finally {
-        // sftp.end(err=>debug("SFTP end : %O", err))
-    }
+async function marquerOrphelin(fuuid) {
+    const pathFichier = getPathFichier(fuuid)
+    const pathOrphelin = getPathFichierOrphelins(fuuid)
+    const pathFichierOrphelinDir = path.dir(pathOrphelin)
+    await _sftpDao.mkdir(pathFichierOrphelinDir)
+    await _sftpDao.rename(pathFichier, pathOrphelin)
+}
+
+async function archiverFichier(fuuid) {
+    const pathFichier = getPathFichier(fuuid)
+    const pathArchive = getPathFichierArchives(fuuid)
+    const pathFichieArchivesDir = path.dir(pathArchive)
+    await _sftpDao.mkdir(pathFichieArchivesDir)
+    await _sftpDao.rename(pathFichier, pathArchive)
 }
 
 async function parcourirFichiers(callback, opts) {
@@ -232,12 +267,31 @@ async function parcourirFichiers(callback, opts) {
     }
 }
 
+async function purgerOrphelinsExpires() {
+    const pathOrphelins = getRemotePathOrphelins()
+    debug("sftp.purgerOrphelinsExpires Path orphelins %s", pathOrphelins)
+    const callback = async info => {
+        debug("Info fichier orphelin : ", info)
+    }
+    await _sftpDao.parcourirFichiersRecursif(pathOrphelins, callback, opts)
+    await callback()  // Dernier appel avec aucune valeur (fin traitement)
+}
+
+function getFichierStream(fuuid) {
+    const pathFichier = getPathFichier(fuuid)
+    return _sftpDao.createReadStream(pathFichier)
+}
+
 function getRemotePathFichiers() {
     return path.join(_remotePath, 'local')
 }
 
-function getRemotePathCorbeille() {
-    return path.join(_remotePath, 'corbeille')
+function getRemotePathOrphelins() {
+    return path.join(_remotePath, 'orphelins')
+}
+
+function getRemotePathArchives() {
+    return path.join(_remotePath, 'archives')
 }
 
 function getRemotePathBackup() {
@@ -418,8 +472,9 @@ async function deleteBackupTransaction(pathBackupTransaction) {
 module.exports = {
     init, fermer,
     chargerConfiguration, modifierConfiguration,
-    getInfoFichier, consignerFichier, 
-    marquerSupprime, recoverFichierSupprime,
+
+    getInfoFichier, getFichierStream, 
+    consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
     parcourirFichiers,
 
     // Backup

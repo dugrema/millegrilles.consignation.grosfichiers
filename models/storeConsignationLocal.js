@@ -96,19 +96,8 @@ async function getFichierStream(fuuid) {
 async function getInfoFichier(fuuid, opts) {
     opts = opts || {}
     const filePath = getPathFichier(fuuid)
-    try {
-        const stat = await fsPromises.stat(filePath)
-        return { stat, filePath }
-    } catch(err) {
-        if(err.errno === -2) {
-            if(opts.recover === true)  {
-                // Verifier si le fichier est encore disponible
-                //return recoverFichierSupprime(fuuid)
-            }
-            return null
-        }
-        else throw err
-    }
+    const stat = await fsPromises.stat(filePath)
+    return { stat, filePath }
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
@@ -437,9 +426,10 @@ module.exports = {
     
     getInfoFichier, getFichierStream, 
     consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
+    parcourirFichiers,
     
-    parcourirFichiers, parcourirBackup, 
-
+    // Backup
+    parcourirBackup, 
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction,
     getBackupTransactionStream, pipeBackupTransactionStream, deleteBackupTransaction,
