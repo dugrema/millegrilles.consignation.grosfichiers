@@ -526,7 +526,7 @@ async function rotationBackupTransactions() {
         debug("rotationBackupTransactions Backup item : ", item)
         const key = item.Key
         const result = key.match(regex)
-        console.debug("Result ", result)
+        debug("rotationBackupTransactions Backup item result ", result)
         const groupe = Number.parseInt(result[2]) || 0
         const subPath = result[3]
         const dictGroupe = dictFichiersExistants[''+groupe] || {groupe, liste: []}
