@@ -50,12 +50,6 @@ function enregistrerChannel() {
   )
 
   _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return recevoirRotationBackup(message, opts)},
-    ['commande.fichiers.rotationBackup'],
-    { qCustom: 'backup', exchange }
-  )
-
-  _mq.routingKeyManager.addRoutingKeyCallback(
     (_routingKey, message, opts)=>{return getClesBackupTransactions(message, opts)},
     ['commande.fichiers.getClesBackupTransactions'],
     { qCustom: 'backup', exchange }
@@ -90,22 +84,22 @@ async function recevoirConserverBackup(message, opts) {
     return reponse
 }
 
-async function recevoirRotationBackup(message, opts) {
-  if(_consignationManager.estPrimaire() === true) return null  // Primaire, ne rien faire
-  debug("recevoirRotationBackup, message : %O\nopts %O", message, opts)
+// async function recevoirRotationBackup(message, opts) {
+//   if(_consignationManager.estPrimaire() === true) return null  // Primaire, ne rien faire
+//   debug("recevoirRotationBackup, message : %O\nopts %O", message, opts)
 
-  let reponse = {ok: true}
+//   let reponse = {ok: true}
 
-  try {
-    await _consignationManager.rotationBackupTransactions(message)
-  } catch(err) {
-    console.error("ERROR recevoirRotationBackup: %O", err)
-    reponse = {ok: false, err: ''+err}
-  }
+//   try {
+//     await _consignationManager.rotationBackupTransactions(message)
+//   } catch(err) {
+//     console.error("ERROR recevoirRotationBackup: %O", err)
+//     reponse = {ok: false, err: ''+err}
+//   }
 
-  debug("recevoirRotationBackup reponse %O", reponse)
-  return reponse
-}
+//   debug("recevoirRotationBackup reponse %O", reponse)
+//   return reponse
+// }
 
 async function getClesBackupTransactions(message, opts) {
   debug("getClesBackupTransactions, message : %O\nopts %O", message, opts)

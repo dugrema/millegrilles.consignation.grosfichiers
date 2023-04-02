@@ -21,7 +21,7 @@ function on_connecter() {
     ajouterCb('commande.fichiers.reactiverFuuids', reactiverFuuids)
     ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration)
     // ajouterCb('commande.fichiers.declencherSync', declencherSyncPrimaire)
-    // ajouterCb('commande.fichiers.demarrerBackupTransactions', demarrerBackupTransactions)
+    ajouterCb('commande.fichiers.rotationBackup', rotationBackup)
     ajouterCb('evenement.CoreTopologie.changementConsignationPrimaire', changementConsignationPrimaire)
     
     // Synchronisation
@@ -151,4 +151,22 @@ async function reactiverFuuids(message, rk, opts) {
     await _mq.transmettreReponse(resultat, properties.replyTo, properties.correlationId)
 }
 
+async function rotationBackup(message, opts) {
+    if(_consignationManager.estPrimaire() === true) return null  // Primaire, ne rien faire
+    debug("rotationBackup, message : %O\nopts %O", message, opts)
+  
+    let reponse = {ok: true}
+  
+    try {
+      await _consignationManager.rotationBackupTransactions(message)
+    } catch(err) {
+      console.error("ERROR recevoirRotationBackup: %O", err)
+      reponse = {ok: false, err: ''+err}
+    }
+  
+    debug("recevoirRotationBackup reponse %O", reponse)
+    return reponse
+}
+
+  
 module.exports = { init, on_connecter }
