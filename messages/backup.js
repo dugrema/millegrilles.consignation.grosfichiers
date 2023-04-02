@@ -161,7 +161,7 @@ async function demarrerBackupTransactions(message, opts) {
         await _consignationManager.rotationBackupTransactions()
 
         // Emettre un message de rotation pour tous les serveurs secondaires
-        await _mq.transmettreCommande(evenement, 'fichiers', {action: 'rotationBackup', attacherCertificat: true})
+        await _mq.transmettreCommande('fichiers', evenement, {action: 'rotationBackup', attacherCertificat: true})
 
         // Declencer le backup de tous les domaines (backend)
         await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
