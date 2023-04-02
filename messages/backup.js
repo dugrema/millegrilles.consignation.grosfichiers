@@ -133,36 +133,41 @@ async function demarrerBackupTransactions(message, opts) {
   if(_consignationManager.estPrimaire() !== true) return  // Skip, secondaire
   debug("demarrerBackupTransactions, message : %O\nopts %O", message, opts)
 
-  // Verifier autorisation
-  const { certificat } = opts
-  const { roles, niveauxSecurite, delegationGlobale } = forgecommon.extraireExtensionsMillegrille(certificat)
+  try {
+    // Verifier autorisation
+    const { certificat } = opts
+    const { roles, niveauxSecurite, delegationGlobale } = forgecommon.extraireExtensionsMillegrille(certificat)
 
-  if(delegationGlobale === 'proprietaire') {
-    // Ok
-  } else if(roles && roles.includes('instance') && niveauxSecurite.includes('3.protege')) {
-    // Ok
-  } else {
-    debug("demarrerBackupTransactions Acces refuse (roles=%O, niveauxSecurite=%O, delegationGlobale=%O)", roles, niveauxSecurite, delegationGlobale)
-    return {ok: false, err: 'Acces refuse'}
+    if(delegationGlobale === 'proprietaire') {
+      // Ok
+    } else if(roles && roles.includes('instance') && niveauxSecurite.includes('3.protege')) {
+      // Ok
+    } else {
+      debug("demarrerBackupTransactions Acces refuse (roles=%O, niveauxSecurite=%O, delegationGlobale=%O)", roles, niveauxSecurite, delegationGlobale)
+      return {ok: false, err: 'Acces refuse'}
+    }
+
+    const { complet } = message
+
+    if(complet === true) {
+        debug("emettreMessagesBackup Declencher un backup complet avec rotation des archives")
+        const evenement = { complet: true }
+
+        // Rotation repertoire transactions
+        await _consignationManager.rotationBackupTransactions()
+
+        await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+    } else {
+        debug("emettreMessagesBackup Emettre trigger backup incremental")
+        const evenement = { complet: false }
+        await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+    }
+
+    return {ok: true}
+  } catch(err) {
+    console.error(new Date() + " demarrerBackupTransactions ERROR ", err)
+    return {ok: false, err: ''+err}
   }
-
-  const { complet } = message
-
-  if(complet === true) {
-      debug("emettreMessagesBackup Declencher un backup complet avec rotation des archives")
-      const evenement = { complet: true }
-
-      // Rotation repertoire transactions
-      await _consignationManager.rotationBackupTransactions()
-
-      await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
-  } else {
-      debug("emettreMessagesBackup Emettre trigger backup incremental")
-      const evenement = { complet: false }
-      await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
-  }
-
-  return {ok: true}
 }
 
 module.exports = { init, on_connecter, startConsuming, stopConsuming }

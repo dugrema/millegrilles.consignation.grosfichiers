@@ -100,6 +100,7 @@ async function abortMultipartUploads(opts) {
     const reponseListe = await _s3_client.send(command)
 
     const uploads = reponseListe.Uploads
+    debug("abortMultipartUploads uploads ", uploads)
     if(uploads) {
         for await(let u of uploads) {
             const command = new AbortMultipartUploadCommand({
@@ -107,6 +108,7 @@ async function abortMultipartUploads(opts) {
                 Key: u.Key,
                 UploadId: u.UploadId,
             })
+            debug("abortMultipartUploads command ", command)
             const response = await _s3_client.send(command)
             debug("abortMultipartUpload Retirer upload incomplet de ", response.Key)
         }
@@ -512,50 +514,64 @@ async function sauvegarderBackupTransactions(message) {
     debug("Backup %s date %O sauvegarde sous %O", domaine, dateFinBackup, pathFichier)
 }
 
-async function rotationBackupTransactions(message) {
-    const { domaine, partition } = message
-    debug("rotationBackupTransactions", domaine, partition)
+async function rotationBackupTransactions() {
+    debug("rotationBackupTransactions")
 
-    const listeFichiers = []
-    await parcourirBackup(info=>listeFichiers.push(info), {prefix: path.join('b/transactions', domaine)})
+    const maxArchives = 2  // transaction.IDX, valeurs superieures vont etre supprimees
+
+    const regex = /^b\/transactions(\.([0-9]+))?(.*)$/
+    const dictFichiersExistants = {}
+    await parcourirBackup(item=>{
+        if(!item) return  // Ok, dernier item
+        debug("rotationBackupTransactions Backup item : ", item)
+        const key = item.Key
+        const result = key.match(regex)
+        console.debug("Result ", result)
+        const groupe = Number.parseInt(result[2]) || 0
+        const subPath = result[3]
+        const dictGroupe = dictFichiersExistants[''+groupe] || {groupe, liste: []}
+        dictGroupe.liste.push({groupe, item, key, subPath})
+        dictFichiersExistants[''+groupe] = dictGroupe
+    }, {prefix: 'b/transactions'})
+
+    // Faire une liste flat, trier par ordre inverse de groupe
+    const listeFichiers = Object.values(dictFichiersExistants).reduce((acc, groupe)=>acc.concat(groupe.liste), [])
+    listeFichiers.sort((a,b)=>b.groupe-a.groupe)
 
     // Supprimer archives
     if(listeFichiers.length > 0) {
-        const listeFichiers = []
-        await parcourirBackup(info=>listeFichiers.push(info), {prefix: path.join('b/archives', domaine)})
-        debug("Liste fichiers backup archives ", listeFichiers)
-        if(listeFichiers.length > 0) {
+        
+        // Supprimer les archives expirees
+        const supprimer = []
+        for await (const fichier of listeFichiers) {
+            const {groupe, item, key, subPath} = fichier
+            if(groupe >= maxArchives) {
+                supprimer.push({Key: key})
+            }
+        }
+        if(supprimer.length > 0) {
             const params = {
                 Bucket: _s3_bucket_backup,
-                Delete: {
-                    Objects: listeFichiers.filter(item=>!!item).map(item=>{
-                        return {Key: path.join(item.directory, item.filename)}
-                    })
-                },
+                Delete: { Objects: supprimer }
             }
             debug("rotationBackupTransactions Params ", params)
             const command = new DeleteObjectsCommand(params)
             const reponse = await _s3_client.send(command)
             debug("rotationBackupTransactions Reponse delete backups ", reponse)
         }
-    } else {
-        debug("rotationBackupTransactions Aucuns fichiers de backup courant, on conserve archives (si presentes)")
-    }
 
-    // Copier fichiers courant vers archives
-    {
-        debug("Liste fichiers backup ", listeFichiers)
-        if(listeFichiers.length > 0) {
-            for await (f of listeFichiers) {
-                if(!f) continue
-                const dirDest = f.directory.replace('b/transactions/', '')
-                await renameFichier(
-                    path.join(f.directory, f.filename), 
-                    path.join('b/archives', dirDest, f.filename), 
-                    {bucket: _s3_bucket_backup}
-                )
+        // Faire rotation des archives en ordre decroissant
+        for await (const fichier of listeFichiers) {
+            const {groupe, item, key, subPath} = fichier
+            if(groupe < maxArchives) {
+                const nouvelleKey = path.join(`b/transactions.${''+(groupe+1)}`, subPath)
+                debug("Renommer archive %s -> %s", key, nouvelleKey)
+                await renameFichier(key, nouvelleKey, {bucket: _s3_bucket_backup})
             }
         }
+
+    } else {
+        debug("rotationBackupTransactions Aucuns fichiers de backup courant, on conserve archives (si presentes)")
     }
 }
 
