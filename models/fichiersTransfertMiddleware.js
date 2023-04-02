@@ -273,12 +273,7 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
         let compteurTaille = 0
         const promise = new Promise((resolve, reject)=>{
             writer.on('close', resolve)
-            writer.on('error', err=>{ 
-                fsPromises.unlink(pathFichierPut).catch(err=>{
-                    console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
-                })
-                reject(err)
-            })
+            writer.on('error', reject)
 
             inputStream.on('data', chunk=>{ 
                 compteurTaille += chunk.length
@@ -290,14 +285,24 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
                 const nouvellePosition = compteurTaille + contenuStatus.position
                 majFichierEtatUpload(pathStaging, fuuid, {position: nouvellePosition})
                     .then(()=>{
-                        debug("stagingPut Rename fichier work vers ", pathFichierPut)
-                        writer.close()
-                        return fsPromises.rename(pathFichierPutWork, pathFichierPut)
+                        writer.close()  // Resolve via writer.on close
                     })
-                    .catch(err=>reject(err))
+                    .catch(reject)
             })
         })
         inputStream.pipe(writer)
+
+        promise
+            .then(()=>{
+                debug("stagingPut Rename fichier work vers ", pathFichierPut)
+                fsPromises.rename(pathFichierPutWork, pathFichierPut)
+            })
+            .catch(err=>{
+                fsPromises.unlink(pathFichierPut).catch(err=>{
+                    console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
+                })
+                throw err
+            })
         
         return promise
     } else {
