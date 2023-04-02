@@ -24,6 +24,7 @@ function on_connecter() {
     // ajouterCb('evenement.grosfichiers.fuuidRecuperer', traiterFichiersRecuperes)
     ajouterCb('requete.fichiers.fuuidVerifierExistance', verifierExistanceFichiers)
     ajouterCb(`commande.fichiers.confirmerActiviteFuuids`, confirmerActiviteFuuids)
+    ajouterCb('commande.fichiers.declencherSync', declencherSyncPrimaire)
 }
 
 function ajouterCb(rk, cb, opts) {
@@ -92,6 +93,17 @@ async function confirmerActiviteFuuids(message, rk, opts) {
         const archive = message.archive || false
         debug("confirmerActiviteFuuids recu - ajouter a la liste %d fuuids (archive : %s)", fuuids.length, archive)
         await _consignationManager.recevoirFuuidsDomaines(fuuids, {archive})
+    }
+}
+
+async function declencherSyncPrimaire(message, rk, opts) {
+    const properties = opts.properties || {}
+    if(_consignationManager.estPrimaire() === true) {
+      debug('declencherSyncPrimaire')
+      _consignationManager.demarrerSynchronization()
+        .catch(err=>console.error(new Date() + ' publication.declencherSyncPrimaire Erreur traitement ', err))
+      const reponse = {ok: true}
+      await _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
     }
 }
 

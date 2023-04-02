@@ -20,12 +20,13 @@ function on_connecter() {
     ajouterCb('evenement.fichiers.consignationPrimaire', consignationPrimaire)
     ajouterCb('commande.fichiers.reactiverFuuids', reactiverFuuids)
     ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration)
-    ajouterCb(`commande.fichiers.declencherSync`, declencherSyncPrimaire)
-    ajouterCb(`evenement.CoreTopologie.changementConsignationPrimaire`, changementConsignationPrimaire)
-
+    // ajouterCb('commande.fichiers.declencherSync', declencherSyncPrimaire)
+    // ajouterCb('commande.fichiers.demarrerBackupTransactions', demarrerBackupTransactions)
+    ajouterCb('evenement.CoreTopologie.changementConsignationPrimaire', changementConsignationPrimaire)
+    
     // Synchronisation
     // ajouterCb(`evenement.fichiers.syncPret`, SYNCINFO)
-    ajouterCb(`evenement.fichiers.declencherSyncSecondaire`, declencherSyncSecondaire)
+    ajouterCb('evenement.fichiers.declencherSyncSecondaire', declencherSyncSecondaire)
   
     // Commandes SSH/SFTP
     ajouterCb('requete.fichiers.getPublicKeySsh', getPublicKeySsh)
@@ -34,8 +35,13 @@ function on_connecter() {
 function ajouterCb(rk, cb, opts) {
     opts = opts || {}
   
+    debug("Enregistrer callback pour rk ", rk)
+
     _mq.routingKeyManager.addRoutingKeyCallback(
-        (routingKey, message, opts)=>{return cb(message, routingKey, opts)},
+        (routingKey, message, opts)=>{
+            debug("Message recu sur rk %s : %O", rk, message)
+            return cb(message, routingKey, opts)
+        },
         [rk],
         {}
     )
@@ -53,17 +59,17 @@ async function traiterFichiersSupprimes(message, rk, opts) {
     }
 }
 
-async function traiterFichiersRecuperes(message, rk, opts) {
-    const fuuids = message.fuuids
-    debug("traiterFichiersRecuperes, fuuids : %O", fuuids)
-    for(let fuuid of fuuids) {
-        try {
-            await _consignationManager.recupererFichier(fuuid)
-        } catch(err) {
-            debug("Erreur recuperation fichier : %O", err)
-        }
-    }
-}
+// async function traiterFichiersRecuperes(message, rk, opts) {
+//     const fuuids = message.fuuids
+//     debug("traiterFichiersRecuperes, fuuids : %O", fuuids)
+//     for(let fuuid of fuuids) {
+//         try {
+//             await _consignationManager.recupererFichier(fuuid)
+//         } catch(err) {
+//             debug("Erreur recuperation fichier : %O", err)
+//         }
+//     }
+// }
 
 async function consignationPrimaire(message, rk, opts) {
     debug("Message consignation primaire (estPrimaire? %s) : %O", _consignationManager.estPrimaire(), message)
@@ -121,17 +127,6 @@ function getPublicKeySsh(message, rk, opts) {
 async function changementConsignationPrimaire(message, rk, opts) {
     const instanceIdPrimaire = message.instance_id
     await _consignationManager.setEstConsignationPrimaire(instanceIdPrimaire===_instanceId, instanceIdPrimaire)
-}
-  
-async function declencherSyncPrimaire(message, rk, opts) {
-    const properties = opts.properties || {}
-    if(_consignationManager.estPrimaire() === true) {
-      debug('declencherSyncPrimaire')
-      _consignationManager.demarrerSynchronization()
-        .catch(err=>console.error(new Date() + ' publication.declencherSyncPrimaire Erreur traitement ', err))
-      const reponse = {ok: true}
-      await _mq.transmettreReponse(reponse, properties.replyTo, properties.correlationId)
-    }
 }
   
 async function declencherSyncSecondaire(message, rk, opts) {

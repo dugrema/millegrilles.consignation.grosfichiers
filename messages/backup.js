@@ -40,9 +40,18 @@ function enregistrerChannel() {
     { qCustom: 'backup', exchange }
   )
 
+  // Obsolete, retirer lorsque tous les domaines seront recompiles (requis pour vieux backup)
   _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return recevoirRotationBackupTransactions(message, opts)},
+    (_routingKey, message, opts)=>{
+      if(_consignationManager.estPrimaire() === true) return {ok: true}
+    },
     ['commande.fichiers.rotationBackupTransactions'],
+    { qCustom: 'backup', exchange }
+  )
+
+  _mq.routingKeyManager.addRoutingKeyCallback(
+    (_routingKey, message, opts)=>{return recevoirRotationBackup(message, opts)},
+    ['commande.fichiers.rotationBackup'],
     { qCustom: 'backup', exchange }
   )
 
@@ -81,19 +90,20 @@ async function recevoirConserverBackup(message, opts) {
     return reponse
 }
 
-async function recevoirRotationBackupTransactions(message, opts) {
-  debug("recevoirRotationBackupTransactions, message : %O\nopts %O", message, opts)
+async function recevoirRotationBackup(message, opts) {
+  if(_consignationManager.estPrimaire() === true) return null  // Primaire, ne rien faire
+  debug("recevoirRotationBackup, message : %O\nopts %O", message, opts)
+
   let reponse = {ok: true}
-  // try {
-  //     reponse = await rotationBackupTransactions(_mq, _consignationManager, message)
-  //     if(_consignationManager.estPrimaire() !== true) reponse = null  // Secondaire, ne pas repondre
-  // } catch(err) {
-  //     console.error("ERROR recevoirRotationBackupTransactions: %O", err)
-  //     reponse = {ok: false, err: ''+err}
-  // }
 
-  debug("recevoirRotationBackupTransactions reponse %O", reponse)
+  try {
+    await _consignationManager.rotationBackupTransactions(message)
+  } catch(err) {
+    console.error("ERROR recevoirRotationBackup: %O", err)
+    reponse = {ok: false, err: ''+err}
+  }
 
+  debug("recevoirRotationBackup reponse %O", reponse)
   return reponse
 }
 
@@ -156,6 +166,10 @@ async function demarrerBackupTransactions(message, opts) {
         // Rotation repertoire transactions
         await _consignationManager.rotationBackupTransactions()
 
+        // Emettre un message de rotation pour tous les serveurs secondaires
+        await _mq.emettreEvenement(evenement, 'fichiers', {action: 'rotationBackup', attacherCertificat: true})
+
+        // Declencer le backup de tous les domaines (backend)
         await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
     } else {
         debug("emettreMessagesBackup Emettre trigger backup incremental")
