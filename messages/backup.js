@@ -1,6 +1,6 @@
 const debug = require('debug')('messages:backup')
 const forgecommon = require('@dugrema/millegrilles.utiljs/src/forgecommon')
-const { conserverBackup, rotationBackupTransactions, 
+const { conserverBackup,
   getClesBackupTransactions: getClesBackupTransactionsRun,
   getBackupTransaction: getBackupTransactionRun,
 } = require('../util/traitementBackup')
