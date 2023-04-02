@@ -151,7 +151,7 @@ async function reactiverFuuids(message, rk, opts) {
     await _mq.transmettreReponse(resultat, properties.replyTo, properties.correlationId)
 }
 
-async function rotationBackup(message, opts) {
+async function rotationBackup(message, rk, opts) {
     if(_consignationManager.estPrimaire() === true) return null  // Primaire, ne rien faire
     debug("rotationBackup, message : %O\nopts %O", message, opts)
   
