@@ -179,10 +179,10 @@ class TransfertPrimaire {
             while(this.queueUploadsFuuids.length > 0) {
                 const fuuid = this.queueUploadsFuuids.shift()  // FIFO
                 try {
-                    debug("Traiter PUT pour item %s", fuuid)
+                    debug("threadUploadFichiersConsignation Traiter PUT pour item %s", fuuid)
                     await this.putFichier(fuuid)
                 } catch(err) {
-                    console.error(new Date() + " Erreur download %s du primaire %O", fuuid, err)
+                    console.error(new Date() + " threadUploadFichiersConsignation Erreur upload %s vers primaire %O", fuuid, err)
                     const response = err.response || {}
                     if(response.status >= 400 && response.status <= 599) {
                         console.warn("Abandon threadDownloadFichiersConsignation sur erreur serveur, redemarrage pending")
@@ -559,7 +559,7 @@ class TransfertPrimaire {
 
         const fuuidsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_PRIMAIRE)
         const fuuidsActifsPrimaireOriginal = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS_PRIMAIRE + '.original')
-        // const fuuidsManquantsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
+        const fuuidsManquantsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
         const fuuidsActifsLocaux = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS)
         const fuuidsOrphelins = path.join(pathDataFolder, FICHIER_FUUIDS_ORPHELINS)
         const fuuidsArchives = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES)
@@ -618,9 +618,9 @@ class TransfertPrimaire {
         // Trouver fichiers qui sont presents localement et manquants sur le primaire
         try {
             // Test de presence des fichiers de fuuids
-            await fsPromises.stat(fuuidsActifsPrimaireOriginal)
+            await fsPromises.stat(fuuidsActifsPrimaire)
             await new Promise((resolve, reject) => {
-                exec(`comm -13 ${fuuidsActifsLocaux} ${fuuidsActifsPrimaireOriginal} > ${fuuidsUploadPrimaire}`, error=>{
+                exec(`comm -12 ${fichierActifsArchives} ${fuuidsManquantsPrimaire} > ${fuuidsUploadPrimaire}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })

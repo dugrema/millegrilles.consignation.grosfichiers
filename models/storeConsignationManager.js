@@ -376,11 +376,14 @@ async function traiterFichiersConfirmes() {
 
             debug("Traitement des fichiers archives")
             try {
-                // Ajouter fichiers archives a fichierFuuidsReclamesActifsCourants (empecher ajout dans orphelins)
-                await combinerSortFiles([fichierFuuidsReclamesActifsCourants, fichierFuuidsReclamesArchivesCourants], fichierFuuidsReclamesActifsCourants)
-
-                // Extraire liste de fichiers actifs a transferer vers archives
                 if(estSupporteArchives()) {
+                    // Ajouter fichiers archives a fichierFuuidsReclamesActifsCourants (empecher ajout dans orphelins)
+                    await combinerSortFiles(
+                        [fichierFuuidsReclamesActifsCourants, fichierFuuidsReclamesArchivesCourants], 
+                        fichierFuuidsReclamesActifsCourants
+                    )
+
+                    // Extraire liste de fichiers actifs a transferer vers archives
                     const fuuidsVersArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_VERS_ARCHIVES)
                     await new Promise((resolve, reject)=>{
                         exec(`comm -12 ${fichierActifs} ${fichierFuuidsReclamesArchivesCourants} > ${fuuidsVersArchives}`, error=>{
