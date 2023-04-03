@@ -19,6 +19,7 @@ const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'fuuidsActifsPrimaire.txt',
       FICHIER_FUUIDS_NOUVEAUX_PRIMAIRE = 'fuuidsNouveauxPrimaire.txt',
       FICHIER_FUUIDS_ARCHIVES_PRIMAIRE = 'fuuidsArchivesPrimaire.txt',
+      FICHIER_FUUIDS_ARCHIVES_RECLAMEES_PRIMAIRE = 'fuuidsArchivesReclameesPrimaire',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
       FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
@@ -389,7 +390,7 @@ class TransfertPrimaire {
         const fuuidsNouveauxPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_NOUVEAUX_PRIMAIRE)
         const fuuidsManquantsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
         const fuuidsArchivesPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES_PRIMAIRE)
-        const fuuidsArchivesReclamesPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES_RECLAMES_PRIMAIRE)
+        const fuuidsArchivesReclameesPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES_RECLAMEES_PRIMAIRE)
         await this.downloadFichierListe(fuuidsActifsPrimaireOriginal, '/data/fuuidsActifs.txt.gz')
         await this.downloadFichierListe(fuuidsManquantsPrimaire, '/data/fuuidsManquants.txt.gz')
 
@@ -418,11 +419,11 @@ class TransfertPrimaire {
             else throw err
         }
         try {
-            await this.downloadFichierListe(fuuidsArchivesPrimaire, '/data/fuuidsReclamesArchives.courant.txt.gz')
+            await this.downloadFichierListe(fuuidsArchivesReclameesPrimaire, '/data/fuuidsReclamesArchives.courant.txt.gz')
         } catch(err) {
             const response = err.response || {}
             if(response.status === 404) { 
-                await fsPromises.writeFile(fuuidsArchivesPrimaire, '')  // Ecrire fichier vide
+                await fsPromises.writeFile(fuuidsArchivesReclameesPrimaire, '')  // Ecrire fichier vide
             } // Ok
             else throw err
         }
