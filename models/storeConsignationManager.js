@@ -352,6 +352,8 @@ async function traiterFichiersConfirmes() {
         const fuuidsReclamesArchivesTmp = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ARCHIVES + '.tmp')
         const fichierFuuidsReclamesArchivesCourants = path.join(getPathDataFolder(), 'fuuidsReclamesArchives.courant.txt')
 
+        const fichierActifsArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_ACTIFS_ARCHIVES)
+
         const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
         await fsPromises.mkdir(pathOrphelins, {recursive: true})
 
@@ -372,13 +374,13 @@ async function traiterFichiersConfirmes() {
             await sortFile(fuuidsReclamesArchivesTmp, fichierFuuidsReclamesArchivesCourants, {gzip: true})
             await fsPromises.rm(fuuidsReclamesArchivesTmp)
 
-            if(estSupporteArchives()) {
-                debug("Traitement des fichiers archives")
-                try {
-                    // Ajouter fichiers archives a fichierFuuidsReclamesActifsCourants (empecher ajout dans orphelins)
-                    await combinerSortFiles([fichierFuuidsReclamesActifsCourants, fichierFuuidsReclamesArchivesCourants], fichierFuuidsReclamesActifsCourants)
+            debug("Traitement des fichiers archives")
+            try {
+                // Ajouter fichiers archives a fichierFuuidsReclamesActifsCourants (empecher ajout dans orphelins)
+                await combinerSortFiles([fichierFuuidsReclamesActifsCourants, fichierFuuidsReclamesArchivesCourants], fichierFuuidsReclamesActifsCourants)
 
-                    // Extraire liste de fichiers actifs a transferer vers archives
+                // Extraire liste de fichiers actifs a transferer vers archives
+                if(estSupporteArchives()) {
                     const fuuidsVersArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_VERS_ARCHIVES)
                     await new Promise((resolve, reject)=>{
                         exec(`comm -12 ${fichierActifs} ${fichierFuuidsReclamesArchivesCourants} > ${fuuidsVersArchives}`, error=>{
@@ -386,15 +388,9 @@ async function traiterFichiersConfirmes() {
                             else resolve()
                         })
                     })
-
-                    // try {
-                    //     await deplacementVersArchives()
-                    // } catch(err) {
-                    //     console.error(new Date() + " traiterFichiersConfirmes ERROR Deplacement fichiers vers archives : ", err)
-                    // }
-                } catch(err) {
-                    console.error(new Date() + " traiterFichiersConfirmes ERROR Traitement fichiers archives : ", err)
                 }
+            } catch(err) {
+                console.error(new Date() + " traiterFichiersConfirmes ERROR Traitement fichiers archives : ", err)
             }
         } catch(err) {
             if(err.code === 'ENOENT') {
@@ -404,12 +400,11 @@ async function traiterFichiersConfirmes() {
             }
         }
 
-        // Traitement orphelins
         try {
             // Faire la liste des fuuids inconnus (reclames mais pas dans actifs / archives)
             const fuuidsManquants = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS)
             await new Promise((resolve, reject)=>{
-                exec(`comm -13 ${fichierActifs} ${fichierFuuidsReclamesActifsCourants} > ${fuuidsManquants} && gzip -9fk ${fuuidsManquants}`, error=>{
+                exec(`comm -13 ${fichierActifsArchives} ${fichierFuuidsReclamesActifsCourants} > ${fuuidsManquants} && gzip -9fk ${fuuidsManquants}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })
@@ -419,6 +414,7 @@ async function traiterFichiersConfirmes() {
             return
         }
 
+        // Traitement orphelins
         try {
             // Faire une rotation des fichiers orphelins existants (fait la diff avec actifs pour retirer fichiers reactives)
             await rotationOrphelins(pathOrphelins, fichierFuuidsReclamesActifsCourants)
