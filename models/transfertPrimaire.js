@@ -181,7 +181,8 @@ class TransfertPrimaire {
                     await this.putFichier(fuuid)
                 } catch(err) {
                     console.error(new Date() + " Erreur download %s du primaire %O", fuuid, err)
-                    if(err.response && err.response.status >= 400 && err.response.status <= 599) {
+                    const response = err.response || {}
+                    if(response.status >= 400 && response.status <= 599) {
                         console.warn("Abandon threadDownloadFichiersConsignation sur erreur serveur, redemarrage pending")
                         intervalleRedemarrageThread = 60_000  // Reessayer dans 1 minute
                         return
@@ -467,7 +468,11 @@ class TransfertPrimaire {
                     await this.downloadFichierDuPrimaire(fuuid)
                 } catch(err) {
                     console.error(new Date() + " Erreur download %s du primaire %O", fuuid, err)
-                    if(err.response && err.response.status >= 400 && err.response.status <= 599) {
+                    const response = err.response || {}
+                    if(response.status === 404) {
+                        console.info(new Date() + ' transfertPrimaire.threadDownloadFichiersConsignation Erreur download ', fuuid)
+                        continue
+                    } else if(response.status >= 400 && response.status <= 599) {
                         console.warn("Abandon threadDownloadFichiersConsignation sur erreur serveur, redemarrage pending")
                         intervalleRedemarrageThread = 60_000  // Reessayer dans 1 minute
                         return

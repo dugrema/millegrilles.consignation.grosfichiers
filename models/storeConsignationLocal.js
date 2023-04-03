@@ -110,7 +110,7 @@ async function getInfoFichier(fuuid, opts) {
         const stat = await fsPromises.stat(filePath)
         return { stat, filePath }
     } catch(err) {
-        if(err.code === 'ENOENT' && opts.supporteArchive === true) {
+        if(err.code === 'ENOENT' && opts.supporteArchives === true) {
             const filePath = getPathFichierArchives(fuuid)
             const stat = await fsPromises.stat(filePath)
             return { stat, filePath }
