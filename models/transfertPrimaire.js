@@ -142,7 +142,9 @@ class TransfertPrimaire {
         }
     }
 
-    ajouterDownload(fuuid) {
+    ajouterDownload(fuuid, opts) {
+        opts = opts || {}
+        
         if(this.ready !== true) throw new Error("Non disponible - Erreur init transfertPrimaire")
 
         if( ! this.queueDownloadsFuuids.includes(fuuid) ) {

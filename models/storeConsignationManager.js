@@ -347,8 +347,6 @@ async function traiterFichiersConfirmes() {
         const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
         await fsPromises.mkdir(pathOrphelins, {recursive: true})
 
-        //const fichierFuuidsReclamesArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ARCHIVES)
-
         // Traitement actifs
         try {
             // Trier, retirer doubles des fuuids reclames actifs

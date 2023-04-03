@@ -119,9 +119,16 @@ async function getInfoFichier(fuuid, opts) {
     }
 }
 
-async function consignerFichier(pathFichierStaging, fuuid) {
+async function consignerFichier(pathFichierStaging, fuuid, opts) {
+    opts = opts || {}
     const pathSource = path.join(pathFichierStaging, fuuid)
-    const pathFichier = getPathFichier(fuuid)
+
+    let pathFichier = null 
+    if(opts.archive === true) {
+        pathFichier = getPathFichierArchives(fuuid)
+    } else {
+        pathFichier = getPathFichier(fuuid)
+    }
     const dirFichier = path.dirname(pathFichier)
     await fsPromises.mkdir(dirFichier, {recursive: true})
 
