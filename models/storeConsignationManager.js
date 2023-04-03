@@ -366,7 +366,7 @@ async function traiterFichiersConfirmes() {
             await sortFile(fuuidsReclamesArchivesTmp, fichierFuuidsReclamesArchivesCourants, {gzip: true})
             await fsPromises.rm(fuuidsReclamesArchivesTmp)
 
-            if(_supporteArchives) {
+            if(estSupporteArchives()) {
                 debug("Traitement des fichiers archives")
                 try {
                     // Ajouter fichiers archives a fichierFuuidsReclamesActifsCourants (empecher ajout dans orphelins)
@@ -774,7 +774,7 @@ async function reactiverFuuids(fuuids) {
 
 function getInfoFichier(fuuid, opts) {
     opts = opts || {}
-    return _storeConsignationHandler.getInfoFichier(fuuid, {...opts, supporteArchives: _supporteArchives})
+    return _storeConsignationHandler.getInfoFichier(fuuid, {...opts, supporteArchives: estSupporteArchives()})
 }
 
 // function getInstanceId() {
@@ -818,11 +818,11 @@ function estPrimaire() {
 }
 
 function getFichierStream(fuuid) {
-    return _storeConsignationHandler.getFichierStream(fuuid, {supporteArchives: _supporteArchives})
+    return _storeConsignationHandler.getFichierStream(fuuid, {supporteArchives: estSupporteArchives()})
 }
 
 function estSupporteArchives() {
-    return _supporteArchives
+    return _estPrimaire || _supporteArchives
 }
 
 async function setEstConsignationPrimaire(primaire, instanceIdPrimaire) {
