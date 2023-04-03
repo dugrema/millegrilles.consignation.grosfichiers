@@ -91,37 +91,47 @@ async function init(mq, opts) {
     opts = opts || {}
     _mq = mq
 
-    // Toujours initialiser le type local - utilise pour stocker/charger la configuration
-    _storeConsignationHandler = StoreConsignationLocal
-    _storeConsignationHandler.init(opts)
+    try {
+        // Toujours initialiser le type local - utilise pour stocker/charger la configuration
+        _storeConsignationHandler = StoreConsignationLocal
+        _storeConsignationHandler.init(opts)
 
-    _pathStaging = opts.PATH_STAGING || PATH_STAGING_DEFAUT
+        _pathStaging = opts.PATH_STAGING || PATH_STAGING_DEFAUT
 
-    _preparerHttpsAgent(mq)  // Genere _httpsAgent
+        debug("Debut init")
 
-    const configuration = await _storeConsignationHandler.chargerConfiguration(opts)
-    const typeStore = configuration.type_store
+        _preparerHttpsAgent(mq)  // Genere _httpsAgent
 
-    const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
+        const configuration = await _storeConsignationHandler.chargerConfiguration(opts)
+        const typeStore = configuration.type_store
 
-    await changerStoreConsignation(typeStore, params)
+        const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
 
-    // Objet responsable de l'upload vers le primaire (si local est secondaire)
-    _transfertPrimaire = new TransfertPrimaire(mq, this)
-    _transfertPrimaire.threadUploadFichiersConsignation()  // Premiere run, initialise loop
+        await changerStoreConsignation(typeStore, params)
 
-    const managerFacade = new ManagerFacade()
+        // Objet responsable de l'upload vers le primaire (si local est secondaire)
+        _transfertPrimaire = new TransfertPrimaire(mq, this)
+        _transfertPrimaire.threadUploadFichiersConsignation()  // Premiere run, initialise loop
 
-    // Creer thread qui transfere les fichiers recus vers le systeme de consignation
-    _threadConsignation = new StoreConsignationThread(mq, managerFacade)
+        const managerFacade = new ManagerFacade()
 
-    // Handler backup sftp
-    _backupSftp = new BackupSftp(mq, this)
-    _backupSftp.setTimeout(15_000)  // Demarrer thread dans 15 secondes
+        // Creer thread qui transfere les fichiers recus vers le systeme de consignation
+        _threadConsignation = new StoreConsignationThread(mq, managerFacade)
 
-    // Entretien - emet la presence (premiere apres 10 secs, apres sous intervalles)
-    setTimeout(entretien, 10_000)
-    setInterval(entretien, 180_000)
+        // Handler backup sftp
+        _backupSftp = new BackupSftp(mq, this)
+        _backupSftp.setTimeout(15_000)  // Demarrer thread dans 15 secondes
+
+        // Entretien - emet la presence (premiere apres 10 secs, apres sous intervalles)
+        debug("Entretien initial")
+        setTimeout(entretien, 10_000)
+        setInterval(entretien, 180_000)
+
+        debug("init complete")
+    } catch(err) {
+        console.error(" !!! FATAL !!! Erreur init storeConsignationManager et handler", err)
+    }
+
 }
 
 async function changerStoreConsignation(typeStore, params, opts) {

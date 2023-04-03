@@ -427,9 +427,9 @@ async function marquerOrphelin(fuuid) {
 async function archiverFichier(fuuid) {
     const keyFile = path.join('c/', fuuid)
     const archiveKeyFile = path.join('a/', fuuid)
+    debug("Archiver fichier %s vers %s", fuuid, archiveKeyFile)
     await renameFichier(keyFile, archiveKeyFile)
 }
-
 
 async function _parcourir(bucketParams, callback, opts) {
     debug("_parcourir: Faire lecture AWS S3 sous %s", bucketParams.Bucket)
