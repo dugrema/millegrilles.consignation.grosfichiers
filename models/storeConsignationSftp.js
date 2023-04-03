@@ -85,7 +85,7 @@ async function getInfoFichier(fuuid) {
 async function reactiverFichier(fuuid) {
     debug("reactiverFichier %s", fuuid)
     const filePath = getPathFichier(fuuid)
-    const filePathDir = path.dir(filePath)
+    const filePathDir = path.dirname(filePath)
     await _sftpDao.mkdir(filePathDir)
     try {
         const filePathCorbeille = getPathFichierCorbeille(fuuid)
@@ -217,31 +217,33 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 async function marquerOrphelin(fuuid) {
     const pathFichier = getPathFichier(fuuid)
     const pathOrphelin = getPathFichierOrphelins(fuuid)
-    const pathFichierOrphelinDir = path.dir(pathOrphelin)
+    const pathFichierOrphelinDir = path.dirname(pathOrphelin)
     await _sftpDao.mkdir(pathFichierOrphelinDir)
+    debug("Marquer orphelin %s vers %s", fuuid, pathArchive)
     await _sftpDao.rename(pathFichier, pathOrphelin)
 }
 
 async function archiverFichier(fuuid) {
     const pathFichier = getPathFichier(fuuid)
     const pathArchive = getPathFichierArchives(fuuid)
-    const pathFichieArchivesDir = path.dir(pathArchive)
+    const pathFichieArchivesDir = path.dirname(pathArchive)
     await _sftpDao.mkdir(pathFichieArchivesDir)
+    debug("Archiver fichier %s vers %s", fuuid, pathArchive)
     await _sftpDao.rename(pathFichier, pathArchive)
 }
 
 async function parcourirFichiers(callback, opts) {
-    debug("Parcourir fichiers")
-    try {
-        // var sftp = await sftpClient()
-        const pathLocal = getRemotePathFichiers()
-        debug("sftp.parcourirFichiers Path local %s", pathLocal)
-        await _sftpDao.parcourirFichiersRecursif(pathLocal, callback, opts)
-        await callback()  // Dernier appel avec aucune valeur (fin traitement)
-    } finally {
-        debug("parcourirFichiers fermer sftp")
-        // sftp.end(err=>debug("SFTP end : %O", err))
-    }
+    const pathLocal = getRemotePathFichiers()
+    debug("sftp.parcourirFichiers Path local %s", pathLocal)
+    await _sftpDao.parcourirFichiersRecursif(pathLocal, callback, opts)
+    await callback()  // Dernier appel avec aucune valeur (fin traitement)
+}
+
+async function parcourirArchives(callback, opts) {
+    const pathArchives = getRemotePathArchives()
+    debug("sftp.parcourirFichiers Path local %s", pathArchives)
+    await _sftpDao.parcourirFichiersRecursif(pathArchives, callback, opts)
+    await callback()  // Dernier appel avec aucune valeur (fin traitement)
 }
 
 async function purgerOrphelinsExpires() {
@@ -490,6 +492,8 @@ module.exports = {
     getInfoFichier, getFichierStream, 
     consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
     parcourirFichiers,
+
+    parcourirArchives,
 
     // Backup
     parcourirBackup,
