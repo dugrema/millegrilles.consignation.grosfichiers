@@ -10,7 +10,7 @@ const readdirp = require('readdirp')
 // const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
 // const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 
-const { chargerFuuidsListe, sortFile } = require('./fileutils')
+const { chargerFuuidsListe, sortFile, combinerSortFiles } = require('./fileutils')
 
 const StoreConsignationLocal = require('./storeConsignationLocal')
 const StoreConsignationSftp = require('./storeConsignationSftp')
@@ -40,6 +40,8 @@ const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
+      FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
+      FICHIER_FUUIDS_VERS_ARCHIVES = 'fuuidsVersArchives.txt',
       FICHIER_FUUIDS_UPLOAD_PRIMAIRE = 'fuuidsUploadPrimaire.txt',
       FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE = 'fuuidsDownloadPrimaire.txt',
       FICHIER_FUUIDS_RECLAMES_ACTIFS = 'fuuidsReclamesActifs.txt',
@@ -60,7 +62,8 @@ var _mq = null,
     _syncActif = true,
     _timeoutTraiterConfirmes = null,
     _pathStaging = PATH_STAGING_DEFAUT,
-    _httpsAgent = null
+    _httpsAgent = null,
+    _supporteArchives = true  // Consignation conserve les fichiers archives
 
 class ManagerFacade {
 
@@ -194,41 +197,6 @@ async function modifierConfiguration(params, opts) {
 
     return await _storeConsignationHandler.modifierConfiguration(params, opts)
 }
-
-
-// async function traiterRecuperer() {
-//     debug("Traitement des fichiers a recuperer")
-//     let batchFichiers = []
-    
-//     const callbackActionRecuperer = async item => {
-//         const {fuuid, supprime} = item
-//         if(supprime === false) {
-//             debug("Le fichier supprime %s est requis par un module, on le recupere", fuuid)
-//             await _storeConsignation.recoverFichierSupprime(fuuid)
-//         }
-//     }
-
-//     const callbackTraiterFichiersARecuperer = async item => {
-//         if(!item) {
-//             // Derniere batch
-//             if(batchFichiers.length > 0) await traiterBatch(batchFichiers, callbackActionRecuperer)
-//         } else {
-//             batchFichiers.push(path.basename(item.filename, '.corbeille'))
-//             while(batchFichiers.length > BATCH_SIZE) {
-//                 const batchCourante = batchFichiers.slice(0, BATCH_SIZE)
-//                 batchFichiers = batchFichiers.slice(BATCH_SIZE)
-//                 await traiterBatch(batchCourante, callbackActionRecuperer)
-//             }
-//         }
-//     }
-    
-//     try {
-//         const filtre = item => item.filename.endsWith('.corbeille')
-//         await _storeConsignation.parcourirFichiers(callbackTraiterFichiersARecuperer, {filtre})
-//     } catch(err) {
-//         console.error(new Date() + " ERROR traiterRecuperer() : %O", err)
-//     }
-// }
 
 async function entretien() {
     try {
@@ -372,12 +340,16 @@ async function traiterFichiersConfirmes() {
         const fichierFuuidsReclamesActifs = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ACTIFS)
         const fichierFuuidsReclamesActifsTmp = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ACTIFS + '.tmp')
         const fichierFuuidsReclamesActifsCourants = path.join(getPathDataFolder(), 'fuuidsReclamesActifs.courant.txt')
+        const fuuidsReclamesArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ARCHIVES)
+        const fuuidsReclamesArchivesTmp = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ARCHIVES + '.tmp')
+        const fichierFuuidsReclamesArchivesCourants = path.join(getPathDataFolder(), 'fuuidsReclamesArchives.courant.txt')
 
         const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
         await fsPromises.mkdir(pathOrphelins, {recursive: true})
 
         //const fichierFuuidsReclamesArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ARCHIVES)
 
+        // Traitement actifs
         try {
             // Trier, retirer doubles des fuuids reclames actifs
             await fsPromises.rename(fichierFuuidsReclamesActifs, fichierFuuidsReclamesActifsTmp)
@@ -388,6 +360,45 @@ async function traiterFichiersConfirmes() {
             return
         }
 
+        // Traitement archives
+        try {
+            await fsPromises.rename(fuuidsReclamesArchives, fuuidsReclamesArchivesTmp)
+            await sortFile(fuuidsReclamesArchivesTmp, fichierFuuidsReclamesArchivesCourants, {gzip: true})
+            await fsPromises.rm(fuuidsReclamesArchivesTmp)
+
+            if(_supporteArchives) {
+                debug("Traitement des fichiers archives")
+                try {
+                    // Ajouter fichiers archives a fichierFuuidsReclamesActifsCourants (empecher ajout dans orphelins)
+                    await combinerSortFiles([fichierFuuidsReclamesActifsCourants, fichierFuuidsReclamesArchivesCourants], fichierFuuidsReclamesActifsCourants)
+
+                    // Extraire liste de fichiers actifs a transferer vers archives
+                    const fuuidsVersArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_VERS_ARCHIVES)
+                    await new Promise((resolve, reject)=>{
+                        exec(`comm -12 ${fichierActifs} ${fichierFuuidsReclamesArchivesCourants} > ${fuuidsVersArchives}`, error=>{
+                            if(error) return reject(error)
+                            else resolve()
+                        })
+                    })
+
+                    try {
+                        await deplacementVersArchives()
+                    } catch(err) {
+                        console.error(new Date() + " traiterFichiersConfirmes ERROR Deplacement fichiers vers archives : ", err)
+                    }
+                } catch(err) {
+                    console.error(new Date() + " traiterFichiersConfirmes ERROR Traitement fichiers archives : ", err)
+                }
+            }
+        } catch(err) {
+            if(err.code === 'ENOENT') {
+                debug("Aucun fichier de fuuids archives reclames, skip")
+            } else {
+                throw err
+            }
+        }
+
+        // Traitement orphelins
         try {
             // Faire la liste des fuuids inconnus (reclames mais pas dans actifs / archives)
             const fuuidsManquants = path.join(getPathDataFolder(), FICHIER_FUUIDS_MANQUANTS)
@@ -428,6 +439,26 @@ async function traiterFichiersConfirmes() {
         console.error(new Date() + " traiterFichiersConfirmes ERROR Erreur traitement : ", err)
     }
 
+}
+
+async function deplacementVersArchives() {
+    const fuuidsVersArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_VERS_ARCHIVES)
+    debug("Deplacer fichiers de la liste a archvier : %s", fuuidsVersArchives)
+
+    const cb = async fuuid => {
+        debug("Deplacer fuuid vers archives : ", fuuid)
+        try {
+            await _storeConsignationHandler.archiverFichier(fuuid)
+        } catch(err) {
+            if(err.code === 'ENOENT') {
+                // Ok, fichier deja archive ou inconnu
+            } else {
+                console.warn(new Date() + " WARN Echec marquer fichier %s comme archive : %O", fuuid, err)
+            }
+        }            
+    }
+    
+    await chargerFuuidsListe(fuuidsVersArchives, cb)
 }
 
 /** Fait une rotation des fichiers orphelins. Compare le resultat avec fuuids reclames courants */
@@ -743,7 +774,7 @@ async function reactiverFuuids(fuuids) {
 
 function getInfoFichier(fuuid, opts) {
     opts = opts || {}
-    return _storeConsignationHandler.getInfoFichier(fuuid, opts)
+    return _storeConsignationHandler.getInfoFichier(fuuid, {...opts, supporteArchives: _supporteArchives})
 }
 
 // function getInstanceId() {
@@ -787,7 +818,11 @@ function estPrimaire() {
 }
 
 function getFichierStream(fuuid) {
-    return _storeConsignationHandler.getFichierStream(fuuid)
+    return _storeConsignationHandler.getFichierStream(fuuid, {supporteArchives: _supporteArchives})
+}
+
+function estSupporteArchives() {
+    return _supporteArchives
 }
 
 async function setEstConsignationPrimaire(primaire, instanceIdPrimaire) {
@@ -833,7 +868,7 @@ module.exports = {
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
     
-    getPathDataFolder, estPrimaire, setEstConsignationPrimaire,
+    getPathDataFolder, estPrimaire, setEstConsignationPrimaire, estSupporteArchives,
     getHttpsAgent, ajouterDownloadPrimaire,
     consignerFichier, reactiverFuuids,
     
@@ -844,5 +879,4 @@ module.exports = {
     downloadFichiersBackup,
     getFichierStream,
     recevoirFuuidsDomaines,
-
 }

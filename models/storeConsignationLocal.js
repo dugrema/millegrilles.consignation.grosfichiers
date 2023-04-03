@@ -83,21 +83,40 @@ function getPathFichierArchives(fuuid) {
  * @param {} fuuid 
  * @returns ReadStream
  */
-async function getFichierStream(fuuid) {
+async function getFichierStream(fuuid, opts) {
     const pathFichier = getPathFichier(fuuid)
     try {
         return fs.createReadStream(pathFichier)
     } catch(err) {
-        if(err.errno === -2) return null
+        if(err.errno === -2) {
+            if(opts.supporteArchive === true) {
+                const pathFichier = getPathFichierArchives(fuuid)
+                try {
+                    return fs.createReadStream(pathFichier)
+                } catch(err) {
+                    // Rien a faire, return null
+                }
+            }
+            return null
+        }
         else throw err
     }
 }
 
 async function getInfoFichier(fuuid, opts) {
     opts = opts || {}
-    const filePath = getPathFichier(fuuid)
-    const stat = await fsPromises.stat(filePath)
-    return { stat, filePath }
+    try {
+        const filePath = getPathFichier(fuuid)
+        const stat = await fsPromises.stat(filePath)
+        return { stat, filePath }
+    } catch(err) {
+        if(err.code === 'ENOENT' && opts.supporteArchive === true) {
+            const filePath = getPathFichierArchives(fuuid)
+            const stat = await fsPromises.stat(filePath)
+            return { stat, filePath }
+        }
+        throw err  // Echec ou pas archive
+    }
 }
 
 async function consignerFichier(pathFichierStaging, fuuid) {
@@ -146,7 +165,7 @@ async function purgerOrphelinsExpires(opts) {
     const repertoireOrphelins = _pathOrphelins
     const settingsReaddirp = { type: 'files', alwaysStat: true, depth: 1 }
     for await (const entry of readdirp(repertoireOrphelins, settingsReaddirp)) {
-        debug("Marquer orphelin entry : ", entry)
+        debug("Marquer orphelin entry : ", entry.path)
         if( entry.stats.ctimeMs < expirationDate ) {
             try {
                 debug("Supprimer fichier orphelin : ", entry.basename)
@@ -160,11 +179,18 @@ async function purgerOrphelinsExpires(opts) {
 
 /** Deplace un fichier actif vers le dossier archives */
 async function archiverFichier(fuuid) {
-    const pathFichierArchives = getPathFichierArchives(fuuid),
-          pathDirFichierArchives = path.dirname(pathFichierActif)
-    const pathFichierActif = getPathFichier(fuuid)
+    const pathFichierActif = getPathFichier(fuuid),
+          pathFichierArchives = getPathFichierArchives(fuuid),
+          pathDirFichierArchives = path.dirname(pathFichierArchives)
 
-    await fsPromises.mkdir(pathDirFichierArchives, {recursive: true})
+    debug("Archiver fichier %s vers %s", fuuid, pathFichierArchives)
+
+    try {
+        await fsPromises.mkdir(pathDirFichierArchives, {recursive: true})
+    } catch(err) {
+        debug("Erreur creation repertoire archives %s : %O", pathDirFichierArchives, err)
+        throw err
+    }
     await fsPromises.rename(pathFichierActif, pathFichierArchives)
 }
 

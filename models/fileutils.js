@@ -33,4 +33,25 @@ async function sortFile(src, dest, opts) {
     })
 }
 
-module.exports = { chargerFuuidsListe, sortFile }
+async function combinerSortFiles(srcList, dest, opts) {
+    opts = opts || {}
+    const gzip = opts.gzip || false,
+          gzipsrc = opts.gzipsrc || false
+
+    let command = null
+    if(gzipsrc) {
+        command = `zcat ${srcList.join(' ')} | sort -u -o ${dest}`
+    } else {
+        command = `cat ${srcList.join(' ')} | sort -u -o ${dest}`
+    }
+    if(gzip) command += ` && gzip -9fk ${dest}`
+
+    await new Promise((resolve, reject)=>{
+        exec(command, error=>{
+            if(error) return reject(error)
+            else resolve()
+        })
+    })
+}
+
+module.exports = { chargerFuuidsListe, sortFile, combinerSortFiles }
