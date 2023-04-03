@@ -391,6 +391,8 @@ async function traiterFichiersConfirmes() {
                             else resolve()
                         })
                     })
+
+                    await deplacementVersArchives()
                 }
             } catch(err) {
                 console.error(new Date() + " traiterFichiersConfirmes ERROR Traitement fichiers archives : ", err)
