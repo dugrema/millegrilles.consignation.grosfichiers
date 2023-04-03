@@ -20,12 +20,14 @@ const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_NOUVEAUX_PRIMAIRE = 'fuuidsNouveauxPrimaire.txt',
       FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
       FICHIER_FUUIDS_ARCHIVES_PRIMAIRE = 'fuuidsArchivesPrimaire.txt',
-      FICHIER_FUUIDS_ARCHIVES_RECLAMEES_PRIMAIRE = 'fuuidsArchivesReclameesPrimaire',
+      FICHIER_FUUIDS_ARCHIVES_RECLAMEES_PRIMAIRE = 'fuuidsArchivesReclameesPrimaire.txt',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
       FICHIER_FUUIDS_MANQUANTS_PRIMAIRE = 'fuuidsManquantsPrimaire.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
       FICHIER_FUUIDS_UPLOAD_PRIMAIRE = 'fuuidsUploadPrimaire.txt',
-      FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE = 'fuuidsDownloadPrimaire.txt'
+      FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE = 'fuuidsDownloadPrimaire.txt',
+      FICHIER_FUUIDS_VERS_ARCHIVES = 'fuuidsVersArchives.txt',
+      FICHIER_FUUIDS_ACTIFS_ARCHIVES = 'fuuidsActifsArchives.txt'
 
 class TransfertPrimaire {
 
@@ -447,6 +449,7 @@ class TransfertPrimaire {
             })
         })
 
+
         // Generer listes pour upload et download
         await this.chargerListeFichiersMissing()
 
@@ -555,27 +558,30 @@ class TransfertPrimaire {
         const pathDataFolder = this.consignationManager.getPathDataFolder()
 
         const fuuidsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_PRIMAIRE)
-        const fuuidsManquantsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
-        const fuuidsLocaux = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS)
+        const fuuidsActifsPrimaireOriginal = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS_PRIMAIRE + '.original')
+        // const fuuidsManquantsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
+        const fuuidsActifsLocaux = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS)
         const fuuidsOrphelins = path.join(pathDataFolder, FICHIER_FUUIDS_ORPHELINS)
         const fuuidsArchives = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES)
         const fuuidsArchivesReclamesPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES_RECLAMEES_PRIMAIRE)
         const fuuidsUploadPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_UPLOAD_PRIMAIRE)
         const fuuidsActifsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
         const fuuidsDownloadPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE)
-    
+        const fuuidsVersArchives = path.join(pathDataFolder, FICHIER_FUUIDS_VERS_ARCHIVES)
+        const fichierActifsArchives = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS_ARCHIVES)
+
         try {
-            await fsPromises.stat(fuuidsLocaux)
+            await fsPromises.stat(fuuidsActifsLocaux)
         } catch(err) {
             debug("chargerListeFichiersMissing Fichier fuuids manquants locaux, pas de sync")
             return
         }
     
         try {
-            // Trouver les fichiers actifs qui sont sur le primaire mais pas localement
-            await fsPromises.stat(fuuidsActifsPrimaire)
+            // Trouver les fichiers sont sur le primaire mais pas localement
+            await fsPromises.stat(fichierActifsArchives)
             await new Promise((resolve, reject) => {
-                exec(`comm -13 ${fuuidsLocaux} ${fuuidsActifsPrimaire} > ${fuuidsDownloadPrimaire}`, error=>{
+                exec(`comm -13 ${fichierActifsArchives} ${fuuidsActifsPrimaire} > ${fuuidsDownloadPrimaire}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })
@@ -594,7 +600,15 @@ class TransfertPrimaire {
 
             // Ajouter liste d'archives manquantes de l'archive locale au download primaire
             await new Promise((resolve, reject) => {
-                exec(`comm -13 ${fuuidsArchives} ${fuuidsArchivesReclamesPrimaire} >> ${fuuidsDownloadPrimaire}`, error=>{
+                exec(`comm -13 ${fichierActifsArchives} ${fuuidsArchivesReclamesPrimaire} >> ${fuuidsDownloadPrimaire}`, error=>{
+                    if(error) return reject(error)
+                    else resolve()
+                })
+            })            
+
+            // Prendre fichiers actifs qui doivent etre deplaces vers archives
+            await new Promise((resolve, reject) => {
+                exec(`comm -12 ${fuuidsActifsLocaux} ${fuuidsArchivesReclamesPrimaire} > ${fuuidsVersArchives}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })
@@ -604,9 +618,9 @@ class TransfertPrimaire {
         // Trouver fichiers qui sont presents localement et manquants sur le primaire
         try {
             // Test de presence des fichiers de fuuids
-            await fsPromises.stat(fuuidsManquantsPrimaire)
+            await fsPromises.stat(fuuidsActifsPrimaireOriginal)
             await new Promise((resolve, reject) => {
-                exec(`comm -12 ${fuuidsLocaux} ${fuuidsManquantsPrimaire} > ${fuuidsUploadPrimaire}`, error=>{
+                exec(`comm -13 ${fuuidsActifsLocaux} ${fuuidsActifsPrimaireOriginal} > ${fuuidsUploadPrimaire}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })
@@ -624,7 +638,7 @@ class TransfertPrimaire {
             // Test de presence des fichiers de fuuids
             await fsPromises.stat(fuuidsPrimaire)
             await new Promise((resolve, reject) => {
-                exec(`comm -23 ${fuuidsLocaux} ${fuuidsPrimaire} > ${fuuidsOrphelins}`, error=>{
+                exec(`comm -23 ${fuuidsActifsLocaux} ${fuuidsPrimaire} > ${fuuidsOrphelins}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })

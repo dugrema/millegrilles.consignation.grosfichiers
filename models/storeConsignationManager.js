@@ -41,6 +41,7 @@ const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
       FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
+      FICHIER_FUUIDS_ACTIFS_ARCHIVES = 'fuuidsActifsArchives.txt',
       FICHIER_FUUIDS_VERS_ARCHIVES = 'fuuidsVersArchives.txt',
       FICHIER_FUUIDS_UPLOAD_PRIMAIRE = 'fuuidsUploadPrimaire.txt',
       FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE = 'fuuidsDownloadPrimaire.txt',
@@ -275,10 +276,17 @@ async function processusSynchronisation() {
         }
 
         try {
+            await deplacementVersArchives()
+        } catch(err) {
+            console.error(new Date() + " ERROR deplacementVersArchives ", err)
+        }
+
+        try {
             await traiterOrphelinsSecondaire()
         } catch(err) {
             console.error(new Date() + " ERROR traiterOrphelinsSecondaire ", err)
         }
+
     } catch(err) {
         console.error("storeConsignation.entretien() Erreur processusSynchronisation(2) ", err)
     } finally {
@@ -290,9 +298,7 @@ async function traiterOrphelinsSecondaire() {
     const pathFichiersPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
     const pathFichierOrphelins = path.join(getPathDataFolder(), FICHIER_FUUIDS_ORPHELINS)
     const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
-    const pathArchives = path.join(getPathDataFolder(), 'archives')
     await fsPromises.mkdir(pathOrphelins, {recursive: true})
-    await fsPromises.mkdir(pathArchives, {recursive: true})
 
     // Supprimer tous les orphelins dans la liste
     await rotationOrphelins(pathOrphelins, pathFichiersPrimaire)
@@ -381,11 +387,11 @@ async function traiterFichiersConfirmes() {
                         })
                     })
 
-                    try {
-                        await deplacementVersArchives()
-                    } catch(err) {
-                        console.error(new Date() + " traiterFichiersConfirmes ERROR Deplacement fichiers vers archives : ", err)
-                    }
+                    // try {
+                    //     await deplacementVersArchives()
+                    // } catch(err) {
+                    //     console.error(new Date() + " traiterFichiersConfirmes ERROR Deplacement fichiers vers archives : ", err)
+                    // }
                 } catch(err) {
                     console.error(new Date() + " traiterFichiersConfirmes ERROR Traitement fichiers archives : ", err)
                 }
@@ -444,6 +450,9 @@ async function traiterFichiersConfirmes() {
 async function deplacementVersArchives() {
     const fuuidsVersArchives = path.join(getPathDataFolder(), FICHIER_FUUIDS_VERS_ARCHIVES)
     debug("Deplacer fichiers de la liste a archvier : %s", fuuidsVersArchives)
+
+    const pathArchives = path.join(getPathDataFolder(), 'archives')
+    await fsPromises.mkdir(pathArchives, {recursive: true})
 
     const cb = async fuuid => {
         debug("Deplacer fuuid vers archives : ", fuuid)
@@ -752,6 +761,11 @@ async function genererListeLocale() {
         const fichierArchives = path.join(pathFichiers, FICHIER_FUUIDS_ARCHIVES)
         await sortFile(fichierArchivesNew, fichierArchives, {gzip: true})
         await fsPromises.rm(fichierArchivesNew)
+
+        // Combinaison des fichiers actifs et archives (presents sur le systeme)
+        const fichierActifsArchives = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS_ARCHIVES)
+        await combinerSortFiles([fichierActifs, fichierArchives], fichierActifsArchives)
+
     } catch(err) {
         console.error("storeConsignation.genererListeLocale Erreur copie fichiers actifs : ", err)
     }
