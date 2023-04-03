@@ -426,8 +426,8 @@ async function marquerOrphelin(fuuid) {
 
 async function archiverFichier(fuuid) {
     const keyFile = path.join('c/', fuuid)
-    const orphelinKeyFile = path.join('a/', fuuid)
-    await renameFichier(keyFile, orphelinKeyFile)
+    const archiveKeyFile = path.join('a/', fuuid)
+    await renameFichier(keyFile, archiveKeyFile)
 }
 
 
@@ -470,6 +470,18 @@ async function parcourirFichiers(callback, opts) {
         Bucket: _s3_bucket,
         MaxKeys: 1000,
         Prefix: 'c/',  // Path de consignation
+    }
+
+    return _parcourir(bucketParams, callback, opts)
+}
+
+async function parcourirArchives(callback, opts) {
+    debug("Parcourir archives")
+    
+    const bucketParams = {
+        Bucket: _s3_bucket,
+        MaxKeys: 1000,
+        Prefix: 'a/',  // Path d'archives
     }
 
     return _parcourir(bucketParams, callback, opts)
@@ -680,6 +692,8 @@ module.exports = {
     getInfoFichier, getFichierStream, 
     consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
     parcourirFichiers,
+
+    parcourirArchives,
 
     entretien,
 
