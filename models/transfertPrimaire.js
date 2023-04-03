@@ -18,6 +18,7 @@ const INTERVALLE_PUT_CONSIGNATION = 900_000,    // millisecs
 const FICHIER_FUUIDS_ACTIFS = 'fuuidsActifs.txt',
       FICHIER_FUUIDS_ACTIFS_PRIMAIRE = 'fuuidsActifsPrimaire.txt',
       FICHIER_FUUIDS_NOUVEAUX_PRIMAIRE = 'fuuidsNouveauxPrimaire.txt',
+      FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
       FICHIER_FUUIDS_ARCHIVES_PRIMAIRE = 'fuuidsArchivesPrimaire.txt',
       FICHIER_FUUIDS_ARCHIVES_RECLAMEES_PRIMAIRE = 'fuuidsArchivesReclameesPrimaire',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
@@ -552,6 +553,8 @@ class TransfertPrimaire {
         const fuuidsManquantsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
         const fuuidsLocaux = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS)
         const fuuidsOrphelins = path.join(pathDataFolder, FICHIER_FUUIDS_ORPHELINS)
+        const fuuidsArchives = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES)
+        const fuuidsArchivesReclamesPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES_RECLAMEES_PRIMAIRE)
         const fuuidsUploadPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_UPLOAD_PRIMAIRE)
         const fuuidsActifsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ACTIFS_PRIMAIRE)
         const fuuidsDownloadPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE)
@@ -578,6 +581,19 @@ class TransfertPrimaire {
             } else {
                 throw err
             }
+        }
+
+        if(this.consignationManager.estSupporteArchives()) {
+            debug("Support archives, on prepare les fichiers de catalogues")
+            await fsPromises.stat(fuuidsArchives)
+
+            // Ajouter liste d'archives manquantes de l'archive locale au download primaire
+            await new Promise((resolve, reject) => {
+                exec(`comm -13 ${fuuidsArchives} ${fuuidsArchivesReclamesPrimaire} >> ${fuuidsDownloadPrimaire}`, error=>{
+                    if(error) return reject(error)
+                    else resolve()
+                })
+            })            
         }
     
         // Trouver fichiers qui sont presents localement et manquants sur le primaire
