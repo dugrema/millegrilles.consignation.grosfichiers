@@ -290,7 +290,9 @@ async function traiterOrphelinsSecondaire() {
     const pathFichiersPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
     const pathFichierOrphelins = path.join(getPathDataFolder(), FICHIER_FUUIDS_ORPHELINS)
     const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
+    const pathArchives = path.join(getPathDataFolder(), 'archives')
     await fsPromises.mkdir(pathOrphelins, {recursive: true})
+    await fsPromises.mkdir(pathArchives, {recursive: true})
 
     // Supprimer tous les orphelins dans la liste
     await rotationOrphelins(pathOrphelins, pathFichiersPrimaire)
@@ -678,13 +680,17 @@ async function genererListeLocale() {
 
     const fichierActifsNew = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS + '.work')
     const fichierFuuidsActifsHandle = await fsPromises.open(fichierActifsNew, 'w')
+    const fichierArchivesNew = path.join(pathFichiers, FICHIER_FUUIDS_ARCHIVES + '.work')
+    const fichierFuuidsArchivesHandle = await fsPromises.open(fichierArchivesNew, 'w')
 
-    let ok = true,
-        nombreFichiersActifs = 0,
-        tailleActifs = 0
+    let nombreFichiersActifs = 0,
+        tailleActifs = 0,
+        nombreFichiersArchives = 0,
+        tailleArchives = 0
+
+    // Calculer actifs
     try {
         const streamFuuidsActifs = fichierFuuidsActifsHandle.createWriteStream()
-
         const callbackTraiterFichier = async item => {
             if(!item) {
                 streamFuuidsActifs.close()
@@ -696,40 +702,63 @@ async function genererListeLocale() {
             nombreFichiersActifs++
             tailleActifs += item.size
         }
-
         await _storeConsignationHandler.parcourirFichiers(callbackTraiterFichier)
     } catch(err) {
-        console.error(new Date() + " storeConsignation.genererListeLocale ERROR : %O", err)
-        ok = false
+        console.error(new Date() + " storeConsignation.genererListeLocale ERROR Actifs : %O", err)
+        throw err
     } finally {
         await fichierFuuidsActifsHandle.close()
     }
 
-    if(ok) {
-        debug("genererListeLocale Terminer information liste")
-        const info = {
-            nombreFichiersActifs, 
-            tailleActifs
+    // Calculer archives
+    try {
+        const streamFuuidsArchives = fichierFuuidsArchivesHandle.createWriteStream()
+        const callbackTraiterFichier = async item => {
+            if(!item) {
+                streamFuuidsArchives.close()
+                return  // Dernier fichier
+            }
+            const fuuid = item.filename.split('.').shift()
+            streamFuuidsArchives.write(fuuid + '\n')
+            nombreFichiersArchives++
+            tailleArchives += item.size
         }
-        const messageFormatte = await _mq.pki.formatterMessage(info, 'fichiers', {action: 'liste', ajouterCertificat: true})
-        debug("genererListeLocale messageFormatte : ", messageFormatte)
-        fsPromises.writeFile(path.join(pathFichiers, 'data.json'), JSON.stringify(messageFormatte))
+        await _storeConsignationHandler.parcourirArchives(callbackTraiterFichier)
+    } catch(err) {
+        console.error(new Date() + " storeConsignation.genererListeLocale ERROR Archives : %O", err)
+    } finally {
+        await fichierFuuidsArchivesHandle.close()
+    }
 
-        // Renommer fichiers .new
-        const fichierActifs = path.join(pathFichiers, '/fuuidsActifs.txt')
-        
-        try { 
-            // Copier le fichier de .work.txt a .txt, trier en meme temps
-            await sortFile(fichierActifsNew, fichierActifs, {gzip: true})
-            await fsPromises.rm(fichierActifsNew)
-        } catch(err) {
-            console.error("storeConsignation.genererListeLocale Erreur copie fichiers actifs : ", err)
-        }
+    debug("genererListeLocale Terminer information liste")
+    const info = {
+        nombreFichiersActifs, 
+        tailleActifs,
+        nombreFichiersArchives,
+        tailleArchives,
+    }
+    const messageFormatte = await _mq.pki.formatterMessage(info, 'fichiers', {action: 'liste', ajouterCertificat: true})
+    debug("genererListeLocale messageFormatte : ", messageFormatte)
+    fsPromises.writeFile(path.join(pathFichiers, 'data.json'), JSON.stringify(messageFormatte))
 
-        if(_estPrimaire) {
-            debug("Emettre evenement de fin du creation de liste du primaire")
-            await _mq.emettreEvenement(messageFormatte, 'fichiers', {action: 'syncPret', ajouterCertificat: true})
-        }
+    // Copier le fichier de .work.txt a .txt, trier en meme temps
+    try { 
+        // Actifs
+        const fichierActifs = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS)
+        await sortFile(fichierActifsNew, fichierActifs, {gzip: true})
+        await fsPromises.rm(fichierActifsNew)
+
+        // Archives
+        const fichierArchives = path.join(pathFichiers, FICHIER_FUUIDS_ARCHIVES)
+        await sortFile(fichierArchivesNew, fichierArchives, {gzip: true})
+        await fsPromises.rm(fichierArchivesNew)
+    } catch(err) {
+        console.error("storeConsignation.genererListeLocale Erreur copie fichiers actifs : ", err)
+    }
+
+    if(_estPrimaire) {
+        debug("Emettre evenement de fin du creation de liste du primaire")
+        await _mq.emettreEvenement(messageFormatte, 'fichiers', {action: 'syncPret', ajouterCertificat: true})
     }
 
     debug("genererListeLocale Fin")

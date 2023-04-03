@@ -9,7 +9,7 @@ const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegri
 const PATH_CONFIG_DIR = path.join(CONSIGNATION_PATH, 'config')
 const PATH_CONFIG_FICHIER = path.join(PATH_CONFIG_DIR, 'store.json')
 const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
-// const PATH_BACKUP_TRANSACTIONS_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions_archives')
+// const PATH_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'archives')
 
 const DEFAULT_URL_CONSIGNATION = 'https://fichiers:443',
       CONST_EXPIRATION_ORPHELINS = 86_400_000 * 3,
@@ -255,6 +255,11 @@ async function parcourirBackup(callback, opts) {
     await callback()  // Dernier appel avec aucune valeur (fin traitement)
 }
 
+async function parcourirArchives(callback, opts) {
+    await parcourirFichiersRecursif(_pathArchives, callback, opts)
+    await callback()  // Dernier appel avec aucune valeur (fin traitement)
+}
+
 async function parcourirFichiersRecursif(repertoire, callback, opts) {
     opts = opts || {}
     const depth = opts.depth || 1
@@ -458,6 +463,8 @@ module.exports = {
     getInfoFichier, getFichierStream, 
     consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
     parcourirFichiers,
+
+    parcourirArchives,
     
     // Backup
     parcourirBackup, 

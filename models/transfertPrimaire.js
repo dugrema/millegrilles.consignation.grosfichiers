@@ -144,7 +144,7 @@ class TransfertPrimaire {
 
     ajouterDownload(fuuid, opts) {
         opts = opts || {}
-        
+
         if(this.ready !== true) throw new Error("Non disponible - Erreur init transfertPrimaire")
 
         if( ! this.queueDownloadsFuuids.includes(fuuid) ) {
@@ -389,6 +389,7 @@ class TransfertPrimaire {
         const fuuidsNouveauxPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_NOUVEAUX_PRIMAIRE)
         const fuuidsManquantsPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_MANQUANTS_PRIMAIRE)
         const fuuidsArchivesPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES_PRIMAIRE)
+        const fuuidsArchivesReclamesPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_ARCHIVES_RECLAMES_PRIMAIRE)
         await this.downloadFichierListe(fuuidsActifsPrimaireOriginal, '/data/fuuidsActifs.txt.gz')
         await this.downloadFichierListe(fuuidsManquantsPrimaire, '/data/fuuidsManquants.txt.gz')
 
@@ -408,6 +409,15 @@ class TransfertPrimaire {
             else throw err
         }
         try {
+            await this.downloadFichierListe(fuuidsArchivesPrimaire, '/data/fuuidsArchives.txt.gz')
+        } catch(err) {
+            const response = err.response || {}
+            if(response.status === 404) { 
+                await fsPromises.writeFile(fuuidsArchivesPrimaire, '')  // Ecrire fichier vide
+            } // Ok
+            else throw err
+        }
+        try {
             await this.downloadFichierListe(fuuidsArchivesPrimaire, '/data/fuuidsReclamesArchives.courant.txt.gz')
         } catch(err) {
             const response = err.response || {}
@@ -419,7 +429,7 @@ class TransfertPrimaire {
 
         // Combiner actifs avec nouveaux
         await new Promise((resolve, reject)=>{
-            exec(`cat ${fuuidsActifsPrimaireOriginal} ${fuuidsNouveauxPrimaire} | sort -u -o ${fuuidsActifsPrimaire}`, error=>{
+            exec(`cat ${fuuidsActifsPrimaireOriginal} ${fuuidsNouveauxPrimaire} ${fuuidsArchivesPrimaire} | sort -u -o ${fuuidsActifsPrimaire}`, error=>{
                 if(error) return reject(error)
                 else resolve()
             })
