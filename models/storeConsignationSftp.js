@@ -246,6 +246,13 @@ async function parcourirArchives(callback, opts) {
     await callback()  // Dernier appel avec aucune valeur (fin traitement)
 }
 
+async function parcourirOrphelins(callback, opts) {
+    const pathArchives = getRemotePathOrphelins()
+    debug("sftp.parcourirFichiers Path local %s", pathArchives)
+    await _sftpDao.parcourirFichiersRecursif(pathArchives, callback, opts)
+    await callback()  // Dernier appel avec aucune valeur (fin traitement)
+}
+
 async function purgerOrphelinsExpires() {
     const expire = Math.floor((new Date().getTime() - CONST_EXPIRATION_ORPHELINS) / 1000)
     const pathOrphelins = getRemotePathOrphelins()
@@ -493,7 +500,7 @@ module.exports = {
     consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
     parcourirFichiers,
 
-    parcourirArchives,
+    parcourirArchives, parcourirOrphelins,
 
     // Backup
     parcourirBackup,

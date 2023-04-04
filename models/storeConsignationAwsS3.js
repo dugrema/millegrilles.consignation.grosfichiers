@@ -487,6 +487,18 @@ async function parcourirArchives(callback, opts) {
     return _parcourir(bucketParams, callback, opts)
 }
 
+async function parcourirOrphelins(callback, opts) {
+    debug("Parcourir orphelins")
+    
+    const bucketParams = {
+        Bucket: _s3_bucket,
+        MaxKeys: 1000,
+        Prefix: 'o/',  // Path d'archives
+    }
+
+    return _parcourir(bucketParams, callback, opts)
+}
+
 async function parcourirBackup(callback, opts) {
     debug("Parcourir backup")
     opts = opts || {}
@@ -693,7 +705,7 @@ module.exports = {
     consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
     parcourirFichiers,
 
-    parcourirArchives,
+    parcourirArchives, parcourirOrphelins,
 
     entretien,
 
