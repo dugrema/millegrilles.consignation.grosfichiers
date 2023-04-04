@@ -260,6 +260,11 @@ async function parcourirArchives(callback, opts) {
     await callback()  // Dernier appel avec aucune valeur (fin traitement)
 }
 
+async function parcourirOrphelins(callback, opts) {
+    await parcourirFichiersRecursif(_pathOrphelins, callback, opts)
+    await callback()  // Dernier appel avec aucune valeur (fin traitement)
+}
+
 async function parcourirFichiersRecursif(repertoire, callback, opts) {
     opts = opts || {}
     const depth = opts.depth || 1
@@ -464,7 +469,7 @@ module.exports = {
     consignerFichier, marquerOrphelin, purgerOrphelinsExpires, archiverFichier, reactiverFichier,
     parcourirFichiers,
 
-    parcourirArchives,
+    parcourirArchives, parcourirOrphelins,
     
     // Backup
     parcourirBackup, 

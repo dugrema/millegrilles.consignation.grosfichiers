@@ -665,9 +665,11 @@ async function emettrePresence() {
             const fichierData = await fsPromises.readFile(pathData, 'utf-8')
             const data = JSON.parse(fichierData)
             info.fichiers_nombre = data.nombreFichiersActifs
-            // info.corbeille_nombre = data.nombreFichiersCorbeille
+            info.archives_nombre = data.nombreFichiersArchives
+            info.orphelins_nombre = data.nombreFichiersOrphelins
             info.fichiers_taille = data.tailleActifs
-            // info.corbeille_taille = data.tailleCorbeille
+            info.archives_taille = data.tailleArchives
+            info.orphelins_taille = data.tailleOrphelins
 
         } catch(err) {
             console.error("storeConsignationLocal.emettrePresence ERROR Erreur chargement fichier data.json : %O", err)
@@ -706,7 +708,9 @@ async function genererListeLocale() {
     let nombreFichiersActifs = 0,
         tailleActifs = 0,
         nombreFichiersArchives = 0,
-        tailleArchives = 0
+        tailleArchives = 0,
+        nombreFichiersOrphelins = 0,
+        tailleOrphelins = 0
 
     // Calculer actifs
     try {
@@ -750,12 +754,25 @@ async function genererListeLocale() {
         await fichierFuuidsArchivesHandle.close()
     }
 
+    // Calculer orphelins
+    try {
+        const callbackTraiterFichier = async item => {
+            if(!item) {
+                return  // Dernier fichier
+            }
+            nombreFichiersOrphelins++
+            tailleOrphelins += item.size
+        }
+        await _storeConsignationHandler.parcourirOrphelins(callbackTraiterFichier)
+    } catch(err) {
+        console.error(new Date() + " storeConsignation.genererListeLocale ERROR Orphelins : %O", err)
+    }
+
     debug("genererListeLocale Terminer information liste")
     const info = {
-        nombreFichiersActifs, 
-        tailleActifs,
-        nombreFichiersArchives,
-        tailleArchives,
+        nombreFichiersActifs, tailleActifs,
+        nombreFichiersArchives, tailleArchives,
+        nombreFichiersOrphelins, tailleOrphelins,
     }
     const messageFormatte = await _mq.pki.formatterMessage(info, 'fichiers', {action: 'liste', ajouterCertificat: true})
     debug("genererListeLocale messageFormatte : ", messageFormatte)

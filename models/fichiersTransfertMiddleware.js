@@ -251,6 +251,7 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
     debug("stagingPut Conserver fichier work upload ", pathFichierPutWork)
 
     if(ArrayBuffer.isView(inputStream)) {
+        debug("stagingPut Conserver inpustream type ArrayBuffer fuuid %s, position %s", fuuid, position)
         // Traiter buffer directement
         await new Promise((resolve, reject)=>{
             writer.on('close', resolve)
@@ -267,9 +268,11 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
         const nouvellePosition = inputStream.length + contenuStatus.position
         await majFichierEtatUpload(pathStaging, fuuid, {position: nouvellePosition})
         await fsPromises.rename(pathFichierPutWork, pathFichierPut)
+        debug("stagingPut Fin conserver inpustream type ArrayBuffer fuuid %s, position %s", fuuid, position)
 
     } else if(typeof(inputStream._read === 'function')) {
         // Assumer stream
+        debug("stagingPut Conserver inpustream type Stream fuuid %s, position %s", fuuid, position)
         let compteurTaille = 0
         const promise = new Promise((resolve, reject)=>{
             writer.on('close', resolve)
@@ -296,6 +299,7 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
             .then(()=>{
                 debug("stagingPut Rename fichier work vers ", pathFichierPut)
                 fsPromises.rename(pathFichierPutWork, pathFichierPut)
+                debug("stagingPut Fin conserver inpustream type Stream fuuid %s, position %s", fuuid, position)
             })
             .catch(err=>{
                 fsPromises.unlink(pathFichierPut).catch(err=>{
