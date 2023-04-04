@@ -107,7 +107,8 @@ async function init(mq, opts) {
 
         const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
 
-        await changerStoreConsignation(typeStore, params)
+        await modifierConfiguration(configuration)
+        // await changerStoreConsignation(typeStore, params)
 
         // Objet responsable de l'upload vers le primaire (si local est secondaire)
         _transfertPrimaire = new TransfertPrimaire(mq, this)
@@ -202,11 +203,21 @@ async function chargerConfiguration(opts) {
 
 async function modifierConfiguration(params, opts) {
 
-    if(params.type_store) {
-        return await changerStoreConsignation(params.type_store, params, opts)
+    debug("modifierConfiguration : ", params)
+
+    if(params.supporte_archives !== undefined) {
+        _supporteArchives = params.supporte_archives
+    } else {
+        _supporteArchives = true
     }
 
-    return await _storeConsignationHandler.modifierConfiguration(params, opts)
+    debug("modifierConfiguration Supporte archives? ", _supporteArchives)
+
+    if(params.type_store) {
+        return await changerStoreConsignation(params.type_store, params, opts)
+    } else {
+        return await _storeConsignationHandler.modifierConfiguration(params, opts)
+    }
 }
 
 async function entretien() {
@@ -305,12 +316,18 @@ async function processusSynchronisation() {
 }
 
 async function traiterOrphelinsSecondaire() {
-    const pathFichiersPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
     const pathFichierOrphelins = path.join(getPathDataFolder(), FICHIER_FUUIDS_ORPHELINS)
     const pathOrphelins = path.join(getPathDataFolder(), 'orphelins')
     await fsPromises.mkdir(pathOrphelins, {recursive: true})
 
     // Supprimer tous les orphelins dans la liste
+    let pathFichiersPrimaire = null
+    if(estSupporteArchives()) {
+        pathFichiersPrimaire = path.join(getPathDataFolder(), FICHIER_FUUIDS_PRIMAIRE)
+    } else {
+        pathFichiersPrimaire = path.join(getPathDataFolder(), 'fuuidsActifsPrimaire.txt.original')
+    }
+    
     await rotationOrphelins(pathOrphelins, pathFichiersPrimaire)
     await fsPromises.rename(pathFichierOrphelins, path.join(pathOrphelins, 'orphelins.00'))
 }

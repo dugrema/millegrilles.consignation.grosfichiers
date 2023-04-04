@@ -578,10 +578,14 @@ class TransfertPrimaire {
         }
     
         try {
+            let fichierPrimaire = fuuidsActifsPrimaire
+            if( ! this.consignationManager.estSupporteArchives() ) {
+                fichierPrimaire = fuuidsActifsPrimaireOriginal
+            }
             // Trouver les fichiers sont sur le primaire mais pas localement
             await fsPromises.stat(fichierActifsArchives)
             await new Promise((resolve, reject) => {
-                exec(`comm -13 ${fichierActifsArchives} ${fuuidsActifsPrimaire} > ${fuuidsDownloadPrimaire}`, error=>{
+                exec(`comm -13 ${fichierActifsArchives} ${fichierPrimaire} > ${fuuidsDownloadPrimaire}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })
@@ -636,9 +640,17 @@ class TransfertPrimaire {
         // Trouver fichiers qui sont presents localement mais non requis par le primaire (orphelins)
         try {
             // Test de presence des fichiers de fuuids
+            let fichierPrimaireActifs = null
+            if(this.consignationManager.estSupporteArchives()) {
+                fichierPrimaireActifs = fuuidsPrimaire
+            } else {
+                // Exclure archives, on conserve les fichiers actifs sur le primaire
+                fichierPrimaireActifs = fuuidsActifsPrimaireOriginal
+            }
+            debug("chargerListeFichiersMissing Generer liste orphelins")
             await fsPromises.stat(fuuidsPrimaire)
             await new Promise((resolve, reject) => {
-                exec(`comm -23 ${fuuidsActifsLocaux} ${fuuidsPrimaire} > ${fuuidsOrphelins}`, error=>{
+                exec(`comm -23 ${fuuidsActifsLocaux} ${fichierPrimaireActifs} > ${fuuidsOrphelins}`, error=>{
                     if(error) return reject(error)
                     else resolve()
                 })
