@@ -550,7 +550,7 @@ async function rotationOrphelins(pathOrphelins, fichierReclames) {
                 if(err.code === 'ENOENT') {
                     // Ok, fichier deja retire
                 } else {
-                    console.warn(new Date() + " WARN Echec marquer fichier %s comme orphelin", fuuid)
+                    console.warn(new Date() + " WARN Echec marquer fichier %s comme orphelin : %O", fuuid, err)
                 }
             }            
         }

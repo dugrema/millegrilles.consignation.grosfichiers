@@ -390,6 +390,21 @@ SftpDao.prototype.rename = async function(srcPath, destPath) {
     })
 }
 
+SftpDao.prototype.touch = async function(srcPath) {
+    const sftp = await this.sftpClient()
+
+    // const stat = await this.stat(srcPath)
+    // console.debug("!!! STAT ", stat)
+
+    const newDate = new Date()
+    return new Promise(async (resolve, reject)=>{
+        sftp.utimes(srcPath, newDate, newDate, err=>{
+            if(err) return reject(err)
+            resolve()
+        })
+    })
+}
+
 SftpDao.prototype.stat = async function(pathFichier) {
     const sftp = await this.sftpClient()
 

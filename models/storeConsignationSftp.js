@@ -219,7 +219,8 @@ async function marquerOrphelin(fuuid) {
     const pathOrphelin = getPathFichierOrphelins(fuuid)
     const pathFichierOrphelinDir = path.dirname(pathOrphelin)
     await _sftpDao.mkdir(pathFichierOrphelinDir)
-    debug("Marquer orphelin %s vers %s", fuuid, pathArchive)
+    debug("Marquer orphelin %s vers %s", fuuid, pathOrphelin)
+    await _sftpDao.touch(pathFichier)  // Va partir le timer pour suppression orphelin
     await _sftpDao.rename(pathFichier, pathOrphelin)
 }
 
@@ -247,9 +248,9 @@ async function parcourirArchives(callback, opts) {
 }
 
 async function parcourirOrphelins(callback, opts) {
-    const pathArchives = getRemotePathOrphelins()
-    debug("sftp.parcourirFichiers Path local %s", pathArchives)
-    await _sftpDao.parcourirFichiersRecursif(pathArchives, callback, opts)
+    const pathOrphelins = getRemotePathOrphelins()
+    debug("sftp.parcourirFichiers Path local %s", pathOrphelins)
+    await _sftpDao.parcourirFichiersRecursif(pathOrphelins, callback, opts)
     await callback()  // Dernier appel avec aucune valeur (fin traitement)
 }
 
