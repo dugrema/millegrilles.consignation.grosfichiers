@@ -1,6 +1,6 @@
 {
   "name": "millegrilles.consignation.grosfichiers",
-  "version": "2023.4.0",
+  "version": "2023.4.1",
   "private": true,
   "scripts": {
     "start": "node ./bin/www",

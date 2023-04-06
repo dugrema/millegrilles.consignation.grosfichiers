@@ -29,7 +29,8 @@ const BATCH_SIZE = 100,
       INTERVALLE_SYNC = 3_600_000,  // 60 minutes
       INTERVALLE_THREAD_TRANSFERT = 1_200_000  // 20 minutes,
       NOMBRE_ARCHIVES_ORPHELINS = 4,
-      DUREE_ATTENTE_RECLAMATIONS = 10_000
+      DUREE_ATTENTE_RECLAMATIONS = 10_000,
+      BATCH_PRESENCE_NOMBRE_MAX = 1_000
 
 const CONST_CHAMPS_CONFIG = ['type_store', 'url_download', 'consignation_url']
 
@@ -72,6 +73,10 @@ class ManagerFacade {
     getTransfertPrimaire() { return _transfertPrimaire }
     getPathStaging() { return getPathStaging() }
     consignerFichier(pathFichierStaging, fuuid) { return consignerFichier(pathFichierStaging, fuuid) }
+}
+
+function getInstanceId() {
+    return mq.pki.cert.subject.getField('CN').value
 }
 
 function _preparerHttpsAgent(mq) {
@@ -745,6 +750,8 @@ async function genererListeLocale() {
 
     // Calculer actifs
     try {
+        let listeFuuidsVisites = []
+
         const streamFuuidsActifs = fichierFuuidsActifsHandle.createWriteStream()
         const callbackTraiterFichier = async item => {
             if(!item) {
@@ -753,11 +760,22 @@ async function genererListeLocale() {
             }
 
             const fuuid = item.filename.split('.').shift()
+            listeFuuidsVisites.push(fuuid)
             streamFuuidsActifs.write(fuuid + '\n')
             nombreFichiersActifs++
             tailleActifs += item.size
+
+            if(listeFuuidsVisites.length >= BATCH_PRESENCE_NOMBRE_MAX) {
+                debug("Emettre batch fuuids reconnus")
+                emettreBatchFuuidsVisites(listeFuuidsVisites)
+                    .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (actifs loop) Erreur emission batch fuuids visite : ", err))
+            }
         }
         await _storeConsignationHandler.parcourirFichiers(callbackTraiterFichier)
+        if(listeFuuidsVisites.length > 0) {
+            emettreBatchFuuidsVisites(listeFuuidsVisites)
+                .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (actifs) Erreur emission batch fuuids visite : ", err))
+        }
     } catch(err) {
         console.error(new Date() + " storeConsignation.genererListeLocale ERROR Actifs : %O", err)
         throw err
@@ -767,6 +785,8 @@ async function genererListeLocale() {
 
     // Calculer archives
     try {
+        let listeFuuidsVisites = []
+
         const streamFuuidsArchives = fichierFuuidsArchivesHandle.createWriteStream()
         const callbackTraiterFichier = async item => {
             if(!item) {
@@ -774,11 +794,22 @@ async function genererListeLocale() {
                 return  // Dernier fichier
             }
             const fuuid = item.filename.split('.').shift()
+            listeFuuidsVisites.push(fuuid)
             streamFuuidsArchives.write(fuuid + '\n')
             nombreFichiersArchives++
             tailleArchives += item.size
+
+            if(listeFuuidsVisites.length >= BATCH_PRESENCE_NOMBRE_MAX) {
+                debug("Emettre batch fuuids reconnus")
+                emettreBatchFuuidsVisites(listeFuuidsVisites)
+                    .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (archives loop) Erreur emission batch fuuids visite : ", err))
+            }
         }
         await _storeConsignationHandler.parcourirArchives(callbackTraiterFichier)
+        if(listeFuuidsVisites.length > 0) {
+            emettreBatchFuuidsVisites(listeFuuidsVisites)
+                .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (archives) Erreur emission batch fuuids visite : ", err))
+        }
     } catch(err) {
         console.error(new Date() + " storeConsignation.genererListeLocale ERROR Archives : %O", err)
     } finally {
@@ -835,6 +866,15 @@ async function genererListeLocale() {
     }
 
     debug("genererListeLocale Fin")
+}
+
+async function emettreBatchFuuidsVisites(listeFuuidsVisites) {
+    const message = {
+        fuuids: listeFuuidsVisites
+    }
+    const domaine = 'fichiers',
+          action = 'visiterFuuids'
+    await _mq.emettreEvenement(message, domaine, {action})
 }
 
 function parcourirFichiers(callback, opts) {
@@ -962,7 +1002,7 @@ async function consignerFichier(pathFichierStaging, fuuid) {
 }
 
 module.exports = { 
-    init, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
+    init, getInstanceId, changerStoreConsignation, chargerConfiguration, modifierConfiguration, getInfoFichier,
     supprimerFichier, 
 
     sauvegarderBackupTransactions, rotationBackupTransactions,
