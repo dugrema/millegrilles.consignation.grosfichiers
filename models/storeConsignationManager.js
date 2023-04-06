@@ -769,6 +769,7 @@ async function genererListeLocale() {
                 debug("Emettre batch fuuids reconnus")
                 emettreBatchFuuidsVisites(listeFuuidsVisites)
                     .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (actifs loop) Erreur emission batch fuuids visite : ", err))
+                listeFuuidsVisites = []
             }
         }
         await _storeConsignationHandler.parcourirFichiers(callbackTraiterFichier)
@@ -803,6 +804,7 @@ async function genererListeLocale() {
                 debug("Emettre batch fuuids reconnus")
                 emettreBatchFuuidsVisites(listeFuuidsVisites)
                     .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (archives loop) Erreur emission batch fuuids visite : ", err))
+                listeFuuidsVisites = []
             }
         }
         await _storeConsignationHandler.parcourirArchives(callbackTraiterFichier)
