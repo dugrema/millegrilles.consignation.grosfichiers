@@ -49,6 +49,8 @@ class TransfertPrimaire {
         this.urlConsignationTransfert = null
         this.instanceIdPrimaire = null
 
+        this.instanceId = mq.pki.cert.subject.getField('CN').value
+
         this.ready = this.init()
             .then(() => {
                 this.ready = true
@@ -67,7 +69,7 @@ class TransfertPrimaire {
         await this.reloadUrlTransfert()
     }
 
-    estPrimare() {
+    estPrimaire() {
         return this.instanceIdPrimaire === this.instance_id
     }
 
@@ -100,19 +102,30 @@ class TransfertPrimaire {
         )
     
         if (!reponse.ok) {
+            debug("Erreur reception reponse url transfert : ", reponse)
             throw new Error("Erreur configuration URL transfert (reponse MQ): ok = false")
         }
     
         const { instance_id, consignation_url } = reponse
+
+        let consignationUrl = new URL('https://fichiers:443')  // Default
+        try {
+            consignationUrl = new URL(consignation_url)
+        } catch(err) {
+            if(instance_id === this.instanceId) {
+                // ON est le primaire, OK
+                console.info(new Date() + " transfertPrimaire.reloadUrlTransfert Erreur chargement consignation url, utilisation default %s : %O", consignationUrl, err)
+            } else {
+                throw err  // On est secondaire, il faut recuperer un URL de consignation primaire
+            }
+        }
+        consignationUrl.pathname = '/fichiers_transfert'
     
-        const consignationURL = new URL(consignation_url)
-        consignationURL.pathname = '/fichiers_transfert'
-    
-        debug("Consignation URL : %s sur instance_id : %s", consignationURL.href, instance_id)
-        this.urlConsignationTransfert = consignationURL
+        debug("Consignation URL : %s sur instance_id : %s", consignationUrl.href, instance_id)
+        this.urlConsignationTransfert = consignationUrl
         this.instanceIdPrimaire = instance_id
     
-        return { url: consignationURL.href, instance_id }
+        return { url: consignationUrl.href, instance_id }
     }
 
     /** Lit tous les fichiers a uploader vers le primaire et les ajoute dans la Q */

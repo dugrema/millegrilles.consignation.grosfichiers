@@ -111,8 +111,22 @@ async function init(mq, opts) {
         // await changerStoreConsignation(typeStore, params)
 
         // Objet responsable de l'upload vers le primaire (si local est secondaire)
-        _transfertPrimaire = new TransfertPrimaire(mq, this)
-        _transfertPrimaire.threadUploadFichiersConsignation()  // Premiere run, initialise loop
+        try {
+            _transfertPrimaire = new TransfertPrimaire(mq, this)
+            _transfertPrimaire.threadUploadFichiersConsignation()  // Premiere run, initialise loop
+            await _transfertPrimaire.ready
+        } catch(err) {
+            console.warn("Erreur initialisation transfert primaire - assumer qu'on est en mode d'initialisation")
+            // Donner 15 secondes pour initialiser la configuration de la consignation dans CoreTopologie
+            setTimeout(()=>{
+                _transfertPrimaire.reloadUrlTransfert()
+                .catch(err=>{
+                    console.error("storeConsignationManager.init Echec de chargement de la configuration de transfert - arreter")
+                    // Si echec, va faire arreter l'execution
+                    throw err
+                })
+            }, 30_000)
+        }
 
         const managerFacade = new ManagerFacade()
 
