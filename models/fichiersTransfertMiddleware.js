@@ -220,11 +220,17 @@ async function majFichierEtatUpload(pathStaging, fuuid, data) {
  */
 async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
     opts = opts || {}
+    const hachagePart = opts.hachagePart
     if(typeof(position) === 'string') position = Number.parseInt(position)
 
     // Verifier si le repertoire existe, le creer au besoin
     const pathFichierPut = await getPathRecevoir(pathStaging, fuuid, position)
     debug("PUT fichier %s", pathFichierPut)
+
+    let verificateurHachage = null
+    if(hachagePart) {
+        verificateurHachage = new VerificateurHachage(hachagePart)
+    }
 
     const contenuStatus = await getFicherEtatUpload(pathStaging, fuuid)
     debug("stagingPut Status upload courant : ", contenuStatus)
@@ -235,7 +241,7 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
         err.response = {
             status: 409,
             headers: {'x-position': contenuStatus.position},
-            json: {position: contenuStatus.position}
+            data: {position: contenuStatus.position}
         }
         throw err
     } else if(position === 0) {
@@ -253,6 +259,20 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
     if(ArrayBuffer.isView(inputStream)) {
         debug("stagingPut Conserver inpustream type ArrayBuffer fuuid %s, position %s", fuuid, position)
         // Traiter buffer directement
+        if(verificateurHachage) {
+            verificateurHachage.update(inputStream)
+            try {
+                await verificateurHachage.verify()  // Lance erreur si hachage invalide
+            } catch(err) {
+                debug("Erreur de hachage ", err)
+                fsPromises.unlink(pathFichierPut).catch(err=>{
+                    console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
+                })
+                err.response = {status: 400, data: {ok: false, err: ''+err, code: 'Hash mismatch'}}
+                throw err
+            }
+            debug("Hachage part OK")
+        }
         await new Promise((resolve, reject)=>{
             writer.on('close', resolve)
             writer.on('error', err=>{ 
@@ -276,16 +296,39 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
         let compteurTaille = 0
         const promise = new Promise((resolve, reject)=>{
             writer.on('close', resolve)
-            writer.on('error', reject)
+            writer.on('error', err => {
+                debug("Erreur de hachage ", err)
+                fsPromises.unlink(pathFichierPut).catch(err=>{
+                    console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
+                })
+                err.response = {status: 400, data: {ok: false, err: ''+err}}
+                reject(err)
+            })
 
             inputStream.on('data', chunk=>{ 
                 compteurTaille += chunk.length
                 return chunk
             })
 
-            inputStream.on('end', ()=>{ 
+            inputStream.on('end', async () => { 
                 // Resultat OK
                 const nouvellePosition = compteurTaille + contenuStatus.position
+
+                if(verificateurHachage) {
+                    try {
+                        await verificateurHachage.verify()
+                    } catch(err) {
+                        debug("Erreur de hachage ", err)
+                        fsPromises.unlink(pathFichierPut).catch(err=>{
+                            console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
+                        })
+                        err.response = {status: 400, data: {ok: false, err: ''+err, code: 'Hash mismatch'}}
+                        return reject(err)
+                    }
+    
+                    debug("Hachage part OK")
+                }
+                
                 majFichierEtatUpload(pathStaging, fuuid, {position: nouvellePosition})
                     .then(()=>{
                         writer.close()  // Resolve via writer.on close
@@ -305,6 +348,10 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
                 fsPromises.unlink(pathFichierPut).catch(err=>{
                     console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
                 })
+                if(!err.response) {
+                    // Erreur generique
+                    err.response = {status: 400, data: {ok: false, err: ''+err}}
+                }
                 throw err
             })
         
