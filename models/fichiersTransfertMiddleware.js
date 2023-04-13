@@ -50,11 +50,12 @@ class FichiersMiddleware {
 
     async middlewareRecevoirFichierHandler(req, res, next, opts) {
         opts = opts || {}
-        debug("middlewareRecevoirFichierHandler DEBUG THIS ", this)
 
         const fuuid = req.params.fuuid
         const position = req.params.position || 0
-        debug("middlewareRecevoirFichier PUT fuuid %s : position %d", fuuid, position)
+        const hachagePart = req.headers['x-content-hash']
+
+        debug("middlewareRecevoirFichier PUT fuuid %s : position %d, hachagePart: %s", fuuid, position, hachagePart)
         
         if(!fuuid) {
             debug("middlewareRecevoirFichier ERREUR fuuid manquant")
@@ -62,18 +63,27 @@ class FichiersMiddleware {
         }
 
         try {
-            await stagingPut(this._pathStaging, req, fuuid, position, opts)
+            await stagingPut(this._pathStaging, req, fuuid, position, {...opts, hachagePart})
         } catch(err) {
             console.error("middlewareRecevoirFichier Erreur PUT: %O", err)
-            const response = err.response
-            if(response) {
-                if(response.headers) {
-                    for (const name of Object.keys(response.headers)) {
-                        res.setHeader(name, response.headers[name])
+            try {
+                const response = err.response
+                if(response) {
+                    if(response.headers) {
+                        for (const name of Object.keys(response.headers)) {
+                            res.setHeader(name, response.headers[name])
+                        }
                     }
+                    if(response.status) {
+                        res.status(response.status)
+                    } else {
+                        res.status(500)
+                    }
+                    debug("Reponse erreur : %O")
+                    return res.send(response.data)
                 }
-                if(response.status) res.status(response.status)
-                return res.send(response.data)
+            } catch(err) {
+                console.error("middlewareRecevoirFichierHandler ERROR preparation reponse erreur ", err)
             }
             return res.sendStatus(500)
         }
@@ -307,6 +317,9 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
 
             inputStream.on('data', chunk=>{ 
                 compteurTaille += chunk.length
+                if(verificateurHachage) {
+                    verificateurHachage.update(chunk)
+                }
                 return chunk
             })
 
@@ -319,9 +332,9 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
                         await verificateurHachage.verify()
                     } catch(err) {
                         debug("Erreur de hachage ", err)
-                        fsPromises.unlink(pathFichierPut).catch(err=>{
-                            console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
-                        })
+                        // fsPromises.unlink(pathFichierPut).catch(err=>{
+                        //     console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
+                        // })
                         err.response = {status: 400, data: {ok: false, err: ''+err, code: 'Hash mismatch'}}
                         return reject(err)
                     }
@@ -336,26 +349,27 @@ async function stagingPut(pathStaging, inputStream, fuuid, position, opts) {
                     .catch(reject)
             })
         })
-        inputStream.pipe(writer)
 
-        promise
-            .then(()=>{
-                debug("stagingPut Rename fichier work vers ", pathFichierPut)
-                fsPromises.rename(pathFichierPutWork, pathFichierPut)
-                debug("stagingPut Fin conserver inpustream type Stream fuuid %s, position %s", fuuid, position)
+        try {
+            inputStream.pipe(writer)
+
+            await promise
+            debug("stagingPut Rename fichier work vers ", pathFichierPut)
+            fsPromises.rename(pathFichierPutWork, pathFichierPut)
+            debug("stagingPut Fin conserver inpustream type Stream fuuid %s, position %s", fuuid, position)
+        } catch(err) {
+            fsPromises.unlink(pathFichierPut).catch(err=>{
+                console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
             })
-            .catch(err=>{
-                fsPromises.unlink(pathFichierPut).catch(err=>{
-                    console.error("Erreur delete part incomplet %s : %O", pathFichierPut, err)
-                })
-                if(!err.response) {
-                    // Erreur generique
-                    err.response = {status: 400, data: {ok: false, err: ''+err}}
-                }
-                throw err
-            })
-        
-        return promise
+
+            if(!err.response) {
+                // Erreur generique
+                err.response = {status: 400, data: {ok: false, err: ''+err}}
+            }
+
+            throw err
+        }
+
     } else {
         throw new Error("Type inputstream non supporte")
     }

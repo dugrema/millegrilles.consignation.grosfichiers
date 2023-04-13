@@ -32,11 +32,11 @@ function traiterCedule(message, rk, opts) {
     debug("Traiter cedule, message : %s", message.date_string)
 
 
-    if( flag_jour ) {
-        // Entretien fichiers supprimes
-        _consignationManager.entretienFichiersSupprimes()
-            .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
-    }
+    // if( flag_jour ) {
+    //     // Entretien fichiers supprimes
+    //     _consignationManager.entretienFichiersSupprimes()
+    //         .catch(err=>console.error("entretien ERROR entretienFichiersSupprimes a echoue : %O", err))
+    // }
 
     // Evenement trigger de backup
     emettreMessagesBackup(message).catch(err=>debug("Erreur emettre messages backup : %O", err))
