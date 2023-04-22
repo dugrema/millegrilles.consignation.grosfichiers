@@ -92,7 +92,7 @@ class StoreConsignationThread {
         try {
             const domaine = 'fichiers', action = 'consigne'
             const contenu = { 'hachage_bytes': etat.hachage }
-            this.mq.emettreEvenement(contenu, domaine, {action, exchange: '2.prive'})
+            this.mq.emettreEvenement(contenu, {domaine, action, exchange: '2.prive'})
                 .catch(err=>{
                     console.error("%O ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
                 })
@@ -161,7 +161,7 @@ class StoreConsignationThread {
         const evenement = {fuuid}
         try {
             this.mq.emettreEvenement(
-                evenement, 'fichiers', {action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
+                evenement, {domaine: 'fichiers', action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
         } catch(err) {
             console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err)
         }

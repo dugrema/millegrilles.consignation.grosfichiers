@@ -7,6 +7,8 @@ const axios = require('axios')
 const { exec } = require('child_process')
 const readdirp = require('readdirp')
 
+const { MESSAGE_KINDS } = require('@dugrema/millegrilles.utiljs/src/constantes')
+
 // const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
 // const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
 
@@ -486,7 +488,7 @@ async function traiterFichiersConfirmes() {
         }
 
         // Declencher sync sur les consignations secondaires
-        await _mq.emettreEvenement({}, 'fichiers', {action: 'declencherSyncSecondaire', ajouterCertificat: true})
+        await _mq.emettreEvenement({}, {domaine: 'fichiers', action: 'declencherSyncSecondaire', ajouterCertificat: true})
 
     } catch(err) {
         console.error(new Date() + " traiterFichiersConfirmes ERROR Erreur traitement : ", err)
@@ -711,7 +713,12 @@ async function emettrePresence() {
             console.error("storeConsignationLocal.emettrePresence ERROR Erreur chargement fichier data.json : %O", err)
         }
 
-        await _mq.emettreEvenement(info, 'fichiers', {action: 'presence', attacherCertificat: true})
+        debug("emettrePresence ", info)
+
+        await _mq.emettreEvenement(
+            info, 
+            {domaine: 'fichiers', action: 'presence', attacherCertificat: true}
+        )
     } catch(err) {
         console.error("storeConsignation.emettrePresence Erreur emission presence : ", err)
     }
@@ -721,7 +728,7 @@ function evenementConsignationFichierPrimaire(mq, fuuid) {
     // Emettre evenement aux secondaires pour indiquer qu'un nouveau fichier est pret
     debug("Evenement consignation primaire sur", fuuid)
     const evenement = {fuuid}
-    mq.emettreEvenement(evenement, 'fichiers', {action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
+    mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
         .catch(err => console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err))
 }
 
@@ -838,7 +845,10 @@ async function genererListeLocale() {
         nombreFichiersArchives, tailleArchives,
         nombreFichiersOrphelins, tailleOrphelins,
     }
-    const messageFormatte = await _mq.pki.formatterMessage(info, 'fichiers', {action: 'liste', ajouterCertificat: true})
+    const messageFormatte = await _mq.pki.formatterMessage(
+        info, 'fichiers', 
+        {kind: MESSAGE_KINDS.KIND_COMMANDE, action: 'liste', ajouterCertificat: true}
+    )
     debug("genererListeLocale messageFormatte : ", messageFormatte)
     fsPromises.writeFile(path.join(pathFichiers, 'data.json'), JSON.stringify(messageFormatte))
 
@@ -864,7 +874,7 @@ async function genererListeLocale() {
 
     if(_estPrimaire) {
         debug("Emettre evenement de fin du creation de liste du primaire")
-        await _mq.emettreEvenement(messageFormatte, 'fichiers', {action: 'syncPret', ajouterCertificat: true})
+        await _mq.emettreEvenement(messageFormatte, {domaine: 'fichiers', action: 'syncPret', ajouterCertificat: true})
     }
 
     debug("genererListeLocale Fin")
@@ -876,7 +886,7 @@ async function emettreBatchFuuidsVisites(listeFuuidsVisites) {
     }
     const domaine = 'fichiers',
           action = 'visiterFuuids'
-    await _mq.emettreEvenement(message, domaine, {action})
+    await _mq.emettreEvenement(message, {domaine, action})
 }
 
 function parcourirFichiers(callback, opts) {
