@@ -846,8 +846,8 @@ async function genererListeLocale() {
         nombreFichiersOrphelins, tailleOrphelins,
     }
     const messageFormatte = await _mq.pki.formatterMessage(
-        info, 'fichiers', 
-        {kind: MESSAGE_KINDS.KIND_COMMANDE, action: 'liste', ajouterCertificat: true}
+        MESSAGE_KINDS.KIND_COMMANDE, info,  
+        {domaine: 'fichiers', action: 'liste', ajouterCertificat: true}
     )
     debug("genererListeLocale messageFormatte : ", messageFormatte)
     fsPromises.writeFile(path.join(pathFichiers, 'data.json'), JSON.stringify(messageFormatte))

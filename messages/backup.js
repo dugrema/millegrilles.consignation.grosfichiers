@@ -164,11 +164,11 @@ async function demarrerBackupTransactions(message, opts) {
         await _mq.transmettreCommande('fichiers', evenement, {action: 'rotationBackup', attacherCertificat: true})
 
         // Declencer le backup de tous les domaines (backend)
-        await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+        await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
     } else {
         debug("emettreMessagesBackup Emettre trigger backup incremental")
         const evenement = { complet: false }
-        await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+        await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
     }
 
     return {ok: true}

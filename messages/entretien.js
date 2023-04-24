@@ -53,11 +53,11 @@ async function emettreMessagesBackup(message) {
     if(dow === 0 && hours === 4) {
         debug("emettreMessagesBackup Emettre trigger backup complet, dimanche 4:00")
         const evenement = { complet: true }
-        await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+        await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
     } else if(minutes % 20 === 0) {
         debug("emettreMessagesBackup Emettre trigger backup incremental")
         const evenement = { complet: false }
-        await _mq.emettreEvenement(evenement, 'fichiers', {action: 'declencherBackup', attacherCertificat: true})
+        await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
     }
 }
 

@@ -291,7 +291,7 @@ async function parcourirFichiersRecursif(repertoire, callback, opts) {
 async function sauvegarderBackupTransactions(message) {
 
     const { domaine, partition, date_transactions_fin } = message
-    const { uuid_transaction } = message['en-tete']
+    const uuid_transaction = message.id
 
     const dateFinBackup = new Date(date_transactions_fin * 1000)
     debug("Sauvegarde du backup %s date %O", domaine, dateFinBackup)

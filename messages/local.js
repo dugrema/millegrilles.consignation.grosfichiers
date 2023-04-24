@@ -88,7 +88,7 @@ async function emettrePresence() {
         if(CONST_CHAMPS_CONFIG.includes(champ)) info[champ] = configuration[champ]
     }
     
-    await _mq.emettreEvenement(info, 'fichiers', {action: 'presence', attacherCertificat: true})
+    await _mq.emettreEvenement(info, {domaine: 'fichiers', action: 'presence', attacherCertificat: true})
 }
   
 async function modifierConfiguration(message, rk, opts) {

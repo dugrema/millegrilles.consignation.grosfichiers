@@ -44,7 +44,10 @@ class StoreConsignationThread {
         debug("transfererFichierVersConsignation Fichier %s/%s", pathReady, fuuid)
         const transactions = await this.traiterTransactions(pathReady, fuuid)
         debug("transfererFichierVersConsignation Info ", transactions)
-        const {etat, transaction: transactionGrosFichiers, cles: commandeMaitreCles} = transactions
+        // const {etat, transaction: transactionGrosFichiers, cles: commandeMaitreCles} = transactions
+        const {etat, transaction: transactionGrosFichiers} = transactions
+        const attachements = transactionGrosFichiers.attachements || {}
+        const commandeMaitreCles = attachements.cle
 
         // Conserver cle
         if(commandeMaitreCles) {
@@ -76,7 +79,7 @@ class StoreConsignationThread {
         if(transactionGrosFichiers) {
             debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
             try {
-                const domaine = transactionGrosFichiers['en-tete'].domaine
+                const domaine = transactionGrosFichiers.routage.domaine
                 const reponseGrosfichiers = await this.mq.transmettreEnveloppeCommande(transactionGrosFichiers, domaine, {exchange: '2.prive'})
                 debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
             } catch(err) {
