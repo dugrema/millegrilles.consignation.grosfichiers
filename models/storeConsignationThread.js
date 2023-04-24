@@ -79,8 +79,7 @@ class StoreConsignationThread {
         if(transactionGrosFichiers) {
             debug("Transmettre commande fichier nouvelleVersion : %O", transactionGrosFichiers)
             try {
-                const domaine = transactionGrosFichiers.routage.domaine
-                const reponseGrosfichiers = await this.mq.transmettreEnveloppeCommande(transactionGrosFichiers, domaine, {exchange: '2.prive'})
+                const reponseGrosfichiers = await this.mq.transmettreEnveloppeCommande(transactionGrosFichiers, {exchange: '2.prive'})
                 debug("Reponse message grosFichiers : %O", reponseGrosfichiers)
             } catch(err) {
                 console.error("%O ERROR Erreur sauvegarde fichier (commande) %s : %O", new Date(), fuuid, err)
