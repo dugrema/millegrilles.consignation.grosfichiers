@@ -1,4 +1,4 @@
-const debug = require('debug')('millegrilles:util:backup')
+const debug = require('debug')('backup')
 const fs = require('fs')
 const readdirp = require('readdirp')
 const path = require('path')
@@ -15,7 +15,7 @@ async function conserverBackup(mq, consignationManager, message) {
   }
 
   // Sauvegarder le backup
-  await consignationManager.sauvegarderBackupTransactions(message)
+  await consignationManager.sauvegarderBackupTransactions(message['__original'])
 
   return {ok: true}
 }

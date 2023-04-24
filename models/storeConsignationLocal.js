@@ -290,7 +290,8 @@ async function parcourirFichiersRecursif(repertoire, callback, opts) {
 
 async function sauvegarderBackupTransactions(message) {
 
-    const { domaine, partition, date_transactions_fin } = message
+    const contenu = JSON.parse(message.contenu)
+    const { domaine, partition, date_transactions_fin } = contenu
     const uuid_transaction = message.id
 
     const dateFinBackup = new Date(date_transactions_fin * 1000)

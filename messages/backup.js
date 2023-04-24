@@ -30,39 +30,49 @@ async function stopConsuming() {
   await _mq.stopConsumingCustomQ('backup')
 }
 
+function parseMessage(message) {
+  try {
+    const parsed = JSON.parse(message.contenu)
+    parsed['__original'] = message
+    return parsed
+  } catch(err) {
+    console.error(new Date() + ' media.parseMessage Erreur traitement %O\n%O', err, message)
+  }
+}
+
 function enregistrerChannel() {
 
   debug("backup Enregistrer channel")
 
   _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return recevoirConserverBackup(message, opts)},
+    (_routingKey, message, opts)=>{return recevoirConserverBackup(parseMessage(message), opts)},
     ['commande.fichiers.backupTransactions'],
     { qCustom: 'backup', exchange }
   )
 
   // Obsolete, retirer lorsque tous les domaines seront recompiles (requis pour vieux backup)
-  _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{
-      if(_consignationManager.estPrimaire() === true) return {ok: true}
-    },
-    ['commande.fichiers.rotationBackupTransactions'],
-    { qCustom: 'backup', exchange }
-  )
+  // _mq.routingKeyManager.addRoutingKeyCallback(
+  //   (_routingKey, message, opts)=>{
+  //     if(_consignationManager.estPrimaire() === true) return {ok: true}
+  //   },
+  //   ['commande.fichiers.rotationBackupTransactions'],
+  //   { qCustom: 'backup', exchange }
+  // )
 
   _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return getClesBackupTransactions(message, opts)},
+    (_routingKey, message, opts)=>{return getClesBackupTransactions(parseMessage(message), opts)},
     ['commande.fichiers.getClesBackupTransactions'],
     { qCustom: 'backup', exchange }
   )
 
   _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return demarrerBackupTransactions(message, opts)},
+    (_routingKey, message, opts)=>{return demarrerBackupTransactions(parseMessage(message), opts)},
     ['commande.fichiers.demarrerBackupTransactions'],
     { qCustom: 'backup', exchange }
   )
 
   _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return getBackupTransaction(message, opts)},
+    (_routingKey, message, opts)=>{return getBackupTransaction(parseMessage(message), opts)},
     ['requete.fichiers.getBackupTransaction'],
     { qCustom: 'backup', exchange }
   )
@@ -161,7 +171,11 @@ async function demarrerBackupTransactions(message, opts) {
         await _consignationManager.rotationBackupTransactions()
 
         // Emettre un message de rotation pour tous les serveurs secondaires
-        await _mq.transmettreCommande('fichiers', evenement, {action: 'rotationBackup', attacherCertificat: true})
+        try {
+          await _mq.transmettreCommande('fichiers', evenement, {action: 'rotationBackup', attacherCertificat: true})
+        } catch(err) {
+          console.info(new Date() + " backup.demarrerBackupTransactions INFO Echec rotation backup serveurs secondaires (absents?)")
+        }
 
         // Declencer le backup de tous les domaines (backend)
         await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
