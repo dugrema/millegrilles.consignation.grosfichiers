@@ -396,8 +396,11 @@ async function getFichiersBackupTransactionsCourant(mq, replyTo) {
         debug("Contenu archive str : %O", contenu)
         contenu = JSON.parse(contenu)
         debug("Contenu archive : %O", contenu)
+        
+        // Extraire le message du catalogue d'archive
+        const contenuMessage = JSON.parse(contenu.contenu)
 
-        const cle = contenu.cle
+        const cle = contenuMessage.cle
         clesAccumulees[nomFichier] = cle
         countCles++
 
@@ -411,7 +414,7 @@ async function getFichiersBackupTransactionsCourant(mq, replyTo) {
         }
     }
 
-    debug("Emettre message %d cles (final)", countCles)
+    debug("Emettre message %d cles (final) : ", countCles, clesAccumulees)
     await emettreMessageCles(mq, replyTo, clesAccumulees, true)
 
     return {ok: true}

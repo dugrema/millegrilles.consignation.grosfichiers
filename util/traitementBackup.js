@@ -11,6 +11,7 @@ async function conserverBackup(mq, consignationManager, message) {
   // Validations de base
   const champsManquants = validerMessageBackup(message)
   if(champsManquants.length > 0) {
+    console.error(new Date() + " traitementBackup.conserverBackup() ERROR Erreur fichier backup %s, champs manquants %O", uuid_backup, champsManquants)
     return {ok: false, err: `Champs manquants dans le fichier de backup ${uuid_backup} : ${champsManquants}`}
   }
 
@@ -24,11 +25,11 @@ function validerMessageBackup(message) {
   const champsObligatoires = [
     'uuid_backup', 'certificats', 'data_hachage_bytes', 'data_transactions', 'domaine', 
     'date_backup', 'date_transactions_debut', 'date_transactions_fin',
-    'cle', 'format', 'iv', 'tag',  // Chiffrage
+    'cle', 'format', // Chiffrage
+    // 'header', 'iv', 'tag',  // Optionnels, depend du format
   ]
   const champsMessage = Object.keys(message)
   const champsManquants = champsObligatoires.filter(champ=>!champsMessage.includes(champ))
-  
  
   return champsManquants
 }
