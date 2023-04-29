@@ -14,6 +14,16 @@ function on_connecter() {
     ajouterCb('evenement.global.cedule', traiterCedule, {direct: true})
 }
 
+function parseMessage(message) {
+    try {
+      const parsed = JSON.parse(message.contenu)
+      parsed['__original'] = message
+      return parsed
+    } catch(err) {
+      console.error(new Date() + ' media.parseMessage Erreur traitement %O\n%O', err, message)
+    }
+}
+  
 function ajouterCb(rk, cb, opts) {
     opts = opts || {}
   
@@ -21,7 +31,7 @@ function ajouterCb(rk, cb, opts) {
     if(!opts.direct) paramsSup.qCustom = 'publication'
   
     _mq.routingKeyManager.addRoutingKeyCallback(
-        (routingKey, message, opts)=>{return cb(message, routingKey, opts)},
+        (routingKey, message, opts)=>{return cb(parseMessage(message), routingKey, opts)},
         [rk],
         paramsSup
     )

@@ -17,6 +17,16 @@ async function startConsuming() {
 async function stopConsuming() {
     await _mq.stopConsumingCustomQ('primaire')
 }
+
+function parseMessage(message) {
+    try {
+      const parsed = JSON.parse(message.contenu)
+      parsed['__original'] = message
+      return parsed
+    } catch(err) {
+      console.error(new Date() + ' media.parseMessage Erreur traitement %O\n%O', err, message)
+    }
+}
   
 function on_connecter() {
     debug("on_connecter Enregistrer 'evenement.global.cedule'")
@@ -34,7 +44,7 @@ function ajouterCb(rk, cb, opts) {
     if(!opts.direct) paramsSup.qCustom = 'primaire'
   
     _mq.routingKeyManager.addRoutingKeyCallback(
-        (routingKey, message, opts)=>{return cb(message, routingKey, opts)},
+        (routingKey, message, opts)=>{return cb(parseMessage(message), routingKey, opts)},
         [rk],
         paramsSup
     )
