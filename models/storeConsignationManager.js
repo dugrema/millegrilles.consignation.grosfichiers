@@ -700,8 +700,11 @@ async function emettrePresence() {
         
         try {
             const pathData = path.join(getPathDataFolder(), 'data.json')
+            debug("storeConsignationLocal.emettrePresence Charger data ", pathData)
             const fichierData = await fsPromises.readFile(pathData, 'utf-8')
-            const data = JSON.parse(fichierData)
+            const enveloppe = JSON.parse(fichierData)
+            const data = JSON.parse(enveloppe.contenu)
+            debug("storeConsignationLocal.emettrePresence Fichier data.json : ", data)
             info.fichiers_nombre = data.nombreFichiersActifs
             info.archives_nombre = data.nombreFichiersArchives
             info.orphelins_nombre = data.nombreFichiersOrphelins
