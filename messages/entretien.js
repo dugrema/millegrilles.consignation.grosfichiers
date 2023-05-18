@@ -62,6 +62,11 @@ async function emettreMessagesBackup(message) {
 
     if(dow === 0 && hours === 4) {
         debug("emettreMessagesBackup Emettre trigger backup complet, dimanche 4:00")
+
+        // Rotation repertoire transactions
+        await _consignationManager.rotationBackupTransactions()
+
+        // Envoyer message de backup complet a tous les domaines
         const evenement = { complet: true }
         await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
     } else if(minutes % 20 === 0) {
