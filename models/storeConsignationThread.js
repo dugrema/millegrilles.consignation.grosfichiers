@@ -45,8 +45,9 @@ class StoreConsignationThread {
         const transactions = await this.traiterTransactions(pathReady, fuuid)
         debug("transfererFichierVersConsignation Info ", transactions)
         // const {etat, transaction: transactionGrosFichiers, cles: commandeMaitreCles} = transactions
-        const {etat, transaction: transactionGrosFichiers} = transactions
-        const attachements = transactionGrosFichiers.attachements || {}
+        const {etat} = transactions
+        const transactionGrosFichiers = transactions.transaction
+        const attachements = (transactionGrosFichiers?transactionGrosFichiers.attachements:null) || {}
         const commandeMaitreCles = attachements.cle
 
         // Conserver cle
