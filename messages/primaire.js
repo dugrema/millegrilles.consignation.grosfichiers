@@ -72,8 +72,10 @@ async function verifierExistanceFichiers(message, rk, opts) {
     if(!replyTo || !correlationId) return  // Rien a faire
     
     const fuuids = message.fuuids
+    const visiter = message.visiter?true:false
+
     const reponse = {fuuids: {}}
-    debug("verifierExistanceFichiers, fuuids : %O", fuuids)
+    debug("verifierExistanceFichiers, (visiter: %s) fuuids : %O", visiter, fuuids)
     for(let fuuid of fuuids) {
         try {
             const infoFichier = await _consignationManager.getInfoFichier(fuuid)
@@ -91,6 +93,28 @@ async function verifierExistanceFichiers(message, rk, opts) {
         }
     }
     debug('verifierExistanceFichiers, fuuids reponse : %O', reponse)
+
+    if(visiter) {
+        debug("verifierExistanceFichiers Visite pour ", reponse.fuuids)
+        const listeFuuids = Object.keys(reponse.fuuids).filter(fuuid=>reponse.fuuids[fuuid])
+        debug("verifierExistanceFichiers Emettre message de visite sur demande pour ", listeFuuids)
+        _consignationManager.emettreBatchFuuidsVisites(listeFuuids)
+            .catch(err=>console.error(new Date() + ' ERROR verifierExistanceFichiers Erreur emission visites : ', err))
+
+        const domaine = 'fichiers', action = 'consigne'
+        for await(const fuuid of listeFuuids) {
+            try {
+                const contenu = { 'hachage_bytes': fuuid }
+                _mq.emettreEvenement(contenu, {domaine, action, exchange: '2.prive'})
+                    .catch(err=>{
+                        console.error("%O verifierExistanceFichiers ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
+                    })
+            } catch(err) {
+                console.error("%O verifierExistanceFichiers ERROR Erreur Emission evenement nouveau fichier %s : %O", new Date(), fuuid, err)
+            }
+    
+        }
+    }
 
     // console.debug("Reponse a " + replyTo + ", correlation " + correlationId);
     _mq.transmettreReponse(reponse, replyTo, correlationId);

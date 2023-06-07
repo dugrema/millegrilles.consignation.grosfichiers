@@ -59,8 +59,6 @@ async function init() {
   const idmg = instAmqpdao.pki.idmg
 
   debug("Initialisation serveur IDMG : %s\n%O", idmg, instAmqpdao)
-
-  if(instAmqpdao.transmettreRequete === undefined) throw new Error("Tada")
   await consignationManager.init(instAmqpdao, {PATH_STAGING})
 
   //const root = express()

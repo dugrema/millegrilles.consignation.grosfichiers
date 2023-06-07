@@ -152,6 +152,7 @@ async function init(mq, opts) {
         debug("init complete")
     } catch(err) {
         console.error(" !!! FATAL !!! Erreur init storeConsignationManager et handler", err)
+        throw err
     }
 
 }
@@ -1028,7 +1029,7 @@ module.exports = {
     consignerFichier, reactiverFuuids,
     
     processusSynchronisation, demarrerSynchronization, 
-    parcourirFichiers, parcourirBackup, ajouterFichierConsignation,
+    parcourirFichiers, parcourirBackup, ajouterFichierConsignation, emettreBatchFuuidsVisites,
     
     getPathStaging,
     downloadFichiersBackup,
