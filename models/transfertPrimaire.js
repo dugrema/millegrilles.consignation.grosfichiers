@@ -141,7 +141,31 @@ class TransfertPrimaire {
         debug("uploaderFichiersVersPrimaire Debut")
         const pathDataFolder = this.consignationManager.getPathDataFolder()
         const fichierDownloadPrimaire = path.join(pathDataFolder, FICHIER_FUUIDS_DOWNLOAD_PRIMAIRE)
-        await chargerFuuidsListe(fichierDownloadPrimaire, fuuid=>this.ajouterDownload(fuuid))
+
+        // Utiliser set pour optimiser ajout a la liste
+        
+        const fuuids = new Set()
+        // Ajouter fuuids deja dans la liste
+        const fuuidsDejaListe = [...this.queueDownloadsFuuids]
+        for (const fuuid of fuuidsDejaListe) fuuids.add(fuuid)
+        const ajouterDownloadFct = fuuid => fuuids.add(fuuid)
+
+        // Charger fuuuids manquants
+        await chargerFuuidsListe(fichierDownloadPrimaire, ajouterDownloadFct)
+
+        // Nettoyer liste des fuuids deja connus (manquants)
+        for(const fuuid of fuuidsDejaListe) fuuids.delete(fuuid)
+
+        // Ajouter tous les fuuids
+        for(const fuuid of fuuids) this.queueDownloadsFuuids.push(fuuid)
+
+        // Declencher download
+        if(this.timerDownloadFichiers) {
+            this.threadDownloadFichiersConsignation()
+                .catch(err=>console.error("Erreur run threadDownloadFichiersConsignation: %O", err))
+        }
+
+        // await chargerFuuidsListe(fichierDownloadPrimaire, fuuid=>this.ajouterDownload(fuuid))
         debug("uploaderFichiersVersPrimaire Fin")
     }
 
@@ -163,6 +187,12 @@ class TransfertPrimaire {
         opts = opts || {}
 
         if(this.ready !== true) throw new Error("Non disponible - Erreur init transfertPrimaire")
+
+        if(this.queueDownloadsFuuids.length > 1000) {
+            const error = new Error("ajouterDownload overflow, plus de 1000 fichiers dans la liste (SKIP)")
+            error.overflow = true
+            throw error
+        }
 
         if( ! this.queueDownloadsFuuids.includes(fuuid) ) {
             this.queueDownloadsFuuids.push(fuuid)

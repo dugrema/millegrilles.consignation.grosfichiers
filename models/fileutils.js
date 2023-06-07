@@ -9,7 +9,12 @@ async function chargerFuuidsListe(pathFichier, cb) {
         // Detecter fichiers manquants localement par espaces vide au debut de la ligne
         fuuid = fuuid.trim()
         if(!fuuid) continue  // Ligne vide
-        await cb(fuuid)
+        try {
+            await cb(fuuid)
+        } catch(err) {
+            if(err.overflow === true) return  // SKIP le reste, overflow Q
+            else throw err
+        }
     }
 }
 
