@@ -49,31 +49,31 @@ function traiterCedule(message, rk, opts) {
     // }
 
     // Evenement trigger de backup
-    emettreMessagesBackup(message).catch(err=>debug("Erreur emettre messages backup : %O", err))
+    //emettreMessagesBackup(message).catch(err=>debug("Erreur emettre messages backup : %O", err))
 
 }
 
-async function emettreMessagesBackup(message) {
-    const { estampille } = message
-    const date = new Date(estampille * 1000)
-    const hours = date.getHours()
-    const minutes = date.getMinutes()
-    const dow = date.getDay()
+// async function emettreMessagesBackup(message) {
+//     const { estampille } = message
+//     const date = new Date(estampille * 1000)
+//     const hours = date.getHours()
+//     const minutes = date.getMinutes()
+//     const dow = date.getDay()
 
-    if(dow === 0 && hours === 4) {
-        debug("emettreMessagesBackup Emettre trigger backup complet, dimanche 4:00")
+//     if(dow === 0 && hours === 4) {
+//         debug("emettreMessagesBackup Emettre trigger backup complet, dimanche 4:00")
 
-        // Rotation repertoire transactions
-        await _consignationManager.rotationBackupTransactions()
+//         // Rotation repertoire transactions
+//         await _consignationManager.rotationBackupTransactions()
 
-        // Envoyer message de backup complet a tous les domaines
-        const evenement = { complet: true }
-        await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
-    } else if(minutes % 20 === 0) {
-        debug("emettreMessagesBackup Emettre trigger backup incremental")
-        const evenement = { complet: false }
-        await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
-    }
-}
+//         // Envoyer message de backup complet a tous les domaines
+//         const evenement = { complet: true }
+//         await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
+//     } else if(minutes % 20 === 0) {
+//         debug("emettreMessagesBackup Emettre trigger backup incremental")
+//         const evenement = { complet: false }
+//         await _mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'declencherBackup', attacherCertificat: true})
+//     }
+// }
 
 module.exports = { init, on_connecter }
