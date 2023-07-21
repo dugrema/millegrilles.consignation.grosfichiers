@@ -994,11 +994,11 @@ async function setEstConsignationPrimaire(primaire, instanceIdPrimaire) {
         if(_estPrimaire === true) {
             // Ecouter Q de backup sur MQ
             startConsumingPrimaire().catch(err=>console.error(new Date() + ' Erreur start consuming primaire', err))
-            startConsumingBackup().catch(err=>console.error(new Date() + ' Erreur start consuming backup', err))
+            //startConsumingBackup().catch(err=>console.error(new Date() + ' Erreur start consuming backup', err))
         } else {
             // Arret ecoute de Q de backup sur MQ
             stopConsumingPrimaire().catch(err=>console.error(new Date() + ' Erreur stop consuming primaire', err))
-            stopConsumingBackup().catch(err=>console.error(new Date() + ' Erreur stop consuming backup', err))
+            //stopConsumingBackup().catch(err=>console.error(new Date() + ' Erreur stop consuming backup', err))
         }
     }
 }

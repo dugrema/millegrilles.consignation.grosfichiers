@@ -44,11 +44,11 @@ function enregistrerChannel() {
 
   debug("backup Enregistrer channel")
 
-  _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return recevoirConserverBackup(parseMessage(message), opts)},
-    ['commande.fichiers.backupTransactions'],
-    { qCustom: 'backup', exchange }
-  )
+  // _mq.routingKeyManager.addRoutingKeyCallback(
+  //   (_routingKey, message, opts)=>{return recevoirConserverBackup(parseMessage(message), opts)},
+  //   ['commande.fichiers.backupTransactions'],
+  //   { qCustom: 'backup', exchange }
+  // )
 
   // Obsolete, retirer lorsque tous les domaines seront recompiles (requis pour vieux backup)
   // _mq.routingKeyManager.addRoutingKeyCallback(
@@ -59,23 +59,23 @@ function enregistrerChannel() {
   //   { qCustom: 'backup', exchange }
   // )
 
-  _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return getClesBackupTransactions(parseMessage(message), opts)},
-    ['commande.fichiers.getClesBackupTransactions'],
-    { qCustom: 'backup', exchange }
-  )
+  // _mq.routingKeyManager.addRoutingKeyCallback(
+  //   (_routingKey, message, opts)=>{return getClesBackupTransactions(parseMessage(message), opts)},
+  //   ['commande.fichiers.getClesBackupTransactions'],
+  //   { qCustom: 'backup', exchange }
+  // )
 
-  _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return demarrerBackupTransactions(parseMessage(message), opts)},
-    ['commande.fichiers.demarrerBackupTransactions'],
-    { qCustom: 'backup', exchange }
-  )
+  // _mq.routingKeyManager.addRoutingKeyCallback(
+  //   (_routingKey, message, opts)=>{return demarrerBackupTransactions(parseMessage(message), opts)},
+  //   ['commande.fichiers.demarrerBackupTransactions'],
+  //   { qCustom: 'backup', exchange }
+  // )
 
-  _mq.routingKeyManager.addRoutingKeyCallback(
-    (_routingKey, message, opts)=>{return getBackupTransaction(parseMessage(message), opts)},
-    ['requete.fichiers.getBackupTransaction'],
-    { qCustom: 'backup', exchange }
-  )
+  // _mq.routingKeyManager.addRoutingKeyCallback(
+  //   (_routingKey, message, opts)=>{return getBackupTransaction(parseMessage(message), opts)},
+  //   ['requete.fichiers.getBackupTransaction'],
+  //   { qCustom: 'backup', exchange }
+  // )
 
 }
 

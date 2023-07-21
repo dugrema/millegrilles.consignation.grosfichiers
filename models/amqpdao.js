@@ -22,7 +22,7 @@ async function init(consignationManager, opts) {
   // Charger PKI
   const instPki = new MilleGrillesPKI()
   const qCustom = {
-    'backup': {name: 'fichiers/backup', autostart: false},
+    // 'backup': {name: 'fichiers/backup', autostart: false},
     'publication': {name: 'fichiers/publication'},
     'primaire': {name: 'fichiers/primaire', autostart: false},
   }
