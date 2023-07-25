@@ -1,4 +1,7 @@
 const debug = require('debug')('sync:syncRepertoire')
+const path = require('path')
+const fsPromises = require('fs/promises')
+
 const SynchronisationPrimaire = require('./syncPrimaire')
 const SynchronisationSecondaire = require('./syncSecondaire')
 
@@ -14,6 +17,8 @@ class SynchronisationManager {
         this.mq = mq
         if(!consignationManager) throw new Error("consignationManager null")
         this.manager = consignationManager
+
+        this._path_listings = path.join(this.manager.getPathStaging(), 'liste')
 
         // Information sur consignation primaire
         this.instanceId = mq.pki.cert.subject.getField('CN').value
@@ -37,6 +42,10 @@ class SynchronisationManager {
     }
 
     init() {
+        const pathLogsReclamations = path.join(this._path_listings, 'reclamations')
+        fsPromises.mkdir(pathLogsReclamations, {recursive: true})
+            .catch(err=>console.error(new Date() + " Erreur creation path %s : %O", pathLogsReclamations, err))
+    
         // const repertoireDownloadSync = path.join(this.manager.getPathDataFolder(), 'syncDownload')
         // await fsPromises.mkdir(repertoireDownloadSync, {recursive: true})
         setTimeout(()=>{
@@ -197,130 +206,5 @@ class SynchronisationManager {
     }
 }
 
-class SynchronisationConsignation {
 
-    constructor(mq) {
-        if(!mq) throw new Error("mq null")
-        this.mq = mq
-    }
-
-    parseFichier(item) {
-        return item.filename
-    }
-
-    async genererListing(opts) {
-        opts = opts || {}
-
-        const outputStream = opts.outputStream,
-              emettreBatch = opts.emettreBatch,
-              tailleBatch = opts.tailleBatch || BATCH_PRESENCE_NOMBRE_MAX
-
-        let nombreFichiers = 0,
-            tailleFichiers = 0
-
-        try {
-            let listeFichiersVisites = []
-
-            const callbackTraiterFichier = async item => {
-                if(!item) {
-                    return  // Dernier fichier
-                }
-
-                const nomFichier = parseFichier(item)
-                if(emettreBatch) listeFuuidsVisites.push(nomFichier)  // Cumuler fichiers en batch
-                if(outputStream) outputStream.write(nomFichier + '\n')
-                
-                // Stats cumulatives
-                nombreFichiers++
-                tailleFichiers += item.size
-
-                if(listeFichiersVisites.length >= tailleBatch) {
-                    debug("Emettre batch fuuids reconnus")
-                    emettreBatch(listeFichiersVisites)
-                        .catch(err=>console.warn(new Date() + " SynchronisationRepertoire.genererListing (actifs loop) Erreur emission batch fichiers visite : ", err))
-                    listeFichiersVisites = []
-                }
-            }
-            
-            // Lancer operation
-            await this.parcourirFichiers(callbackTraiterFichier)
-
-            if(listeFichiersVisites.length > 0) {
-                emettreBatch(listeFichiersVisites)
-                    .catch(err=>console.warn(new Date() + " SynchronisationRepertoire.genererListing (actifs) Erreur emission batch fichiers visite : ", err))
-            }
-
-        } catch(err) {
-            console.error(new Date() + " SynchronisationRepertoire.genererListing ERROR : %O", err)
-            throw err
-        }
-
-        return { nombreFichiers, tailleFichiers }
-    }
-
-    async parcourirFichiers(callback, opts) {
-        throw new Error('must override')
-    }
-
-}
-
-class SynchronisationConsignationFuuids extends SynchronisationConsignation {
-
-    constructor(consignationManager, opts) {
-        opts = opts || {}
-
-        if(!consignationManager) throw new Error("consignationManager null")
-        super(consignationManager.getMq())
-
-        this.manager = consignationManager
-        this.archive = opts.archive || false
-    }
-
-    parseFichier(item) {
-        const fuuid = item.filename.split('.').shift()
-        return fuuid
-    }
-
-    async parcourirFichiers(callback, opts) {
-        if(this.archive) {
-            return this.manager.parcourirArchives(callback, opts)
-        } else {
-            return this.manager.parcourirFichiers(callback, opts)
-        }
-    }
-
-}
-
-class SynchronisationBackup extends SynchronisationConsignation {
-
-    constructor(consignationManager, opts) {
-        opts = opts || {}
-
-        if(!consignationManager) throw new Error("consignationManager null")
-        super(consignationManager.getMq())
-
-        this.manager = consignationManager
-        this.archive = opts.archive || false
-    }
-
-    parseFichier(item) {
-        const pathFichierSplit = item.directory.split('/')
-        const pathBase = pathFichierSplit.slice(pathFichierSplit.length-2).join('/')
-    
-        // Conserver uniquement le contenu de transaction/ (transaction_archive/ n'est pas copie)
-        if(pathBase.startsWith('transactions/')) {
-            const fichierPath = path.join(pathBase, item.filename)
-            return fichierPath
-        }
-    }
-
-    async parcourirFichiers(callback, opts) {
-        return this.manager.parcourirBackup(callback, opts)
-    }
-
-}
-
-module.exports = { 
-    SynchronisationManager, 
-    SynchronisationConsignationFuuids, 
-}
+module.exports = SynchronisationManager

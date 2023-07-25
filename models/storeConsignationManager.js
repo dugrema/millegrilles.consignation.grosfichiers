@@ -19,8 +19,8 @@ const StoreConsignationSftp = require('./storeConsignationSftp')
 const StoreConsignationAwsS3 = require('./storeConsignationAwsS3')
 
 const StoreConsignationThread = require('./storeConsignationThread')
-const TransfertPrimaire = require('./transfertPrimaire')
-const { SynchronisationManager }  = require('./synchronisation')
+// const TransfertPrimaire = require('./transfertPrimaire')
+const SynchronisationManager  = require('./synchronisation')
 const BackupSftp = require('./backupSftp')
 const { dechiffrerConfiguration } = require('./pki')
 
@@ -86,6 +86,7 @@ class ManagerFacade {
     // Methodes d'acces au store
     parcourirFichiers(callback, opts) { return parcourirFichiers(callback, opts) }
     parcourirArchives(callback, opts) { return parcourirArchives(callback, opts) }
+    parcourirOrphelins(callback, opts) { return parcourirOrphelins(callback, opts) }
     parcourirBackup(callback, opts) { return parcourirBackup(callback, opts) }
     supprimerFichier(fuuid) { return supprimerFichier(fuuid) }
 
@@ -928,6 +929,10 @@ function parcourirBackup(callback, opts) {
     return _storeConsignationHandler.parcourirBackup(callback, opts)
 }
 
+function parcourirOrphelins(callback, opts) {
+    return _storeConsignationHandler.parcourirOrphelins(callback, opts)
+}
+
 function supprimerFichier(fuuid) {
     return _storeConsignationHandler.marquerSupprime(fuuid)
 }
@@ -1041,7 +1046,7 @@ async function consignerFichier(pathFichierStaging, fuuid) {
     await _storeConsignationHandler.consignerFichier(pathFichierStaging, fuuid)
 
     // Ajouter fichier a la fuuidsActifs.nouveau.txt
-    const pathFichierNouveaux = path.join(getPathDataFolder(), FICHIER_FUUIDS_NOUVEAUX)
+    const pathFichierNouveaux = path.join(getPathDataFolder(), 'reclamations', FICHIER_FUUIDS_NOUVEAUX)
     const writeStream = fs.createWriteStream(pathFichierNouveaux, {flags: 'a'})
     writeStream.write(fuuid + '\n')
 }

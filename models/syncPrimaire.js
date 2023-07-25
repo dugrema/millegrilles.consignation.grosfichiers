@@ -1,9 +1,18 @@
 const debug = require('debug')('sync:syncPrimaire')
 const path = require('path')
 const fs = require('fs')
+const fsPromises = require('fs/promises')
 
-const FICHIER_FUUIDS_RECLAMES_ACTIFS = 'fuuidsReclamesActifs.txt',
-      FICHIER_FUUIDS_RECLAMES_ARCHIVES = 'fuuidsReclamesArchives.txt'
+const fileutils = require('./fileutils')
+const { SynchronisationConsignationFuuids } = require('./synchronisationConsignation')
+
+const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
+      FICHIER_FUUIDS_RECLAMES_ARCHIVES = 'fuuidsReclamesArchives.txt',
+      FICHIER_FUUIDS_NOUVEAUX = 'fuuidsNouveaux.txt',
+      FICHIER_FUUIDS_LOCAUX = 'fuuidsLocaux.txt',
+      FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
+      FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
+      DIR_RECLAMATIONS = 'reclamations'
 
 const DUREE_ATTENTE_RECLAMATIONS = 10_000
 
@@ -24,12 +33,6 @@ class SynchronisationPrimaire {
         this.rejectRecevoirFuuidsDomaine = null
     }
 
-    /** Demande aux domaines de fournir une liste de fuuids a conserver. 
-     *  Permet de generer la liste d'orphelins. */
-    async recupererListeFuuids() {
-
-    }
-
     /** Reception de listes de fuuids a partir de chaque domaine. */
     async recevoirFuuidsReclames(fuuids, opts) {
         opts = opts || {}
@@ -47,9 +50,9 @@ class SynchronisationPrimaire {
 
                 let fichierFuuids = null
                 if(archive) {
-                    fichierFuuids = path.join(this._path_listings, FICHIER_FUUIDS_RECLAMES_ARCHIVES)
+                    fichierFuuids = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_ARCHIVES + '.work')
                 } else {
-                    fichierFuuids = path.join(this._path_listings, FICHIER_FUUIDS_RECLAMES_ACTIFS)
+                    fichierFuuids = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_LOCAUX + '.work')
                 }
 
                 const writeStream = fs.createWriteStream(fichierFuuids, {flags: 'a'})
@@ -79,7 +82,7 @@ class SynchronisationPrimaire {
 
     async runSync() {
         await this.genererListeFichiers()
-        await this.reclamerFichiers()
+        const reclamationComplete = await this.reclamerFichiers()
     }
 
     arreter() {
@@ -89,8 +92,32 @@ class SynchronisationPrimaire {
     /** Genere une liste tous les fichiers locaux */
     async genererListeFichiers() {
         debug("genererListeFichiers Debut")
-        const pathListings = this.manager.getPathDataFolder()
-        debug("genererListeFichiers Path des listings : ", pathListings)
+        const pathConsignationListings = path.join(this._path_listings, 'consignation')
+        debug("genererListeFichiers Path des listings consignation : ", pathConsignationListings)
+
+        // Cleanup fichiers precedents
+        try {
+            await fsPromises.rm(pathConsignationListings, {recursive: true})
+        } catch(err) {
+            console.error(new Date() + " Erreur suppression %s : %O", pathConsignationListings, err)
+        }
+        await fsPromises.mkdir(pathConsignationListings, {recursive: true})
+
+        // Generer listing repertoire local
+        const repertoireLocal = new SynchronisationConsignationFuuids(this.manager)
+        const fichierLocalPath = path.join(pathConsignationListings, FICHIER_FUUIDS_LOCAUX)
+        await repertoireLocal.genererOutputListing(fichierLocalPath)
+
+        // Generer listing repertoire archives
+        const repertoireArchives = new SynchronisationConsignationFuuids(
+            this.manager, {parcourirFichiers: this.manager.parcourirArchives})
+        const fichierArchivesPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ARCHIVES)
+        await repertoireArchives.genererOutputListing(fichierArchivesPath)
+
+        const repertoireOrphelins = new SynchronisationConsignationFuuids(
+            this.manager, {parcourirFichiers: this.manager.parcourirOrphelins})
+        const fichierOrphelinsPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ORPHELINS)
+        await repertoireOrphelins.genererOutputListing(fichierOrphelinsPath)
 
         debug("genererListeFichiers Fin")
     }
@@ -104,6 +131,17 @@ class SynchronisationPrimaire {
         let reclamationComplete = true
 
         const domaines = await getListeDomainesFuuids(this.mq)
+
+        // Cleanup fichiers precedents
+        const pathLogsFuuids = path.join(this._path_listings, DIR_RECLAMATIONS)
+        try {
+            await fsPromises.rm(pathLogsFuuids, {recursive: true})
+        } catch(err) {
+            console.error(new Date() + " Erreur suppression %s : %O", pathLogsFuuids, err)
+        }
+        await fsPromises.mkdir(pathLogsFuuids, {recursive: true})
+
+        // Reclamation des fuuids de chaque domaine
         for await (const domaine of domaines) {
             try {
                 reclamationComplete &= await this.reclamerFichiersDomaine(domaine)
@@ -113,7 +151,22 @@ class SynchronisationPrimaire {
             }
         }
 
+        // Trier les fichiers
+        const logs = [
+            path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_ARCHIVES),
+            path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_LOCAUX),
+        ]
+        for await(const log of logs) {
+            try {
+                await fileutils.sortFile(log + '.work', log)
+                await fsPromises.unlink(log + '.work')
+            } catch(err) {
+                console.error(new Date() + " reclamerFichiers Erreur sort/compression fichier %s, on continue : %O", log, err)
+            }
+        }
+
         debug("reclamerFichiers Fin reclamation fichiers, complete %O", reclamationComplete)
+        return reclamationComplete
     }
     
     async reclamerFichiersDomaine(domaine) {
