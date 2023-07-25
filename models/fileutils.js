@@ -59,4 +59,19 @@ async function combinerSortFiles(srcList, dest, opts) {
     })
 }
 
-module.exports = { chargerFuuidsListe, sortFile, combinerSortFiles }
+async function trouverManquants(src1, src2, dest) {
+    try {
+        // Faire la liste des fuuids inconnus (reclames mais pas dans actifs / archives)
+        await new Promise((resolve, reject)=>{
+            exec(`comm -13 ${src1} ${src2} > ${dest} && gzip -9fk ${dest}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
+        })
+    } catch(err) {
+        console.error(new Date() + " trouverManquants ERROR Traitement fichiers manquants : ", err)
+        return
+    }
+}
+
+module.exports = { chargerFuuidsListe, sortFile, combinerSortFiles, trouverManquants}

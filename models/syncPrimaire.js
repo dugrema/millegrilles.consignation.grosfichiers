@@ -12,6 +12,9 @@ const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
       FICHIER_FUUIDS_LOCAUX = 'fuuidsLocaux.txt',
       FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
+      FICHIER_FUUIDS_PRESENTS = 'fuuidsPresents.txt',
+      FICHIER_FUUIDS_RECLAMES = 'fuuidsReclames.txt',
+      FICHIER_FUUIDS_MANQUANTS = 'fuuidsManquants.txt',
       DIR_RECLAMATIONS = 'reclamations'
 
 const DUREE_ATTENTE_RECLAMATIONS = 10_000
@@ -81,8 +84,9 @@ class SynchronisationPrimaire {
     }
 
     async runSync() {
-        await this.genererListeFichiers()
+        const infoConsignation = await this.genererListeFichiers()
         const reclamationComplete = await this.reclamerFichiers()
+        await this.genererListeCombinees()
     }
 
     arreter() {
@@ -103,23 +107,71 @@ class SynchronisationPrimaire {
         }
         await fsPromises.mkdir(pathConsignationListings, {recursive: true})
 
+        const emettreBatch = async fuuids => {
+            try {
+                await this.emettreBatchFuuidsVisites(fuuids)
+            } catch(err) {
+                console.warn(new Date() + " SynchronisationPrimaire.genererListeFichiers Erreur emission batch fuuids visite : ", err)
+            }
+        }
+
         // Generer listing repertoire local
         const repertoireLocal = new SynchronisationConsignationFuuids(this.manager)
         const fichierLocalPath = path.join(pathConsignationListings, FICHIER_FUUIDS_LOCAUX)
-        await repertoireLocal.genererOutputListing(fichierLocalPath)
+        const infoLocal = await repertoireLocal.genererOutputListing(fichierLocalPath, {emettreBatch})
 
         // Generer listing repertoire archives
         const repertoireArchives = new SynchronisationConsignationFuuids(
             this.manager, {parcourirFichiers: this.manager.parcourirArchives})
         const fichierArchivesPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ARCHIVES)
-        await repertoireArchives.genererOutputListing(fichierArchivesPath)
-
+        const infoArchives = await repertoireArchives.genererOutputListing(fichierArchivesPath, {emettreBatch})
+        
         const repertoireOrphelins = new SynchronisationConsignationFuuids(
             this.manager, {parcourirFichiers: this.manager.parcourirOrphelins})
         const fichierOrphelinsPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ORPHELINS)
-        await repertoireOrphelins.genererOutputListing(fichierOrphelinsPath)
+        const infoOrphelins = await repertoireOrphelins.genererOutputListing(fichierOrphelinsPath)
 
-        debug("genererListeFichiers Fin")
+        debug("genererListeFichiers Information local : %O\nArchives : %O\nOrphelins : %O", infoLocal, infoArchives, infoOrphelins)
+
+        return {
+            local: infoLocal,
+            archives: infoArchives,
+            orphelins: infoOrphelins,
+        }
+    }
+
+    async genererListeCombinees() {
+        // Combinaison des fichiers local et archives (presents sur le systeme)
+        const pathTraitementListings = path.join(this._path_listings, 'traitements')
+        // Cleanup fichiers precedents
+        try {
+            await fsPromises.rm(pathTraitementListings, {recursive: true})
+        } catch(err) {
+            console.error(new Date() + " Erreur suppression %s : %O", pathTraitementListings, err)
+        }
+        await fsPromises.mkdir(pathTraitementListings, {recursive: true})
+
+        // Generer un fichier combine de tous les fuuids reclames
+        const fichierReclamesLocalPath = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_ARCHIVES)
+        const fichierReclamesArchivesPath = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_LOCAUX)
+        const fichierReclamesActifs = path.join(pathTraitementListings, FICHIER_FUUIDS_RECLAMES)
+        await fileutils.combinerSortFiles([fichierReclamesLocalPath, fichierReclamesArchivesPath], fichierReclamesActifs)
+
+        // Generer un fichier combine de tous les fuuids deja presents localement
+        const pathConsignationListings = path.join(this._path_listings, 'consignation')
+        const fichierLocalPath = path.join(pathConsignationListings, FICHIER_FUUIDS_LOCAUX)
+        const fichierArchivesPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ARCHIVES)
+        const fichierOrphelinsPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ORPHELINS)
+        const fichiersPresents = path.join(pathTraitementListings, FICHIER_FUUIDS_PRESENTS)
+        await fileutils.combinerSortFiles([fichierLocalPath, fichierArchivesPath, fichierOrphelinsPath], fichiersPresents)
+
+        // Generer un fichier des fuuids orphelins (non reclames)
+        const fichiersOrphelins = path.join(pathTraitementListings, FICHIER_FUUIDS_ORPHELINS)
+        await fileutils.trouverManquants(fichierReclamesActifs, fichiersPresents, fichiersOrphelins)
+
+        // Generer un fichier des fuuids manquants (reclames, non presents localement - possiblement sur un secondaire)
+        const fichiersManquants = path.join(pathTraitementListings, FICHIER_FUUIDS_MANQUANTS)
+        await fileutils.trouverManquants(fichiersPresents, fichierReclamesActifs, fichiersManquants)
     }
 
     /**
@@ -158,7 +210,7 @@ class SynchronisationPrimaire {
         ]
         for await(const log of logs) {
             try {
-                await fileutils.sortFile(log + '.work', log)
+                await fileutils.sortFile(log + '.work', log, {gzip: true})
                 await fsPromises.unlink(log + '.work')
             } catch(err) {
                 console.error(new Date() + " reclamerFichiers Erreur sort/compression fichier %s, on continue : %O", log, err)
@@ -204,160 +256,12 @@ class SynchronisationPrimaire {
         return true
     }
 
-    /** Genere une liste locale de tous les fuuids */
-    async OLD__genererListeLocale() {
-        debug("genererListeLocale Debut")
-
-        const pathFichiers = getPathDataFolder()
-        const pathFichierNouveaux = path.join(pathFichiers, FICHIER_FUUIDS_NOUVEAUX)
-        fsPromises.rm(pathFichierNouveaux)
-            .catch(()=>debug("Echec suppression fichier fuuidsNouveaux.txt (OK)"))
-        debug("genererListeLocale Fichiers sous ", pathFichiers)
-        await fsPromises.mkdir(pathFichiers, {recursive: true})
-
-        const fichierActifsNew = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS + '.work')
-        const fichierFuuidsActifsHandle = await fsPromises.open(fichierActifsNew, 'w')
-        const fichierArchivesNew = path.join(pathFichiers, FICHIER_FUUIDS_ARCHIVES + '.work')
-        const fichierFuuidsArchivesHandle = await fsPromises.open(fichierArchivesNew, 'w')
-
-        let nombreFichiersActifs = 0,
-            tailleActifs = 0,
-            nombreFichiersArchives = 0,
-            tailleArchives = 0,
-            nombreFichiersOrphelins = 0,
-            tailleOrphelins = 0
-
-        // Calculer actifs
-        try {
-            let listeFuuidsVisites = []
-
-            const streamFuuidsActifs = fichierFuuidsActifsHandle.createWriteStream()
-            const callbackTraiterFichier = async item => {
-                if(!item) {
-                    streamFuuidsActifs.close()
-                    return  // Dernier fichier
-                }
-
-                const fuuid = item.filename.split('.').shift()
-                listeFuuidsVisites.push(fuuid)
-                streamFuuidsActifs.write(fuuid + '\n')
-                nombreFichiersActifs++
-                tailleActifs += item.size
-
-                if(listeFuuidsVisites.length >= BATCH_PRESENCE_NOMBRE_MAX) {
-                    debug("Emettre batch fuuids reconnus")
-                    this.emettreBatchFuuidsVisites(listeFuuidsVisites)
-                        .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (actifs loop) Erreur emission batch fuuids visite : ", err))
-                    listeFuuidsVisites = []
-                }
-            }
-            await _storeConsignationHandler.parcourirFichiers(callbackTraiterFichier)
-            if(listeFuuidsVisites.length > 0) {
-                this.emettreBatchFuuidsVisites(listeFuuidsVisites)
-                    .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (actifs) Erreur emission batch fuuids visite : ", err))
-            }
-        } catch(err) {
-            console.error(new Date() + " storeConsignation.genererListeLocale ERROR Actifs : %O", err)
-            throw err
-        } finally {
-            await fichierFuuidsActifsHandle.close()
-        }
-
-        // Calculer archives
-        try {
-            let listeFuuidsVisites = []
-
-            const streamFuuidsArchives = fichierFuuidsArchivesHandle.createWriteStream()
-            const callbackTraiterFichier = async item => {
-                if(!item) {
-                    streamFuuidsArchives.close()
-                    return  // Dernier fichier
-                }
-                const fuuid = item.filename.split('.').shift()
-                listeFuuidsVisites.push(fuuid)
-                streamFuuidsArchives.write(fuuid + '\n')
-                nombreFichiersArchives++
-                tailleArchives += item.size
-
-                if(listeFuuidsVisites.length >= BATCH_PRESENCE_NOMBRE_MAX) {
-                    debug("Emettre batch fuuids reconnus")
-                    this.emettreBatchFuuidsVisites(listeFuuidsVisites)
-                        .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (archives loop) Erreur emission batch fuuids visite : ", err))
-                    listeFuuidsVisites = []
-                }
-            }
-            await _storeConsignationHandler.parcourirArchives(callbackTraiterFichier)
-            if(listeFuuidsVisites.length > 0) {
-                this.emettreBatchFuuidsVisites(listeFuuidsVisites)
-                    .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (archives) Erreur emission batch fuuids visite : ", err))
-            }
-        } catch(err) {
-            console.error(new Date() + " storeConsignation.genererListeLocale ERROR Archives : %O", err)
-        } finally {
-            await fichierFuuidsArchivesHandle.close()
-        }
-
-        // Calculer orphelins
-        try {
-            const callbackTraiterFichier = async item => {
-                if(!item) {
-                    return  // Dernier fichier
-                }
-                nombreFichiersOrphelins++
-                tailleOrphelins += item.size
-            }
-            await _storeConsignationHandler.parcourirOrphelins(callbackTraiterFichier)
-        } catch(err) {
-            console.error(new Date() + " storeConsignation.genererListeLocale ERROR Orphelins : %O", err)
-        }
-
-        debug("genererListeLocale Terminer information liste")
-        const info = {
-            nombreFichiersActifs, tailleActifs,
-            nombreFichiersArchives, tailleArchives,
-            nombreFichiersOrphelins, tailleOrphelins,
-        }
-        const messageFormatte = await _mq.pki.formatterMessage(
-            MESSAGE_KINDS.KIND_COMMANDE, info,  
-            {domaine: 'fichiers', action: 'liste', ajouterCertificat: true}
-        )
-        debug("genererListeLocale messageFormatte : ", messageFormatte)
-        fsPromises.writeFile(path.join(pathFichiers, 'data.json'), JSON.stringify(messageFormatte))
-
-        // Copier le fichier de .work.txt a .txt, trier en meme temps
-        try { 
-            // Actifs
-            const fichierActifs = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS)
-            await sortFile(fichierActifsNew, fichierActifs, {gzip: true})
-            await fsPromises.rm(fichierActifsNew)
-
-            // Archives
-            const fichierArchives = path.join(pathFichiers, FICHIER_FUUIDS_ARCHIVES)
-            await sortFile(fichierArchivesNew, fichierArchives, {gzip: true})
-            await fsPromises.rm(fichierArchivesNew)
-
-            // Combinaison des fichiers actifs et archives (presents sur le systeme)
-            const fichierActifsArchives = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS_ARCHIVES)
-            await combinerSortFiles([fichierActifs, fichierArchives], fichierActifsArchives)
-
-        } catch(err) {
-            console.error("storeConsignation.genererListeLocale Erreur copie fichiers actifs : ", err)
-        }
-
-        if(_estPrimaire) {
-            debug("Emettre evenement de fin du creation de liste du primaire")
-            await _mq.emettreEvenement(messageFormatte, {domaine: 'fichiers', action: 'syncPret', ajouterCertificat: true})
-        }
-
-        debug("genererListeLocale Fin")
-    }
-
     async emettreBatchFuuidsVisites(listeFuuidsVisites) {
         const message = {
             fuuids: listeFuuidsVisites
         }
         const domaine = 'fichiers', action = 'visiterFuuids'
-        await _mq.emettreEvenement(message, {domaine, action})
+        await this.mq.emettreEvenement(message, {domaine, action})
     }
 
 }

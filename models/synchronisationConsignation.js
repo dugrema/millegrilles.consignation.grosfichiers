@@ -33,7 +33,7 @@ class SynchronisationConsignation {
                 }
 
                 const nomFichier = this.parseFichier(item)
-                if(emettreBatch) listeFuuidsVisites.push(nomFichier)  // Cumuler fichiers en batch
+                if(emettreBatch) listeFichiersVisites.push(nomFichier)  // Cumuler fichiers en batch
                 if(outputStream) outputStream.write(nomFichier + '\n')
                 
                 // Stats cumulatives
@@ -71,10 +71,14 @@ class SynchronisationConsignation {
     async genererOutputListing(fichierPath, opts) {
         opts = opts || {}
         const fichierWriteStream = fs.createWriteStream(fichierPath + '.work')
-        await this.genererListing({...opts, outputStream: fichierWriteStream})
+        
+        const resultat = await this.genererListing({...opts, outputStream: fichierWriteStream})
+        
         fichierWriteStream.close()
-        await fileutils.sortFile(fichierPath + '.work', fichierPath)  // Trier
+        await fileutils.sortFile(fichierPath + '.work', fichierPath, opts)  // Trier
         await fsPromises.unlink(fichierPath + '.work')
+
+        return resultat
     }
 
 }
