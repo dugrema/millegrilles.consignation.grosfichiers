@@ -85,6 +85,7 @@ class ManagerFacade {
 
     // Methodes d'acces au store
     parcourirFichiers(callback, opts) { return parcourirFichiers(callback, opts) }
+    parcourirArchives(callback, opts) { return parcourirArchives(callback, opts) }
     parcourirBackup(callback, opts) { return parcourirBackup(callback, opts) }
     supprimerFichier(fuuid) { return supprimerFichier(fuuid) }
 
@@ -371,36 +372,41 @@ async function traiterOrphelinsSecondaire() {
     await fsPromises.rename(pathFichierOrphelins, path.join(pathOrphelins, 'orphelins.00'))
 }
 
-/** Reception de listes de fuuids a partir de chaque domaine. */
-async function recevoirFuuidsDomaines(fuuids, opts) {
-    opts = opts || {}
-    const archive = opts.archive || false
-    debug("recevoirFuuidsDomaines %d fuuids (archive %s)", fuuids.length, archive)
-
-    let fichierFuuids = null
-    if(archive) {
-        fichierFuuids = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ARCHIVES)
-    } else {
-        fichierFuuids = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ACTIFS)
-    }
-
-    const writeStream = fs.createWriteStream(fichierFuuids, {flags: 'a'})
-    await new Promise((resolve, reject) => {
-        writeStream.on('error', reject)
-        writeStream.on('close', resolve)
-        for (let fuuid of fuuids) {
-            writeStream.write(fuuid + '\n')
-        }
-        writeStream.close()
-    })
-
-    if(_timeoutTraiterConfirmes) clearTimeout(_timeoutTraiterConfirmes)
-    debug("traiterFichiersConfirmes dans %d secs", DUREE_ATTENTE_RECLAMATIONS / 1000)
-    _timeoutTraiterConfirmes = setTimeout(()=>{
-        traiterFichiersConfirmes()
-            .catch(err=>console.error("ERREUR ", err))
-    }, DUREE_ATTENTE_RECLAMATIONS)
+/** Passthrough message vers sync manager */
+async function recevoirFuuidsReclames(fuuids, opts) {
+    return _synchronisationManager.recevoirFuuidsReclames(fuuids, opts)
 }
+
+/** Reception de listes de fuuids a partir de chaque domaine. */
+// async function recevoirFuuidsDomaines(fuuids, opts) {
+//     opts = opts || {}
+//     const archive = opts.archive || false
+//     debug("recevoirFuuidsDomaines %d fuuids (archive %s)", fuuids.length, archive)
+
+//     let fichierFuuids = null
+//     if(archive) {
+//         fichierFuuids = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ARCHIVES)
+//     } else {
+//         fichierFuuids = path.join(getPathDataFolder(), FICHIER_FUUIDS_RECLAMES_ACTIFS)
+//     }
+
+//     const writeStream = fs.createWriteStream(fichierFuuids, {flags: 'a'})
+//     await new Promise((resolve, reject) => {
+//         writeStream.on('error', reject)
+//         writeStream.on('close', resolve)
+//         for (let fuuid of fuuids) {
+//             writeStream.write(fuuid + '\n')
+//         }
+//         writeStream.close()
+//     })
+
+//     if(_timeoutTraiterConfirmes) clearTimeout(_timeoutTraiterConfirmes)
+//     debug("traiterFichiersConfirmes dans %d secs", DUREE_ATTENTE_RECLAMATIONS / 1000)
+//     _timeoutTraiterConfirmes = setTimeout(()=>{
+//         traiterFichiersConfirmes()
+//             .catch(err=>console.error("ERREUR ", err))
+//     }, DUREE_ATTENTE_RECLAMATIONS)
+// }
 
 /** Compare les fichiers reclames (confirmes) par chaque domaine au contenu consigne. */
 async function traiterFichiersConfirmes() {
@@ -914,6 +920,10 @@ function parcourirFichiers(callback, opts) {
     return _storeConsignationHandler.parcourirFichiers(callback, opts)
 }
 
+function parcourirArchives(callback, opts) {
+    return _storeConsignationHandler.parcourirArchives(callback, opts)
+}
+
 function parcourirBackup(callback, opts) {
     return _storeConsignationHandler.parcourirBackup(callback, opts)
 }
@@ -1053,5 +1063,5 @@ module.exports = {
     getPathStaging,
     downloadFichiersBackup,
     getFichierStream,
-    recevoirFuuidsDomaines,
+    recevoirFuuidsReclames,
 }

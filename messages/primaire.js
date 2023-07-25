@@ -125,8 +125,10 @@ async function confirmerActiviteFuuids(message, rk, opts) {
     if(_consignationManager.estPrimaire()) {
         const fuuids = message.fuuids || []
         const archive = message.archive || false
-        debug("confirmerActiviteFuuids recu - ajouter a la liste %d fuuids (archive : %s)", fuuids.length, archive)
-        await _consignationManager.recevoirFuuidsDomaines(fuuids, {archive})
+        const termine = message.termine || false
+        debug("confirmerActiviteFuuids recu - ajouter a la liste %d fuuids (archive : %s, termine: %s)", fuuids.length, archive, termine)
+        // await _consignationManager.recevoirFuuidsDomaines(fuuids, {archive})
+        await _consignationManager.recevoirFuuidsReclames(fuuids, {archive, termine})
     }
 }
 
