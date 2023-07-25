@@ -2,20 +2,15 @@ const debug = require('debug')('millegrilles:fichiers:app')
 var express = require('express')
 var path = require('path')
 
-// var indexRouter = require('./routes/index');
 const {InitialiserGrosFichiers} = require('../routes/grosfichiers')
 // const {InitialiserBackup} = require('../routes/backup')
-// const {init: InitialiserPublier} = require('../routes/publier')
 const {verificationCertificatSSL, ValidateurSignature} = require('../util/pki')
-// const {PathConsignation} = require('../util/traitementFichier')
 
 function initialiser(mq, consignationManager, opts) {
   debug("Initialiser app, opts : %O", opts)
   opts = opts || {}
   const middleware = opts.middleware,
         idmg = mq.pki.idmg
-
-  // const pathConsignation = new PathConsignation({idmg})
 
   var app = express()
 
@@ -43,9 +38,7 @@ function initialiser(mq, consignationManager, opts) {
 
   // app.all('/backup/*', InitialiserBackup())
   const traitementGrosFichiers = InitialiserGrosFichiers(mq, consignationManager, opts)
-  // app.all('/fichiers/*', traitementGrosFichiers)
   app.all('/fichiers_transfert/*', traitementGrosFichiers)
-  // app.all('/publier/*', InitialiserPublier(mq, pathConsignation))
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {
@@ -58,9 +51,6 @@ function initialiser(mq, consignationManager, opts) {
     console.error("Erreur generique\n%O", err);
     res.sendStatus(err.status || 500);
   })
-
-  // Activer nettoyage sur cedule des repertoires de staging
-  //setInterval(cleanupStaging, 5 * 60 * 1000)  // Cleanup aux 5 minutes
 
   return app;
 }

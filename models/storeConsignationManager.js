@@ -20,6 +20,7 @@ const StoreConsignationAwsS3 = require('./storeConsignationAwsS3')
 
 const StoreConsignationThread = require('./storeConsignationThread')
 const TransfertPrimaire = require('./transfertPrimaire')
+const { SynchronisationManager }  = require('./synchronisation')
 const BackupSftp = require('./backupSftp')
 const { dechiffrerConfiguration } = require('./pki')
 
@@ -59,6 +60,7 @@ var _mq = null,
     _sync_lock = false,
     _derniere_sync = 0,
     _transfertPrimaire = null,
+    _synchronisationManager = null,
     _backupSftp = null,
     // _queueDownloadFuuids = new Set(),
     // _timeoutStartThreadDownload = null,
@@ -73,8 +75,19 @@ class ManagerFacade {
 
     estPrimaire() { return _estPrimaire }
     getTransfertPrimaire() { return _transfertPrimaire }
+    getHttpsAgent() { return _httpsAgent }
+    getMq() { return _mq }
+
     getPathStaging() { return getPathStaging() }
     consignerFichier(pathFichierStaging, fuuid) { return consignerFichier(pathFichierStaging, fuuid) }
+    getPathDataFolder() { return getPathDataFolder() }
+    async setEstConsignationPrimaire(estPrimaire) { await setEstConsignationPrimaire(estPrimaire) }
+
+    // Methodes d'acces au store
+    parcourirFichiers(callback, opts) { return parcourirFichiers(callback, opts) }
+    parcourirBackup(callback, opts) { return parcourirBackup(callback, opts) }
+    supprimerFichier(fuuid) { return supprimerFichier(fuuid) }
+
 }
 
 function getInstanceId() {
@@ -112,30 +125,33 @@ async function init(mq, opts) {
         const configuration = await _storeConsignationHandler.chargerConfiguration(opts)
         const typeStore = configuration.type_store
 
-        const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
+        //const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
 
         await modifierConfiguration(configuration)
         // await changerStoreConsignation(typeStore, params)
 
-        // Objet responsable de l'upload vers le primaire (si local est secondaire)
-        try {
-            _transfertPrimaire = new TransfertPrimaire(mq, this)
-            _transfertPrimaire.threadUploadFichiersConsignation()  // Premiere run, initialise loop
-            await _transfertPrimaire.ready
-        } catch(err) {
-            console.warn("Erreur initialisation transfert primaire - assumer qu'on est en mode d'initialisation")
-            // Donner 15 secondes pour initialiser la configuration de la consignation dans CoreTopologie
-            setTimeout(()=>{
-                _transfertPrimaire.reloadUrlTransfert()
-                .catch(err=>{
-                    console.error("storeConsignationManager.init Echec de chargement de la configuration de transfert - arreter")
-                    // Si echec, va faire arreter l'execution
-                    throw err
-                })
-            }, 30_000)
-        }
+        // OBSOLETE : Objet responsable de l'upload vers le primaire (si local est secondaire)
+        // try {
+        //     _transfertPrimaire = new TransfertPrimaire(mq, this)
+        //     _transfertPrimaire.threadUploadFichiersConsignation()  // Premiere run, initialise loop
+        //     await _transfertPrimaire.ready
+        // } catch(err) {
+        //     console.warn("Erreur initialisation transfert primaire - assumer qu'on est en mode d'initialisation")
+        //     // Donner 15 secondes pour initialiser la configuration de la consignation dans CoreTopologie
+        //     setTimeout(()=>{
+        //         _transfertPrimaire.reloadUrlTransfert()
+        //         .catch(err=>{
+        //             console.error("storeConsignationManager.init Echec de chargement de la configuration de transfert - arreter")
+        //             // Si echec, va faire arreter l'execution
+        //             throw err
+        //         })
+        //     }, 30_000)
+        // }
 
         const managerFacade = new ManagerFacade()
+
+        // Manager de synchronisation entre domaines (fuuids) et autres consignations (tous les repertoires)
+        _synchronisationManager = new SynchronisationManager(mq, managerFacade)
 
         // Creer thread qui transfere les fichiers recus vers le systeme de consignation
         _threadConsignation = new StoreConsignationThread(mq, managerFacade)
@@ -243,30 +259,31 @@ async function modifierConfiguration(params, opts) {
 }
 
 async function entretien() {
-    try {
-        // Determiner si on est la consignation primaire
-        if(await _transfertPrimaire.ready === true) {
-            const instance_id_primaire = _transfertPrimaire.getInstanceIdPrimaire()
-            const instance_id_local = _mq.pki.cert.subject.getField('CN').value
-            debug("entretien Instance consignation : %s, instance_id local %s", instance_id_primaire, instance_id_local)
-            await setEstConsignationPrimaire(instance_id_primaire === instance_id_local)
+    // try {
+    //     // Determiner si on est la consignation primaire
+    //     if(await _transfertPrimaire.ready === true) {
+    //         const instance_id_primaire = _transfertPrimaire.getInstanceIdPrimaire()
+    //         const instance_id_local = _mq.pki.cert.subject.getField('CN').value
+    //         debug("entretien Instance consignation : %s, instance_id local %s", instance_id_primaire, instance_id_local)
+    //         await setEstConsignationPrimaire(instance_id_primaire === instance_id_local)
 
-            // Demarrer thread de consignation (aucun effet si deja en cours)
-            _threadConsignation.demarrer()
+    //         //OBSOLETE
+    //         // // Demarrer thread de consignation (aucun effet si deja en cours)
+    //         // _threadConsignation.demarrer()
 
-            const now = new Date().getTime()
-            if(_syncActif && now > _derniere_sync + _intervalleSync) {
-                _derniere_sync = now  // Temporaire, pour eviter loop si un probleme survient
+    //         // const now = new Date().getTime()
+    //         // if(_syncActif && now > _derniere_sync + _intervalleSync) {
+    //         //     _derniere_sync = now  // Temporaire, pour eviter loop si un probleme survient
         
-                demarrerSynchronization()
-                    .catch(err=>console.error("storeConsignation.entretien() Erreur processusSynchronisation(1) ", err))
-            }
-        } else {
-            debug("Erreur chargement information transfertPrimaire - pas de sync")
-        }
-    } catch(err) {
-        console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
-    }
+    //         //     demarrerSynchronization()
+    //         //         .catch(err=>console.error("storeConsignation.entretien() Erreur processusSynchronisation(1) ", err))
+    //         // }
+    //     } else {
+    //         debug("Erreur chargement information transfertPrimaire - pas de sync")
+    //     }
+    // } catch(err) {
+    //     console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
+    // }
 
     try {
         await emettrePresence()
@@ -728,13 +745,13 @@ async function emettrePresence() {
     }
 }
 
-function evenementConsignationFichierPrimaire(mq, fuuid) {
-    // Emettre evenement aux secondaires pour indiquer qu'un nouveau fichier est pret
-    debug("Evenement consignation primaire sur", fuuid)
-    const evenement = {fuuid}
-    mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
-        .catch(err => console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err))
-}
+// function evenementConsignationFichierPrimaire(mq, fuuid) {
+//     // Emettre evenement aux secondaires pour indiquer qu'un nouveau fichier est pret
+//     debug("Evenement consignation primaire sur", fuuid)
+//     const evenement = {fuuid}
+//     mq.emettreEvenement(evenement, {domaine: 'fichiers', action: 'consignationPrimaire', exchange: '2.prive', attacherCertificat: true})
+//         .catch(err => console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err))
+// }
 
 /** Genere une liste locale de tous les fuuids */
 async function genererListeLocale() {
@@ -985,9 +1002,11 @@ async function setEstConsignationPrimaire(primaire, instanceIdPrimaire) {
     debug('setEstConsignationPrimaire %s', primaire)
     const courant = _estPrimaire
     _estPrimaire = primaire
-    if(instanceIdPrimaire) {
-        _transfertPrimaire.setInstanceIdPrimaire(instanceIdPrimaire)
-    }
+
+    // //OBSOLETE
+    // if(instanceIdPrimaire) {
+    //     // _transfertPrimaire.setInstanceIdPrimaire(instanceIdPrimaire)
+    // }
     if(courant !== primaire) {
         debug("Changement role consignation : primaire => %s", primaire)
         // FichiersTransfertBackingStore.setEstPrimaire(primaire)
@@ -1024,7 +1043,7 @@ module.exports = {
     sauvegarderBackupTransactions, rotationBackupTransactions,
     getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
     
-    getPathDataFolder, estPrimaire, setEstConsignationPrimaire, estSupporteArchives,
+    getPathDataFolder, estPrimaire, estSupporteArchives,
     getHttpsAgent, ajouterDownloadPrimaire,
     consignerFichier, reactiverFuuids,
     
