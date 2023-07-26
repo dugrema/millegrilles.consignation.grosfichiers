@@ -7,7 +7,7 @@ const axios = require('axios')
 const { exec } = require('child_process')
 const readdirp = require('readdirp')
 
-const { MESSAGE_KINDS } = require('@dugrema/millegrilles.utiljs/src/constantes')
+// const { MESSAGE_KINDS } = require('@dugrema/millegrilles.utiljs/src/constantes')
 
 // const FichiersTransfertBackingStore = require('@dugrema/millegrilles.nodejs/src/fichiersTransfertBackingstore')
 // const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
@@ -760,153 +760,153 @@ async function emettrePresence() {
 //         .catch(err => console.error(new Date() + " uploadFichier.evenementFichierPrimaire Erreur ", err))
 // }
 
-/** Genere une liste locale de tous les fuuids */
-async function genererListeLocale() {
-    debug("genererListeLocale Debut")
+// /** Genere une liste locale de tous les fuuids */
+// async function genererListeLocale() {
+//     debug("genererListeLocale Debut")
 
-    const pathFichiers = getPathDataFolder()
-    const pathFichierNouveaux = path.join(pathFichiers, FICHIER_FUUIDS_NOUVEAUX)
-    fsPromises.rm(pathFichierNouveaux)
-        .catch(()=>debug("Echec suppression fichier fuuidsNouveaux.txt (OK)"))
-    debug("genererListeLocale Fichiers sous ", pathFichiers)
-    await fsPromises.mkdir(pathFichiers, {recursive: true})
+//     const pathFichiers = getPathDataFolder()
+//     const pathFichierNouveaux = path.join(pathFichiers, FICHIER_FUUIDS_NOUVEAUX)
+//     fsPromises.rm(pathFichierNouveaux)
+//         .catch(()=>debug("Echec suppression fichier fuuidsNouveaux.txt (OK)"))
+//     debug("genererListeLocale Fichiers sous ", pathFichiers)
+//     await fsPromises.mkdir(pathFichiers, {recursive: true})
 
-    const fichierActifsNew = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS + '.work')
-    const fichierFuuidsActifsHandle = await fsPromises.open(fichierActifsNew, 'w')
-    const fichierArchivesNew = path.join(pathFichiers, FICHIER_FUUIDS_ARCHIVES + '.work')
-    const fichierFuuidsArchivesHandle = await fsPromises.open(fichierArchivesNew, 'w')
+//     const fichierActifsNew = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS + '.work')
+//     const fichierFuuidsActifsHandle = await fsPromises.open(fichierActifsNew, 'w')
+//     const fichierArchivesNew = path.join(pathFichiers, FICHIER_FUUIDS_ARCHIVES + '.work')
+//     const fichierFuuidsArchivesHandle = await fsPromises.open(fichierArchivesNew, 'w')
 
-    let nombreFichiersActifs = 0,
-        tailleActifs = 0,
-        nombreFichiersArchives = 0,
-        tailleArchives = 0,
-        nombreFichiersOrphelins = 0,
-        tailleOrphelins = 0
+//     let nombreFichiersActifs = 0,
+//         tailleActifs = 0,
+//         nombreFichiersArchives = 0,
+//         tailleArchives = 0,
+//         nombreFichiersOrphelins = 0,
+//         tailleOrphelins = 0
 
-    // Calculer actifs
-    try {
-        let listeFuuidsVisites = []
+//     // Calculer actifs
+//     try {
+//         let listeFuuidsVisites = []
 
-        const streamFuuidsActifs = fichierFuuidsActifsHandle.createWriteStream()
-        const callbackTraiterFichier = async item => {
-            if(!item) {
-                streamFuuidsActifs.close()
-                return  // Dernier fichier
-            }
+//         const streamFuuidsActifs = fichierFuuidsActifsHandle.createWriteStream()
+//         const callbackTraiterFichier = async item => {
+//             if(!item) {
+//                 streamFuuidsActifs.close()
+//                 return  // Dernier fichier
+//             }
 
-            const fuuid = item.filename.split('.').shift()
-            listeFuuidsVisites.push(fuuid)
-            streamFuuidsActifs.write(fuuid + '\n')
-            nombreFichiersActifs++
-            tailleActifs += item.size
+//             const fuuid = item.filename.split('.').shift()
+//             listeFuuidsVisites.push(fuuid)
+//             streamFuuidsActifs.write(fuuid + '\n')
+//             nombreFichiersActifs++
+//             tailleActifs += item.size
 
-            if(listeFuuidsVisites.length >= BATCH_PRESENCE_NOMBRE_MAX) {
-                debug("Emettre batch fuuids reconnus")
-                emettreBatchFuuidsVisites(listeFuuidsVisites)
-                    .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (actifs loop) Erreur emission batch fuuids visite : ", err))
-                listeFuuidsVisites = []
-            }
-        }
-        await _storeConsignationHandler.parcourirFichiers(callbackTraiterFichier)
-        if(listeFuuidsVisites.length > 0) {
-            emettreBatchFuuidsVisites(listeFuuidsVisites)
-                .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (actifs) Erreur emission batch fuuids visite : ", err))
-        }
-    } catch(err) {
-        console.error(new Date() + " storeConsignation.genererListeLocale ERROR Actifs : %O", err)
-        throw err
-    } finally {
-        await fichierFuuidsActifsHandle.close()
-    }
+//             if(listeFuuidsVisites.length >= BATCH_PRESENCE_NOMBRE_MAX) {
+//                 debug("Emettre batch fuuids reconnus")
+//                 emettreBatchFuuidsVisites(listeFuuidsVisites)
+//                     .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (actifs loop) Erreur emission batch fuuids visite : ", err))
+//                 listeFuuidsVisites = []
+//             }
+//         }
+//         await _storeConsignationHandler.parcourirFichiers(callbackTraiterFichier)
+//         if(listeFuuidsVisites.length > 0) {
+//             emettreBatchFuuidsVisites(listeFuuidsVisites)
+//                 .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (actifs) Erreur emission batch fuuids visite : ", err))
+//         }
+//     } catch(err) {
+//         console.error(new Date() + " storeConsignation.genererListeLocale ERROR Actifs : %O", err)
+//         throw err
+//     } finally {
+//         await fichierFuuidsActifsHandle.close()
+//     }
 
-    // Calculer archives
-    try {
-        let listeFuuidsVisites = []
+//     // Calculer archives
+//     try {
+//         let listeFuuidsVisites = []
 
-        const streamFuuidsArchives = fichierFuuidsArchivesHandle.createWriteStream()
-        const callbackTraiterFichier = async item => {
-            if(!item) {
-                streamFuuidsArchives.close()
-                return  // Dernier fichier
-            }
-            const fuuid = item.filename.split('.').shift()
-            listeFuuidsVisites.push(fuuid)
-            streamFuuidsArchives.write(fuuid + '\n')
-            nombreFichiersArchives++
-            tailleArchives += item.size
+//         const streamFuuidsArchives = fichierFuuidsArchivesHandle.createWriteStream()
+//         const callbackTraiterFichier = async item => {
+//             if(!item) {
+//                 streamFuuidsArchives.close()
+//                 return  // Dernier fichier
+//             }
+//             const fuuid = item.filename.split('.').shift()
+//             listeFuuidsVisites.push(fuuid)
+//             streamFuuidsArchives.write(fuuid + '\n')
+//             nombreFichiersArchives++
+//             tailleArchives += item.size
 
-            if(listeFuuidsVisites.length >= BATCH_PRESENCE_NOMBRE_MAX) {
-                debug("Emettre batch fuuids reconnus")
-                emettreBatchFuuidsVisites(listeFuuidsVisites)
-                    .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (archives loop) Erreur emission batch fuuids visite : ", err))
-                listeFuuidsVisites = []
-            }
-        }
-        await _storeConsignationHandler.parcourirArchives(callbackTraiterFichier)
-        if(listeFuuidsVisites.length > 0) {
-            emettreBatchFuuidsVisites(listeFuuidsVisites)
-                .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (archives) Erreur emission batch fuuids visite : ", err))
-        }
-    } catch(err) {
-        console.error(new Date() + " storeConsignation.genererListeLocale ERROR Archives : %O", err)
-    } finally {
-        await fichierFuuidsArchivesHandle.close()
-    }
+//             if(listeFuuidsVisites.length >= BATCH_PRESENCE_NOMBRE_MAX) {
+//                 debug("Emettre batch fuuids reconnus")
+//                 emettreBatchFuuidsVisites(listeFuuidsVisites)
+//                     .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (archives loop) Erreur emission batch fuuids visite : ", err))
+//                 listeFuuidsVisites = []
+//             }
+//         }
+//         await _storeConsignationHandler.parcourirArchives(callbackTraiterFichier)
+//         if(listeFuuidsVisites.length > 0) {
+//             emettreBatchFuuidsVisites(listeFuuidsVisites)
+//                 .catch(err=>console.warn(new Date() + " storeConsignationManager.genererListeLocale (archives) Erreur emission batch fuuids visite : ", err))
+//         }
+//     } catch(err) {
+//         console.error(new Date() + " storeConsignation.genererListeLocale ERROR Archives : %O", err)
+//     } finally {
+//         await fichierFuuidsArchivesHandle.close()
+//     }
 
-    // Calculer orphelins
-    try {
-        const callbackTraiterFichier = async item => {
-            if(!item) {
-                return  // Dernier fichier
-            }
-            nombreFichiersOrphelins++
-            tailleOrphelins += item.size
-        }
-        await _storeConsignationHandler.parcourirOrphelins(callbackTraiterFichier)
-    } catch(err) {
-        console.error(new Date() + " storeConsignation.genererListeLocale ERROR Orphelins : %O", err)
-    }
+//     // Calculer orphelins
+//     try {
+//         const callbackTraiterFichier = async item => {
+//             if(!item) {
+//                 return  // Dernier fichier
+//             }
+//             nombreFichiersOrphelins++
+//             tailleOrphelins += item.size
+//         }
+//         await _storeConsignationHandler.parcourirOrphelins(callbackTraiterFichier)
+//     } catch(err) {
+//         console.error(new Date() + " storeConsignation.genererListeLocale ERROR Orphelins : %O", err)
+//     }
 
-    debug("genererListeLocale Terminer information liste")
-    const info = {
-        nombreFichiersActifs, tailleActifs,
-        nombreFichiersArchives, tailleArchives,
-        nombreFichiersOrphelins, tailleOrphelins,
-    }
-    const messageFormatte = await _mq.pki.formatterMessage(
-        MESSAGE_KINDS.KIND_COMMANDE, info,  
-        {domaine: 'fichiers', action: 'liste', ajouterCertificat: true}
-    )
-    debug("genererListeLocale messageFormatte : ", messageFormatte)
-    fsPromises.writeFile(path.join(pathFichiers, 'data.json'), JSON.stringify(messageFormatte))
+//     debug("genererListeLocale Terminer information liste")
+//     const info = {
+//         nombreFichiersActifs, tailleActifs,
+//         nombreFichiersArchives, tailleArchives,
+//         nombreFichiersOrphelins, tailleOrphelins,
+//     }
+//     const messageFormatte = await _mq.pki.formatterMessage(
+//         MESSAGE_KINDS.KIND_COMMANDE, info,  
+//         {domaine: 'fichiers', action: 'liste', ajouterCertificat: true}
+//     )
+//     debug("genererListeLocale messageFormatte : ", messageFormatte)
+//     fsPromises.writeFile(path.join(pathFichiers, 'data.json'), JSON.stringify(messageFormatte))
 
-    // Copier le fichier de .work.txt a .txt, trier en meme temps
-    try { 
-        // Actifs
-        const fichierActifs = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS)
-        await sortFile(fichierActifsNew, fichierActifs, {gzip: true})
-        await fsPromises.rm(fichierActifsNew)
+//     // Copier le fichier de .work.txt a .txt, trier en meme temps
+//     try { 
+//         // Actifs
+//         const fichierActifs = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS)
+//         await sortFile(fichierActifsNew, fichierActifs, {gzip: true})
+//         await fsPromises.rm(fichierActifsNew)
 
-        // Archives
-        const fichierArchives = path.join(pathFichiers, FICHIER_FUUIDS_ARCHIVES)
-        await sortFile(fichierArchivesNew, fichierArchives, {gzip: true})
-        await fsPromises.rm(fichierArchivesNew)
+//         // Archives
+//         const fichierArchives = path.join(pathFichiers, FICHIER_FUUIDS_ARCHIVES)
+//         await sortFile(fichierArchivesNew, fichierArchives, {gzip: true})
+//         await fsPromises.rm(fichierArchivesNew)
 
-        // Combinaison des fichiers actifs et archives (presents sur le systeme)
-        const fichierActifsArchives = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS_ARCHIVES)
-        await combinerSortFiles([fichierActifs, fichierArchives], fichierActifsArchives)
+//         // Combinaison des fichiers actifs et archives (presents sur le systeme)
+//         const fichierActifsArchives = path.join(pathFichiers, FICHIER_FUUIDS_ACTIFS_ARCHIVES)
+//         await combinerSortFiles([fichierActifs, fichierArchives], fichierActifsArchives)
 
-    } catch(err) {
-        console.error("storeConsignation.genererListeLocale Erreur copie fichiers actifs : ", err)
-    }
+//     } catch(err) {
+//         console.error("storeConsignation.genererListeLocale Erreur copie fichiers actifs : ", err)
+//     }
 
-    if(_estPrimaire) {
-        debug("Emettre evenement de fin du creation de liste du primaire")
-        await _mq.emettreEvenement(messageFormatte, {domaine: 'fichiers', action: 'syncPret', ajouterCertificat: true})
-    }
+//     if(_estPrimaire) {
+//         debug("Emettre evenement de fin du creation de liste du primaire")
+//         await _mq.emettreEvenement(messageFormatte, {domaine: 'fichiers', action: 'syncPret', ajouterCertificat: true})
+//     }
 
-    debug("genererListeLocale Fin")
-}
+//     debug("genererListeLocale Fin")
+// }
 
 async function emettreBatchFuuidsVisites(listeFuuidsVisites) {
     const message = {

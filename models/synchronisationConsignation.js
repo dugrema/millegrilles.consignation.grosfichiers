@@ -74,9 +74,15 @@ class SynchronisationConsignation {
         
         const resultat = await this.genererListing({...opts, outputStream: fichierWriteStream})
         
-        fichierWriteStream.close()
+        await new Promise((resolve, reject)=>{
+            fichierWriteStream.close(err=>{
+                if(err) return reject(err)
+                resolve()
+            })
+        })
+        
         await fileutils.sortFile(fichierPath + '.work', fichierPath, opts)  // Trier
-        await fsPromises.unlink(fichierPath + '.work')
+        //await fsPromises.unlink(fichierPath + '.work')
 
         return resultat
     }

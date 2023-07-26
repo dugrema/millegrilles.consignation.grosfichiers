@@ -184,6 +184,9 @@ class SynchronisationPrimaire {
 
         const domaines = await getListeDomainesFuuids(this.mq)
 
+        const pathListingLocal = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_LOCAUX),
+              pathListingArchives = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_ARCHIVES)
+
         // Cleanup fichiers precedents
         const pathLogsFuuids = path.join(this._path_listings, DIR_RECLAMATIONS)
         try {
@@ -204,10 +207,7 @@ class SynchronisationPrimaire {
         }
 
         // Trier les fichiers
-        const logs = [
-            path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_ARCHIVES),
-            path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_LOCAUX),
-        ]
+        const logs = [ pathListingLocal, pathListingArchives ]
         for await(const log of logs) {
             try {
                 await fileutils.sortFile(log + '.work', log, {gzip: true})
@@ -216,6 +216,12 @@ class SynchronisationPrimaire {
                 console.error(new Date() + " reclamerFichiers Erreur sort/compression fichier %s, on continue : %O", log, err)
             }
         }
+
+        // Retirer d'archives tous les fichiers fuuids aussi presents dans local (integrite, eviter duplication de fichiers)
+        await fileutils.trouverUniques(pathListingArchives, pathListingLocal, pathListingArchives + '.unique')
+        // Recreer le liste d'archives
+        await fileutils.sortFile(pathListingArchives + '.unique', pathListingArchives, {gzip: true})
+        await fsPromises.unlink(pathListingArchives + '.unique')
 
         debug("reclamerFichiers Fin reclamation fichiers, complete %O", reclamationComplete)
         return reclamationComplete
