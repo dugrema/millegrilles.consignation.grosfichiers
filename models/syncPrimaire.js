@@ -37,67 +37,27 @@ class SynchronisationPrimaire {
         this.rejectRecevoirFuuidsDomaine = null
     }
 
-    /** Reception de listes de fuuids a partir de chaque domaine. */
-    async recevoirFuuidsReclames(fuuids, opts) {
-        opts = opts || {}
-        debug("recevoirFuuidsReclames %d fuuids (%O)", fuuids.length, opts)
-
-        const archive = opts.archive || false,
-              termine = opts.termine || false
-
-        if(!this.timerRecevoirFuuidsReclames) throw Error("Message fuuids reclames recus hors d'une synchronisation")
-        clearTimeout(this.timerRecevoirFuuidsReclames)
-
-        if(fuuids !== null && fuuids.length > 0) {
-            try {
-                debug("recevoirFuuidsReclames %d fuuids (archive %s)", fuuids.length, archive)
-
-                let fichierFuuids = null
-                if(archive) {
-                    fichierFuuids = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_ARCHIVES + '.work')
-                } else {
-                    fichierFuuids = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_LOCAUX + '.work')
-                }
-
-                const writeStream = fs.createWriteStream(fichierFuuids, {flags: 'a'})
-                await new Promise((resolve, reject) => {
-                    writeStream.on('error', reject)
-                    writeStream.on('close', resolve)
-                    for (let fuuid of fuuids) {
-                        writeStream.write(fuuid + '\n')
-                    }
-                    writeStream.close()
-                })
-            } finally {
-                debug("recevoirFuuidsReclames dans %d secs", DUREE_ATTENTE_RECLAMATIONS / 1000)
-                this.timerRecevoirFuuidsReclames = setTimeout(()=>{
-                    this.rejectRecevoirFuuidsDomaine(new Error('timeout'))
-                }, DUREE_ATTENTE_RECLAMATIONS)
-            }
-        }
-
-        if(termine) {
-            clearTimeout(this.timerRecevoirFuuidsReclames)
-            this.timerRecevoirFuuidsReclames = null
-            this.resolveRecevoirFuuidsDomaine()
-        }
-
-    }
-
     async runSync() {
-        let infoConsignation = await this.genererListeFichiers()
-        const reclamationComplete = await this.reclamerFichiers()
-        await this.genererListeCombinees()
-        await this.genererListeOperations()
-        const nombreOperations = await this.moveFichiers()
+        let [infoConsignation, reclamationComplete] = await Promise.all([
+            this.genererListeFichiers(),
+            this.reclamerFichiers(),
+        ])
 
+        // Combiner listes locales et reclamees
+        await this.genererListeCombinees()
+
+        // Deplacer les fichiers entre local, archives et orphelins
+        // Ne pas deplacer vers orphelins si reclamationComplete est false (tous les domaines n'ont pas repondus)
+        await this.genererListeOperations()
+        const nombreOperations = await this.moveFichiers({traiterOrphelins: reclamationComplete})
         if(nombreOperations > 0) {
             debug("runSync Regenerer information de consignation apres %d operations", nombreOperations)
             infoConsignation = await this.genererListeFichiers()
         }
-
         debug("Information de consignation courante : ", infoConsignation)
-        await this.exposerListings()  // Exposer listings pour download
+
+        // Exposer les listings pour consignations secondaires (download)
+        await this.exposerListings()
     }
 
     arreter() {
@@ -249,7 +209,10 @@ class SynchronisationPrimaire {
     }
 
     /** Execute les operations de deplacements internes (move) */
-    async moveFichiers() {
+    async moveFichiers(opts) {
+        opts = opts || {}
+        const traiterOrphelins = opts.traiterOrphelins
+
         const pathMove = this.getPathMove()
 
         let operations = 0
@@ -258,7 +221,7 @@ class SynchronisationPrimaire {
         operations += await fileutils.chargerFuuidsListe(pathMove.localVersArchives, fuuid=>this.manager.archiverFichier(fuuid))
         
         // Reactiver fichier orphelin et deplacer vers archives
-        operations += await fileutils.chargerFuuidsListe(pathMove.archivesVersOrphelins, async fuuid => {
+        operations += await fileutils.chargerFuuidsListe(pathMove.orphelinsVersArchives, async fuuid => {
             // On doit reactiver le fichiers puis le transferer vers archives
             await this.manager.reactiverFichier(fuuid)
             await this.manager.archiverFichier(fuuid)
@@ -268,13 +231,17 @@ class SynchronisationPrimaire {
         operations += await fileutils.chargerFuuidsListe(pathMove.orphelinsVersLocal, fuuid=>this.manager.reactiverFichier(fuuid))
         operations += await fileutils.chargerFuuidsListe(pathMove.archivesVersLocal, fuuid=>this.manager.reactiverFichier(fuuid))
 
-        // Deplacer vers orphelins
-        operations += await fileutils.chargerFuuidsListe(pathMove.localVersOrphelins, fuuid=>this.manager.marquerOrphelin(fuuid))
-        operations += await fileutils.chargerFuuidsListe(pathMove.archivesVersOrphelins, async fuuid => {
-            // On doit reactiver le fichiers puis le transferer vers orphelins
-            await this.manager.reactiverFichier(fuuid)
-            await this.manager.marquerOrphelin(fuuid)
-        })
+        if(traiterOrphelins) {
+            // Deplacer vers orphelins
+            operations += await fileutils.chargerFuuidsListe(pathMove.localVersOrphelins, fuuid=>this.manager.marquerOrphelin(fuuid))
+            operations += await fileutils.chargerFuuidsListe(pathMove.archivesVersOrphelins, async fuuid => {
+                // On doit reactiver le fichiers puis le transferer vers orphelins
+                await this.manager.reactiverFichier(fuuid)
+                await this.manager.marquerOrphelin(fuuid)
+            })
+        } else {
+            debug("moveFichier - SKIP traitement orphelins")
+        }
 
         return operations
     }
@@ -382,6 +349,53 @@ class SynchronisationPrimaire {
         return true
     }
 
+    /** Reception de listes de fuuids a partir de chaque domaine. */
+    async recevoirFuuidsReclames(fuuids, opts) {
+        opts = opts || {}
+        debug("recevoirFuuidsReclames %d fuuids (%O)", fuuids.length, opts)
+
+        const archive = opts.archive || false,
+              termine = opts.termine || false
+
+        if(!this.timerRecevoirFuuidsReclames) throw Error("Message fuuids reclames recus hors d'une synchronisation")
+        clearTimeout(this.timerRecevoirFuuidsReclames)
+
+        if(fuuids !== null && fuuids.length > 0) {
+            try {
+                debug("recevoirFuuidsReclames %d fuuids (archive %s)", fuuids.length, archive)
+
+                let fichierFuuids = null
+                if(archive) {
+                    fichierFuuids = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_ARCHIVES + '.work')
+                } else {
+                    fichierFuuids = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_LOCAUX + '.work')
+                }
+
+                const writeStream = fs.createWriteStream(fichierFuuids, {flags: 'a'})
+                await new Promise((resolve, reject) => {
+                    writeStream.on('error', reject)
+                    writeStream.on('close', resolve)
+                    for (let fuuid of fuuids) {
+                        writeStream.write(fuuid + '\n')
+                    }
+                    writeStream.close()
+                })
+            } finally {
+                debug("recevoirFuuidsReclames dans %d secs", DUREE_ATTENTE_RECLAMATIONS / 1000)
+                this.timerRecevoirFuuidsReclames = setTimeout(()=>{
+                    this.rejectRecevoirFuuidsDomaine(new Error('timeout'))
+                }, DUREE_ATTENTE_RECLAMATIONS)
+            }
+        }
+
+        if(termine) {
+            clearTimeout(this.timerRecevoirFuuidsReclames)
+            this.timerRecevoirFuuidsReclames = null
+            this.resolveRecevoirFuuidsDomaine()
+        }
+
+    }
+
     async emettreBatchFuuidsVisites(listeFuuidsVisites) {
         const message = {
             fuuids: listeFuuidsVisites
@@ -394,7 +408,7 @@ class SynchronisationPrimaire {
         // Note : le repertoire listings est cree/vide durant la passe de reclamation
         //        Permet de recevoir les fuuidsNouveaux.txt qui pourraient avoir ete echappes.
         const dirListingsExposes = path.join(this._path_listings, DIR_LISTINGS_EXPOSES)
-        
+
         // Deplacer les fichires gzip
         const pathReclamationsListings = path.join(this._path_listings, 'reclamations')
         const fichierReclamesLocalPath = path.join(pathReclamationsListings, FICHIER_FUUIDS_RECLAMES_LOCAUX + '.gz')
