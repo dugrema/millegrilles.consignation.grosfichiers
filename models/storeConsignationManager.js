@@ -83,6 +83,7 @@ class ManagerFacade {
     archiverFichier(fuuid) { return _storeConsignationHandler.archiverFichier(fuuid)}
     reactiverFichier(fuuid) { return _storeConsignationHandler.reactiverFichier(fuuid) }
     marquerOrphelin(fuuid) { return _storeConsignationHandler.marquerOrphelin(fuuid) }
+    purgerOrphelinsExpires(opts) { return _storeConsignationHandler.purgerOrphelinsExpires(opts) }
     getPathDataFolder() { return getPathDataFolder() }
     async setEstConsignationPrimaire(estPrimaire) { await setEstConsignationPrimaire(estPrimaire) }
 

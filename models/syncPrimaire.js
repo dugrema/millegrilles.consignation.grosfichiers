@@ -11,7 +11,8 @@ const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
       DIR_RECLAMATIONS = 'reclamations',
       DIR_LISTINGS_EXPOSES = 'listings'
 
-const DUREE_ATTENTE_RECLAMATIONS = 10_000
+const DUREE_ATTENTE_RECLAMATIONS = 10_000,
+      EXPIRATION_ORPHELINS_PRIMAIRES = 86_400_000 * 21
 
 /** Gere les fichiers et catalogues de la consignation primaire */
 class SynchronisationPrimaire extends SynchronisationConsignation {
@@ -41,7 +42,8 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
             // Deplacer les fichiers entre local, archives et orphelins
             // Ne pas deplacer vers orphelins si reclamationComplete est false (tous les domaines n'ont pas repondus)
             await this.genererListeOperations()
-            const nombreOperations = await this.moveFichiers({traiterOrphelins: reclamationComplete})
+            const nombreOperations = await this.moveFichiers({
+                traiterOrphelins: reclamationComplete, expirationOrphelins: EXPIRATION_ORPHELINS_PRIMAIRES})
             if(nombreOperations > 0) {
                 debug("runSync Regenerer information de consignation apres %d operations", nombreOperations)
                 infoConsignation = await this.genererListeFichiers({emettreBatch: false})

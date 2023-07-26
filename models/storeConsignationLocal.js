@@ -12,7 +12,7 @@ const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'tra
 // const PATH_ARCHIVES_DIR = path.join(CONSIGNATION_PATH, 'archives')
 
 const DEFAULT_URL_CONSIGNATION = 'https://fichiers:443',
-      CONST_EXPIRATION_ORPHELINS = 86_400_000 * 3,
+      CONST_EXPIRATION_ORPHELINS = 86_400_000 * 7,
       ERROR_CODE_FICHIER_INCONNU = 1
 
 let _pathConsignation = path.join(CONSIGNATION_PATH, 'local'),

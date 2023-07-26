@@ -12,7 +12,7 @@ const SftpDao = require('./sftpDao')
 const CONSIGNATION_PATH = process.env.MG_CONSIGNATION_PATH || '/var/opt/millegrilles/consignation'
 const PATH_BACKUP_TRANSACTIONS_DIR = path.join(CONSIGNATION_PATH, 'backup', 'transactions')
 
-const CONST_EXPIRATION_ORPHELINS = 86_400_000 * 3
+const CONST_EXPIRATION_ORPHELINS = 86_400_000 * 7
 
 const _sftpDao = new SftpDao()
 

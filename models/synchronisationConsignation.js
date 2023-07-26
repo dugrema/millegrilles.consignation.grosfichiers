@@ -195,7 +195,8 @@ class SynchronisationConsignation {
     /** Execute les operations de deplacements internes (move) */
     async moveFichiers(opts) {
         opts = opts || {}
-        const traiterOrphelins = opts.traiterOrphelins
+        const traiterOrphelins = opts.traiterOrphelins,
+              expirationOrphelins = opts.expirationOrphelins
 
         const pathMove = this.getPathMove()
 
@@ -223,6 +224,8 @@ class SynchronisationConsignation {
                 await this.manager.reactiverFichier(fuuid)
                 await this.manager.marquerOrphelin(fuuid)
             })
+
+            await this.manager.purgerOrphelinsExpires({expiration: expirationOrphelins})
         } else {
             debug("moveFichier - SKIP traitement orphelins")
         }
