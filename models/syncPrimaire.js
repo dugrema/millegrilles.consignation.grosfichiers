@@ -221,7 +221,7 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
             termine,
         }
         const domaine = 'fichiers', action = 'syncPrimaire'
-        this.mq.emettreEvenement(message, {domaine, action})
+        this.mq.emettreEvenement(message, {domaine, action, ajouterCertificat: true})
             .catch(err=>console.error("emettreEvenementActivite Erreur : ", err))
     }
 
