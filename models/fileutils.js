@@ -5,10 +5,12 @@ const { exec } = require('child_process')
 async function chargerFuuidsListe(pathFichier, cb) {
     const readStreamFichiers = fs.createReadStream(pathFichier)
     const rlFichiers = readline.createInterface({input: readStreamFichiers, crlfDelay: Infinity})
+    let count = 0
     for await (let fuuid of rlFichiers) {
         // Detecter fichiers manquants localement par espaces vide au debut de la ligne
         fuuid = fuuid.trim()
         if(!fuuid) continue  // Ligne vide
+        count ++
         try {
             await cb(fuuid)
         } catch(err) {
@@ -16,6 +18,7 @@ async function chargerFuuidsListe(pathFichier, cb) {
             else throw err
         }
     }
+    return count
 }
 
 async function sortFile(src, dest, opts) {
@@ -90,4 +93,19 @@ async function trouverUniques(src1, src2, dest) {
     }
 }
 
-module.exports = { chargerFuuidsListe, sortFile, combinerSortFiles, trouverManquants, trouverUniques}
+/** Conserve les fichiers qui sont uniquement presents dans src1 */
+async function trouverPresentsTous(src1, src2, dest) {
+    try {
+        await new Promise((resolve, reject)=>{
+            exec(`comm -12 ${src1} ${src2} > ${dest}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
+        })
+    } catch(err) {
+        console.error(new Date() + " trouverManquants ERROR Traitement fichiers manquants : ", err)
+        return
+    }
+}
+
+module.exports = { chargerFuuidsListe, sortFile, combinerSortFiles, trouverManquants, trouverUniques, trouverPresentsTous}

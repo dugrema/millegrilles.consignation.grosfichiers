@@ -80,6 +80,9 @@ class ManagerFacade {
 
     getPathStaging() { return getPathStaging() }
     consignerFichier(pathFichierStaging, fuuid) { return consignerFichier(pathFichierStaging, fuuid) }
+    archiverFichier(fuuid) { return _storeConsignationHandler.archiverFichier(fuuid)}
+    reactiverFichier(fuuid) { return _storeConsignationHandler.reactiverFichier(fuuid) }
+    marquerOrphelin(fuuid) { return _storeConsignationHandler.marquerOrphelin(fuuid) }
     getPathDataFolder() { return getPathDataFolder() }
     async setEstConsignationPrimaire(estPrimaire) { await setEstConsignationPrimaire(estPrimaire) }
 
@@ -1046,7 +1049,7 @@ async function consignerFichier(pathFichierStaging, fuuid) {
     await _storeConsignationHandler.consignerFichier(pathFichierStaging, fuuid)
 
     // Ajouter fichier a la fuuidsActifs.nouveau.txt
-    const pathFichierNouveaux = path.join(getPathDataFolder(), 'reclamations', FICHIER_FUUIDS_NOUVEAUX)
+    const pathFichierNouveaux = path.join(getPathDataFolder(), 'listings', FICHIER_FUUIDS_NOUVEAUX)
     const writeStream = fs.createWriteStream(pathFichierNouveaux, {flags: 'a'})
     writeStream.write(fuuid + '\n')
 }

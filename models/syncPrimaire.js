@@ -15,7 +15,8 @@ const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
       FICHIER_FUUIDS_PRESENTS = 'fuuidsPresents.txt',
       FICHIER_FUUIDS_RECLAMES = 'fuuidsReclames.txt',
       FICHIER_FUUIDS_MANQUANTS = 'fuuidsManquants.txt',
-      DIR_RECLAMATIONS = 'reclamations'
+      DIR_RECLAMATIONS = 'reclamations',
+      DIR_LISTINGS_EXPOSES = 'listings'
 
 const DUREE_ATTENTE_RECLAMATIONS = 10_000
 
@@ -84,9 +85,19 @@ class SynchronisationPrimaire {
     }
 
     async runSync() {
-        const infoConsignation = await this.genererListeFichiers()
+        let infoConsignation = await this.genererListeFichiers()
         const reclamationComplete = await this.reclamerFichiers()
         await this.genererListeCombinees()
+        await this.genererListeOperations()
+        const nombreOperations = await this.moveFichiers()
+
+        if(nombreOperations > 0) {
+            debug("runSync Regenerer information de consignation apres %d operations", nombreOperations)
+            infoConsignation = await this.genererListeFichiers()
+        }
+
+        debug("Information de consignation courante : ", infoConsignation)
+        await this.exposerListings()  // Exposer listings pour download
     }
 
     arreter() {
@@ -174,6 +185,100 @@ class SynchronisationPrimaire {
         await fileutils.trouverManquants(fichiersPresents, fichierReclamesActifs, fichiersManquants)
     }
 
+    async genererListeOperations() {
+        const pathOperationsListings = path.join(this._path_listings, 'operations')
+        // Cleanup fichiers precedents
+        try {
+            await fsPromises.rm(pathOperationsListings, {recursive: true})
+        } catch(err) {
+            console.error(new Date() + " Erreur suppression %s : %O", pathOperationsListings, err)
+        }
+        await fsPromises.mkdir(pathOperationsListings, {recursive: true})
+
+        const pathReclamationsListings = path.join(this._path_listings, 'reclamations')
+        const pathTraitementListings = path.join(this._path_listings, 'traitements')
+        const pathConsignationListings = path.join(this._path_listings, 'consignation')
+
+        const fichierLocalPath = path.join(pathConsignationListings, FICHIER_FUUIDS_LOCAUX)
+        const fichierArchivesPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ARCHIVES)
+
+        const fichierReclamesLocalPath = path.join(pathReclamationsListings, FICHIER_FUUIDS_RECLAMES_LOCAUX)
+        const fichierReclamesArchivesPath = path.join(pathReclamationsListings, FICHIER_FUUIDS_RECLAMES_ARCHIVES)
+
+        const fichierOrphelinsPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ORPHELINS)
+        const fichierOrphelinsTraitementPath = path.join(pathTraitementListings, FICHIER_FUUIDS_ORPHELINS)
+        
+        const pathMove = this.getPathMove()
+
+        // Transfert de orphelins vers local
+        await fileutils.trouverPresentsTous(fichierReclamesLocalPath, fichierOrphelinsPath, pathMove.orphelinsVersLocal)
+
+        // Transfert de orphelins vers archives
+        await fileutils.trouverPresentsTous(fichierReclamesArchivesPath, fichierOrphelinsPath, pathMove.orphelinsVersArchives)
+
+        // Transfert de archives vers local
+        await fileutils.trouverPresentsTous(fichierReclamesLocalPath, fichierArchivesPath, pathMove.archivesVersLocal)
+
+        // Transfert de archives vers orphelins
+        await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierArchivesPath, pathMove.archivesVersOrphelins)
+
+        // Transfert de local vers archives
+        await fileutils.trouverPresentsTous(fichierReclamesArchivesPath, fichierLocalPath, pathMove.localVersArchives)
+
+        // Transfert de local vers orphelins
+        await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierLocalPath, pathMove.localVersOrphelins)
+    }
+
+    getPathMove() {
+        const pathOperationsListings = path.join(this._path_listings, 'operations')
+
+        const orphelinsVersLocal = path.join(pathOperationsListings, 'move_orphelins_vers_local.txt')
+        const orphelinsVersArchives = path.join(pathOperationsListings, 'move_orphelins_vers_archives.txt')
+        const archivesVersLocal = path.join(pathOperationsListings, 'move_archives_vers_local.txt')
+        const archivesVersOrphelins = path.join(pathOperationsListings, 'move_archives_vers_orphelins.txt')
+        const localVersArchives = path.join(pathOperationsListings, 'move_local_vers_archives.txt')
+        const localVersOrphelins = path.join(pathOperationsListings, 'move_local_vers_orphelins.txt')
+        return {
+            orphelinsVersLocal,
+            orphelinsVersArchives,
+            archivesVersLocal,
+            archivesVersOrphelins,
+            localVersArchives,
+            localVersOrphelins,
+        }
+    }
+
+    /** Execute les operations de deplacements internes (move) */
+    async moveFichiers() {
+        const pathMove = this.getPathMove()
+
+        let operations = 0
+
+        // Archiver fichier (de local vers archives)
+        operations += await fileutils.chargerFuuidsListe(pathMove.localVersArchives, fuuid=>this.manager.archiverFichier(fuuid))
+        
+        // Reactiver fichier orphelin et deplacer vers archives
+        operations += await fileutils.chargerFuuidsListe(pathMove.archivesVersOrphelins, async fuuid => {
+            // On doit reactiver le fichiers puis le transferer vers archives
+            await this.manager.reactiverFichier(fuuid)
+            await this.manager.archiverFichier(fuuid)
+        })
+
+        // Reactiver fichiers (de orphelins ou archives vers local)
+        operations += await fileutils.chargerFuuidsListe(pathMove.orphelinsVersLocal, fuuid=>this.manager.reactiverFichier(fuuid))
+        operations += await fileutils.chargerFuuidsListe(pathMove.archivesVersLocal, fuuid=>this.manager.reactiverFichier(fuuid))
+
+        // Deplacer vers orphelins
+        operations += await fileutils.chargerFuuidsListe(pathMove.localVersOrphelins, fuuid=>this.manager.marquerOrphelin(fuuid))
+        operations += await fileutils.chargerFuuidsListe(pathMove.archivesVersOrphelins, async fuuid => {
+            // On doit reactiver le fichiers puis le transferer vers orphelins
+            await this.manager.reactiverFichier(fuuid)
+            await this.manager.marquerOrphelin(fuuid)
+        })
+
+        return operations
+    }
+
     /**
      * Demande a tous les domaines avec des fichiers de relamer leurs fichiers
      */
@@ -187,6 +292,8 @@ class SynchronisationPrimaire {
         const pathListingLocal = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_LOCAUX),
               pathListingArchives = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_ARCHIVES)
 
+
+
         // Cleanup fichiers precedents
         const pathLogsFuuids = path.join(this._path_listings, DIR_RECLAMATIONS)
         try {
@@ -195,6 +302,19 @@ class SynchronisationPrimaire {
             console.error(new Date() + " Erreur suppression %s : %O", pathLogsFuuids, err)
         }
         await fsPromises.mkdir(pathLogsFuuids, {recursive: true})
+
+        // Cleanup listings precedents - permet de recevoir fuuidsNouveaux.txt durant sync
+        const dirListingsExposes = path.join(this._path_listings, DIR_LISTINGS_EXPOSES)
+        try {
+            await fsPromises.rm(dirListingsExposes, {recursive: true})
+        } catch(err) {
+            console.error(new Date() + " Erreur suppression %s : %O", dirListingsExposes, err)
+        }
+        await fsPromises.mkdir(dirListingsExposes, {recursive: true})
+
+        // Initialiser fichiers vides
+        await fsPromises.writeFile(pathListingLocal + '.work', '')
+        await fsPromises.writeFile(pathListingArchives + '.work', '')
 
         // Reclamation des fuuids de chaque domaine
         for await (const domaine of domaines) {
@@ -270,6 +390,23 @@ class SynchronisationPrimaire {
         await this.mq.emettreEvenement(message, {domaine, action})
     }
 
+    async exposerListings() {
+        // Note : le repertoire listings est cree/vide durant la passe de reclamation
+        //        Permet de recevoir les fuuidsNouveaux.txt qui pourraient avoir ete echappes.
+        const dirListingsExposes = path.join(this._path_listings, DIR_LISTINGS_EXPOSES)
+        
+        // Deplacer les fichires gzip
+        const pathReclamationsListings = path.join(this._path_listings, 'reclamations')
+        const fichierReclamesLocalPath = path.join(pathReclamationsListings, FICHIER_FUUIDS_RECLAMES_LOCAUX + '.gz')
+        const fichierReclamesArchivesPath = path.join(pathReclamationsListings, FICHIER_FUUIDS_RECLAMES_ARCHIVES + '.gz')
+
+        const pathTraitementListings = path.join(this._path_listings, 'traitements')
+        const fichiersManquants = path.join(pathTraitementListings, FICHIER_FUUIDS_MANQUANTS + '.gz')
+
+        await fsPromises.rename(fichierReclamesLocalPath, path.join(dirListingsExposes, FICHIER_FUUIDS_RECLAMES_LOCAUX + '.gz'))
+        await fsPromises.rename(fichierReclamesArchivesPath, path.join(dirListingsExposes, FICHIER_FUUIDS_RECLAMES_ARCHIVES + '.gz'))
+        await fsPromises.rename(fichiersManquants, path.join(dirListingsExposes, FICHIER_FUUIDS_MANQUANTS + '.gz'))
+    }
 }
 
 async function getListeDomainesFuuids(mq) {

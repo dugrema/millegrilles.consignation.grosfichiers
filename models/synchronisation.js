@@ -1,4 +1,4 @@
-const debug = require('debug')('sync:syncRepertoire')
+const debug = require('debug')('sync:synchronisation')
 const path = require('path')
 const fsPromises = require('fs/promises')
 
@@ -182,14 +182,16 @@ class SynchronisationManager {
         } catch(err) {
             console.error(new Date() + ' SynhronisationManager._thread Erreur execution cycle : %O', err)
         } finally {
-            debug("SynhronisationManager._threadConsignerFichiers Fin execution cycle, attente %s ms", INTERVALLE_DEMARRER_THREAD)
             if(this.timerThread !== false) {
                 // Redemarrer apres intervalle
+                debug("SynhronisationManager._thread Fin execution cycle, attente %s ms", INTERVALLE_DEMARRER_THREAD)
                 this.timerThread = setTimeout(()=>{
-                    this.timerThread = null
+                    this.timerThread = true
                     this._thread()
                         .catch(err=>console.error("SynhronisationManager Erreur run _thread: %O", err))
                 }, INTERVALLE_DEMARRER_THREAD)
+            } else {
+                debug("SynhronisationManager._thread Fin execution cycle et arret _thread")
             }
         }
     }
