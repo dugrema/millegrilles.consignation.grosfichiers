@@ -308,13 +308,7 @@ async function entretien() {
 }
 
 async function demarrerSynchronization() {
-    await genererListeLocale()
-    await processusSynchronisation()
-    
-    debug("Sync complete, re-emettre presence")
-    _derniere_sync = new Date().getTime()
-
-    await emettrePresence()
+    _synchronisationManager.demarrer()
 }
 
 async function processusSynchronisation() {
