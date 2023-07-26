@@ -64,7 +64,7 @@ var _mq = null,
     _backupSftp = null,
     // _queueDownloadFuuids = new Set(),
     // _timeoutStartThreadDownload = null,
-    _intervalleSync = INTERVALLE_SYNC,
+    // _intervalleSync = INTERVALLE_SYNC,
     _syncActif = true,
     _timeoutTraiterConfirmes = null,
     _pathStaging = PATH_STAGING_DEFAUT,
@@ -135,7 +135,6 @@ async function init(mq, opts) {
 
         //const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
 
-        await modifierConfiguration(configuration)
         // await changerStoreConsignation(typeStore, params)
 
         // OBSOLETE : Objet responsable de l'upload vers le primaire (si local est secondaire)
@@ -164,6 +163,8 @@ async function init(mq, opts) {
         // Creer thread qui transfere les fichiers recus vers le systeme de consignation
         _threadConsignation = new StoreConsignationThread(mq, managerFacade)
 
+        await modifierConfiguration(configuration)
+
         // Handler backup sftp
         _backupSftp = new BackupSftp(mq, this)
         _backupSftp.setTimeout(15_000)  // Demarrer thread dans 15 secondes
@@ -191,11 +192,7 @@ async function changerStoreConsignation(typeStore, params, opts) {
         _syncActif = params.sync_actif
         debug("changerStoreConsignation Set sync actif ", _syncActif)
     }
-    if(params.sync_intervalle !== undefined) {
-        _intervalleSync = params.sync_intervalle * 1000  // Convertir de secondes en millisecs
-        debug("changerStoreConsignation Set sync intervalle %d msecs", _intervalleSync)
-    }
-
+    
     if('fermer' in _storeConsignationHandler) await _storeConsignationHandler.fermer()
 
     let storeConsignation = null
@@ -251,6 +248,12 @@ async function modifierConfiguration(params, opts) {
 
     debug("modifierConfiguration : ", params)
 
+    if(params.sync_intervalle !== undefined) {
+        const intervalleSync = params.sync_intervalle * 1000  // Convertir de secondes en millisecs
+        _synchronisationManager.setIntervalleSync(intervalleSync)
+        debug("changerStoreConsignation Set sync intervalle %d msecs", intervalleSync)
+    }
+
     if(params.supporte_archives !== undefined) {
         _supporteArchives = params.supporte_archives
     } else {
@@ -264,6 +267,7 @@ async function modifierConfiguration(params, opts) {
     } else {
         return await _storeConsignationHandler.modifierConfiguration(params, opts)
     }
+
 }
 
 async function entretien() {

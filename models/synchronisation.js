@@ -41,6 +41,11 @@ class SynchronisationManager {
         this.init()
     }
 
+    /** Set nombre de millsecs entre sync automatiques */
+    setIntervalleSync(intervalleSync) {
+        this.intervalleSync = intervalleSync
+    }
+
     init() {
         const pathLogsReclamations = path.join(this._path_listings, 'reclamations')
         fsPromises.mkdir(pathLogsReclamations, {recursive: true})
@@ -184,12 +189,12 @@ class SynchronisationManager {
         } finally {
             if(this.timerThread !== false) {
                 // Redemarrer apres intervalle
-                debug("SynhronisationManager._thread Fin execution cycle, attente %s ms", INTERVALLE_DEMARRER_THREAD)
+                debug("SynhronisationManager._thread Fin execution cycle, attente %s ms", this.intervalleSync)
                 this.timerThread = setTimeout(()=>{
                     this.timerThread = true
                     this._thread()
                         .catch(err=>console.error("SynhronisationManager Erreur run _thread: %O", err))
-                }, INTERVALLE_DEMARRER_THREAD)
+                }, this.intervalleSync)
             } else {
                 debug("SynhronisationManager._thread Fin execution cycle et arret _thread")
             }
