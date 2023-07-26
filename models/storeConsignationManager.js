@@ -87,6 +87,8 @@ class ManagerFacade {
     getPathDataFolder() { return getPathDataFolder() }
     async setEstConsignationPrimaire(estPrimaire) { await setEstConsignationPrimaire(estPrimaire) }
 
+    emettrePresence() { return emettrePresence() }
+
     // Methodes d'acces au store
     parcourirFichiers(callback, opts) { return parcourirFichiers(callback, opts) }
     parcourirArchives(callback, opts) { return parcourirArchives(callback, opts) }
@@ -734,13 +736,9 @@ async function emettrePresence() {
             const enveloppe = JSON.parse(fichierData)
             const data = JSON.parse(enveloppe.contenu)
             debug("storeConsignationLocal.emettrePresence Fichier data.json : ", data)
-            info.fichiers_nombre = data.nombreFichiersActifs
-            info.archives_nombre = data.nombreFichiersArchives
-            info.orphelins_nombre = data.nombreFichiersOrphelins
-            info.fichiers_taille = data.tailleActifs
-            info.archives_taille = data.tailleArchives
-            info.orphelins_taille = data.tailleOrphelins
-
+            info.local = data.local
+            info.archives = data.archives
+            info.orphelins = data.orphelins
         } catch(err) {
             console.error("storeConsignationLocal.emettrePresence ERROR Erreur chargement fichier data.json : %O", err)
         }

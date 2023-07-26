@@ -3,6 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const fsPromises = require('fs/promises')
 
+const { MESSAGE_KINDS } = require('@dugrema/millegrilles.utiljs/src/constantes')
 const fileutils = require('./fileutils')
 
 const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
@@ -14,7 +15,8 @@ const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
       FICHIER_FUUIDS_RECLAMES = 'fuuidsReclames.txt',
       FICHIER_FUUIDS_MANQUANTS = 'fuuidsManquants.txt',
       DIR_RECLAMATIONS = 'reclamations',
-      DIR_LISTINGS_EXPOSES = 'listings'
+      DIR_LISTINGS_EXPOSES = 'listings',
+      FICHIER_DATA = 'data.json'
 
 const DUREE_ATTENTE_RECLAMATIONS = 10_000
 
@@ -88,11 +90,15 @@ class SynchronisationConsignation {
 
         debug("genererListeFichiers Information local : %O\nArchives : %O\nOrphelins : %O", infoLocal, infoArchives, infoOrphelins)
 
-        return {
+        const resultat = {
             local: infoLocal,
             archives: infoArchives,
             orphelins: infoOrphelins,
         }
+
+        await this.sauvegarderEtat(resultat)
+
+        return resultat
     }
 
     async genererListeCombinees() {
@@ -259,6 +265,28 @@ class SynchronisationConsignation {
         await fsPromises.rename(fichiersManquants, path.join(dirListingsExposes, FICHIER_FUUIDS_MANQUANTS + '.gz'))
     }
 
+    async sauvegarderEtat(data) {
+        const dataPath = path.join(this.manager.getPathDataFolder(), FICHIER_DATA)
+
+        let dataCourant = {}
+        try {
+            const contenuFichier = await fsPromises.readFile(dataPath)
+            const dataEnveloppe = JSON.parse(contenuFichier)
+            dataCourant = JSON.parse(dataEnveloppe.contenu)
+        } catch(err) {
+            debug("Fichier data.json n'existe pas, on va le generer")
+        }
+        dataCourant = {...dataCourant, ...data}
+
+        const dataFormatte = await this.mq.pki.formatterMessage(
+            MESSAGE_KINDS.KIND_DOCUMENT, 
+            dataCourant,
+            {ajouterCertificat: true}
+        )
+
+        await fsPromises.writeFile(dataPath, JSON.stringify(dataFormatte))
+    }
+
 }
 
 class ConsignationRepertoire {
@@ -319,7 +347,7 @@ class ConsignationRepertoire {
             throw err
         }
 
-        return { nombreFichiers, tailleFichiers }
+        return { nombre: nombreFichiers, taille: tailleFichiers }
     }
 
     async parcourirFichiers(callback, opts) {

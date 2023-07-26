@@ -34,8 +34,6 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
                 this.reclamerFichiers(),
             ])
 
-            await new Promise(resolve=>setTimeout(resolve, 8_000))
-
             // Combiner listes locales et reclamees
             await this.genererListeCombinees()
 
@@ -55,6 +53,8 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
         } finally {
             clearInterval(intervalActivite)
             this.emettreEvenementActivite({termine: true})
+            this.manager.emettrePresence()
+                .catch(err=>console.error(new Date() + " SynchronisationPrimaire.runSync Erreur emettre presence : ", err))
         }
     }
 
@@ -228,20 +228,16 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
 }
 
 async function getListeDomainesFuuids(mq) {
-    const domaine = 'CoreTopologie', action = 'listeDomaines',
-          requete = {'supporte_fuuids': true}
+    const domaine = 'CoreTopologie', 
+          action = 'listeDomaines',
+          requete = {'reclame_fuuids': true}
 
     const reponse = await mq.transmettreRequete(domaine, requete, {action})
     debug("Reponse liste domaines : ", reponse)
 
     if(reponse.ok === false) throw new Error(`Erreur recuperation domaines : ${''+reponse.err}`)
 
-    const domaines = reponse.resultats
-        .map(item=>item.domaine)
-        .filter(item=>['GrosFichiers', 'Messagerie'].includes(item))  // Note : fix avec filtre cote serveur
-
-    return domaines
-
+    return reponse.resultats.map(item=>item.domaine)
 }
 
 module.exports = SynchronisationPrimaire
