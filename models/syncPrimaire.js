@@ -38,7 +38,7 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
         const nombreOperations = await this.moveFichiers({traiterOrphelins: reclamationComplete})
         if(nombreOperations > 0) {
             debug("runSync Regenerer information de consignation apres %d operations", nombreOperations)
-            infoConsignation = await this.genererListeFichiers()
+            infoConsignation = await this.genererListeFichiers({emettreBatch: false})
         }
         debug("Information de consignation courante : ", infoConsignation)
 

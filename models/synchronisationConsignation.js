@@ -44,7 +44,10 @@ class SynchronisationConsignation {
     }
 
     /** Genere une liste tous les fichiers locaux */
-    async genererListeFichiers() {
+    async genererListeFichiers(opts) {
+        opts = opts || {}
+        const flagEmettreBatch = opts.emettreBatch===false?false:true
+
         debug("genererListeFichiers Debut")
         const pathConsignationListings = path.join(this._path_listings, 'consignation')
         debug("genererListeFichiers Path des listings consignation : ", pathConsignationListings)
@@ -57,11 +60,14 @@ class SynchronisationConsignation {
         }
         await fsPromises.mkdir(pathConsignationListings, {recursive: true})
 
-        const emettreBatch = async fuuids => {
-            try {
-                await this.emettreBatchFuuidsVisites(fuuids)
-            } catch(err) {
-                console.warn(new Date() + " SynchronisationPrimaire.genererListeFichiers Erreur emission batch fuuids visite : ", err)
+        let emettreBatch = null
+        if(flagEmettreBatch) {
+            emettreBatch = async fuuids => {
+                try {
+                    await this.emettreBatchFuuidsVisites(fuuids)
+                } catch(err) {
+                    console.warn(new Date() + " SynchronisationPrimaire.genererListeFichiers Erreur emission batch fuuids visite : ", err)
+                }
             }
         }
 
