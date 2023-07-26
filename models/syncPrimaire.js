@@ -24,26 +24,36 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
     }
 
     async runSync() {
-        let [infoConsignation, reclamationComplete] = await Promise.all([
-            this.genererListeFichiers(),
-            this.reclamerFichiers(),
-        ])
 
-        // Combiner listes locales et reclamees
-        await this.genererListeCombinees()
+        this.emettreEvenementActivite()
+        const intervalActivite = setInterval(()=>this.emettreEvenementActivite(), 3_000)
+        try {
+            let [infoConsignation, reclamationComplete] = await Promise.all([
+                this.genererListeFichiers(),
+                this.reclamerFichiers(),
+            ])
 
-        // Deplacer les fichiers entre local, archives et orphelins
-        // Ne pas deplacer vers orphelins si reclamationComplete est false (tous les domaines n'ont pas repondus)
-        await this.genererListeOperations()
-        const nombreOperations = await this.moveFichiers({traiterOrphelins: reclamationComplete})
-        if(nombreOperations > 0) {
-            debug("runSync Regenerer information de consignation apres %d operations", nombreOperations)
-            infoConsignation = await this.genererListeFichiers({emettreBatch: false})
+            await new Promise(resolve=>setTimeout(resolve, 8_000))
+
+            // Combiner listes locales et reclamees
+            await this.genererListeCombinees()
+
+            // Deplacer les fichiers entre local, archives et orphelins
+            // Ne pas deplacer vers orphelins si reclamationComplete est false (tous les domaines n'ont pas repondus)
+            await this.genererListeOperations()
+            const nombreOperations = await this.moveFichiers({traiterOrphelins: reclamationComplete})
+            if(nombreOperations > 0) {
+                debug("runSync Regenerer information de consignation apres %d operations", nombreOperations)
+                infoConsignation = await this.genererListeFichiers({emettreBatch: false})
+            }
+            debug("Information de consignation courante : ", infoConsignation)
+
+            // Exposer les listings pour consignations secondaires (download)
+            await this.exposerListings()
+        } finally {
+            clearInterval(intervalActivite)
+            this.emettreEvenementActivite({termine: true})
         }
-        debug("Information de consignation courante : ", infoConsignation)
-
-        // Exposer les listings pour consignations secondaires (download)
-        await this.exposerListings()
     }
 
     arreter() {
@@ -198,6 +208,19 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
             this.resolveRecevoirFuuidsDomaine()
         }
 
+    }
+
+    emettreEvenementActivite(opts) {
+        opts = opts || {}
+        
+        const termine = opts.termine || false
+
+        const message = {
+            termine,
+        }
+        const domaine = 'fichiers', action = 'syncPrimaire'
+        this.mq.emettreEvenement(message, {domaine, action})
+            .catch(err=>console.error("emettreEvenementActivite Erreur : ", err))
     }
 
 }

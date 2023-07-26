@@ -7,7 +7,6 @@ const fileutils = require('./fileutils')
 
 const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
       FICHIER_FUUIDS_RECLAMES_ARCHIVES = 'fuuidsReclamesArchives.txt',
-      FICHIER_FUUIDS_NOUVEAUX = 'fuuidsNouveaux.txt',
       FICHIER_FUUIDS_LOCAUX = 'fuuidsLocaux.txt',
       FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
