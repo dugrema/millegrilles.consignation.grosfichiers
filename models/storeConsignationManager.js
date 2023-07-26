@@ -169,10 +169,18 @@ async function init(mq, opts) {
         _backupSftp = new BackupSftp(mq, this)
         _backupSftp.setTimeout(15_000)  // Demarrer thread dans 15 secondes
 
-        // Entretien - emet la presence (premiere apres 10 secs, apres sous intervalles)
+        // Entretien
         debug("Entretien initial")
         setTimeout(entretien, 10_000)
         setInterval(entretien, 180_000)
+
+        // Emet la presence (premiere apres 3 secs, apres sous intervalles)
+        const emettrePresenceCb = () => {
+            emettrePresence()
+                .catch(err=>console.error("storeConsignation.entretien() Erreur emettrePresence ", err))
+        }
+        setTimeout(emettrePresenceCb, 3_000)
+        setInterval(emettrePresenceCb, 20_000)
 
         debug("init complete")
     } catch(err) {
@@ -296,12 +304,6 @@ async function entretien() {
     // } catch(err) {
     //     console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
     // }
-
-    try {
-        await emettrePresence()
-    } catch(err) {
-        console.error("storeConsignation.entretien() Erreur emettrePresence ", err)
-    }
 
     // Entretien specifique a la consignation
     try {
