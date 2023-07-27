@@ -53,6 +53,9 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
 
             // Exposer les listings pour consignations secondaires (download)
             await this.exposerListings()
+
+            // Declencher synchronisation des consignations secondaires
+            await this.declencherSyncSecondaire()
         } finally {
             clearInterval(intervalActivite)
             this.emettreEvenementActivite({termine: true})
@@ -270,6 +273,13 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
         const domaine = 'fichiers', action = 'syncPrimaire'
         this.mq.emettreEvenement(message, {domaine, action, ajouterCertificat: true})
             .catch(err=>console.error("emettreEvenementActivite Erreur : ", err))
+    }
+
+    async declencherSyncSecondaire() {
+        const domaine = 'fichiers', action = 'declencherSyncSecondaire'
+        const message = {}
+        this.mq.emettreEvenement(message, {domaine, action, ajouterCertificat: true})
+            .catch(err=>console.error("declencherSyncSecondaires Erreur : ", err))
     }
 
 }

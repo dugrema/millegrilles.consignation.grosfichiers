@@ -6,6 +6,7 @@ const path = require('path')
 const readdirp = require('readdirp')
 
 const uploadFichier = require('./uploadFichier')
+const syncRouter = require('./sync')
 // const { stagingFichier: stagingPublic, creerStreamDechiffrage } = require('../util/publicStaging')
 
 // const throttle = require('@sitespeed.io/throttle');
@@ -23,6 +24,8 @@ function InitialiserGrosFichiers(mq, consignationManager, opts) {
   const router = express.Router();
   const routerFichiersTransfert = express.Router()
   router.use('/fichiers_transfert', routerFichiersTransfert)
+
+  routerFichiersTransfert.use('/sync', syncRouter(mq, opts))
 
   // backup : /fichiers_transfert/backup
   const routerBackup = express.Router()
