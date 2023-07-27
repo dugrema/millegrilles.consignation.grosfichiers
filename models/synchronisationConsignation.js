@@ -18,8 +18,6 @@ const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
       DIR_LISTINGS_EXPOSES = 'listings',
       FICHIER_DATA = 'data.json'
 
-const DUREE_ATTENTE_RECLAMATIONS = 10_000
-
 class SynchronisationConsignation {
 
     constructor(mq, consignationManager) {

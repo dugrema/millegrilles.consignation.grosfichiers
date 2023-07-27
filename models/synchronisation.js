@@ -43,7 +43,12 @@ class SynchronisationManager {
 
     /** Set nombre de millsecs entre sync automatiques */
     setIntervalleSync(intervalleSync) {
-        this.intervalleSync = intervalleSync
+        if(intervalleSync) {
+            this.intervalleSync = intervalleSync
+        } else {
+            console.info("SynchronisationManager.setIntervalleSync Set default ", INTERVALLE_DEMARRER_THREAD)
+            this.intervalleSync = INTERVALLE_DEMARRER_THREAD
+        }
     }
 
     init() {
