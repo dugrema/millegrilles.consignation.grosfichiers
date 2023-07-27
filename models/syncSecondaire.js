@@ -8,7 +8,11 @@ const path = require('path')
 const { SynchronisationConsignation } = require('./synchronisationConsignation')
 const fileutils = require('./fileutils')
 
-const FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt'
+const FICHIER_FUUIDS_LOCAUX = 'fuuidsLocaux.txt',
+      FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
+      FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
+      FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
+      FICHIER_FUUIDS_PRESENTS = 'fuuidsPresents.txt'
 
 const FICHIERS_LISTE_PATH = '/var/opt/millegrilles/consignation/staging/fichiers/liste'
 const FICHIERS_LISTING_PATH = path.join(FICHIERS_LISTE_PATH, '/listings')
@@ -39,6 +43,8 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
                 infoConsignation = await this.genererListeFichiers({emettreBatch: false})
             }
             debug("Information de consignation courante : ", infoConsignation)
+
+            // Faire la liste des fichiers a downloader et uploader avec le primaire
 
         } finally {
             clearInterval(intervalActivite)
@@ -73,9 +79,31 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         await fsPromises.mkdir(outputPath, {recursive: true})
 
         debug("getFichiersSync Get fichiers a partir du url ", urlConsignationTransfert.href)
-        await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsLocaux.txt', {outputPath})
-        await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsArchives.txt', {outputPath})
+        await downloadFichierSync(httpsAgent, urlConsignationTransfert, FICHIER_FUUIDS_LOCAUX, {outputPath})
+        await downloadFichierSync(httpsAgent, urlConsignationTransfert, FICHIER_FUUIDS_ARCHIVES, {outputPath})
         await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsManquants.txt', {outputPath})
+
+        // Combiner les fichiers locaux et archives pour complete liste de traitements (presents)
+        const pathTraitementListings = path.join(this._path_listings, 'traitements')
+        // Cleanup fichiers precedents
+        try {
+            await fsPromises.rm(pathTraitementListings, {recursive: true})
+        } catch(err) {
+            console.error(new Date() + " Erreur suppression %s : %O", pathTraitementListings, err)
+        }
+        await fsPromises.mkdir(pathTraitementListings, {recursive: true})
+
+        const pathPrimaireListings = path.join(this._path_listings, 'listings')
+        const fichiersPrimaire = path.join(pathTraitementListings, FICHIER_FUUIDS_PRIMAIRE)
+        await fileutils.combinerSortFiles([
+            path.join(pathPrimaireListings, FICHIER_FUUIDS_LOCAUX), 
+            path.join(pathPrimaireListings, FICHIER_FUUIDS_ARCHIVES),
+        ], fichiersPrimaire)
+
+        // Calculer nouveaux orphelins
+        const fichiersPresents = path.join(pathTraitementListings, FICHIER_FUUIDS_PRESENTS)
+        const fichiersOrphelins = path.join(pathTraitementListings, FICHIER_FUUIDS_ORPHELINS)
+        await fileutils.trouverManquants(fichiersPrimaire, fichiersPresents, fichiersOrphelins)
     }
 
     async genererListeOperations() {
@@ -89,8 +117,8 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         await fsPromises.mkdir(pathOperationsListings, {recursive: true})
 
         const listingPath = FICHIERS_LISTING_PATH
-        const pathTraitementListings = path.join(this._path_listings, 'traitements')
         const pathConsignationListings = path.join(this._path_listings, 'consignation')
+        const pathTraitementListings = path.join(this._path_listings, 'traitements')
 
         const fichierLocalPath = path.join(pathConsignationListings, 'fuuidsLocaux.txt')
         const fichierArchivesPath = path.join(pathConsignationListings, 'fuuidsArchives.txt')
@@ -99,7 +127,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         const fichierPrimaireArchivesPath = path.join(listingPath, 'fuuidsArchives.txt')
 
         const fichierOrphelinsPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ORPHELINS)
-        // const fichierOrphelinsTraitementPath = path.join(pathTraitementListings, FICHIER_FUUIDS_ORPHELINS)
+        const fichierOrphelinsTraitementPath = path.join(pathTraitementListings, FICHIER_FUUIDS_ORPHELINS)
         
         const pathMove = this.getPathMove()
 
@@ -112,14 +140,14 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         // Transfert de archives vers local
         await fileutils.trouverPresentsTous(fichierPrimaireLocalPath, fichierArchivesPath, pathMove.archivesVersLocal)
 
-        // Transfert de archives vers orphelins
-        //await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierArchivesPath, pathMove.archivesVersOrphelins)
-
         // Transfert de local vers archives
         await fileutils.trouverPresentsTous(fichierPrimaireArchivesPath, fichierLocalPath, pathMove.localVersArchives)
 
+        // Transfert de archives vers orphelins
+        await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierArchivesPath, pathMove.archivesVersOrphelins)
+
         // Transfert de local vers orphelins
-        //await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierLocalPath, pathMove.localVersOrphelins)
+        await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierLocalPath, pathMove.localVersOrphelins)
     }
 
     emettreEvenementActivite(opts) {
