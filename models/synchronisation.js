@@ -184,7 +184,7 @@ class SynchronisationManager {
                 }
 
                 // Executer la synchronisation
-                await this.syncHandler.runSync()
+                await this.syncHandler.runSync(this)
             } else {
                 console.info("SynhronisationManager SyncHandler null, skip execution")
             }
@@ -193,13 +193,18 @@ class SynchronisationManager {
             console.error(new Date() + ' SynhronisationManager._thread Erreur execution cycle : %O', err)
         } finally {
             if(this.timerThread !== false) {
-                // Redemarrer apres intervalle
-                debug("SynhronisationManager._thread Fin execution cycle, attente %s ms", this.intervalleSync)
-                this.timerThread = setTimeout(()=>{
-                    this.timerThread = true
-                    this._thread()
-                        .catch(err=>console.error("SynhronisationManager Erreur run _thread: %O", err))
-                }, this.intervalleSync)
+                if(this.estPrimaire) {
+                    // Redemarrer apres intervalle
+                    debug("SynhronisationManager._thread Fin execution cycle, attente %s ms", this.intervalleSync)
+                    this.timerThread = setTimeout(()=>{
+                        this.timerThread = true
+                        this._thread()
+                            .catch(err=>console.error("SynhronisationManager Erreur run _thread: %O", err))
+                    }, this.intervalleSync)
+                } else {
+                    debug("SynhronisationManager._thread Fin execution cycle, attente prochain trigger secondaire")
+                    this.timerThread = true  // Permet redemarrage de la Q via message
+                }
             } else {
                 debug("SynhronisationManager._thread Fin execution cycle et arret _thread")
             }
@@ -216,6 +221,7 @@ class SynchronisationManager {
         if(!this.estPrimaire) throw new Error("SynchronisationManager recevoirFuuidsReclames Consignation secondaire/null, fuuids ignores")
         return this.syncPrimaireHandler.recevoirFuuidsReclames(fuuids, opts)
     }
+
 }
 
 

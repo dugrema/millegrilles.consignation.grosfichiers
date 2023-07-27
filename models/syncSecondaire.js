@@ -1,6 +1,8 @@
 const debug = require('debug')('sync:syncSecondaire')
 const { SynchronisationConsignation } = require('./synchronisationConsignation')
 
+const EXPIRATION_ORPHELINS_SECONDAIRES = 86_400_000 * 7
+
 /** Gere les fichiers, catalogues et la synchronisation avec la consignation primaire pour un serveur secondaire */
 class SynchronisationSecondaire extends SynchronisationConsignation {
 
@@ -8,14 +10,11 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         super(mq, consignationManager)
     }
 
-    async runSync() {
+    async runSync(syncManager) {
         this.emettreEvenementActivite()
-        const intervalActivite = setInterval(()=>this.emettreEvenementActivite(), 3_000)
+        const intervalActivite = setInterval(()=>this.emettreEvenementActivite(), 5_000)
         try {
-            let [infoConsignation, reclamationComplete] = await Promise.all([
-                this.genererListeFichiers(),
-                this.reclamerFichiers(),
-            ])
+            const infoConsignation = await this.genererListeFichiers()
 
             // Combiner listes locales et reclamees
             await this.genererListeCombinees()
@@ -23,8 +22,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
             // Deplacer les fichiers entre local, archives et orphelins
             // Ne pas deplacer vers orphelins si reclamationComplete est false (tous les domaines n'ont pas repondus)
             await this.genererListeOperations()
-            const nombreOperations = await this.moveFichiers({
-                traiterOrphelins: reclamationComplete, expirationOrphelins: EXPIRATION_ORPHELINS_PRIMAIRES})
+            const nombreOperations = await this.moveFichiers({traiterOrphelins: true, expirationOrphelins: EXPIRATION_ORPHELINS_SECONDAIRES})
             if(nombreOperations > 0) {
                 debug("runSync Regenerer information de consignation apres %d operations", nombreOperations)
                 infoConsignation = await this.genererListeFichiers({emettreBatch: false})
@@ -33,6 +31,8 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
 
             // Exposer les listings pour consignations secondaires (download)
             await this.exposerListings()
+
+            await this.getFichiersSync(syncManager.urlConsignationTransfert)
         } finally {
             clearInterval(intervalActivite)
             this.emettreEvenementActivite({termine: true})
@@ -55,6 +55,13 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
 
     }
 
+    /**
+     * Charge les fichiers d'information a partir du primaire
+     */
+    async getFichiersSync(urlConsignationTransfert) {
+        debug("Get fichiers a partir du url ", urlConsignationTransfert)
+    }
+    
     emettreEvenementActivite(opts) {
         opts = opts || {}
         
