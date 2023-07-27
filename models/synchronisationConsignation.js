@@ -134,47 +134,7 @@ class SynchronisationConsignation {
     }
 
     async genererListeOperations() {
-        const pathOperationsListings = path.join(this._path_listings, 'operations')
-        // Cleanup fichiers precedents
-        try {
-            await fsPromises.rm(pathOperationsListings, {recursive: true})
-        } catch(err) {
-            console.error(new Date() + " Erreur suppression %s : %O", pathOperationsListings, err)
-        }
-        await fsPromises.mkdir(pathOperationsListings, {recursive: true})
-
-        const pathReclamationsListings = path.join(this._path_listings, 'reclamations')
-        const pathTraitementListings = path.join(this._path_listings, 'traitements')
-        const pathConsignationListings = path.join(this._path_listings, 'consignation')
-
-        const fichierLocalPath = path.join(pathConsignationListings, FICHIER_FUUIDS_LOCAUX)
-        const fichierArchivesPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ARCHIVES)
-
-        const fichierReclamesLocalPath = path.join(pathReclamationsListings, FICHIER_FUUIDS_RECLAMES_LOCAUX)
-        const fichierReclamesArchivesPath = path.join(pathReclamationsListings, FICHIER_FUUIDS_RECLAMES_ARCHIVES)
-
-        const fichierOrphelinsPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ORPHELINS)
-        const fichierOrphelinsTraitementPath = path.join(pathTraitementListings, FICHIER_FUUIDS_ORPHELINS)
-        
-        const pathMove = this.getPathMove()
-
-        // Transfert de orphelins vers local
-        await fileutils.trouverPresentsTous(fichierReclamesLocalPath, fichierOrphelinsPath, pathMove.orphelinsVersLocal)
-
-        // Transfert de orphelins vers archives
-        await fileutils.trouverPresentsTous(fichierReclamesArchivesPath, fichierOrphelinsPath, pathMove.orphelinsVersArchives)
-
-        // Transfert de archives vers local
-        await fileutils.trouverPresentsTous(fichierReclamesLocalPath, fichierArchivesPath, pathMove.archivesVersLocal)
-
-        // Transfert de archives vers orphelins
-        await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierArchivesPath, pathMove.archivesVersOrphelins)
-
-        // Transfert de local vers archives
-        await fileutils.trouverPresentsTous(fichierReclamesArchivesPath, fichierLocalPath, pathMove.localVersArchives)
-
-        // Transfert de local vers orphelins
-        await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierLocalPath, pathMove.localVersOrphelins)
+        throw new Error('must override')
     }
 
     getPathMove() {

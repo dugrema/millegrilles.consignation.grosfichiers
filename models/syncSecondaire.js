@@ -1,5 +1,17 @@
 const debug = require('debug')('sync:syncSecondaire')
+const axios = require('axios')
+const zlib = require('zlib')
+const fs = require('fs')
+const fsPromises = require('fs/promises')
+const path = require('path')
+
 const { SynchronisationConsignation } = require('./synchronisationConsignation')
+const fileutils = require('./fileutils')
+
+const FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt'
+
+const FICHIERS_LISTE_PATH = '/var/opt/millegrilles/consignation/staging/fichiers/liste'
+const FICHIERS_LISTING_PATH = path.join(FICHIERS_LISTE_PATH, '/listings')
 
 const EXPIRATION_ORPHELINS_SECONDAIRES = 86_400_000 * 7
 
@@ -16,8 +28,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         try {
             const infoConsignation = await this.genererListeFichiers()
 
-            // Combiner listes locales et reclamees
-            await this.genererListeCombinees()
+            await this.getFichiersSync(syncManager.urlConsignationTransfert)
 
             // Deplacer les fichiers entre local, archives et orphelins
             // Ne pas deplacer vers orphelins si reclamationComplete est false (tous les domaines n'ont pas repondus)
@@ -29,10 +40,6 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
             }
             debug("Information de consignation courante : ", infoConsignation)
 
-            // Exposer les listings pour consignations secondaires (download)
-            await this.exposerListings()
-
-            await this.getFichiersSync(syncManager.urlConsignationTransfert)
         } finally {
             clearInterval(intervalActivite)
             this.emettreEvenementActivite({termine: true})
@@ -59,9 +66,62 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
      * Charge les fichiers d'information a partir du primaire
      */
     async getFichiersSync(urlConsignationTransfert) {
-        debug("Get fichiers a partir du url ", urlConsignationTransfert)
+        const httpsAgent = this.manager.getHttpsAgent()
+
+        const outputPath = FICHIERS_LISTING_PATH
+        try { await fsPromises.rm(outputPath, {recursive: true}) } catch(err) { console.info("getFichiersSync Erreur suppression %s : %O", outputPath, err) }
+        await fsPromises.mkdir(outputPath, {recursive: true})
+
+        debug("getFichiersSync Get fichiers a partir du url ", urlConsignationTransfert.href)
+        await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsLocaux.txt', {outputPath})
+        await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsArchives.txt', {outputPath})
+        await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsManquants.txt', {outputPath})
     }
-    
+
+    async genererListeOperations() {
+        const pathOperationsListings = path.join(this._path_listings, 'operations')
+        // Cleanup fichiers precedents
+        try {
+            await fsPromises.rm(pathOperationsListings, {recursive: true})
+        } catch(err) {
+            console.error(new Date() + " Erreur suppression %s : %O", pathOperationsListings, err)
+        }
+        await fsPromises.mkdir(pathOperationsListings, {recursive: true})
+
+        const listingPath = FICHIERS_LISTING_PATH
+        const pathTraitementListings = path.join(this._path_listings, 'traitements')
+        const pathConsignationListings = path.join(this._path_listings, 'consignation')
+
+        const fichierLocalPath = path.join(pathConsignationListings, 'fuuidsLocaux.txt')
+        const fichierArchivesPath = path.join(pathConsignationListings, 'fuuidsArchives.txt')
+
+        const fichierPrimaireLocalPath = path.join(listingPath, 'fuuidsLocaux.txt')
+        const fichierPrimaireArchivesPath = path.join(listingPath, 'fuuidsArchives.txt')
+
+        const fichierOrphelinsPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ORPHELINS)
+        // const fichierOrphelinsTraitementPath = path.join(pathTraitementListings, FICHIER_FUUIDS_ORPHELINS)
+        
+        const pathMove = this.getPathMove()
+
+        // Transfert de orphelins vers local
+        await fileutils.trouverPresentsTous(fichierPrimaireLocalPath, fichierOrphelinsPath, pathMove.orphelinsVersLocal)
+
+        // Transfert de orphelins vers archives
+        await fileutils.trouverPresentsTous(fichierPrimaireArchivesPath, fichierOrphelinsPath, pathMove.orphelinsVersArchives)
+
+        // Transfert de archives vers local
+        await fileutils.trouverPresentsTous(fichierPrimaireLocalPath, fichierArchivesPath, pathMove.archivesVersLocal)
+
+        // Transfert de archives vers orphelins
+        //await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierArchivesPath, pathMove.archivesVersOrphelins)
+
+        // Transfert de local vers archives
+        await fileutils.trouverPresentsTous(fichierPrimaireArchivesPath, fichierLocalPath, pathMove.localVersArchives)
+
+        // Transfert de local vers orphelins
+        //await fileutils.trouverPresentsTous(fichierOrphelinsTraitementPath, fichierLocalPath, pathMove.localVersOrphelins)
+    }
+
     emettreEvenementActivite(opts) {
         opts = opts || {}
         
@@ -75,6 +135,28 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
             .catch(err=>console.error("emettreEvenementActivite Erreur : ", err))
     }
 
+}
+
+async function downloadFichierSync(httpsAgent, urlConsignationTransfert, nomFichier, opts) {
+    opts = opts || {}
+    const outputPath = opts.outputPath || FICHIERS_LISTING_PATH
+    const pathFichiersLocal = new URL(urlConsignationTransfert.href)
+    pathFichiersLocal.pathname += `/sync/${nomFichier}.gz`
+    const reponse = await axios({
+        method: 'GET', 
+        url: pathFichiersLocal.href, 
+        httpsAgent,
+        responseType: 'stream',
+    })
+    debug("Reponse fichier %s status : %d", pathFichiersLocal.href, reponse.status)
+    const writeStream = fs.createWriteStream(path.join(outputPath, nomFichier))
+    const gunzip = zlib.createGunzip()
+    await new Promise((resolve, reject)=>{
+        writeStream.on('error', reject)
+        writeStream.on('close', resolve)
+        gunzip.pipe(writeStream)
+        reponse.data.pipe(gunzip)
+    })
 }
 
 module.exports = SynchronisationSecondaire
