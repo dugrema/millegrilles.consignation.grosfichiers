@@ -122,15 +122,20 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         }
         await fsPromises.mkdir(pathTraitementListings, {recursive: true})
 
-        const pathPrimaireListings = path.join(this._path_listings, 'listings')
         const fichiersPrimaire = path.join(pathTraitementListings, FICHIER_FUUIDS_PRIMAIRE)
         await fileutils.combinerSortFiles([
-            path.join(pathPrimaireListings, FICHIER_FUUIDS_LOCAUX), 
-            path.join(pathPrimaireListings, FICHIER_FUUIDS_ARCHIVES),
+            path.join(outputPath, FICHIER_FUUIDS_LOCAUX), 
+            path.join(outputPath, FICHIER_FUUIDS_ARCHIVES),
         ], fichiersPrimaire)
 
         // Calculer nouveaux orphelins
+        const pathConsignationListings = path.join(this._path_listings, 'consignation')
         const fichiersPresents = path.join(pathTraitementListings, FICHIER_FUUIDS_PRESENTS)
+        await fileutils.combinerSortFiles([
+            path.join(pathConsignationListings, FICHIER_FUUIDS_LOCAUX), 
+            path.join(pathConsignationListings, FICHIER_FUUIDS_ARCHIVES),
+        ], fichiersPresents)
+
         const fichiersOrphelins = path.join(pathTraitementListings, FICHIER_FUUIDS_ORPHELINS)
         await fileutils.trouverManquants(fichiersPrimaire, fichiersPresents, fichiersOrphelins)
     }
