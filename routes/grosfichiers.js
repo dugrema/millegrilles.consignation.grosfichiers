@@ -25,7 +25,7 @@ function InitialiserGrosFichiers(mq, consignationManager, opts) {
   const routerFichiersTransfert = express.Router()
   router.use('/fichiers_transfert', routerFichiersTransfert)
 
-  routerFichiersTransfert.use('/sync', syncRouter(mq, opts))
+  routerFichiersTransfert.use('/sync', syncRouter(mq, consignationManager, opts))
 
   // backup : /fichiers_transfert/backup
   const routerBackup = express.Router()
