@@ -618,6 +618,10 @@ class UploadPrimaireHandler extends TransfertHandler {
         debug("UploadPrimaireHandler.transfererFichier Debut upload fichier ", fichier)
     }
 
+    async emettreEtat(opts) {
+        debug("UploadPrimaireHandler.emettreEtat : ** TODO **")
+    }
+
 }
 
 module.exports = SynchronisationSecondaire

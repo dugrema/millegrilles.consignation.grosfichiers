@@ -325,12 +325,15 @@ class ConsignationRepertoire {
         const resultat = await this.genererListing({...opts, outputStream: fichierWriteStream})
         
         await new Promise((resolve, reject)=>{
+            debug("genererOutputListing Fermer %s.work", fichierPath)
             fichierWriteStream.close(err=>{
+                debug("genererOutputListing Fermer %s.work resultat : %O", fichierPath, err)
                 if(err) return reject(err)
                 resolve()
             })
         })
         
+        debug("Sort %s.work", fichierPath)
         await fileutils.sortFile(fichierPath + '.work', fichierPath, opts)  // Trier
         //await fsPromises.unlink(fichierPath + '.work')
 
