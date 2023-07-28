@@ -24,6 +24,9 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
 
     constructor(mq, consignationManager) {
         super(mq, consignationManager)
+
+        this.downloadPrimaireHandler = new DownloadPrimaireHandler()
+        this.uploadPrimaireHandler = new UploadPrimaireHandler()
     }
 
     async runSync(syncManager) {
@@ -32,6 +35,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         try {
             const infoConsignation = await this.genererListeFichiers()
 
+            debug("runSync Download fichiers listing du primaire")
             await this.getFichiersSync(syncManager.urlConsignationTransfert)
 
             // Deplacer les fichiers entre local, archives et orphelins
@@ -42,9 +46,14 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
                 debug("runSync Regenerer information de consignation apres %d operations", nombreOperations)
                 infoConsignation = await this.genererListeFichiers({emettreBatch: false})
             }
-            debug("Information de consignation courante : ", infoConsignation)
+            debug("runSync Information de consignation courante : ", infoConsignation)
 
-            // Faire la liste des fichiers a downloader et uploader avec le primaire
+            debug("runSync Faire la liste des fichiers a downloader et uploader avec le primaire")
+            await this.genererOperationsTransfertPrimaire()
+
+            // Indiquer aux transfert que de nouvelles listes sont disponibles
+            await this.downloadPrimaireHandler.update()
+            await this.uploadPrimaireHandler.update()
 
         } finally {
             clearInterval(intervalActivite)
@@ -56,16 +65,6 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
 
     arreter() {
         throw new Error('todo')
-    }
-
-    /** Thread upload de fichiers vers consignation primaire */
-    async _threadUpload() {
-
-    }
-
-    /** Thread upload de fichiers de la consignation primaire */
-    async _threadDownload() {
-
     }
 
     /**
@@ -163,6 +162,35 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
             .catch(err=>console.error("emettreEvenementActivite Erreur : ", err))
     }
 
+    async genererOperationsTransfertPrimaire() {
+        const pathConsignationListings = path.join(this._path_listings, 'consignation')
+        const fichierLocalPath = path.join(pathConsignationListings, 'fuuidsLocaux.txt')
+        const fichierArchivesPath = path.join(pathConsignationListings, 'fuuidsArchives.txt')
+
+        const pathPrimaireListings = path.join(this._path_listings, 'listings')
+        const fichierPrimaireLocalPath = path.join(pathPrimaireListings, 'fuuidsLocaux.txt')
+        const fichierPrimaireArchivesPath = path.join(pathPrimaireListings, 'fuuidsArchives.txt')
+        const fichierPrimaireManquantsPath = path.join(pathPrimaireListings, 'fuuidsManquants.txt')
+
+        const pathOperationsListings = path.join(this._path_listings, 'operations')
+
+        // Trouver fichiers a downloader de "local"
+        const fichierDownloadLocalPath = path.join(pathOperationsListings, 'fuuidsDownloadsLocal.txt')
+        await fileutils.trouverManquants(fichierLocalPath, fichierPrimaireLocalPath, fichierDownloadLocalPath)
+
+        // Trouver fichiers a downloader de archives
+        const fichierDownloadArchivesPath = path.join(pathOperationsListings, 'fuuidsDownloadArchives.txt')
+        await fileutils.trouverManquants(fichierArchivesPath, fichierPrimaireArchivesPath, fichierDownloadArchivesPath)
+
+        // Trouver fichiers a uploader vers "local"
+        const fichierUploadsLocalPath = path.join(pathOperationsListings, 'fuuidsUploadsLocal.txt')
+        await fileutils.trouverManquants(fichierPrimaireManquantsPath, fichierLocalPath, fichierUploadsLocalPath)
+
+        // Trouver fichiers a uploader vers archives
+        const fichierUploadsArchivesPath = path.join(pathOperationsListings, 'fuuidsUploadsArchives.txt')
+        await fileutils.trouverManquants(fichierPrimaireManquantsPath, fichierArchivesPath, fichierUploadsArchivesPath)
+    }
+
 }
 
 async function downloadFichierSync(httpsAgent, urlConsignationTransfert, nomFichier, opts) {
@@ -185,6 +213,61 @@ async function downloadFichierSync(httpsAgent, urlConsignationTransfert, nomFich
         gunzip.pipe(writeStream)
         reponse.data.pipe(gunzip)
     })
+}
+
+class TransfertHandler {
+
+    constructor() {
+        this.enCours = false
+        this.pending = []
+    }
+
+    async _thread() {
+        if(this.enCours) {
+            debug("_thread deja en cours, SKIP")
+            return
+        }
+        try {
+            this.enCours = true
+            while(this.pending.length > 0) {
+                const transfert = this.pending.unshift()  // Methode FIFO
+                try {
+                    await this.transfererFichier(transfert)
+                } catch(err) {
+                    debug("_thread Erreur execution operation transfert %O, passer a next() : %O", transfert, err)
+                }
+            }
+        } finally {
+            this.enCours = false
+        }
+    }
+
+    /** Transfere un fichier */
+    async transfererFichier(fichier) {
+        throw new Error('must override')
+    }
+
+    /** Met a jour la liste de transferts. */
+    async update() {
+        throw new Error('must override')
+    }
+
+}
+
+class DownloadPrimaireHandler extends TransfertHandler {
+
+    async update() {
+        debug("DownloadPrimaireHandler update liste de fichiers a downloader")
+    }
+
+}
+
+class UploadPrimaireHandler extends TransfertHandler {
+
+    async update() {
+        debug("UploadPrimaireHandler update liste de fichiers a uploader")
+    }
+
 }
 
 module.exports = SynchronisationSecondaire
