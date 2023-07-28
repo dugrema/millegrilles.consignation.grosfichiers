@@ -44,7 +44,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         this.emettreEvenementActivite()
         const intervalActivite = setInterval(()=>this.emettreEvenementActivite(), 5_000)
         try {
-            const infoConsignation = await this.genererListeFichiers()
+            let infoConsignation = await this.genererListeFichiers()
 
             debug("runSync Download fichiers listing du primaire")
             await this.getFichiersSync()
@@ -93,6 +93,24 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         await downloadFichierSync(httpsAgent, urlConsignationTransfert, FICHIER_FUUIDS_LOCAUX, {outputPath})
         await downloadFichierSync(httpsAgent, urlConsignationTransfert, FICHIER_FUUIDS_ARCHIVES, {outputPath})
         await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsManquants.txt', {outputPath})
+        try {
+            await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsNouveaux.txt', {outputPath, gzip: false})
+
+            // Ajouter tous les fuuids nouveaux au fichier fuuidsLocaux.txt
+            await fsPromises.rename(path.join(outputPath, FICHIER_FUUIDS_LOCAUX), path.join(outputPath, FICHIER_FUUIDS_LOCAUX+'.original'))
+            await fileutils.combinerSortFiles([
+                path.join(outputPath, FICHIER_FUUIDS_LOCAUX+'.original'), 
+                path.join(outputPath, 'fuuidsNouveaux.txt'),
+            ], path.join(outputPath, FICHIER_FUUIDS_LOCAUX))
+        } catch(err) {
+            if(err.response && err.response.status === 404) {
+                // Fichier absent, OK
+                const writeStream = fs.createWriteStream(path.join(outputPath, 'fuuidsNouveaux.txt'))
+                writeStream.close()  // Creer fichier vide
+            } else {
+                throw err
+            }
+        }
 
         // Combiner les fichiers locaux et archives pour complete liste de traitements (presents)
         const pathTraitementListings = path.join(this._path_listings, 'traitements')
@@ -213,8 +231,15 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
 async function downloadFichierSync(httpsAgent, urlConsignationTransfert, nomFichier, opts) {
     opts = opts || {}
     const outputPath = opts.outputPath || FICHIERS_LISTING_PATH
+    const gzipFlag = opts.gzip===false?false:true
+
     const pathFichiersLocal = new URL(urlConsignationTransfert.href)
-    pathFichiersLocal.pathname += `/sync/${nomFichier}.gz`
+    if(gzipFlag) {
+        pathFichiersLocal.pathname += `/sync/${nomFichier}.gz`
+    } else {
+        pathFichiersLocal.pathname += `/sync/${nomFichier}`
+    }
+
     const reponse = await axios({
         method: 'GET', 
         url: pathFichiersLocal.href, 
@@ -222,13 +247,18 @@ async function downloadFichierSync(httpsAgent, urlConsignationTransfert, nomFich
         responseType: 'stream',
     })
     debug("Reponse fichier %s status : %d", pathFichiersLocal.href, reponse.status)
+
     const writeStream = fs.createWriteStream(path.join(outputPath, nomFichier))
     const gunzip = zlib.createGunzip()
     await new Promise((resolve, reject)=>{
         writeStream.on('error', reject)
         writeStream.on('close', resolve)
-        gunzip.pipe(writeStream)
-        reponse.data.pipe(gunzip)
+        if(gzipFlag) {
+            gunzip.pipe(writeStream)
+            reponse.data.pipe(gunzip)
+        } else {
+            reponse.data.pipe(writeStream)
+        }
     })
 }
 
@@ -522,7 +552,7 @@ class UploadPrimaireHandler extends TransfertHandler {
     }
 
     async transfererFichier(fichier) {
-        debug("UploadPrimaireHandler.transfererFichier Debut download fichier ", fichier)
+        debug("UploadPrimaireHandler.transfererFichier Debut upload fichier ", fichier)
     }
 
 }
