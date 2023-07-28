@@ -20,11 +20,13 @@ const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
 
 class SynchronisationConsignation {
 
-    constructor(mq, consignationManager) {
+    constructor(mq, consignationManager, syncManager) {
         if(!mq) throw new Error("mq null")
         this.mq = mq
         if(!consignationManager) throw new Error("consignationManager null")
         this.manager = consignationManager
+        if(!consignationManager) throw new Error("syncManager null")
+        this.syncManager = syncManager
 
         this._path_listings = path.join(this.manager.getPathStaging(), 'liste')
 
@@ -32,6 +34,10 @@ class SynchronisationConsignation {
         
         this.resolveRecevoirFuuidsDomaine = null
         this.rejectRecevoirFuuidsDomaine = null
+    }
+
+    async init() {
+        // Hook pour subclasses
     }
 
     async runSync() {

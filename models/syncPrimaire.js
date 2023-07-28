@@ -20,8 +20,8 @@ const DUREE_ATTENTE_RECLAMATIONS = 10_000,
 /** Gere les fichiers et catalogues de la consignation primaire */
 class SynchronisationPrimaire extends SynchronisationConsignation {
 
-    constructor(mq, consignationManager) {
-        super(mq, consignationManager)
+    constructor(mq, consignationManager, syncManager) {
+        super(mq, consignationManager, syncManager)
         
         this.resolveRecevoirFuuidsDomaine = null
         this.rejectRecevoirFuuidsDomaine = null

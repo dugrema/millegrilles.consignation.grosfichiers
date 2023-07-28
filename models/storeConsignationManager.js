@@ -79,6 +79,7 @@ class ManagerFacade {
     getMq() { return _mq }
 
     getPathStaging() { return getPathStaging() }
+    getInfoFichier(fuuid) { return _storeConsignationHandler.getInfoFichier(fuuid) }
     consignerFichier(pathFichierStaging, fuuid) { return consignerFichier(pathFichierStaging, fuuid) }
     archiverFichier(fuuid) { return _storeConsignationHandler.archiverFichier(fuuid)}
     reactiverFichier(fuuid) { return _storeConsignationHandler.reactiverFichier(fuuid) }
@@ -131,34 +132,12 @@ async function init(mq, opts) {
         _preparerHttpsAgent(mq)  // Genere _httpsAgent
 
         const configuration = await _storeConsignationHandler.chargerConfiguration(opts)
-        const typeStore = configuration.type_store
-
-        //const params = {...configuration, ...opts}  // opts peut faire un override de la configuration
-
-        // await changerStoreConsignation(typeStore, params)
-
-        // OBSOLETE : Objet responsable de l'upload vers le primaire (si local est secondaire)
-        // try {
-        //     _transfertPrimaire = new TransfertPrimaire(mq, this)
-        //     _transfertPrimaire.threadUploadFichiersConsignation()  // Premiere run, initialise loop
-        //     await _transfertPrimaire.ready
-        // } catch(err) {
-        //     console.warn("Erreur initialisation transfert primaire - assumer qu'on est en mode d'initialisation")
-        //     // Donner 15 secondes pour initialiser la configuration de la consignation dans CoreTopologie
-        //     setTimeout(()=>{
-        //         _transfertPrimaire.reloadUrlTransfert()
-        //         .catch(err=>{
-        //             console.error("storeConsignationManager.init Echec de chargement de la configuration de transfert - arreter")
-        //             // Si echec, va faire arreter l'execution
-        //             throw err
-        //         })
-        //     }, 30_000)
-        // }
 
         const managerFacade = new ManagerFacade()
 
         // Manager de synchronisation entre domaines (fuuids) et autres consignations (tous les repertoires)
         _synchronisationManager = new SynchronisationManager(mq, managerFacade)
+        await _synchronisationManager.init()
 
         // Creer thread qui transfere les fichiers recus vers le systeme de consignation
         _threadConsignation = new StoreConsignationThread(mq, managerFacade)

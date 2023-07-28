@@ -29,16 +29,14 @@ class SynchronisationManager {
         // Threads
         this.timerThread = false  // null => actif, true => init en cours, int => en attente timeout, false => arrete
         this.timerRecevoirFuuidsReclames = null
-        this.syncPrimaireHandler = new SynchronisationPrimaire(mq, consignationManager)
-        this.syncSecondaireHandler = new SynchronisationSecondaire(mq, consignationManager)
+        this.syncPrimaireHandler = new SynchronisationPrimaire(mq, consignationManager, this)
+        this.syncSecondaireHandler = new SynchronisationSecondaire(mq, consignationManager, this)
         this.syncHandler = null  // Prend la valeur synPrimaireHandler ou syncSecondaireHandler
 
         // Parametres optionnels
         this.intervalleSync = opts.intervalleSync || INTERVALLE_DEMARRER_THREAD
 
         debug("SynchronisationManager path staging %s, intervalle sync %d", this.manager.getPathStaging(), this.intervalleSync)
-        
-        this.init()
     }
 
     /** Set nombre de millsecs entre sync automatiques */
@@ -51,7 +49,7 @@ class SynchronisationManager {
         }
     }
 
-    init() {
+    async init() {
         const pathLogsReclamations = path.join(this._path_listings, 'reclamations')
         fsPromises.mkdir(pathLogsReclamations, {recursive: true})
             .catch(err=>console.error(new Date() + " Erreur creation path %s : %O", pathLogsReclamations, err))
@@ -70,6 +68,9 @@ class SynchronisationManager {
                     }, 25_000)
                 })
         }, 5_000)
+
+        await this.syncPrimaireHandler.init()
+        await this.syncSecondaireHandler.init()
     }
 
     async reloadUrlTransfert(opts) {

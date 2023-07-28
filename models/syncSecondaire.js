@@ -17,26 +17,35 @@ const FICHIER_FUUIDS_LOCAUX = 'fuuidsLocaux.txt',
 const FICHIERS_LISTE_PATH = '/var/opt/millegrilles/consignation/staging/fichiers/liste'
 const FICHIERS_LISTING_PATH = path.join(FICHIERS_LISTE_PATH, '/listings')
 
-const EXPIRATION_ORPHELINS_SECONDAIRES = 86_400_000 * 7
+const EXPIRATION_ORPHELINS_SECONDAIRES = 86_400_000 * 7,
+      LIMITE_TRANFERT_ITEMS = 10_000
 
 /** Gere les fichiers, catalogues et la synchronisation avec la consignation primaire pour un serveur secondaire */
 class SynchronisationSecondaire extends SynchronisationConsignation {
 
-    constructor(mq, consignationManager) {
-        super(mq, consignationManager)
+    constructor(mq, consignationManager, syncManager) {
+        super(mq, consignationManager, syncManager)
 
-        this.downloadPrimaireHandler = new DownloadPrimaireHandler()
-        this.uploadPrimaireHandler = new UploadPrimaireHandler()
+        this.pathOperationsListings = path.join(this._path_listings, 'operations')
+
+        this.downloadPrimaireHandler = new DownloadPrimaireHandler(consignationManager, this)
+        this.uploadPrimaireHandler = new UploadPrimaireHandler(consignationManager, this)
     }
 
-    async runSync(syncManager) {
+    async init() {
+        await super.init()
+        await this.downloadPrimaireHandler.init()
+        await this.uploadPrimaireHandler.init()
+    }
+
+    async runSync() {
         this.emettreEvenementActivite()
         const intervalActivite = setInterval(()=>this.emettreEvenementActivite(), 5_000)
         try {
             const infoConsignation = await this.genererListeFichiers()
 
             debug("runSync Download fichiers listing du primaire")
-            await this.getFichiersSync(syncManager.urlConsignationTransfert)
+            await this.getFichiersSync()
 
             // Deplacer les fichiers entre local, archives et orphelins
             // Ne pas deplacer vers orphelins si reclamationComplete est false (tous les domaines n'ont pas repondus)
@@ -70,8 +79,9 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
     /**
      * Charge les fichiers d'information a partir du primaire
      */
-    async getFichiersSync(urlConsignationTransfert) {
+    async getFichiersSync() {
         const httpsAgent = this.manager.getHttpsAgent()
+        const urlConsignationTransfert = this.syncManager.urlConsignationTransfert
 
         const outputPath = FICHIERS_LISTING_PATH
         try { await fsPromises.rm(outputPath, {recursive: true}) } catch(err) { console.info("getFichiersSync Erreur suppression %s : %O", outputPath, err) }
@@ -179,7 +189,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         await fileutils.trouverManquants(fichierLocalPath, fichierPrimaireLocalPath, fichierDownloadLocalPath)
 
         // Trouver fichiers a downloader de archives
-        const fichierDownloadArchivesPath = path.join(pathOperationsListings, 'fuuidsDownloadArchives.txt')
+        const fichierDownloadArchivesPath = path.join(pathOperationsListings, 'fuuidsDownloadsArchives.txt')
         await fileutils.trouverManquants(fichierArchivesPath, fichierPrimaireArchivesPath, fichierDownloadArchivesPath)
 
         // Trouver fichiers a uploader vers "local"
@@ -217,9 +227,46 @@ async function downloadFichierSync(httpsAgent, urlConsignationTransfert, nomFich
 
 class TransfertHandler {
 
-    constructor() {
+    constructor(manager, syncConsignation) {
+        this.manager = manager
+        this.syncConsignation = syncConsignation
+
         this.enCours = false
-        this.pending = []
+        this.pathStaging = '/var/opt/millegrilles/consignation/staging/fichiers/transferts'
+
+        this.pending = []           // Liste ordonnee des transferts
+        this.transfertsInfo = {}    // Information sur les transferts pending
+    }
+
+    async init() {
+        await fsPromises.mkdir(this.pathStaging, {recursive: true})
+    }
+
+    ajouterTransfert(fuuid, opts) {
+        opts = opts || {}
+        const archive = opts.archive || false
+
+        if(this.pending.length > LIMITE_TRANFERT_ITEMS) {
+            debug("DownloadPrimaireHandler.update Ajouter download local de %s - SKIP, limite atteinte", fuuid)
+            return
+        }
+
+        if(this.transfertsInfo[fuuid]) {
+            debug("DownloadPrimaireHandler.update Ajouter download local de %s - SKIP, deja dans la liste", fuuid)
+            return
+        }
+
+        debug("Ajouter transfert local de %s", fuuid)
+        this.transfertsInfo[fuuid] = { fuuid, archive, dateAjout: new Date() }
+        this.pending.push(fuuid)
+    }
+
+    demarrerThread() {
+        debug("TransfertHandler.demarrerThread Start")
+        this._thread()
+            .catch(err=>{
+                console.error("demarrerThread Erreur demarrage _thread : ", err)
+            })
     }
 
     async _thread() {
@@ -230,13 +277,22 @@ class TransfertHandler {
         try {
             this.enCours = true
             while(this.pending.length > 0) {
-                const transfert = this.pending.unshift()  // Methode FIFO
+                const transfert = this.pending.shift()  // Methode FIFO
                 try {
                     await this.transfererFichier(transfert)
                 } catch(err) {
-                    debug("_thread Erreur execution operation transfert %O, passer a next() : %O", transfert, err)
+                    debug("TransfertHandler._thread Erreur execution operation transfert %O, passer a next() : %O", transfert, err)
+                } finally {
+                    debug("TransfertHandler._thread Cleanup de l'information de transfert en memoire pour %s", transfert.fuuid)
+                    delete this.transfertsInfo[transfert.fuuid]
                 }
             }
+
+            await this.syncConsignation.genererListeFichiers()
+
+            this.manager.emettrePresence()
+                .catch(err=>console.error(new Date() + " SynchronisationPrimaire.runSync Erreur emettre presence : ", err))
+
         } finally {
             this.enCours = false
         }
@@ -252,20 +308,198 @@ class TransfertHandler {
         throw new Error('must override')
     }
 
+    trierPending() {
+        debug("Trier/dedupe la liste de fichiers pending")
+
+        // Recuperer liste a partir du dict - pas de doublons possibles (la cle est le fuuid)
+        const listeValues = Object.values(this.transfertsInfo).filter(item=>!item.enCours)
+
+        // Trier par type (local en premier, archive) puis par date d'ajout au dict
+        listeValues.sort(trierPending)
+
+        // Remplacer la liste de pending
+        this.pending = listeValues
+    }
+
+}
+
+function trierPending(a, b) {
+
+    const dateA = a.dateAjout.getTime(), dateB = b.dateAjout.getTime(),
+          archiveA = a.archive || false, archiveB = b.archive || false,
+          fuuidA = a.fuuid, fuuidB = b.fuuid
+
+    if(archiveA !== archiveB) {
+        if(archiveA) return 1
+        else return -1
+    }
+
+    if(dateA !== dateB) {
+        return dateA - dateB
+    }
+
+    return fuuidA.localeCompare(fuuidB)
 }
 
 class DownloadPrimaireHandler extends TransfertHandler {
 
+    constructor(manager, syncConsignation) {
+        super(manager, syncConsignation)
+
+        // Override pathStaging
+        this.pathStaging = '/var/opt/millegrilles/consignation/staging/fichiers/download'
+
+        this.fetchInformationEnCours = false
+    }
+
     async update() {
         debug("DownloadPrimaireHandler update liste de fichiers a downloader")
+        const fichierDownloadLocalPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsDownloadsLocal.txt')
+        const fichierDownloadArchivesPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsDownloadsArchives.txt')
+
+        await fileutils.chargerFuuidsListe(fichierDownloadLocalPath, fuuid=>this.ajouterTransfert(fuuid))
+        await fileutils.chargerFuuidsListe(fichierDownloadArchivesPath, fuuid=>this.ajouterTransfert(fuuid, {archive: true}))
+
+        this.trierPending()
+
+        this.demarrerThread()
+
+        this.fetchInformationDownloads()
+            .catch(err=>console.error("Erreur fetchInformationDownloads : ", err))
+    }
+
+    async transfererFichier(transfertInfo) {
+        debug("DownloadPrimaireHandler.transfererFichier fichier ", transfertInfo)
+        const { fuuid } = transfertInfo
+
+        transfertInfo.enCours = true
+
+        // Verifier si le fichier est deja present localement
+        try {
+            const infoFichier = await this.manager.getInfoFichier(fuuid)
+            debug("Le fichier %s existe deja (SKIP) : %O", fuuid, infoFichier)
+            return
+        } catch(err) {
+            if(err.code === 'ENOENT') {
+                // Ok, fichier n'existe pas deja
+                debug("transfererFichier Verification absence fichier avant download fuuid %s OK", fuuid)
+            } else {
+                throw err
+            }
+        }
+
+        await this.downloadFichier(transfertInfo)
+    }
+
+    async downloadFichier(transfertInfo) {
+        const { fuuid, archive } = transfertInfo
+        debug("DownloadPrimaireHandler.downloadFichier Debut download ", fuuid)
+
+        const urlDownload = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
+              httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
+        urlDownload.pathname += '/' + fuuid
+        debug("DownloadPrimaireHandler.downloadFichier URL download fichier ", urlDownload.href)
+
+        const pathFichierDownload = path.join(this.pathStaging, fuuid)
+        const writeStream = fs.createWriteStream(pathFichierDownload)
+
+        const controller = new AbortController()
+
+        const reponse = await axios({
+            method: 'GET', 
+            url: urlDownload.href, 
+            httpsAgent,
+            responseType: 'stream',
+            signal: controller.signal,
+        })
+
+        let timeout = setTimeout(controller.abort, 45_000)  // Timeout 15 secondes pour connexion
+
+        // debug("Reponse headers : ", reponse.headers)
+        try {
+            const taille = Number.parseInt(reponse.headers['content-length'])
+            transfertInfo.taille = taille
+        } catch(err) {
+            debug("DownloadPrimaireHandler.downloadFichier Erreur lecture taille fuuid %s a partir des headers http", fuuid, err)
+            transfertInfo.taille = null
+        }
+        transfertInfo.position = 0
+
+        debug("DownloadPrimaireHandler.downloadFichier Reponse fichier %s status : %d", fuuid, reponse.status)
+        await new Promise((resolve, reject)=>{
+            reponse.data.on('data', chunk => {
+                transfertInfo.position += chunk.length
+                clearTimeout(timeout)
+                timeout = setTimeout(controller.abort, 15_000)  // Timeout 15 secondes entre chunks
+            })
+            writeStream.on('error', reject)
+            writeStream.on('close', resolve)
+            reponse.data.pipe(writeStream)
+        })
+
+        clearTimeout(timeout)
+
+        debug("DownloadPrimaireHandler.downloadFichier Resultat transfert : ", transfertInfo)
+        await this.manager.consignerFichier(this.pathStaging, fuuid)
+        if(archive) {
+            await this.manager.archiverFichier(fuuid)
+        }
+    }
+
+    /** 
+     * Recupere de l'information sur les downloads a partir du primaire. 
+     * Permet de generer un rapport de transfert (bytes, %, etc)
+    */
+    async fetchInformationDownloads() {
+        if(this.fetchInformationEnCours) {
+            debug("fetchInformationDownloads Deja en cours, SKIP")
+            return
+        }
+
+        try {
+            this.fetchInformationEnCours = true
+
+            let fuuidsInfo = Object.values(this.transfertsInfo).filter(item=>!item.fetchComplete)
+            while(fuuidsInfo.length > 0) {
+                const fuuidsBatch = fuuidsInfo.slice(1, 1000)
+                fuuidsInfo = fuuidsInfo.slice(1000)
+
+                debug("fetchInformationDownloads Fetch batch %d fuuids", fuuidsBatch.length)
+
+            }
+
+            // TODO - fetch information des fuuids
+        } finally {
+            this.fetchInformationEnCours = false
+        }
     }
 
 }
 
 class UploadPrimaireHandler extends TransfertHandler {
 
+    constructor(manager, syncConsignation) {
+        super(manager, syncConsignation)
+
+        // Override pathStaging
+        this.pathStaging = '/var/opt/millegrilles/consignation/staging/fichiers/upload'
+    }
+
     async update() {
         debug("UploadPrimaireHandler update liste de fichiers a uploader")
+        const fichierUploadLocalPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsUploadsLocal.txt')
+        const fichierUploadArchivesPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsUploadsArchives.txt')
+
+        await fileutils.chargerFuuidsListe(fichierUploadLocalPath, fuuid=>this.ajouterTransfert(fuuid))
+        await fileutils.chargerFuuidsListe(fichierUploadArchivesPath, fuuid=>this.ajouterTransfert(fuuid, {archive: true}))
+
+        this.trierPending()
+
+        this.demarrerThread()
+    }
+
+    async transfererFichier(fichier) {
+        debug("UploadPrimaireHandler.transfererFichier Debut download fichier ", fichier)
     }
 
 }
