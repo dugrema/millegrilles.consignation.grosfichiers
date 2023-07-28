@@ -219,11 +219,11 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
 
         // Trouver fichiers a uploader vers "local"
         const fichierUploadsLocalPath = path.join(pathOperationsListings, 'fuuidsUploadsLocal.txt')
-        await fileutils.trouverManquants(fichierPrimaireManquantsPath, fichierLocalPath, fichierUploadsLocalPath)
+        await fileutils.trouverManquants(fichierLocalPath, fichierPrimaireManquantsPath, fichierUploadsLocalPath)
 
         // Trouver fichiers a uploader vers archives
         const fichierUploadsArchivesPath = path.join(pathOperationsListings, 'fuuidsUploadsArchives.txt')
-        await fileutils.trouverManquants(fichierPrimaireManquantsPath, fichierArchivesPath, fichierUploadsArchivesPath)
+        await fileutils.trouverManquants(fichierArchivesPath, fichierPrimaireManquantsPath, fichierUploadsArchivesPath)
     }
 
     ajouterDownload(fuuid) {
@@ -316,8 +316,11 @@ class TransfertHandler {
             debug("_thread deja en cours, SKIP")
             return
         }
+
+        const intervalEtatTransfert = setInterval(()=>this.emettreEtat(), 5_000)
         try {
             this.enCours = true
+
             while(this.pending.length > 0) {
                 const transfert = this.pending.shift()  // Methode FIFO
                 try {
@@ -336,7 +339,10 @@ class TransfertHandler {
                 .catch(err=>console.error(new Date() + " SynchronisationPrimaire.runSync Erreur emettre presence : ", err))
 
         } finally {
+            clearInterval(intervalEtatTransfert)
             this.enCours = false
+            this.emettreEtat({termine: true})
+                .catch(err=>console.error("Erreur emttre fin transfert : ", err))
         }
     }
 
@@ -347,6 +353,10 @@ class TransfertHandler {
 
     /** Met a jour la liste de transferts. */
     async update() {
+        throw new Error('must override')
+    }
+
+    async emettreEtat(opts) {
         throw new Error('must override')
     }
 
@@ -514,22 +524,68 @@ class DownloadPrimaireHandler extends TransfertHandler {
             return
         }
 
+        const urlInfo = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
+              httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
+        
+        urlInfo.pathname += '/sync/fuuidsInfo'
+        debug("DownloadPrimaireHandler.fetchInformationDownloads URL download fichier ", urlInfo.href)
+
         try {
             this.fetchInformationEnCours = true
 
-            let fuuidsInfo = Object.values(this.transfertsInfo).filter(item=>!item.fetchComplete)
+            let fuuidsInfo = Object.values(this.transfertsInfo).filter(item=>!item.fetchComplete).map(item=>item.fuuid)
             while(fuuidsInfo.length > 0) {
-                const fuuidsBatch = fuuidsInfo.slice(1, 1000)
+                const fuuidsBatch = fuuidsInfo.slice(0, 1000)
                 fuuidsInfo = fuuidsInfo.slice(1000)
 
                 debug("fetchInformationDownloads Fetch batch %d fuuids", fuuidsBatch.length)
+                const requete = { fuuids: fuuidsBatch }
+                const reponse = await axios({
+                    method: 'POST',
+                    url: urlInfo.href,
+                    data: requete,
+                    httpsAgent,
+                })
+                const data = reponse.data
+                debug("fetchInformationDownloads Info fichiers status : ", reponse.status)
+                for(const infoRemote of data) {
+                    const {fuuid, status, size} = infoRemote
+                    const infoFuuid = this.transfertsInfo[fuuid]
+                    if(!infoFuuid || infoFuuid.enCours) continue  // Fichier deja traite
+                    
+                    if(size) infoFuuid.taille = size
+                    infoFuuid.status = status
 
+                    infoFuuid.fetchComplete = true
+                }
             }
 
-            // TODO - fetch information des fuuids
+            this.emettreEtat()
+                .catch(err=>console.warn("DownloadPrimaireHandler.fetchInformationDownloads Erreur emettreEtat : ", err))
         } finally {
             this.fetchInformationEnCours = false
         }
+    }
+
+    async emettreEtat(opts) {
+        const mq = this.syncConsignation.mq
+
+        const liste = Object.values(this.transfertsInfo)
+        const taille = liste.reduce((acc, item)=>{
+            const taille = item.taille || 0
+            acc += taille
+            return acc
+        }, 0)
+
+        const e = {
+            termine: !this.enCours,
+            nombre: liste.length,
+            taille,
+        }
+
+        debug("emettreEtat syncDownload ", e)
+        const domaine = 'fichiers', action = 'syncDownload'
+        await mq.emettreEvenement(e, {domaine, action, ajouterCertificat: true})
     }
 
 }
