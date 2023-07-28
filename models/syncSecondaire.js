@@ -5,6 +5,8 @@ const fs = require('fs')
 const fsPromises = require('fs/promises')
 const path = require('path')
 
+const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachage')
+
 const { SynchronisationConsignation } = require('./synchronisationConsignation')
 const fileutils = require('./fileutils')
 
@@ -425,25 +427,41 @@ class DownloadPrimaireHandler extends TransfertHandler {
         }
         transfertInfo.position = 0
 
+        const verificateurHachage = new VerificateurHachage(fuuid)
+
         debug("DownloadPrimaireHandler.downloadFichier Reponse fichier %s status : %d", fuuid, reponse.status)
-        await new Promise((resolve, reject)=>{
-            reponse.data.on('data', chunk => {
-                transfertInfo.position += chunk.length
-                clearTimeout(timeout)
-                timeout = setTimeout(controller.abort, 15_000)  // Timeout 15 secondes entre chunks
+        try {
+            await new Promise((resolve, reject)=>{
+                reponse.data.on('data', chunk => {
+                    verificateurHachage.update(chunk)
+                    transfertInfo.position += chunk.length
+                    clearTimeout(timeout)
+                    timeout = setTimeout(controller.abort, 15_000)  // Timeout 15 secondes entre chunks
+                })
+                writeStream.on('error', reject)
+                writeStream.on('close', () => {
+                    // Verifier hachage - lance une exception si la verification echoue
+                    verificateurHachage.verify().then(resolve).catch(reject)
+                })
+                reponse.data.pipe(writeStream)
             })
-            writeStream.on('error', reject)
-            writeStream.on('close', resolve)
-            reponse.data.pipe(writeStream)
-        })
 
-        clearTimeout(timeout)
+            clearTimeout(timeout)
 
-        debug("DownloadPrimaireHandler.downloadFichier Resultat transfert : ", transfertInfo)
-        await this.manager.consignerFichier(this.pathStaging, fuuid)
-        if(archive) {
-            await this.manager.archiverFichier(fuuid)
+            debug("DownloadPrimaireHandler.downloadFichier Resultat transfert : ", transfertInfo)
+            await this.manager.consignerFichier(this.pathStaging, fuuid)
+            if(archive) {
+                await this.manager.archiverFichier(fuuid)
+            }
+        } catch(err) {
+            // Supprimer le fichier temporaire
+            fsPromises.unlink(pathFichierDownload)
+                .catch(err=>console.info("DownloadPrimaireHandler.downloadFichier Erreur cleanup fichier %s (download en erreur)) : ", err))
+            throw err
+        } finally {
+            clearTimeout(timeout)
         }
+
     }
 
     /** 
