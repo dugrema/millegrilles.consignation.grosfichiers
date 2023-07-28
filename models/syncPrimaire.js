@@ -56,6 +56,8 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
 
             // Declencher synchronisation des consignations secondaires
             await this.declencherSyncSecondaire()
+        } catch(err) {
+            console.error(new Date() + " runSync Erreur sync : ", err)
         } finally {
             clearInterval(intervalActivite)
             this.emettreEvenementActivite({termine: true})

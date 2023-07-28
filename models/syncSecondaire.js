@@ -66,6 +66,8 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
             await this.downloadPrimaireHandler.update()
             await this.uploadPrimaireHandler.update()
 
+        } catch(err) {
+            console.error(new Date() + " runSync Erreur sync : ", err)
         } finally {
             clearInterval(intervalActivite)
             this.emettreEvenementActivite({termine: true})
