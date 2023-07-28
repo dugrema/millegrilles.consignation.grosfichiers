@@ -223,6 +223,16 @@ class SynchronisationManager {
         return this.syncPrimaireHandler.recevoirFuuidsReclames(fuuids, opts)
     }
 
+    /**
+     * Ajoute un fuuid a downloader pour une consignation secondaire (vient de confirmation primaire)
+     * @param {*} fuuid 
+     */
+    ajouterDownloadPrimaire(fuuid) {
+        if(this.estPrimaire === false) {
+            this.syncSecondaireHandler.ajouterDownload(fuuid)
+        }
+    }
+
 }
 
 

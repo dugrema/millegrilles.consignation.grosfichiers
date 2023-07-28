@@ -203,6 +203,11 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         await fileutils.trouverManquants(fichierPrimaireManquantsPath, fichierArchivesPath, fichierUploadsArchivesPath)
     }
 
+    ajouterDownload(fuuid) {
+        this.downloadPrimaireHandler.ajouterTransfert({fuuid, dateAjout: new Date()})
+        this.downloadPrimaireHandler.demarrerThread()
+    }
+
 }
 
 async function downloadFichierSync(httpsAgent, urlConsignationTransfert, nomFichier, opts) {

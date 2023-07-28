@@ -598,14 +598,15 @@ async function rotationOrphelins(pathOrphelins, fichierReclames) {
 }
 
 function ajouterDownloadPrimaire(fuuid) {
-    if(_transfertPrimaire.ready === true) {
-        _transfertPrimaire.ajouterDownload(fuuid)
-    } else {
-        _transfertPrimaire.ready.then(()=>{
-            _transfertPrimaire.ajouterDownload(fuuid)
-        })
-        .catch(err=>console.error("Erreur ajouterDownloadPrimaire %s : %O", fuuid, err))
-    }
+    _synchronisationManager.ajouterDownloadPrimaire(fuuid)
+    // if(_transfertPrimaire.ready === true) {
+    //     _transfertPrimaire.ajouterDownload(fuuid)
+    // } else {
+    //     _transfertPrimaire.ready.then(()=>{
+    //         _transfertPrimaire.ajouterDownload(fuuid)
+    //     })
+    //     .catch(err=>console.error("Erreur ajouterDownloadPrimaire %s : %O", fuuid, err))
+    // }
 }
 
 async function downloadFichiersBackup() {
