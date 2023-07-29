@@ -20,7 +20,9 @@ const FICHIERS_LISTE_PATH = '/var/opt/millegrilles/consignation/staging/fichiers
 const FICHIERS_LISTING_PATH = path.join(FICHIERS_LISTE_PATH, '/listings')
 
 const EXPIRATION_ORPHELINS_SECONDAIRES = 86_400_000 * 7,
-      LIMITE_TRANFERT_ITEMS = 10_000
+      LIMITE_TRANFERT_ITEMS = 10_000,
+      TIMEOUT_AXIOS = 60_000,
+      CONST_TAILLE_SPLIT_MAX_DEFAULT = 1024 * 1024 * 100
 
 /** Gere les fichiers, catalogues et la synchronisation avec la consignation primaire pour un serveur secondaire */
 class SynchronisationSecondaire extends SynchronisationConsignation {
@@ -257,7 +259,7 @@ async function downloadFichierSync(httpsAgent, urlConsignationTransfert, nomFich
         url: pathFichiersLocal.href, 
         httpsAgent,
         responseType: 'stream',
-        timeout: 10_000,
+        timeout: TIMEOUT_AXIOS,
     })
     debug("Reponse fichier %s status : %d", pathFichiersLocal.href, reponse.status)
 
@@ -292,9 +294,14 @@ class TransfertHandler {
         await fsPromises.mkdir(this.pathStaging, {recursive: true})
     }
 
-    ajouterTransfert(fuuid, opts) {
+    ajouterTransfert(infoFichier, opts) {
         opts = opts || {}
-        const archive = opts.archive || false
+        const archive = opts.archive || infoFichier.archive || false,
+              demarrerThread = opts.demarrer===false?false:true
+
+        const fuuid = infoFichier.fuuid || infoFichier
+
+        debug("Ajouter transfert local de %s", fuuid)
 
         if(this.pending.length > LIMITE_TRANFERT_ITEMS) {
             debug("DownloadPrimaireHandler.update Ajouter download local de %s - SKIP, limite atteinte", fuuid)
@@ -306,9 +313,10 @@ class TransfertHandler {
             return
         }
 
-        debug("Ajouter transfert local de %s", fuuid)
         this.transfertsInfo[fuuid] = { fuuid, archive, dateAjout: new Date() }
         this.pending.push(fuuid)
+
+        if(demarrerThread) this.demarrerThread()
     }
 
     demarrerThread() {
@@ -328,6 +336,8 @@ class TransfertHandler {
         const intervalEtatTransfert = setInterval(()=>this.emettreEtat(), 5_000)
         try {
             this.enCours = true
+
+            this.trierPending()
 
             while(this.pending.length > 0) {
                 const transfert = this.pending.shift()  // Methode FIFO
@@ -350,7 +360,7 @@ class TransfertHandler {
             clearInterval(intervalEtatTransfert)
             this.enCours = false
             this.emettreEtat({termine: true})
-                .catch(err=>console.error("Erreur emttre fin transfert : ", err))
+                .catch(err=>console.error("Erreur emettre fin transfert : ", err))
         }
     }
 
@@ -412,13 +422,24 @@ class DownloadPrimaireHandler extends TransfertHandler {
         this.fetchInformationEnCours = false
     }
 
+    demarrerThread() {
+        if(this.enCours) return  // Deja en cours
+        debug("TransfertHandler.demarrerThread Start")
+
+        this.fetchInformationDownloads()
+            .catch(err=>console.error("TransfertHandler.demarrerThread Erreur fetchInformationDownloads", err))
+
+        super.demarrerThread()
+    }
+
+
     async update() {
         debug("DownloadPrimaireHandler update liste de fichiers a downloader")
         const fichierDownloadLocalPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsDownloadsLocal.txt')
         const fichierDownloadArchivesPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsDownloadsArchives.txt')
 
-        await fileutils.chargerFuuidsListe(fichierDownloadLocalPath, fuuid=>this.ajouterTransfert(fuuid))
-        await fileutils.chargerFuuidsListe(fichierDownloadArchivesPath, fuuid=>this.ajouterTransfert(fuuid, {archive: true}))
+        await fileutils.chargerFuuidsListe(fichierDownloadLocalPath, fuuid=>this.ajouterTransfert(fuuid, {demarrer: false}))
+        await fileutils.chargerFuuidsListe(fichierDownloadArchivesPath, fuuid=>this.ajouterTransfert(fuuid, {demarrer: false, archive: true}))
 
         this.trierPending()
 
@@ -553,7 +574,7 @@ class DownloadPrimaireHandler extends TransfertHandler {
                     url: urlInfo.href,
                     data: requete,
                     httpsAgent,
-                    timeout: 60_000,
+                    timeout: TIMEOUT_AXIOS,
                 })
                 const data = reponse.data
                 debug("fetchInformationDownloads Info fichiers status : ", reponse.status)
@@ -626,8 +647,37 @@ class UploadPrimaireHandler extends TransfertHandler {
             .catch(err=>console.warn("UploadPrimaireHandler.update Erreur preparation information upload : ", err))
     }
 
-    async transfererFichier(fichier) {
-        debug("UploadPrimaireHandler.transfererFichier Debut upload fichier ", fichier)
+    async transfererFichier(transfertInfo) {
+        debug("UploadPrimaireHandler.transfererFichier Debut upload fichier ", transfertInfo)
+        transfertInfo.enCours = true
+
+        const { fuuid } = transfertInfo
+
+        const statItem = (await this.manager.getInfoFichier(fuuid))
+        statItem.fuuid = fuuid
+        debug("UploadPrimaireHandler.putFichier ", statItem)
+
+        if(!statItem) {
+            console.error(new Date() + " transfertPrimaire.putFichier Fuuid %s n'existe pas localement, upload annule", fuuid)
+            return
+        }
+
+        debug("Traiter PUT pour fuuid %s", fuuid)
+
+        try {
+            const urlInfo = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
+                  httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
+            await putAxios(httpsAgent, urlInfo, fuuid, statItem)
+        } catch(err) {
+            const response = err.response || {}
+            const status = response.status
+            console.error(new Date() + " Erreur PUT fichier (status %d) %O", status, err)
+            if(status === 409) {
+                positionUpload = response.headers['x-position'] || position
+            } else {
+                throw err
+            }
+        }
     }
 
     /** Injecte l'information de taille/presence des fichiers a uploader. */
@@ -638,7 +688,7 @@ class UploadPrimaireHandler extends TransfertHandler {
               httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
 
         urlInfo.pathname += '/sync/fuuidsInfo'
-        debug("DownUploadPrimaireHandler.preparerInformationUpload URL download fichier ", urlInfo.href)
+        debug("UploadPrimaireHandler.preparerInformationUpload URL download fichier ", urlInfo.href)
       
         try {
             let fuuidsInfo = Object.values(this.transfertsInfo).filter(item=>!item.fetchComplete).map(item=>item.fuuid)
@@ -653,7 +703,7 @@ class UploadPrimaireHandler extends TransfertHandler {
                     url: urlInfo.href,
                     data: requete,
                     httpsAgent,
-                    timeout: 60_000,
+                    timeout: TIMEOUT_AXIOS,
                 })
                 const data = reponse.data
                 debug("UploadPrimaireHandler.preparerInformationUpload Info fichiers status : ", reponse.status)
@@ -673,14 +723,16 @@ class UploadPrimaireHandler extends TransfertHandler {
                     // Recuperer information locale (taille du fichier) pour stats
                     try {
                         const infoFichier = await this.manager.getInfoFichier(fuuid)
-                        fuuidsInfo.taille = infoFichier.stat.size
+                        infoFuuid.taille = infoFichier.stat.size
                     } catch(err) {
                         console.warn("UploadPrimaireHandler.preparerInformationUpload Le fichier %s n'existe pas ou autre erreur pour upload vers primaire, SKIP\n%O", fuuid, err)
                         delete this.transfertsInfo[fuuid]
                         continue
                     } finally {
-                        fuuidsInfo.fetchComplete = true  // Marquer complete, en cas d'erreur d'acces a l'info
+                        infoFuuid.fetchComplete = true  // Marquer complete, en cas d'erreur d'acces a l'info
                     }
+
+                    debug("UploadPrimaireHandler.preparerInformationUpload Fichier upload info ", infoFuuid)
                 }
             }
 
@@ -709,11 +761,104 @@ class UploadPrimaireHandler extends TransfertHandler {
             taille,
         }
 
-        debug("emettreEtat syncDownload ", e)
+        debug("UploadPrimaireHandler.emettreEtat syncDownload ", e)
         const domaine = 'fichiers', action = 'syncUpload'
         await mq.emettreEvenement(e, {domaine, action, ajouterCertificat: true})
     }
 
+}
+
+async function putAxios(httpsAgent, urlConsignationTransfert, fuuid, statItem) {
+    debug("PUT Axios %s info %O", fuuid, statItem)
+    const filePath = statItem.filePath
+    const statContent = statItem.stat || {}
+    const size = statContent.size
+    const fileRedirect = statItem.fileRedirect
+
+    // debug("PUT Axios %s size %d", fuuid, size)
+
+    const correlation = fuuid
+
+    const urlPrimaireFuuid = new URL(urlConsignationTransfert.href)
+    urlPrimaireFuuid.pathname = path.join(urlPrimaireFuuid.pathname, fuuid)
+
+    // S'assurer que le fichier n'existe pas deja
+    try {
+        await axios({method: 'HEAD', url: urlPrimaireFuuid.href, httpsAgent, timeout: TIMEOUT_AXIOS})
+        console.error(new Date() + "transfertPrimaire.putAxios Fichier %s existe deja sur le primaire, annuler transfert", fuuid)
+        return false
+    } catch(err) {
+        const response = err.response
+        if(response && response.status === 404) {
+            // OK, le fuuid n'existe pas deja
+        } else {
+            debug("Erreur axios : ", err)
+            throw err
+        }
+    }
+
+    let srcFilePath = null,
+        tmpFile = null
+
+    try {
+        if(fileRedirect) {
+            debug("putAxios Source transfert via %s", fileRedirect)
+            tmpFile = path.join('/tmp/', fuuid + '.primaire')
+            const sourceReponse = await axios({method: 'GET', url: fileRedirect, responseType: 'stream', timeout: TIMEOUT_AXIOS })
+            if(sourceReponse.status !== 200) {
+                throw new Error("Mauvaise reponse source (code %d) %s", sourceReponse.status, fileRedirect)
+            }
+            const writeStream = fs.createWriteStream(tmpFile)
+            await new Promise((resolve, reject)=>{
+                writeStream.on('close', resolve)
+                writeStream.on('error', reject)
+                sourceReponse.data.pipe(writeStream)
+            })
+            srcFilePath = tmpFile
+        } else {
+            srcFilePath = filePath
+        }
+
+        debug("putAxios Source transfert %s", srcFilePath)
+        for (let position=0; position < size; position += CONST_TAILLE_SPLIT_MAX_DEFAULT) {
+            // Creer output stream
+            const start = position,
+                end = Math.min(position+CONST_TAILLE_SPLIT_MAX_DEFAULT, size) - 1
+            debug("PUT fuuid %s positions %d a %d", correlation, start, end)
+    
+            const urlPosition = new URL(urlConsignationTransfert.href)
+            urlPosition.pathname = path.join(urlPosition.pathname, correlation, ''+position)
+    
+            const readStream = fs.createReadStream(srcFilePath, {start, end})
+            await axios({
+                method: 'PUT',
+                httpsAgent,
+                url: urlPosition.href,
+                headers: {'content-type': 'application/stream', 'X-fuuid': fuuid},
+                data: readStream,
+                timeout: TIMEOUT_AXIOS,
+                maxRedirects: 0,  // Eviter redirect buffer (max 10mb)
+            })
+        }        
+
+    } finally {
+        if(tmpFile) {
+            debug("putAxios Cleanup ", tmpFile)
+            await fsPromises.unlink(tmpFile)
+        }
+    }
+        
+    // Emettre message POST pour indiquer que le fichier est complete
+    const transactions = { etat: { hachage: fuuid } }
+    const urlCorrelation = new URL(urlConsignationTransfert.href)
+    urlCorrelation.pathname = path.join(urlCorrelation.pathname, correlation)
+    await axios({
+        method: 'POST',
+        httpsAgent,
+        url: urlCorrelation.href,
+        data: transactions,
+        timeout: TIMEOUT_AXIOS,
+    })
 }
 
 module.exports = SynchronisationSecondaire
