@@ -320,22 +320,27 @@ class ConsignationRepertoire {
 
     async genererOutputListing(fichierPath, opts) {
         opts = opts || {}
-        const fichierWriteStream = fs.createWriteStream(fichierPath + '.work')
-        
-        const resultat = await this.genererListing({...opts, outputStream: fichierWriteStream})
-        
-        await new Promise((resolve, reject)=>{
-            debug("genererOutputListing Fermer %s.work", fichierPath)
-            fichierWriteStream.close(err=>{
-                debug("genererOutputListing Fermer %s.work resultat : %O", fichierPath, err)
-                if(err) return reject(err)
-                resolve()
-            })
+        let resultat = null
+        await new Promise(async (resolve, reject)=>{
+            const fichierWriteStream = fs.createWriteStream(fichierPath + '.work')
+            fichierWriteStream.on('error', reject)
+            fichierWriteStream.on('close', resolve)
+
+            try {
+                debug("ConsignationRepertoire.genererOutputListing %s.work", fichierPath)
+                resultat = await this.genererListing({...opts, outputStream: fichierWriteStream})
+                debug("ConsignationRepertoire.genererOutputListing Fermer %s.work", fichierPath)
+            } catch(err) {
+                reject(err)
+            } finally {
+                debug("genererOutputListing Fermer %s.work", fichierPath)
+                fichierWriteStream.close()
+            }
         })
         
-        debug("Sort %s.work", fichierPath)
+        debug("ConsignationRepertoire.genererOutputListing Sort %s.work", fichierPath)
         await fileutils.sortFile(fichierPath + '.work', fichierPath, opts)  // Trier
-        //await fsPromises.unlink(fichierPath + '.work')
+        await fsPromises.unlink(fichierPath + '.work')
 
         return resultat
     }

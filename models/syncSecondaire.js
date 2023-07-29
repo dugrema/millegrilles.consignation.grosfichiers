@@ -341,6 +341,10 @@ class TransfertHandler {
 
             while(this.pending.length > 0) {
                 const fuuid = this.pending.shift()  // Methode FIFO
+
+                this.emettreEtat({fuuid})
+                    .catch(err=>console.error("Erreur emettre etat transfert : ", err))
+
                 debug("TransfertHandler._thread Traiter fuuid : %O", fuuid)
                 const transfert = this.transfertsInfo[fuuid]
                 try {
@@ -686,13 +690,13 @@ class UploadPrimaireHandler extends TransfertHandler {
     async preparerInformationUpload() {
         this.preparationInformationEnCours = true
 
-        const urlInfo = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
-              httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
-
-        urlInfo.pathname += '/sync/fuuidsInfo'
-        debug("UploadPrimaireHandler.preparerInformationUpload URL download fichier ", urlInfo.href)
-      
         try {
+            const urlInfo = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
+                  httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
+
+            urlInfo.pathname += '/sync/fuuidsInfo'
+            debug("UploadPrimaireHandler.preparerInformationUpload URL download fichier ", urlInfo.href)
+
             let fuuidsInfo = Object.values(this.transfertsInfo).filter(item=>!item.fetchComplete).map(item=>item.fuuid)
             while(fuuidsInfo.length > 0) {
                 const fuuidsBatch = fuuidsInfo.slice(0, 1000)
@@ -708,12 +712,12 @@ class UploadPrimaireHandler extends TransfertHandler {
                     timeout: TIMEOUT_AXIOS,
                 })
                 const data = reponse.data
-                debug("UploadPrimaireHandler.preparerInformationUpload Info fichiers status : ", reponse.status)
+                debug("UploadPrimaireHandler.preparerInformationUpload Info fichiers status : %d\n%O", reponse.status, data)
 
                 for(const infoRemote of data) {
                     const { fuuid, status } = infoRemote
                     const infoFuuid = this.transfertsInfo[fuuid]
-                    if(!infoFuuid || infoFuuid.enCours) continue  // Fichier deja traite
+                    if(!infoFuuid || infoFuuid.fetchComplete) continue  // Fichier deja traite
 
                     // Verifier si le fichier est deja sur le primaire
                     if(status === 200) {
@@ -725,6 +729,7 @@ class UploadPrimaireHandler extends TransfertHandler {
                     // Recuperer information locale (taille du fichier) pour stats
                     try {
                         const infoFichier = await this.manager.getInfoFichier(fuuid)
+                        debug("UploadPrimaireHandler.preparerInformationUpload Info fichier %s : %O", fuuid, infoFichier)
                         infoFuuid.taille = infoFichier.stat.size
                     } catch(err) {
                         console.warn("UploadPrimaireHandler.preparerInformationUpload Le fichier %s n'existe pas ou autre erreur pour upload vers primaire, SKIP\n%O", fuuid, err)
@@ -738,9 +743,6 @@ class UploadPrimaireHandler extends TransfertHandler {
                 }
             }
 
-            this.emettreEtat()
-                .catch(err=>console.warn("UploadPrimaireHandler.preparerInformationUpload Erreur emettreEtat : ", err))
-
         } finally {
             this.preparationInformationEnCours = false
         }
@@ -748,6 +750,9 @@ class UploadPrimaireHandler extends TransfertHandler {
     }
 
     async emettreEtat(opts) {
+        this.preparerInformationUpload()
+            .catch(err=>console.warn("UploadPrimaireHandler.update Erreur preparation information upload : ", err))
+
         const mq = this.syncConsignation.mq
 
         const liste = Object.values(this.transfertsInfo)
