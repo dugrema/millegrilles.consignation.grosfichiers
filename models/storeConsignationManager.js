@@ -1003,14 +1003,10 @@ async function setEstConsignationPrimaire(primaire, instanceIdPrimaire) {
     const courant = _estPrimaire
     _estPrimaire = primaire
 
-    // //OBSOLETE
-    // if(instanceIdPrimaire) {
-    //     // _transfertPrimaire.setInstanceIdPrimaire(instanceIdPrimaire)
-    // }
     if(courant !== primaire) {
         debug("Changement role consignation : primaire => %s", primaire)
         // FichiersTransfertBackingStore.setEstPrimaire(primaire)
-        if(_estPrimaire === true) {
+        if(primaire === true) {
             // Ecouter Q de backup sur MQ
             startConsumingPrimaire().catch(err=>console.error(new Date() + ' Erreur start consuming primaire', err))
             //startConsumingBackup().catch(err=>console.error(new Date() + ' Erreur start consuming backup', err))
