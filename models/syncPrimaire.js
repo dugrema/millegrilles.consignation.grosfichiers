@@ -67,7 +67,7 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
     }
 
     arreter() {
-        throw new Error('todo')
+        
     }
 
     /**

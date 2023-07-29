@@ -79,7 +79,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
     }
 
     arreter() {
-        throw new Error('todo')
+        
     }
 
     /**

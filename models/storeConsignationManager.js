@@ -1002,6 +1002,7 @@ async function setEstConsignationPrimaire(primaire, instanceIdPrimaire) {
     debug('setEstConsignationPrimaire %s', primaire)
     const courant = _estPrimaire
     _estPrimaire = primaire
+    
 
     if(courant !== primaire) {
         debug("Changement role consignation : primaire => %s", primaire)
@@ -1010,10 +1011,14 @@ async function setEstConsignationPrimaire(primaire, instanceIdPrimaire) {
             // Ecouter Q de backup sur MQ
             startConsumingPrimaire().catch(err=>console.error(new Date() + ' Erreur start consuming primaire', err))
             //startConsumingBackup().catch(err=>console.error(new Date() + ' Erreur start consuming backup', err))
+
+            _synchronisationManager.demarrerModePrimaire()
         } else {
             // Arret ecoute de Q de backup sur MQ
             stopConsumingPrimaire().catch(err=>console.error(new Date() + ' Erreur stop consuming primaire', err))
             //stopConsumingBackup().catch(err=>console.error(new Date() + ' Erreur stop consuming backup', err))
+
+            _synchronisationManager.demarrerModeSecondaire()
         }
     }
 }
