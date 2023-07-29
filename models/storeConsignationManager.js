@@ -1054,4 +1054,5 @@ module.exports = {
     downloadFichiersBackup,
     getFichierStream,
     recevoirFuuidsReclames,
+    setEstConsignationPrimaire,
 }

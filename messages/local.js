@@ -9,6 +9,7 @@ var _mq = null,
 
 function init(mq, consignationManager) {
     debug("messages local init()")
+    if(!mq || !consignationManager) throw new Error("params mq ou consignationManager null")
     _mq = mq
     _consignationManager = consignationManager
     _instanceId = mq.pki.cert.subject.getField('CN').value
