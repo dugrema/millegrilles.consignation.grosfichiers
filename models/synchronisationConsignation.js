@@ -340,7 +340,7 @@ class ConsignationRepertoire {
         
         debug("ConsignationRepertoire.genererOutputListing Sort %s.work", fichierPath)
         await fileutils.sortFile(fichierPath + '.work', fichierPath, opts)  // Trier
-        await fsPromises.unlink(fichierPath + '.work')
+        // await fsPromises.unlink(fichierPath + '.work')
 
         return resultat
     }

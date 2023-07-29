@@ -38,8 +38,9 @@ async function chargerConfiguration() {
             config = {type_store: 'millegrille', consignation_url: DEFAULT_URL_CONSIGNATION}
             await fsPromises.writeFile(PATH_CONFIG_FICHIER, JSON.stringify(config))
         } else {
-            console.error("storeConsignationLocal.chargerConfiguration ERROR Erreur chargement fichier configuration : %O", err)
-            throw new err
+            console.error("storeConsignationLocal.chargerConfiguration ERROR Erreur chargement fichier configuration. On RESET le fichier\n%O", err)
+            config = {type_store: 'millegrille', consignation_url: DEFAULT_URL_CONSIGNATION}
+            await fsPromises.writeFile(PATH_CONFIG_FICHIER, JSON.stringify(config))
         }
     }
 
