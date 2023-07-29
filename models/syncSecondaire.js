@@ -340,7 +340,9 @@ class TransfertHandler {
             this.trierPending()
 
             while(this.pending.length > 0) {
-                const transfert = this.pending.shift()  // Methode FIFO
+                const fuuid = this.pending.shift()  // Methode FIFO
+                debug("TransfertHandler._thread Traiter fuuid : %O", fuuid)
+                const transfert = this.transfertsInfo[fuuid]
                 try {
                     await this.transfererFichier(transfert)
                 } catch(err) {
@@ -388,7 +390,7 @@ class TransfertHandler {
         listeValues.sort(trierPending)
 
         // Remplacer la liste de pending
-        this.pending = listeValues
+        this.pending = listeValues.map(item=>item.fuuid)
     }
 
 }
