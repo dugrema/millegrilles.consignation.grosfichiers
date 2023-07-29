@@ -74,7 +74,7 @@ var _mq = null,
 class ManagerFacade {
 
     estPrimaire() { return _estPrimaire }
-    getTransfertPrimaire() { return _transfertPrimaire }
+    // getTransfertPrimaire() { return _transfertPrimaire }
     getHttpsAgent() { return _httpsAgent }
     getMq() { return _mq }
 
@@ -96,6 +96,9 @@ class ManagerFacade {
     parcourirOrphelins(callback, opts) { return parcourirOrphelins(callback, opts) }
     parcourirBackup(callback, opts) { return parcourirBackup(callback, opts) }
     supprimerFichier(fuuid) { return supprimerFichier(fuuid) }
+
+    // Synchronisation
+    ajouterUploadPrimaire(fuuid) { return _synchronisationManager.ajouterUploadPrimaire(fuuid) }
 
 }
 

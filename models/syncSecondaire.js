@@ -221,16 +221,21 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
 
         // Trouver fichiers a uploader vers "local"
         const fichierUploadsLocalPath = path.join(pathOperationsListings, 'fuuidsUploadsLocal.txt')
-        await fileutils.trouverManquants(fichierLocalPath, fichierPrimaireManquantsPath, fichierUploadsLocalPath)
+        await fileutils.trouverPresentsTous(fichierLocalPath, fichierPrimaireManquantsPath, fichierUploadsLocalPath)
 
         // Trouver fichiers a uploader vers archives
         const fichierUploadsArchivesPath = path.join(pathOperationsListings, 'fuuidsUploadsArchives.txt')
-        await fileutils.trouverManquants(fichierArchivesPath, fichierPrimaireManquantsPath, fichierUploadsArchivesPath)
+        await fileutils.trouverPresentsTous(fichierArchivesPath, fichierPrimaireManquantsPath, fichierUploadsArchivesPath)
     }
 
     ajouterDownload(fuuid) {
         this.downloadPrimaireHandler.ajouterTransfert({fuuid, dateAjout: new Date()})
         this.downloadPrimaireHandler.demarrerThread()
+    }
+
+    ajouterUpload(fuuid) {
+        this.uploadPrimaireHandler.ajouterTransfert({fuuid, dateAjout: new Date()})
+        this.uploadPrimaireHandler.demarrerThread()
     }
 
 }
@@ -252,6 +257,7 @@ async function downloadFichierSync(httpsAgent, urlConsignationTransfert, nomFich
         url: pathFichiersLocal.href, 
         httpsAgent,
         responseType: 'stream',
+        timeout: 10_000,
     })
     debug("Reponse fichier %s status : %d", pathFichiersLocal.href, reponse.status)
 
@@ -547,6 +553,7 @@ class DownloadPrimaireHandler extends TransfertHandler {
                     url: urlInfo.href,
                     data: requete,
                     httpsAgent,
+                    timeout: 60_000,
                 })
                 const data = reponse.data
                 debug("fetchInformationDownloads Info fichiers status : ", reponse.status)
@@ -599,6 +606,8 @@ class UploadPrimaireHandler extends TransfertHandler {
 
         // Override pathStaging
         this.pathStaging = '/var/opt/millegrilles/consignation/staging/fichiers/upload'
+
+        this.preparationInformationEnCours = false
     }
 
     async update() {
@@ -612,14 +621,97 @@ class UploadPrimaireHandler extends TransfertHandler {
         this.trierPending()
 
         this.demarrerThread()
+
+        this.preparerInformationUpload()
+            .catch(err=>console.warn("UploadPrimaireHandler.update Erreur preparation information upload : ", err))
     }
 
     async transfererFichier(fichier) {
         debug("UploadPrimaireHandler.transfererFichier Debut upload fichier ", fichier)
     }
 
+    /** Injecte l'information de taille/presence des fichiers a uploader. */
+    async preparerInformationUpload() {
+        this.preparationInformationEnCours = true
+
+        const urlInfo = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
+              httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
+
+        urlInfo.pathname += '/sync/fuuidsInfo'
+        debug("DownUploadPrimaireHandler.preparerInformationUpload URL download fichier ", urlInfo.href)
+      
+        try {
+            let fuuidsInfo = Object.values(this.transfertsInfo).filter(item=>!item.fetchComplete).map(item=>item.fuuid)
+            while(fuuidsInfo.length > 0) {
+                const fuuidsBatch = fuuidsInfo.slice(0, 1000)
+                fuuidsInfo = fuuidsInfo.slice(1000)
+
+                debug("UploadPrimaireHandler.preparerInformationUpload Fetch batch %d fuuids", fuuidsBatch.length)
+                const requete = { fuuids: fuuidsBatch }
+                const reponse = await axios({
+                    method: 'POST',
+                    url: urlInfo.href,
+                    data: requete,
+                    httpsAgent,
+                    timeout: 60_000,
+                })
+                const data = reponse.data
+                debug("UploadPrimaireHandler.preparerInformationUpload Info fichiers status : ", reponse.status)
+
+                for(const infoRemote of data) {
+                    const { fuuid, status } = infoRemote
+                    const infoFuuid = this.transfertsInfo[fuuid]
+                    if(!infoFuuid || infoFuuid.enCours) continue  // Fichier deja traite
+
+                    // Verifier si le fichier est deja sur le primaire
+                    if(status === 200) {
+                        debug("UploadPrimaireHandler.preparerInformationUpload Le fichier %s existe deja sur le primaire, annuler transfert", fuuid)
+                        delete this.transfertsInfo[fuuid]
+                        continue
+                    }
+
+                    // Recuperer information locale (taille du fichier) pour stats
+                    try {
+                        const infoFichier = await this.manager.getInfoFichier(fuuid)
+                        fuuidsInfo.taille = infoFichier.stat.size
+                    } catch(err) {
+                        console.warn("UploadPrimaireHandler.preparerInformationUpload Le fichier %s n'existe pas ou autre erreur pour upload vers primaire, SKIP\n%O", fuuid, err)
+                        delete this.transfertsInfo[fuuid]
+                        continue
+                    } finally {
+                        fuuidsInfo.fetchComplete = true  // Marquer complete, en cas d'erreur d'acces a l'info
+                    }
+                }
+            }
+
+            this.emettreEtat()
+                .catch(err=>console.warn("UploadPrimaireHandler.preparerInformationUpload Erreur emettreEtat : ", err))
+
+        } finally {
+            this.preparationInformationEnCours = false
+        }
+
+    }
+
     async emettreEtat(opts) {
-        debug("UploadPrimaireHandler.emettreEtat : ** TODO **")
+        const mq = this.syncConsignation.mq
+
+        const liste = Object.values(this.transfertsInfo)
+        const taille = liste.reduce((acc, item)=>{
+            const taille = item.taille || 0
+            acc += taille
+            return acc
+        }, 0)
+
+        const e = {
+            termine: !this.enCours,
+            nombre: liste.length,
+            taille,
+        }
+
+        debug("emettreEtat syncDownload ", e)
+        const domaine = 'fichiers', action = 'syncUpload'
+        await mq.emettreEvenement(e, {domaine, action, ajouterCertificat: true})
     }
 
 }

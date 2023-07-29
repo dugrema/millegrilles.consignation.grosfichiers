@@ -108,7 +108,7 @@ class StoreConsignationThread {
             // Emettre un message
             await this.evenementFichierPrimaire(fuuid)
         } else {
-            this.manager.getTransfertPrimaire().ajouterUpload(fuuid)
+            this.manager.ajouterUploadPrimaire(fuuid)
         }
 
     }

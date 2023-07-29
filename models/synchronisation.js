@@ -233,6 +233,12 @@ class SynchronisationManager {
         }
     }
 
+    ajouterUploadPrimaire(fuuid) {
+        if(this.estPrimaire === false) {
+            this.syncSecondaireHandler.ajouterUpload(fuuid)
+        }
+    }
+
 }
 
 
