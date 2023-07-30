@@ -21,6 +21,7 @@ function init(mq, consignationManager, opts) {
   })
 
   // Fichiers sync primaire
+  route.use(headersNoCache)
   route.get('/fuuidsLocaux.txt.gz', (req, res, next) => getFichier(req, res, next, PATH_FUUIDS_LOCAUX))
   route.get('/fuuidsArchives.txt.gz', (req, res, next) => getFichier(req, res, next, PATH_FUUIDS_ARCHIVES))
   route.get('/fuuidsManquants.txt.gz', (req, res, next) => getFichier(req, res, next, PATH_FUUIDS_MANQUANTS))
@@ -31,6 +32,11 @@ function init(mq, consignationManager, opts) {
   debug("Route /fichiers_transfert/sync initialisee")
 
   return route
+}
+
+function headersNoCache(req, res, next) {
+    res.setHeader('Cache-Control', 'no-store')
+    next()
 }
 
 async function getFichier(req, res, next, pathFichier, opts) {
