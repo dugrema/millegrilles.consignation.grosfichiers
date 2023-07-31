@@ -1,4 +1,5 @@
 const fs = require('fs')
+const fsPromises = require('fs/promises')
 const readline = require('readline')
 const { exec } = require('child_process')
 
@@ -64,33 +65,66 @@ async function combinerSortFiles(srcList, dest, opts) {
 
 /** Trouve les fichiers qui sont manquants dans src2 compare a src1 */
 async function trouverManquants(src1, src2, dest) {
+    // Trier fichiers
+    const src1Sorted = src1 + '.sorted',
+          src2Sorted = src2 + '.sorted'
     // Faire la liste des fuuids inconnus (reclames mais pas dans actifs / archives)
-    await new Promise((resolve, reject)=>{
-        exec(`comm -13 ${src1} ${src2} > ${dest} && gzip -9fk ${dest}`, error=>{
-            if(error) return reject(error)
-            else resolve()
+    try {
+        await sortFile(src1, src1Sorted)
+        await sortFile(src2, src2Sorted)
+
+        await new Promise((resolve, reject)=>{
+            exec(`comm -13 ${src1Sorted} ${src2Sorted} > ${dest} && gzip -9fk ${dest}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
         })
-    })
+    } finally {
+        fsPromises.unlink(src1Sorted).catch(err=>console.info("trouverManquants Erreur supprimer src1.sorted (%s) : ", src1Sorted, err))
+        fsPromises.unlink(src2Sorted).catch(err=>console.info("trouverManquants Erreur supprimer src2.sorted (%s) : ", src2Sorted, err))
+    }
 }
 
 /** Conserve les fichiers qui sont uniquement presents dans src1 */
 async function trouverUniques(src1, src2, dest) {
-    await new Promise((resolve, reject)=>{
-        exec(`comm -23 ${src1} ${src2} > ${dest}`, error=>{
-            if(error) return reject(error)
-            else resolve()
+    // Trier fichiers
+    const src1Sorted = src1 + '.sorted',
+          src2Sorted = src2 + '.sorted'
+    try {
+        await sortFile(src1, src1Sorted)
+        await sortFile(src2, src2Sorted)
+
+        await new Promise((resolve, reject)=>{
+            exec(`comm -23 ${src1Sorted} ${src2Sorted} > ${dest}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
         })
-    })
+    } finally {
+        fsPromises.unlink(src1Sorted).catch(err=>console.info("trouverUniques Erreur supprimer src1.sorted (%s) : ", src1Sorted, err))
+        fsPromises.unlink(src2Sorted).catch(err=>console.info("trouverUniques Erreur supprimer src2.sorted (%s) : ", src2Sorted, err))
+    }
 }
 
 /** Conserve les fichiers qui sont uniquement presents dans src1 */
 async function trouverPresentsTous(src1, src2, dest) {
-    await new Promise((resolve, reject)=>{
-        exec(`comm -12 ${src1} ${src2} > ${dest}`, error=>{
-            if(error) return reject(error)
-            else resolve()
+    // Trier fichiers
+    const src1Sorted = src1 + '.sorted',
+          src2Sorted = src2 + '.sorted'
+    try {
+        await sortFile(src1, src1Sorted)
+        await sortFile(src2, src2Sorted)
+  
+        await new Promise((resolve, reject)=>{
+            exec(`comm -12 ${src1Sorted} ${src2Sorted} > ${dest}`, error=>{
+                if(error) return reject(error)
+                else resolve()
+            })
         })
-    })
+    } finally {
+        fsPromises.unlink(src1Sorted).catch(err=>console.info("trouverPresentsTous Erreur supprimer src1.sorted (%s) : ", src1Sorted, err))
+        fsPromises.unlink(src2Sorted).catch(err=>console.info("trouverPresentsTous Erreur supprimer src2.sorted (%s) : ", src2Sorted, err))
+    }
 }
 
 module.exports = { chargerFuuidsListe, sortFile, combinerSortFiles, trouverManquants, trouverUniques, trouverPresentsTous}

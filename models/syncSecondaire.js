@@ -68,11 +68,12 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
             await this.downloadPrimaireHandler.update()
             await this.uploadPrimaireHandler.update()
 
+            this.emettreEvenementActivite({termine: true})
         } catch(err) {
             console.error(new Date() + " runSync Erreur sync : ", err)
+            this.emettreEvenementActivite({termine: true, err: ''+err})
         } finally {
             clearInterval(intervalActivite)
-            this.emettreEvenementActivite({termine: true})
             this.manager.emettrePresence()
                 .catch(err=>console.error(new Date() + " SynchronisationPrimaire.runSync Erreur emettre presence : ", err))
         }        
@@ -487,9 +488,6 @@ class DownloadPrimaireHandler extends TransfertHandler {
         urlDownload.pathname += '/' + fuuid
         debug("DownloadPrimaireHandler.downloadFichier URL download fichier ", urlDownload.href)
 
-        const pathFichierDownload = path.join(this.pathStaging, fuuid)
-        const writeStream = fs.createWriteStream(pathFichierDownload)
-
         const controller = new AbortController()
 
         const reponse = await axios({
@@ -512,10 +510,12 @@ class DownloadPrimaireHandler extends TransfertHandler {
         }
         transfertInfo.position = 0
 
-        const verificateurHachage = new VerificateurHachage(fuuid)
-
         debug("DownloadPrimaireHandler.downloadFichier Reponse fichier %s status : %d", fuuid, reponse.status)
+        const pathFichierDownload = path.join(this.pathStaging, fuuid)
         try {
+            const writeStream = fs.createWriteStream(pathFichierDownload)
+            const verificateurHachage = new VerificateurHachage(fuuid)
+
             await new Promise((resolve, reject)=>{
                 reponse.data.on('data', chunk => {
                     verificateurHachage.update(chunk)
@@ -532,6 +532,7 @@ class DownloadPrimaireHandler extends TransfertHandler {
             })
 
             clearTimeout(timeout)
+            timeout = null
 
             debug("DownloadPrimaireHandler.downloadFichier Resultat transfert : ", transfertInfo)
             await this.manager.consignerFichier(this.pathStaging, fuuid)

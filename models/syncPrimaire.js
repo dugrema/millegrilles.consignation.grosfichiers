@@ -56,11 +56,12 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
 
             // Declencher synchronisation des consignations secondaires
             await this.declencherSyncSecondaire()
+            this.emettreEvenementActivite({termine: true})
         } catch(err) {
             console.error(new Date() + " runSync Erreur sync : ", err)
+            this.emettreEvenementActivite({termine: true, err: ''+err})
         } finally {
             clearInterval(intervalActivite)
-            this.emettreEvenementActivite({termine: true})
             this.manager.emettrePresence()
                 .catch(err=>console.error(new Date() + " SynchronisationPrimaire.runSync Erreur emettre presence : ", err))
         }
@@ -82,8 +83,6 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
 
         const pathListingLocal = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_LOCAUX),
               pathListingArchives = path.join(this._path_listings, DIR_RECLAMATIONS, FICHIER_FUUIDS_RECLAMES_ARCHIVES)
-
-
 
         // Cleanup fichiers precedents
         const pathLogsFuuids = path.join(this._path_listings, DIR_RECLAMATIONS)
