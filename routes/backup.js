@@ -34,7 +34,31 @@ async function verifierBackup(req, res) {
     const body = req.body
     debug("verifierBackup verifier %s", body)
 
-    return res.sendStatus(500)
+    const uuidBackup = body.uuid_backup,
+          domaine = body.domaine
+
+    const pathBackups = path.join(PATH_BACKUP, uuidBackup, domaine)
+
+    const reponse = {}
+    for await (const nomFichier of body.fichiers) {
+        const pathFichier = path.join(pathBackups, nomFichier)
+
+        let present = false
+        try {
+            await fsPromises.stat(pathFichier)
+            present = true
+        } catch(err) {
+            if(err.code === 'ENOENT') {
+                // Ok, fichier / path absent
+            } else {
+                debug("Erreur verification fichier %s : %O", pathFichier, err)
+            }
+        }
+        
+        reponse[nomFichier] = false
+    }
+
+    return res.status(200).send(reponse)
 }
 
 module.exports = init
