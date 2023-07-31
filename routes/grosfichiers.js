@@ -7,6 +7,8 @@ const readdirp = require('readdirp')
 
 const uploadFichier = require('./uploadFichier')
 const syncRouter = require('./sync')
+const backupRouter = require('./backup')
+
 // const { stagingFichier: stagingPublic, creerStreamDechiffrage } = require('../util/publicStaging')
 
 // const throttle = require('@sitespeed.io/throttle');
@@ -26,12 +28,13 @@ function InitialiserGrosFichiers(mq, consignationManager, opts) {
   router.use('/fichiers_transfert', routerFichiersTransfert)
 
   routerFichiersTransfert.use('/sync', syncRouter(mq, consignationManager, opts))
+  routerFichiersTransfert.use('/backup', backupRouter(mq, consignationManager, opts))
 
   // backup : /fichiers_transfert/backup
-  const routerBackup = express.Router()
-  routerFichiersTransfert.use('/backup', routerBackup)
-  routerBackup.get('/liste', getListeBackup)
-  routerBackup.get('/transactions/:domaine/:fichier', getFichierTransaction)
+  // const routerBackup = express.Router()
+  // routerFichiersTransfert.use('/backup', routerBackup)
+  // routerBackup.get('/liste', getListeBackup)
+  // routerBackup.get('/transactions/:domaine/:fichier', getFichierTransaction)
 
   //router.get('/fichiers/:fuuid', downloadFichierLocal, pipeReponse)
   //router.head('/fichiers/:fuuid', downloadFichierLocal)
