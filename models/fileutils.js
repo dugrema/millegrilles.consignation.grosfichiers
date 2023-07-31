@@ -64,48 +64,33 @@ async function combinerSortFiles(srcList, dest, opts) {
 
 /** Trouve les fichiers qui sont manquants dans src2 compare a src1 */
 async function trouverManquants(src1, src2, dest) {
-    try {
-        // Faire la liste des fuuids inconnus (reclames mais pas dans actifs / archives)
-        await new Promise((resolve, reject)=>{
-            exec(`comm -13 ${src1} ${src2} > ${dest} && gzip -9fk ${dest}`, error=>{
-                if(error) return reject(error)
-                else resolve()
-            })
+    // Faire la liste des fuuids inconnus (reclames mais pas dans actifs / archives)
+    await new Promise((resolve, reject)=>{
+        exec(`comm -13 ${src1} ${src2} > ${dest} && gzip -9fk ${dest}`, error=>{
+            if(error) return reject(error)
+            else resolve()
         })
-    } catch(err) {
-        console.error(new Date() + " trouverManquants ERROR Traitement fichiers manquants : ", err)
-        return
-    }
+    })
 }
 
 /** Conserve les fichiers qui sont uniquement presents dans src1 */
 async function trouverUniques(src1, src2, dest) {
-    try {
-        await new Promise((resolve, reject)=>{
-            exec(`comm -23 ${src1} ${src2} > ${dest}`, error=>{
-                if(error) return reject(error)
-                else resolve()
-            })
+    await new Promise((resolve, reject)=>{
+        exec(`comm -23 ${src1} ${src2} > ${dest}`, error=>{
+            if(error) return reject(error)
+            else resolve()
         })
-    } catch(err) {
-        console.error(new Date() + " trouverManquants ERROR Traitement fichiers manquants : ", err)
-        return
-    }
+    })
 }
 
 /** Conserve les fichiers qui sont uniquement presents dans src1 */
 async function trouverPresentsTous(src1, src2, dest) {
-    try {
-        await new Promise((resolve, reject)=>{
-            exec(`comm -12 ${src1} ${src2} > ${dest}`, error=>{
-                if(error) return reject(error)
-                else resolve()
-            })
+    await new Promise((resolve, reject)=>{
+        exec(`comm -12 ${src1} ${src2} > ${dest}`, error=>{
+            if(error) return reject(error)
+            else resolve()
         })
-    } catch(err) {
-        console.error(new Date() + " trouverManquants ERROR Traitement fichiers manquants : ", err)
-        return
-    }
+    })
 }
 
 module.exports = { chargerFuuidsListe, sortFile, combinerSortFiles, trouverManquants, trouverUniques, trouverPresentsTous}
