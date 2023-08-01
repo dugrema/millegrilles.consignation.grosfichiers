@@ -14,7 +14,8 @@ const FICHIER_FUUIDS_LOCAUX = 'fuuidsLocaux.txt',
       FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
       FICHIER_FUUIDS_PRIMAIRE = 'fuuidsPrimaire.txt',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
-      FICHIER_FUUIDS_PRESENTS = 'fuuidsPresents.txt'
+      FICHIER_FUUIDS_PRESENTS = 'fuuidsPresents.txt',
+      FICHIER_LISTING_BACKUP = 'listingBackup.txt'
 
 const FICHIERS_LISTE_PATH = '/var/opt/millegrilles/consignation/staging/fichiers/liste'
 const FICHIERS_LISTING_PATH = path.join(FICHIERS_LISTE_PATH, '/listings')
@@ -98,6 +99,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         await downloadFichierSync(httpsAgent, urlConsignationTransfert, FICHIER_FUUIDS_LOCAUX, {outputPath})
         await downloadFichierSync(httpsAgent, urlConsignationTransfert, FICHIER_FUUIDS_ARCHIVES, {outputPath})
         await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsManquants.txt', {outputPath})
+        await downloadFichierSync(httpsAgent, urlConsignationTransfert, FICHIER_LISTING_BACKUP, {outputPath})
         try {
             await downloadFichierSync(httpsAgent, urlConsignationTransfert, 'fuuidsNouveaux.txt', {outputPath, gzip: false})
 
@@ -206,6 +208,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         const pathConsignationListings = path.join(this._path_listings, 'consignation')
         const fichierLocalPath = path.join(pathConsignationListings, 'fuuidsLocaux.txt')
         const fichierArchivesPath = path.join(pathConsignationListings, 'fuuidsArchives.txt')
+        const fichierBackupPath = path.join(pathConsignationListings, FICHIER_LISTING_BACKUP)
 
         const pathPrimaireListings = path.join(this._path_listings, 'listings')
 
@@ -214,6 +217,7 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         const fichierPrimaireArchivesPath = path.join(pathPrimaireListings, 'fuuidsArchives.txt')
         // Fichiers reclames qui sont manquants du primaire. Il ne faut pas essayer de les downloader.
         const fichierPrimaireManquantsPath = path.join(pathPrimaireListings, 'fuuidsManquants.txt')
+        const fichierBackupPrimairePath = path.join(pathPrimaireListings, FICHIER_LISTING_BACKUP)
 
         const pathOperationsListings = path.join(this._path_listings, 'operations')
 
@@ -236,6 +240,10 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         // Trouver fichiers a uploader vers archives
         const fichierUploadsArchivesPath = path.join(pathOperationsListings, 'fuuidsUploadsArchives.txt')
         await fileutils.trouverPresentsTous(fichierArchivesPath, fichierPrimaireManquantsPath, fichierUploadsArchivesPath)
+
+        // Trouver fichiers a uploader vers backup
+        const fichierBackupOperationsPath = path.join(pathOperationsListings, FICHIER_LISTING_BACKUP)
+        await fileutils.trouverManquants(fichierBackupPrimairePath, fichierBackupPath, fichierBackupOperationsPath)
     }
 
     ajouterDownload(fuuid) {
@@ -305,23 +313,24 @@ class TransfertHandler {
     ajouterTransfert(infoFichier, opts) {
         opts = opts || {}
         const archive = opts.archive || infoFichier.archive || false,
+              backup = opts.backup || infoFichier.backup || false,
               demarrerThread = opts.demarrer===false?false:true
 
-        const fuuid = infoFichier.fuuid || infoFichier
+        const fuuid = infoFichier.fuuid || infoFichier.fichier || infoFichier
 
         debug("Ajouter transfert local de %s", fuuid)
 
         if(this.pending.length > LIMITE_TRANFERT_ITEMS) {
-            debug("DownloadPrimaireHandler.update Ajouter download local de %s - SKIP, limite atteinte", fuuid)
+            debug("DownloadPrimaireHandler.update Ajouter download de %s - SKIP, limite atteinte", fuuid)
             return
         }
 
         if(this.transfertsInfo[fuuid]) {
-            debug("DownloadPrimaireHandler.update Ajouter download local de %s - SKIP, deja dans la liste", fuuid)
+            debug("DownloadPrimaireHandler.update Ajouter download de %s - SKIP, deja dans la liste", fuuid)
             return
         }
 
-        this.transfertsInfo[fuuid] = { fuuid, archive, dateAjout: new Date() }
+        this.transfertsInfo[fuuid] = { fuuid, archive, backup, dateAjout: new Date() }
         this.pending.push(fuuid)
 
         if(demarrerThread) this.demarrerThread()
@@ -477,6 +486,7 @@ class DownloadPrimaireHandler extends TransfertHandler {
         } catch(err) {
             if(err.code === 'ENOENT') {
                 // Ok, fichier n'existe pas deja
+                transfertInfo.verificationLocale = true
                 debug("transfererFichier Verification absence fichier avant download fuuid %s OK", fuuid)
             } else {
                 throw err
@@ -575,6 +585,34 @@ class DownloadPrimaireHandler extends TransfertHandler {
 
         try {
             this.fetchInformationEnCours = true
+
+            // Pre-process
+            let prefiltreFuuidsInfo = Object.values(this.transfertsInfo)
+                .filter(item=>!(item.fetchComplete && item.verificationLocale))
+            for (const info of prefiltreFuuidsInfo) {
+                if(info.fetchComplete) continue  // Deja traite
+
+                const fichier = info.fuuid || info.fichier
+
+                if(info.backup) {
+                    // Rien a faire pour le type backup
+                    info.fetchComplete = true
+                } else if (!info.verificationLocale) {
+                    // S'assurer que le fichier n'existe pas deja localement
+                    try {
+                        await this.manager.getInfoFichier(fichier)
+                        debug("Le fichier %s existe deja (SKIP)", fichier)
+                        delete this.transfertsInfo[fichier]
+                    } catch(err) {
+                        if(err.code === 'ENOENT') {
+                            // Ok, fichier n'existe pas deja
+                            info.verificationLocale = true
+                        } else {
+                            console.warn("DownloadPrimaireHandler.fetchInformationDownloads Erreur verification presence fichier : %O", err)
+                        }
+                    }
+                }
+            }
 
             let fuuidsInfo = Object.values(this.transfertsInfo).filter(item=>!item.fetchComplete).map(item=>item.fuuid)
             while(fuuidsInfo.length > 0) {
