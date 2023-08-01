@@ -242,8 +242,10 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         await fileutils.trouverPresentsTous(fichierArchivesPath, fichierPrimaireManquantsPath, fichierUploadsArchivesPath)
 
         // Trouver fichiers a uploader vers backup
-        const fichierBackupOperationsPath = path.join(pathOperationsListings, FICHIER_LISTING_BACKUP)
-        await fileutils.trouverManquants(fichierBackupPrimairePath, fichierBackupPath, fichierBackupOperationsPath)
+        const fichierBackupDownloadOperationsPath = path.join(pathOperationsListings, 'listingDownloadBackup.txt')
+        await fileutils.trouverManquants(fichierBackupPath, fichierBackupPrimairePath, fichierBackupDownloadOperationsPath)
+        const fichierBackupUploadOperationsPath = path.join(pathOperationsListings, 'listingUploadBackup.txt')
+        await fileutils.trouverManquants(fichierBackupPrimairePath, fichierBackupPath, fichierBackupUploadOperationsPath)
     }
 
     ajouterDownload(fuuid) {
@@ -344,6 +346,10 @@ class TransfertHandler {
             })
     }
 
+    downloadsCompletes() {
+        // Hook pour sous-classes
+    }
+
     async _thread() {
         if(this.enCours) {
             debug("_thread deja en cours, SKIP")
@@ -380,6 +386,7 @@ class TransfertHandler {
                 .catch(err=>console.error(new Date() + " SynchronisationPrimaire.runSync Erreur emettre presence : ", err))
 
         } finally {
+            this.downloadsCompletes()
             clearInterval(intervalEtatTransfert)
             this.enCours = false
             this.emettreEtat({termine: true})
@@ -443,6 +450,8 @@ class DownloadPrimaireHandler extends TransfertHandler {
         this.pathStaging = '/var/opt/millegrilles/consignation/staging/fichiers/download'
 
         this.fetchInformationEnCours = false
+
+        this.intervalleFetchInformationDownloads = null  // Si download actif, on verifie regulierement
     }
 
     demarrerThread() {
@@ -452,9 +461,22 @@ class DownloadPrimaireHandler extends TransfertHandler {
         this.fetchInformationDownloads()
             .catch(err=>console.error("TransfertHandler.demarrerThread Erreur fetchInformationDownloads", err))
 
+        // Verifier regulierement s'il y a de l'information a traiter dans la liste de fichiers a transferer
+        if(!this.intervalleFetchInformationDownloads) {
+            this.intervalleFetchInformationDownloads = setInterval(()=>{
+                this.fetchInformationDownloads()
+                    .catch(err=>console.error("demarrerThread Erreur traitement via intervalleFetchInformationDownloads :", err))
+            }, 30_000)
+        }
+    
         super.demarrerThread()
     }
 
+    downloadsCompletes() {
+        if(this.intervalleFetchInformationDownloads) {
+            clearInterval(this.intervalleFetchInformationDownloads)
+        }
+    }
 
     async update() {
         debug("DownloadPrimaireHandler update liste de fichiers a downloader")
@@ -597,6 +619,7 @@ class DownloadPrimaireHandler extends TransfertHandler {
                 if(info.backup) {
                     // Rien a faire pour le type backup
                     info.fetchComplete = true
+                    info.verificationLocale = true  // todo
                 } else if (!info.verificationLocale) {
                     // S'assurer que le fichier n'existe pas deja localement
                     try {
