@@ -165,6 +165,14 @@ async function reactiverFuuids(message, rk, opts) {
 async function entretienBackup(message, rk, opts) {
     debug("entretienBackup, message : %O\nopts %O", message, opts)
   
+    const extensions = opts.extensions,
+          roles = extensions.roles
+
+    // Verifier autorisation du message
+    if(!roles.includes('backup')) {
+        debug("entretienBackup Message sans role backup - SKIP")
+    }
+
     let reponse = {ok: true}
   
     try {
