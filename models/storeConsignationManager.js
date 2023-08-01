@@ -966,25 +966,25 @@ function getHttpsAgent() {
     return _httpsAgent
 }
 
-function sauvegarderBackupTransactions(message) {
-    return _storeConsignationHandler.sauvegarderBackupTransactions(message)
+function sauvegarderBackupTransactions(uuid_backup, domaine, srcPath) {
+    return _storeConsignationHandler.sauvegarderBackupTransactions(uuid_backup, domaine, srcPath)
 }
 
-function rotationBackupTransactions() {
-    return _storeConsignationHandler.rotationBackupTransactions()
+function rotationBackupTransactions(uuid_backups_courants) {
+    return _storeConsignationHandler.rotationBackupTransactions(uuid_backups_courants)
 }
 
-function getFichiersBackupTransactionsCourant(mq, replyTo) {
-    return _storeConsignationHandler.getFichiersBackupTransactionsCourant(mq, replyTo)
-}
+// function getFichiersBackupTransactionsCourant(mq, replyTo) {
+//     return _storeConsignationHandler.getFichiersBackupTransactionsCourant(mq, replyTo)
+// }
 
-function getBackupTransaction(pathBackupTransaction) {
-    return _storeConsignationHandler.getBackupTransaction(pathBackupTransaction)
-}
+// function getBackupTransaction(pathBackupTransaction) {
+//     return _storeConsignationHandler.getBackupTransaction(pathBackupTransaction)
+// }
 
-function getBackupTransactionStream(pathBackupTransaction) {
-    return _storeConsignationHandler.getBackupTransactionStream(pathBackupTransaction)
-}
+// function getBackupTransactionStream(pathBackupTransaction) {
+//     return _storeConsignationHandler.getBackupTransactionStream(pathBackupTransaction)
+// }
 
 function estPrimaire() {
     return _estPrimaire
@@ -1042,7 +1042,7 @@ module.exports = {
     supprimerFichier, 
 
     sauvegarderBackupTransactions, rotationBackupTransactions,
-    getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
+    // getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
     
     getPathDataFolder, estPrimaire, estSupporteArchives,
     getHttpsAgent, ajouterDownloadPrimaire,

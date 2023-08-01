@@ -22,7 +22,7 @@ function on_connecter() {
     ajouterCb('commande.fichiers.reactiverFuuids', reactiverFuuids)
     ajouterCb(`commande.fichiers.${_instanceId}.modifierConfiguration`, modifierConfiguration)
     // ajouterCb('commande.fichiers.declencherSync', declencherSyncPrimaire)
-    ajouterCb('commande.fichiers.rotationBackup', rotationBackup)
+    ajouterCb('commande.fichiers.entretienBackup', entretienBackup)
     ajouterCb('evenement.CoreTopologie.changementConsignationPrimaire', changementConsignationPrimaire)
     
     // Synchronisation
@@ -162,20 +162,19 @@ async function reactiverFuuids(message, rk, opts) {
     await _mq.transmettreReponse(resultat, properties.replyTo, properties.correlationId)
 }
 
-async function rotationBackup(message, rk, opts) {
-    if(_consignationManager.estPrimaire() === true) return null  // Primaire, ne rien faire
-    debug("rotationBackup, message : %O\nopts %O", message, opts)
+async function entretienBackup(message, rk, opts) {
+    debug("entretienBackup, message : %O\nopts %O", message, opts)
   
     let reponse = {ok: true}
   
     try {
-      await _consignationManager.rotationBackupTransactions(message)
+      await _consignationManager.rotationBackupTransactions(message.uuid_backups)
     } catch(err) {
-      console.error("ERROR recevoirRotationBackup: %O", err)
+      console.error("ERROR entretienBackup: %O", err)
       reponse = {ok: false, err: ''+err}
     }
   
-    debug("recevoirRotationBackup reponse %O", reponse)
+    debug("entretienBackup reponse %O", reponse)
     return reponse
 }
 

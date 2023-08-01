@@ -514,6 +514,8 @@ async function parcourirBackup(callback, opts) {
 
 async function sauvegarderBackupTransactions(message) {
 
+    throw new Error('fix me')
+
     const contenu = JSON.parse(message.contenu)
     const { domaine, partition, date_transactions_fin } = contenu
     const uuid_transaction = message.id
@@ -542,6 +544,8 @@ async function sauvegarderBackupTransactions(message) {
 async function rotationBackupTransactions() {
     debug("rotationBackupTransactions")
 
+    throw new Error('fix me')
+    
     const maxArchives = 2  // transaction.IDX, valeurs superieures vont etre supprimees
 
     const regex = /^b\/transactions(\.([0-9]+))?(.*)$/

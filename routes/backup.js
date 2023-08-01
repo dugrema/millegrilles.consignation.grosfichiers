@@ -7,7 +7,8 @@ const zlib = require('zlib')
 
 const forgecommon = require('@dugrema/millegrilles.utiljs/src/forgecommon')
 
-const PATH_BACKUP = '/var/opt/millegrilles/consignation/backupConsignation'
+const PATH_BACKUP = '/var/opt/millegrilles/consignation/backupConsignation',
+      PATH_STAGING = '/var/opt/millegrilles/consignation/staging/backupConsignation'
 
 function init(mq, consignationManager, opts) {
   opts = opts || {}
@@ -26,6 +27,9 @@ function init(mq, consignationManager, opts) {
 
   debug("Route /fichiers_transfert/backup initialisee")
 
+  fsPromises.mkdir(PATH_STAGING, {recursive: true})
+    .catch(err=>console.error("Erreur creation path staging %s : %O", PATH_STAGING, err))
+
   return route
 }
 
@@ -41,26 +45,19 @@ async function verifierBackup(req, res) {
     const uuidBackup = body.uuid_backup,
           domaine = body.domaine
 
-    const pathBackups = path.join(PATH_BACKUP, uuidBackup, domaine)
-
-    const reponse = {}
-    for await (const nomFichier of body.fichiers) {
-        const pathFichier = path.join(pathBackups, nomFichier)
-
-        let present = false
-        try {
-            await fsPromises.stat(pathFichier)
-            present = true
-        } catch(err) {
-            if(err.code === 'ENOENT') {
-                // Ok, fichier / path absent
-            } else {
-                debug("Erreur verification fichier %s : %O", pathFichier, err)
-            }
+    const reponse = body.fichiers.reduce((acc, item)=>{
+        acc[item] = false
+        return acc
+    }, {})
+    const callback = fichier => {
+        if(!fichier) return  // Termine
+        debug("VerifierBackup callback %O", fichier)
+        if(reponse[fichier.filename]===false) {
+            reponse[fichier.filename] = true
         }
-        
-        reponse[nomFichier] = present
     }
+
+    await req.consignationManager.parcourirBackup(callback, {uuid_backup: uuidBackup, domaine})
 
     return res.status(200).send(reponse)
 }
@@ -75,22 +72,8 @@ async function recevoirFichier(req, res) {
         return res.status(400).send('Parametres manquants')
     }
 
-    // Verifier que le fichier n'existe pas deja
-    const destinationFichierBackup = path.join(PATH_BACKUP, uuid_backup, domaine, nomfichier)
-    try {
-        await fsPromises.stat(destinationFichierBackup)
-        console.warn("recevoirFichier Le fichier %s existe, upload refuse", destinationFichierBackup)
-        return res.status(400).send('Fichier de backup existe deja')
-    } catch(err) {
-        if(err.code === 'ENOENT') {
-            // Ok, fichier n'existe pas
-        } else {
-            throw err
-        }
-    }
-
     // Recevoir le fichier dans staging
-    const pathReception = `/tmp/${params.nomfichier}`
+    const pathReception = path.join(PATH_STAGING, params.nomfichier)
     try {
         const writeStream = fs.createWriteStream(pathReception)
         await new Promise((resolve, reject)=>{
@@ -138,7 +121,7 @@ async function recevoirFichier(req, res) {
             debug("Catalogue recu OK")
 
             // Copier le fichier vers le repertoire de backup
-            await deplacerFichierBackup(pathReception, destinationFichierBackup)
+            await req.consignationManager.sauvegarderBackupTransactions(uuid_backup, domaine, pathReception)
 
         } catch(err) {
             console.error("recevoirFichier Erreur validation catalogue recu %s : %O", pathReception, err)
@@ -147,39 +130,13 @@ async function recevoirFichier(req, res) {
     
     } finally {
         fsPromises.unlink(pathReception)
-            .catch(err=>console.warn(new Date() + " recevoirFichier Erreur suppression fichier temp %s", err))
+            .catch(err=>{
+                if(err.code === 'ENOENT') return  // Ok, fichier deja supprime ou deplace
+                console.warn(new Date() + " recevoirFichier Erreur suppression fichier temp %s", err)
+            })
     }
 
     return res.sendStatus(200)
-}
-
-async function deplacerFichierBackup(pathSource, pathDestination) {
-    const dirFichier = path.dirname(pathDestination)
-    await fsPromises.mkdir(dirFichier, {recursive: true})
-
-    try {
-        // Methode simple, rename (move)
-        await fsPromises.rename(pathSource, pathDestination)
-    } catch(err) {
-        if(err.code === 'ENOENT') {
-            console.error(new Date() + " copierFichierBackup Fichier %s introuvable ", pathSource)
-            throw err
-        }
-        debug("copierFichierBackup Erreur rename, tenter copy ", err)
-        const reader = fs.createReadStream(pathSource)
-        const writer = fs.createWriteStream(pathDestination)
-        await new Promise((resolve, reject)=>{
-            writer.on('close', resolve)
-            writer.on('error', err => {
-                fsPromises.unlink(pathDestination)
-                    .catch(err=>console.warn("Erreur suppression fichier incomplet %s : %O", pathDestination, err))
-                reject(err)
-            })
-            reader.pipe(writer)
-        })
-        fsPromises.rm(pathSource).catch(err=>console.error("Erreur suppression fichier : %O", err))
-    }
-
 }
 
 module.exports = init

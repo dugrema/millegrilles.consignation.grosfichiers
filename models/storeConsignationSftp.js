@@ -325,6 +325,8 @@ async function parcourirBackup(callback, opts) {
 
 async function sauvegarderBackupTransactions(message) {
 
+    throw new Error('fix me')
+
     const contenu = JSON.parse(message.contenu)
     const { domaine, partition, date_transactions_fin } = contenu
     const uuid_transaction = message.id
@@ -362,6 +364,8 @@ function toStream(bytes) {
 
 async function rotationBackupTransactions() {
     debug("rotationBackupTransactions")
+
+    throw new Error('fix me')
 
     const maxArchives = 3
     const pathArchiveMax = getRemotePathBackupTransactions() + '.' +(maxArchives+1)
