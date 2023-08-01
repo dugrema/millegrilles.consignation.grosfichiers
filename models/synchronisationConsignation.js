@@ -14,6 +14,7 @@ const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
       FICHIER_FUUIDS_PRESENTS = 'fuuidsPresents.txt',
       FICHIER_FUUIDS_RECLAMES = 'fuuidsReclames.txt',
       FICHIER_FUUIDS_MANQUANTS = 'fuuidsManquants.txt',
+      FICHIER_LISTING_BACKUP = 'listingBackup.txt',
       DIR_RECLAMATIONS = 'reclamations',
       DIR_LISTINGS_EXPOSES = 'listings',
       FICHIER_DATA = 'data.json'
@@ -91,6 +92,10 @@ class SynchronisationConsignation {
             this.manager, {parcourirFichiers: this.manager.parcourirOrphelins})
         const fichierOrphelinsPath = path.join(pathConsignationListings, FICHIER_FUUIDS_ORPHELINS)
         const infoOrphelins = await repertoireOrphelins.genererOutputListing(fichierOrphelinsPath)
+
+        const repertoireBackup = new ConsignationRepertoireBackup(this.manager)
+        const fichierBackupPath = path.join(pathConsignationListings, FICHIER_LISTING_BACKUP)
+        await repertoireBackup.genererOutputListing(fichierBackupPath)
 
         debug("genererListeFichiers Information local : %O\nArchives : %O\nOrphelins : %O", infoLocal, infoArchives, infoOrphelins)
 
@@ -382,15 +387,15 @@ class ConsignationRepertoireBackup extends ConsignationRepertoire {
         const pathFichierSplit = item.directory.split('/')
         const pathBase = pathFichierSplit.slice(pathFichierSplit.length-2).join('/')
     
-        // Conserver uniquement le contenu de transaction/ (transaction_archive/ n'est pas copie)
-        if(pathBase.startsWith('transactions/')) {
-            const fichierPath = path.join(pathBase, item.filename)
-            return fichierPath
-        }
+        // Conserver uniquement le subpath uuid_backup/domaine/nom_fichier
+        const fichierPath = path.join(pathBase, item.filename)
+        return fichierPath
     }
 
     async parcourirFichiers(callback, opts) {
-        return this.manager.parcourirBackup(callback, opts)
+        opts = opts || {}
+        const optsParcourir = {...opts, depth: 2}
+        return this.manager.parcourirBackup(callback, optsParcourir)
     }
 
 }

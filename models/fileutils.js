@@ -2,6 +2,7 @@ const fs = require('fs')
 const fsPromises = require('fs/promises')
 const readline = require('readline')
 const { exec } = require('child_process')
+const zlib = require('zlib')
 
 async function chargerFuuidsListe(pathFichier, cb) {
     const readStreamFichiers = fs.createReadStream(pathFichier)
@@ -127,4 +128,19 @@ async function trouverPresentsTous(src1, src2, dest) {
     }
 }
 
-module.exports = { chargerFuuidsListe, sortFile, combinerSortFiles, trouverManquants, trouverUniques, trouverPresentsTous}
+async function gzipFile(src, dest) {
+    await new Promise((resolve, reject)=>{
+        const readStream = fs.createReadStream(src)
+        readStream.on('error', reject)
+
+        const writeStream = fs.createWriteStream(dest)
+        writeStream.on('error', reject)
+        writeStream.on('close', resolve)
+
+        const gzip = zlib.createGzip()
+        gzip.pipe(writeStream)
+        readStream.pipe(gzip)
+    })
+}
+
+module.exports = { chargerFuuidsListe, sortFile, combinerSortFiles, trouverManquants, trouverUniques, trouverPresentsTous, gzipFile }

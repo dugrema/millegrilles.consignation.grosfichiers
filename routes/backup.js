@@ -24,6 +24,7 @@ function init(mq, consignationManager, opts) {
   route.use(headersNoCache)
   route.post('/verifierFichiers', express.json(), verifierBackup)
   route.put('/upload/:uuid_backup/:domaine/:nomfichier', recevoirFichier)
+  route.get('/download/:uuid_backup/:domaine/:nomfichier', downloaderFichier)
 
   debug("Route /fichiers_transfert/backup initialisee")
 
@@ -137,6 +138,20 @@ async function recevoirFichier(req, res) {
     }
 
     return res.sendStatus(200)
+}
+
+async function downloaderFichier(req, res) {
+
+    const params = req.params
+    debug("recevoirFichier Backup %s", params)
+    const { nomfichier, domaine, uuid_backup } = params
+    if(!nomfichier || !domaine || !uuid_backup ) {
+        console.warn("recevoirFichier Mauvais requete, params manquants (recu: %O)", params)
+        return res.status(400).send('Parametres manquants')
+    }
+
+
+    return res.sendStatus(500)  // TODO
 }
 
 module.exports = init

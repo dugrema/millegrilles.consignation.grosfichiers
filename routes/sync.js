@@ -8,6 +8,7 @@ const PATH_STAGING = '/var/opt/millegrilles/consignation/staging/fichiers/liste/
 const PATH_FUUIDS_LOCAUX = path.join(PATH_STAGING, 'fuuidsReclamesLocaux.txt.gz')
 const PATH_FUUIDS_ARCHIVES = path.join(PATH_STAGING, 'fuuidsReclamesArchives.txt.gz')
 const PATH_FUUIDS_MANQUANTS = path.join(PATH_STAGING, 'fuuidsManquants.txt.gz')
+const PATH_LISTING_BACKUP = path.join(PATH_STAGING, 'listingBackup.txt.gz')
 const PATH_FUUIDS_NOUVEAUX = path.join(PATH_STAGING, 'fuuidsNouveaux.txt')
 
 function init(mq, consignationManager, opts) {
@@ -25,6 +26,7 @@ function init(mq, consignationManager, opts) {
   route.get('/fuuidsLocaux.txt.gz', (req, res, next) => getFichier(req, res, next, PATH_FUUIDS_LOCAUX))
   route.get('/fuuidsArchives.txt.gz', (req, res, next) => getFichier(req, res, next, PATH_FUUIDS_ARCHIVES))
   route.get('/fuuidsManquants.txt.gz', (req, res, next) => getFichier(req, res, next, PATH_FUUIDS_MANQUANTS))
+  route.get('/listingBackup.txt.gz', (req, res, next) => getFichier(req, res, next, PATH_LISTING_BACKUP))
   route.get('/fuuidsNouveaux.txt', (req, res, next) => getFichier(req, res, next, PATH_FUUIDS_NOUVEAUX, {gzip: false}))
 
   route.post('/fuuidsInfo', express.json(), getFuuidsInfo)

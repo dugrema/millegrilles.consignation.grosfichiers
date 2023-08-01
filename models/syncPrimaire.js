@@ -11,6 +11,7 @@ const FICHIER_FUUIDS_RECLAMES_LOCAUX = 'fuuidsReclamesLocaux.txt',
       FICHIER_FUUIDS_LOCAUX = 'fuuidsLocaux.txt',
       FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
       FICHIER_FUUIDS_ORPHELINS = 'fuuidsOrphelins.txt',
+      FICHIER_LISTING_BACKUP = 'listingBackup.txt',
       DIR_RECLAMATIONS = 'reclamations',
       DIR_LISTINGS_EXPOSES = 'listings'
 
@@ -282,6 +283,19 @@ class SynchronisationPrimaire extends SynchronisationConsignation {
         this.mq.emettreEvenement(message, {domaine, action, ajouterCertificat: true})
             .catch(err=>console.error("declencherSyncSecondaires Erreur : ", err))
     }
+
+    async exposerListings() {
+        await super.exposerListings()
+
+        const pathConsignationListings = path.join(this._path_listings, 'consignation')
+        const dirListingsExposes = path.join(this._path_listings, DIR_LISTINGS_EXPOSES)
+
+        // Deplacer les fichiers gzip
+        const backupSource = path.join(pathConsignationListings, FICHIER_LISTING_BACKUP)
+        const backupDestination = path.join(dirListingsExposes, FICHIER_LISTING_BACKUP + '.gz')
+        await fileutils.gzipFile(backupSource, backupDestination)
+    }
+
 
 }
 

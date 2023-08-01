@@ -277,10 +277,11 @@ async function parcourirOrphelins(callback, opts) {
 
 async function parcourirFichiersRecursif(repertoire, callback, opts) {
     opts = opts || {}
-    const depth = opts.depth || 1
+    const depth = opts.depth || 1,
+          types = opts.types || 'files'
     debug("parcourirFichiers %s", repertoire)
   
-    const settingsReaddirp = { type: 'files', alwaysStat: true, depth }
+    const settingsReaddirp = { type: types, alwaysStat: true, depth }
 
     for await (const entry of readdirp(repertoire, settingsReaddirp)) {
         debug("Fichier : %O", entry.fullPath)
