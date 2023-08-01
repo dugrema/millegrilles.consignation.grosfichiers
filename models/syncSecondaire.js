@@ -358,7 +358,7 @@ class TransfertHandler {
                 }
             }
 
-            await this.syncConsignation.genererListeFichiers()
+            // await this.syncConsignation.genererListeFichiers()
 
             this.manager.emettrePresence()
                 .catch(err=>console.error(new Date() + " SynchronisationPrimaire.runSync Erreur emettre presence : ", err))

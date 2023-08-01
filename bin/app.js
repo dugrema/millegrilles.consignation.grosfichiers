@@ -30,13 +30,11 @@ function initialiser(mq, consignationManager, opts) {
     next()
   })
 
-  app.use(express.json())
-
-  app.use(express.urlencoded({ extended: false }))
+  // app.use(express.json())
+  // app.use(express.urlencoded({ extended: false }))
 
   app.use(express.static(path.join(__dirname, 'public')))
 
-  // app.all('/backup/*', InitialiserBackup())
   const traitementGrosFichiers = InitialiserGrosFichiers(mq, consignationManager, opts)
   app.all('/fichiers_transfert/*', traitementGrosFichiers)
 
