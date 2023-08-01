@@ -208,19 +208,26 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         const fichierArchivesPath = path.join(pathConsignationListings, 'fuuidsArchives.txt')
 
         const pathPrimaireListings = path.join(this._path_listings, 'listings')
+
+        // Local et archives representent les fuuids reclames par les domaines.
         const fichierPrimaireLocalPath = path.join(pathPrimaireListings, 'fuuidsLocaux.txt')
         const fichierPrimaireArchivesPath = path.join(pathPrimaireListings, 'fuuidsArchives.txt')
+        // Fichiers reclames qui sont manquants du primaire. Il ne faut pas essayer de les downloader.
         const fichierPrimaireManquantsPath = path.join(pathPrimaireListings, 'fuuidsManquants.txt')
 
         const pathOperationsListings = path.join(this._path_listings, 'operations')
 
         // Trouver fichiers a downloader de "local"
         const fichierDownloadLocalPath = path.join(pathOperationsListings, 'fuuidsDownloadsLocal.txt')
-        await fileutils.trouverManquants(fichierLocalPath, fichierPrimaireLocalPath, fichierDownloadLocalPath)
+        // La liste represente les fuuids reclames - on retire ceux qui sont "manquants" du primaire
+        await fileutils.trouverManquants(fichierPrimaireManquantsPath, fichierPrimaireLocalPath, fichierPrimaireLocalPath + ".sansManquants")
+        await fileutils.trouverManquants(fichierLocalPath, fichierPrimaireLocalPath + ".sansManquants", fichierDownloadLocalPath)
 
         // Trouver fichiers a downloader de archives
         const fichierDownloadArchivesPath = path.join(pathOperationsListings, 'fuuidsDownloadsArchives.txt')
-        await fileutils.trouverManquants(fichierArchivesPath, fichierPrimaireArchivesPath, fichierDownloadArchivesPath)
+        // La liste represente les fuuids reclames - on retire ceux qui sont "manquants" du primaire
+        await fileutils.trouverManquants(fichierPrimaireManquantsPath, fichierPrimaireArchivesPath, fichierPrimaireArchivesPath + ".sansManquants")
+        await fileutils.trouverManquants(fichierArchivesPath, fichierPrimaireArchivesPath + ".sansManquants", fichierDownloadArchivesPath)
 
         // Trouver fichiers a uploader vers "local"
         const fichierUploadsLocalPath = path.join(pathOperationsListings, 'fuuidsUploadsLocal.txt')
