@@ -253,8 +253,18 @@ class SynchronisationSecondaire extends SynchronisationConsignation {
         this.downloadPrimaireHandler.demarrerThread()
     }
 
+    ajouterDownloadBackup(fichier) {
+        this.downloadPrimaireHandler.ajouterTransfert({fichier, backup: true, dateAjout: new Date()})
+        this.downloadPrimaireHandler.demarrerThread()
+    }
+
     ajouterUpload(fuuid) {
         this.uploadPrimaireHandler.ajouterTransfert({fuuid, dateAjout: new Date()})
+        this.uploadPrimaireHandler.demarrerThread()
+    }
+
+    ajouterUploadBackup(fichier) {
+        this.uploadPrimaireHandler.ajouterTransfert({fichier, backup: true, dateAjout: new Date()})
         this.uploadPrimaireHandler.demarrerThread()
     }
 
@@ -318,22 +328,41 @@ class TransfertHandler {
               backup = opts.backup || infoFichier.backup || false,
               demarrerThread = opts.demarrer===false?false:true
 
-        const fuuid = infoFichier.fuuid || infoFichier.fichier || infoFichier
+        let idTransfert = null, 
+            fuuid = null,
+            fichier = null
 
-        debug("Ajouter transfert local de %s", fuuid)
+        if(typeof(infoFichier) === 'string') {
+            idTransfert = infoFichier
+        } else {
+            idTransfert = infoFichier.fuuid || infoFichier.fichier
+        }
+
+        if(!idTransfert) {
+            debug("Erreur - aucun identificateur valide\ninfoFichier : %O\nopts: %O", infoFichier, opts)
+            throw new Error("Erreur - aucun identificateur valide")
+        }
+
+        if(backup) {
+            fichier = idTransfert
+        } else {
+            fuuid = idTransfert
+        }
+
+        debug("Ajouter transfert local de %s\n%O\n%O", idTransfert, infoFichier, opts)
 
         if(this.pending.length > LIMITE_TRANFERT_ITEMS) {
-            debug("DownloadPrimaireHandler.update Ajouter download de %s - SKIP, limite atteinte", fuuid)
+            debug("DownloadPrimaireHandler.update Ajouter download de %s - SKIP, limite atteinte", idTransfert)
             return
         }
 
-        if(this.transfertsInfo[fuuid]) {
-            debug("DownloadPrimaireHandler.update Ajouter download de %s - SKIP, deja dans la liste", fuuid)
+        if(this.transfertsInfo[idTransfert]) {
+            debug("DownloadPrimaireHandler.update Ajouter download de %s - SKIP, deja dans la liste", idTransfert)
             return
         }
 
-        this.transfertsInfo[fuuid] = { fuuid, archive, backup, dateAjout: new Date() }
-        this.pending.push(fuuid)
+        this.transfertsInfo[idTransfert] = { fuuid, fichier, archive, backup, dateAjout: new Date() }
+        this.pending.push(idTransfert)
 
         if(demarrerThread) this.demarrerThread()
     }
@@ -363,13 +392,21 @@ class TransfertHandler {
             this.trierPending()
 
             while(this.pending.length > 0) {
-                const fuuid = this.pending.shift()  // Methode FIFO
+                const idTransfert = this.pending.shift()  // Methode FIFO
 
-                this.emettreEtat({fuuid})
-                    .catch(err=>console.error("Erreur emettre etat transfert : ", err))
+                debug("TransfertHandler._thread Traiter idTransfert : %O", idTransfert)
+                const transfert = this.transfertsInfo[idTransfert]
 
-                debug("TransfertHandler._thread Traiter fuuid : %O", fuuid)
-                const transfert = this.transfertsInfo[fuuid]
+                if(!transfert) {
+                    debug("Transfert %s sans info (peut etre retire), SKIP", idTransfert)
+                    continue
+                }
+
+                if(transfert.backup !== true) {
+                    this.emettreEtat({fuuid: idTransfert})
+                        .catch(err=>console.error("Erreur emettre etat transfert : ", err))
+                }
+
                 try {
                     await this.transfererFichier(transfert)
                 } catch(err) {
@@ -418,7 +455,7 @@ class TransfertHandler {
         listeValues.sort(trierPending)
 
         // Remplacer la liste de pending
-        this.pending = listeValues.map(item=>item.fuuid)
+        this.pending = listeValues.map(item=>item.fuuid||item.fichier)
     }
 
 }
@@ -427,8 +464,14 @@ function trierPending(a, b) {
 
     const dateA = a.dateAjout.getTime(), dateB = b.dateAjout.getTime(),
           archiveA = a.archive || false, archiveB = b.archive || false,
-          fuuidA = a.fuuid, fuuidB = b.fuuid
+          backupA = a.backup || false, backupB = b.backup || false,
+          fuuidA = a.fuuid || a.fichier, fuuidB = b.fuuid || b.fichier
 
+    if(backupA !== backupB) {
+        if(backupA) return -1
+        else return 1
+    }
+    
     if(archiveA !== archiveB) {
         if(archiveA) return 1
         else return -1
@@ -710,9 +753,11 @@ class UploadPrimaireHandler extends TransfertHandler {
         debug("UploadPrimaireHandler update liste de fichiers a uploader")
         const fichierUploadLocalPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsUploadsLocal.txt')
         const fichierUploadArchivesPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsUploadsArchives.txt')
+        const fichierUploadBackupPath = path.join(this.syncConsignation.pathOperationsListings, 'listingUploadBackup.txt')
 
         await fileutils.chargerFuuidsListe(fichierUploadLocalPath, fuuid=>this.ajouterTransfert(fuuid))
         await fileutils.chargerFuuidsListe(fichierUploadArchivesPath, fuuid=>this.ajouterTransfert(fuuid, {archive: true}))
+        await fileutils.chargerFuuidsListe(fichierUploadBackupPath, fichier=>this.ajouterTransfert(fichier, {backup: true}))
 
         this.trierPending()
 
@@ -726,31 +771,39 @@ class UploadPrimaireHandler extends TransfertHandler {
         debug("UploadPrimaireHandler.transfererFichier Debut upload fichier ", transfertInfo)
         transfertInfo.enCours = true
 
-        const { fuuid } = transfertInfo
+        const { fuuid, fichier, backup } = transfertInfo
 
-        const statItem = (await this.manager.getInfoFichier(fuuid))
-        statItem.fuuid = fuuid
-        debug("UploadPrimaireHandler.putFichier ", statItem)
+        if(backup) {
+            debug("UploadPrimaireHandler TODO")
+        } else {
+            const statItem = (await this.manager.getInfoFichier(fuuid))
+            statItem.fuuid = fuuid
+            debug("UploadPrimaireHandler.putFichier ", statItem)
 
-        if(!statItem) {
-            console.error(new Date() + " transfertPrimaire.putFichier Fuuid %s n'existe pas localement, upload annule", fuuid)
-            return
-        }
+            if(!statItem) {
+                console.error(new Date() + " transfertPrimaire.putFichier Fuuid %s n'existe pas localement, upload annule", fuuid)
+                return
+            }
 
-        debug("Traiter PUT pour fuuid %s", fuuid)
+            debug("Traiter PUT pour fuuid %s", fuuid)
 
-        try {
-            const urlInfo = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
-                  httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
-            await putAxios(httpsAgent, urlInfo, fuuid, statItem)
-        } catch(err) {
-            const response = err.response || {}
-            const status = response.status
-            console.error(new Date() + " Erreur PUT fichier (status %d) %O", status, err)
-            if(status === 409) {
-                positionUpload = response.headers['x-position'] || position
-            } else {
-                throw err
+            try {
+                const urlInfo = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
+                    httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
+                if(backup) {
+                    await uploadBackup(httpsAgent, urlInfo, fichier)
+                } else {
+                    await putAxios(httpsAgent, urlInfo, fuuid, statItem)
+                }
+            } catch(err) {
+                const response = err.response || {}
+                const status = response.status
+                console.error(new Date() + " Erreur PUT fichier (status %d) %O", status, err)
+                if(status === 409) {
+                    //positionUpload = response.headers['x-position'] || position
+                } else {
+                    throw err
+                }
             }
         }
     }
@@ -766,7 +819,7 @@ class UploadPrimaireHandler extends TransfertHandler {
             urlInfo.pathname += '/sync/fuuidsInfo'
             debug("UploadPrimaireHandler.preparerInformationUpload URL download fichier ", urlInfo.href)
 
-            let fuuidsInfo = Object.values(this.transfertsInfo).filter(item=>!item.fetchComplete).map(item=>item.fuuid)
+            let fuuidsInfo = Object.values(this.transfertsInfo).filter(item=>(!item.fetchComplet && item.fuuid)).map(item=>item.fuuid)
             while(fuuidsInfo.length > 0) {
                 const fuuidsBatch = fuuidsInfo.slice(0, 1000)
                 fuuidsInfo = fuuidsInfo.slice(1000)
@@ -842,6 +895,10 @@ class UploadPrimaireHandler extends TransfertHandler {
         await mq.emettreEvenement(e, {domaine, action, ajouterCertificat: true})
     }
 
+}
+
+async function uploadBackup(httpsAgent, urlConsignationTransfert, fichier) {
+    debug("PUT fichier backup ", fichier)
 }
 
 async function putAxios(httpsAgent, urlConsignationTransfert, fuuid, statItem) {
