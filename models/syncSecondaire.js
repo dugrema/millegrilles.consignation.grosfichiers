@@ -568,7 +568,8 @@ class DownloadPrimaireHandler extends TransfertHandler {
 
     async downloadFichier(transfertInfo) {
         const { fuuid, fichier, archive, backup } = transfertInfo
-        debug("DownloadPrimaireHandler.downloadFichier Debut download ", fuuid)
+        const idFichier = fuuid || fichier
+        debug("DownloadPrimaireHandler.downloadFichier Debut download ", idFichier)
 
         const httpsAgent = this.manager.getHttpsAgent(),
               mq = this.syncConsignation.syncManager.mq
@@ -590,7 +591,10 @@ class DownloadPrimaireHandler extends TransfertHandler {
                 // signal: controller.signal,
                 timeout: 5_000,
             })
-            const pathFichierDownload = path.join(this.pathStaging, fichier.replaceAll('/', '_'))
+            const pathDownloadsBackups = path.join(this.pathStaging, 'backups')
+            await fsPromises.mkdir(pathDownloadsBackups, {recursive: true})
+            const pathFichierDownload = path.join(pathDownloadsBackups, nomfichier)
+
             try {
                 const writeStream = fs.createWriteStream(pathFichierDownload)
                 await new Promise((resolve, reject)=>{
