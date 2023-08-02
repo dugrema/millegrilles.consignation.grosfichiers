@@ -65,12 +65,25 @@ async function verifierBackup(req, res) {
 
 async function recevoirFichier(req, res) {
 
+    const consignationManager = req.consignationManager
     const params = req.params
     debug("recevoirFichier Backup %s", params)
     const { nomfichier, domaine, uuid_backup } = params
     if(!nomfichier || !domaine || !uuid_backup ) {
         console.warn("recevoirFichier Mauvais requete, params manquants (recu: %O)", params)
         return res.status(400).send('Parametres manquants')
+    }
+
+    // Verifier si le fichier existe deja
+    try {
+        await consignationManager.getInfoFichier(`${uuid_backup}/${domaine}/${nomfichier}`, {backup: true})
+        return res.sendStatus(409)
+    } catch(err) {
+        if(err.code === 'ENOENT') {
+            // Ok, le fichier n'existe pas
+        } else {
+            throw err
+        }
     }
 
     // Recevoir le fichier dans staging

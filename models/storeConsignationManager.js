@@ -79,7 +79,7 @@ class ManagerFacade {
     getMq() { return _mq }
 
     getPathStaging() { return getPathStaging() }
-    getInfoFichier(fuuid) { return _storeConsignationHandler.getInfoFichier(fuuid) }
+    getInfoFichier(fuuid, opts) { return _storeConsignationHandler.getInfoFichier(fuuid, opts) }
     consignerFichier(pathFichierStaging, fuuid) { return consignerFichier(pathFichierStaging, fuuid) }
     archiverFichier(fuuid) { return _storeConsignationHandler.archiverFichier(fuuid)}
     reactiverFichier(fuuid) { return _storeConsignationHandler.reactiverFichier(fuuid) }
@@ -87,6 +87,7 @@ class ManagerFacade {
     purgerOrphelinsExpires(opts) { return _storeConsignationHandler.purgerOrphelinsExpires(opts) }
     getPathDataFolder() { return getPathDataFolder() }
     async setEstConsignationPrimaire(estPrimaire) { await setEstConsignationPrimaire(estPrimaire) }
+    getBackupTransactionStream(fichier) { return _storeConsignationHandler.getBackupTransactionStream(fichier) }
 
     emettrePresence() { return emettrePresence() }
 
@@ -982,9 +983,9 @@ function rotationBackupTransactions(uuid_backups_courants) {
 //     return _storeConsignationHandler.getBackupTransaction(pathBackupTransaction)
 // }
 
-// function getBackupTransactionStream(pathBackupTransaction) {
-//     return _storeConsignationHandler.getBackupTransactionStream(pathBackupTransaction)
-// }
+function getBackupTransactionStream(pathBackupTransaction) {
+    return _storeConsignationHandler.getBackupTransactionStream(pathBackupTransaction)
+}
 
 function estPrimaire() {
     return _estPrimaire
@@ -1042,7 +1043,8 @@ module.exports = {
     supprimerFichier, 
 
     sauvegarderBackupTransactions, rotationBackupTransactions,
-    // getFichiersBackupTransactionsCourant, getBackupTransaction, getBackupTransactionStream,
+    // getFichiersBackupTransactionsCourant, getBackupTransaction, 
+    getBackupTransactionStream,
     
     getPathDataFolder, estPrimaire, estSupporteArchives,
     getHttpsAgent, ajouterDownloadPrimaire,

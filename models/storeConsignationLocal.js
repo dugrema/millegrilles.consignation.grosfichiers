@@ -79,19 +79,35 @@ function getPathFichierArchives(fuuid) {
     return path.join(_pathArchives, last2, fuuid)
 }
 
+function getPathFichierBackup(pathFichier) {
+    return path.join(PATH_BACKUP_CONSIGNATION_DIR, pathFichier)
+}
+
 /**
  * Retourne un readStream pour le fichier local.
- * @param {} fuuid 
+ * @param {} idFichier 
  * @returns ReadStream
  */
-async function getFichierStream(fuuid, opts) {
-    const pathFichier = getPathFichier(fuuid)
+async function getFichierStream(idFichier, opts) {
+    opts = opts || {}
+    const { archive, backup, supporteArchives } = opts
+
+    let pathFichier = null
+    if(backup) {
+        pathFichier = getPathFichierBackup(idFichier)
+    } else if(archive) {
+        pathFichier = getPathFichierArchives(idFichier)
+    } else {
+        pathFichier = getPathFichier(idFichier)
+    }
+
     try {
         return fs.createReadStream(pathFichier)
     } catch(err) {
         if(err.errno === -2) {
-            if(opts.supporteArchive === true) {
-                const pathFichier = getPathFichierArchives(fuuid)
+            if(!archive && supporteArchives === true) {
+                // Fallback sur archive
+                const pathFichier = getPathFichierArchives(idFichier)
                 try {
                     return fs.createReadStream(pathFichier)
                 } catch(err) {
@@ -104,15 +120,26 @@ async function getFichierStream(fuuid, opts) {
     }
 }
 
-async function getInfoFichier(fuuid, opts) {
+async function getInfoFichier(idFichier, opts) {
     opts = opts || {}
+    const { archive, backup, supporteArchives } = opts
+
+    let filePath = null
+    if(backup) {
+        filePath = getPathFichierBackup(idFichier)
+    } else if(archive) {
+        filePath = getPathFichierArchives(idFichier)
+    } else {
+        filePath = getPathFichier(idFichier)
+    }
+
     try {
-        const filePath = getPathFichier(fuuid)
+        // const filePath = getPathFichier(idFichier, opts)
         const stat = await fsPromises.stat(filePath)
         return { stat, filePath }
     } catch(err) {
-        if(err.code === 'ENOENT' && opts.supporteArchives === true) {
-            const filePath = getPathFichierArchives(fuuid)
+        if(!archive && supporteArchives === true && err.code === 'ENOENT') {
+            const filePath = getPathFichierArchives(idFichier)
             const stat = await fsPromises.stat(filePath)
             return { stat, filePath }
         }
@@ -305,36 +332,9 @@ async function sauvegarderBackupTransactions(uuid_backup, domaine, srcPath) {
 
     const dirpathDestination = path.join(PATH_BACKUP_CONSIGNATION_DIR, uuid_backup, domaine)
     await fsPromises.mkdir(dirpathDestination, {recursive: true})
+
     const destPath = path.join(dirpathDestination, nomfichier)
     await deplacerFichier(srcPath, destPath)
-
-    // const contenu = JSON.parse(message.contenu)
-    // const { domaine, partition, date_transactions_fin } = contenu
-    // const uuid_transaction = message.id
-
-    // const dateFinBackup = new Date(date_transactions_fin * 1000)
-    // debug("Sauvegarde du backup %s date %O", domaine, dateFinBackup)
-
-    // // Creer repertoire de backup
-    // const dirBackup = path.join(PATH_BACKUP_TRANSACTIONS_DIR, domaine)
-    // await fsPromises.mkdir(dirBackup, {recursive: true})
-
-    // // Formatter le nom du fichier avec domaine_partition_DATE
-    // const dateFinString = dateFinBackup.toISOString().replaceAll('-', '').replaceAll(':', '')
-    // const nomFichierList = [domaine]
-    // if(partition) nomFichierList.push(partition)
-    // nomFichierList.push(dateFinString)
-    // nomFichierList.push(uuid_transaction.slice(0,8))  // Ajouter valeur "random" avec uuid_transaction
-    
-    // const nomFichier = nomFichierList.join('_') + '.json.xz'
-    // const pathFichier = path.join(dirBackup, nomFichier)
-
-    // // Compresser en lzma et conserver
-    // const messageCompresse = await lzma.compress(JSON.stringify(message), 9)
-    // await fsPromises.writeFile(pathFichier + '.new', messageCompresse)
-    // await fsPromises.rename(pathFichier + '.new', pathFichier)
-    
-    // debug("Backup %s date %O sauvegarde sous %O", domaine, dateFinBackup, pathFichier)
 }
 
 async function rotationBackupTransactions(uuid_backups_courants) {
@@ -367,115 +367,95 @@ async function rotationBackupTransactions(uuid_backups_courants) {
     }
 }
 
-// async function pushRotateArchive(idxFrom) {
-//     const dirArchivesScr = path.join(PATH_BACKUP_TRANSACTIONS_DIR + '.' + idxFrom)
-//     const dirArchivesDst = path.join(PATH_BACKUP_TRANSACTIONS_DIR + '.' + (idxFrom+1))
+// async function getFichiersBackupTransactionsCourant(mq, replyTo) {
+//     throw new Error('fix me')
+//     // // Parcourir repertoire
+//     // const promiseReaddirp = readdirp(PATH_BACKUP_TRANSACTIONS_DIR, {
+//     //     type: 'files',
+//     //     fileFilter: '*.json.xz',
+//     //     depth: 2,
+//     // })
 
-//     debug("pushRotateArchive idxFrom %d", idxFrom)
+//     // let clesAccumulees = {}
+//     // let countCles = 0
 
-//     try {
-//         await fsPromises.stat(dirArchivesDst)
-//         // Le repertoire existe, on le deplace en premier (recursivement)
-//         await pushRotateArchive(idxFrom+1)
-//     } catch (err) {
-//         // Le code ENOENT (inexistant) est OK
-//         if(err.code != 'ENOENT') return  // Le code ENOENT (inexistant) est OK, rien a faire
-//     }
+//     // for await (const entry of promiseReaddirp) {
+//     //     debug("Fichier backup transactions : %O", entry)
+//     //     const nomFichier = entry.path
+//     //     let contenu = await fsPromises.readFile(entry.fullPath)
+//     //     contenu = await lzma.decompress(contenu)
+//     //     debug("Contenu archive str : %O", contenu)
+//     //     contenu = JSON.parse(contenu)
+//     //     debug("Contenu archive : %O", contenu)
+        
+//     //     // Extraire le message du catalogue d'archive
+//     //     const contenuMessage = JSON.parse(contenu.contenu)
 
-//     await fsPromises.rename(dirArchivesScr, dirArchivesDst)
+//     //     const cle = contenuMessage.cle
+//     //     clesAccumulees[nomFichier] = cle
+//     //     countCles++
+
+//     //     if(countCles >= 1000) {
+//     //         debug("Emettre message %d cles (batch)", countCles)
+//     //         await emettreMessageCles(mq, replyTo, clesAccumulees, false)
+
+//     //         // Clear
+//     //         clesAccumulees = {}
+//     //         countCles = 0
+//     //     }
+//     // }
+
+//     // debug("Emettre message %d cles (final) : ", countCles, clesAccumulees)
+//     // await emettreMessageCles(mq, replyTo, clesAccumulees, true)
+
+//     // return {ok: true}
 // }
 
-async function getFichiersBackupTransactionsCourant(mq, replyTo) {
-    throw new Error('fix me')
-    // // Parcourir repertoire
-    // const promiseReaddirp = readdirp(PATH_BACKUP_TRANSACTIONS_DIR, {
-    //     type: 'files',
-    //     fileFilter: '*.json.xz',
-    //     depth: 2,
-    // })
+// async function emettreMessageCles(mq, replyTo, cles, complet) {
+//     const reponse = { ok: true, cles, complet }
+//     await mq.transmettreReponse(reponse, replyTo, 'cles')
+// }
 
-    // let clesAccumulees = {}
-    // let countCles = 0
+// async function getBackupTransaction(pathBackupTransaction) {
+//     throw new Error('fix me')
+//     // const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
 
-    // for await (const entry of promiseReaddirp) {
-    //     debug("Fichier backup transactions : %O", entry)
-    //     const nomFichier = entry.path
-    //     let contenu = await fsPromises.readFile(entry.fullPath)
-    //     contenu = await lzma.decompress(contenu)
-    //     debug("Contenu archive str : %O", contenu)
-    //     contenu = JSON.parse(contenu)
-    //     debug("Contenu archive : %O", contenu)
-        
-    //     // Extraire le message du catalogue d'archive
-    //     const contenuMessage = JSON.parse(contenu.contenu)
+//     // let contenu = await fsPromises.readFile(pathFichier)
+//     // contenu = await lzma.decompress(contenu)
 
-    //     const cle = contenuMessage.cle
-    //     clesAccumulees[nomFichier] = cle
-    //     countCles++
+//     // debug("Contenu archive str : %O", contenu)
+//     // contenu = JSON.parse(contenu)
 
-    //     if(countCles >= 1000) {
-    //         debug("Emettre message %d cles (batch)", countCles)
-    //         await emettreMessageCles(mq, replyTo, clesAccumulees, false)
-
-    //         // Clear
-    //         clesAccumulees = {}
-    //         countCles = 0
-    //     }
-    // }
-
-    // debug("Emettre message %d cles (final) : ", countCles, clesAccumulees)
-    // await emettreMessageCles(mq, replyTo, clesAccumulees, true)
-
-    // return {ok: true}
-}
-
-async function emettreMessageCles(mq, replyTo, cles, complet) {
-    const reponse = { ok: true, cles, complet }
-    await mq.transmettreReponse(reponse, replyTo, 'cles')
-}
-
-async function getBackupTransaction(pathBackupTransaction) {
-    throw new Error('fix me')
-    // const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
-
-    // let contenu = await fsPromises.readFile(pathFichier)
-    // contenu = await lzma.decompress(contenu)
-
-    // debug("Contenu archive str : %O", contenu)
-    // contenu = JSON.parse(contenu)
-
-    // debug("Contenu archive : %O", contenu)
-    // return contenu
-}
+//     // debug("Contenu archive : %O", contenu)
+//     // return contenu
+// }
 
 async function getBackupTransactionStream(pathBackupTransaction) {
-    throw new Error('obsolete')
-    // const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
-    // return fs.createReadStream(pathFichier)
+    const pathFichier = path.join(PATH_BACKUP_CONSIGNATION_DIR, pathBackupTransaction)
+    return fs.createReadStream(pathFichier)
 }
 
-async function pipeBackupTransactionStream(pathFichier, stream) {
-    throw new Error('obsolete')
-    // const pathFichierParsed = path.parse(pathFichier)
-    // debug("pipeBackupTransactionStream ", pathFichierParsed)
-    // const dirFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathFichierParsed.dir)
-    // const pathFichierComplet = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathFichier)
-    // await fsPromises.mkdir(dirFichier, {recursive: true})
+// async function pipeBackupTransactionStream(pathFichier, stream) {
+//     throw new Error('obsolete')
+//     // const pathFichierParsed = path.parse(pathFichier)
+//     // debug("pipeBackupTransactionStream ", pathFichierParsed)
+//     // const dirFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathFichierParsed.dir)
+//     // const pathFichierComplet = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathFichier)
+//     // await fsPromises.mkdir(dirFichier, {recursive: true})
     
-    // const writeStream = fs.createWriteStream(pathFichierComplet)
-    // await new Promise((resolve, reject)=>{
-    //     writeStream.on('close', resolve)
-    //     writeStream.on('error', reject)
-    //     stream.pipe(writeStream)
-    // })
-}
+//     // const writeStream = fs.createWriteStream(pathFichierComplet)
+//     // await new Promise((resolve, reject)=>{
+//     //     writeStream.on('close', resolve)
+//     //     writeStream.on('error', reject)
+//     //     stream.pipe(writeStream)
+//     // })
+// }
 
-async function deleteBackupTransaction(pathBackupTransaction) {
-    throw new Error('obsolete')
-    // const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
-    // await fsPromises.unlink(pathFichier)
-}
-
+// async function deleteBackupTransaction(pathBackupTransaction) {
+//     throw new Error('obsolete')
+//     // const pathFichier = path.join(PATH_BACKUP_TRANSACTIONS_DIR, pathBackupTransaction)
+//     // await fsPromises.unlink(pathFichier)
+// }
 
 async function deplacerFichier(pathSource, pathDestination) {
     const dirFichier = path.dirname(pathDestination)
@@ -519,7 +499,6 @@ module.exports = {
     
     // Backup
     parcourirBackup, 
-    sauvegarderBackupTransactions, rotationBackupTransactions,
-    getFichiersBackupTransactionsCourant, getBackupTransaction,
-    getBackupTransactionStream, pipeBackupTransactionStream, deleteBackupTransaction,
+    sauvegarderBackupTransactions, rotationBackupTransactions, getBackupTransactionStream, 
+    //getFichiersBackupTransactionsCourant, getBackupTransaction, pipeBackupTransactionStream, deleteBackupTransaction,
 }

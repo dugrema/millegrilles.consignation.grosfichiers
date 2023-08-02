@@ -412,8 +412,8 @@ class TransfertHandler {
                 } catch(err) {
                     debug("TransfertHandler._thread Erreur execution operation transfert %O, passer a next() : %O", transfert, err)
                 } finally {
-                    debug("TransfertHandler._thread Cleanup de l'information de transfert en memoire pour %s", transfert.fuuid)
-                    delete this.transfertsInfo[transfert.fuuid]
+                    debug("TransfertHandler._thread Cleanup de l'information de transfert en memoire pour %s", idTransfert)
+                    delete this.transfertsInfo[idTransfert]
                 }
             }
 
@@ -774,7 +774,8 @@ class UploadPrimaireHandler extends TransfertHandler {
         const { fuuid, fichier, backup } = transfertInfo
 
         if(backup) {
-            debug("UploadPrimaireHandler TODO")
+            const urlInfo = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href)
+            await uploadBackup(this.manager, urlInfo, fichier)
         } else {
             const statItem = (await this.manager.getInfoFichier(fuuid))
             statItem.fuuid = fuuid
@@ -789,12 +790,8 @@ class UploadPrimaireHandler extends TransfertHandler {
 
             try {
                 const urlInfo = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
-                    httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
-                if(backup) {
-                    await uploadBackup(httpsAgent, urlInfo, fichier)
-                } else {
-                    await putAxios(httpsAgent, urlInfo, fuuid, statItem)
-                }
+                      httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
+                await putAxios(httpsAgent, urlInfo, fuuid, statItem)
             } catch(err) {
                 const response = err.response || {}
                 const status = response.status
@@ -897,8 +894,34 @@ class UploadPrimaireHandler extends TransfertHandler {
 
 }
 
-async function uploadBackup(httpsAgent, urlConsignationTransfert, fichier) {
+async function uploadBackup(manager, urlConsignationTransfert, fichier, opts) {
+    opts = opts || {}
+    let { taille } = opts
     debug("PUT fichier backup ", fichier)
+    const httpsAgent = manager.getHttpsAgent()
+    const urlFichier = new URL(urlConsignationTransfert.href)
+    urlFichier.pathname += '/backup/upload/' + fichier
+    debug("PUT url : %s", urlFichier.href)
+    if(!taille) {
+        const infoFichier = await manager.getInfoFichier(fichier, {backup: true})
+        // debug("Info fichier de backup a uploader : %O", infoFichier)
+        taille = infoFichier.stat.size
+    }
+
+    const readStream = await manager.getBackupTransactionStream(fichier)
+
+    await axios({
+        method: 'PUT',
+        url: urlFichier.href,
+        httpsAgent,
+        headers: {
+            'content-type': 'application/stream',
+            'content-length': taille,
+        },
+        timeout: 5_000,
+        data: readStream,
+        maxRedirects: 0,  // Eviter redirect buffer (max 10mb)
+    })
 }
 
 async function putAxios(httpsAgent, urlConsignationTransfert, fuuid, statItem) {
