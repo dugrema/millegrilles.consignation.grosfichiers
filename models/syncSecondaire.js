@@ -9,6 +9,7 @@ const { VerificateurHachage } = require('@dugrema/millegrilles.nodejs/src/hachag
 
 const { SynchronisationConsignation } = require('./synchronisationConsignation')
 const fileutils = require('./fileutils')
+const { verifierCatalogue } = require('../util/utilBackup')
 
 const FICHIER_FUUIDS_LOCAUX = 'fuuidsLocaux.txt',
       FICHIER_FUUIDS_ARCHIVES = 'fuuidsArchives.txt',
@@ -525,9 +526,11 @@ class DownloadPrimaireHandler extends TransfertHandler {
         debug("DownloadPrimaireHandler update liste de fichiers a downloader")
         const fichierDownloadLocalPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsDownloadsLocal.txt')
         const fichierDownloadArchivesPath = path.join(this.syncConsignation.pathOperationsListings, 'fuuidsDownloadsArchives.txt')
+        const fichierDownloadBackupPath = path.join(this.syncConsignation.pathOperationsListings, 'listingDownloadBackup.txt')
 
         await fileutils.chargerFuuidsListe(fichierDownloadLocalPath, fuuid=>this.ajouterTransfert(fuuid, {demarrer: false}))
         await fileutils.chargerFuuidsListe(fichierDownloadArchivesPath, fuuid=>this.ajouterTransfert(fuuid, {demarrer: false, archive: true}))
+        await fileutils.chargerFuuidsListe(fichierDownloadBackupPath, fichier=>this.ajouterTransfert(fichier, {backup: true}))
 
         this.trierPending()
 
@@ -539,20 +542,22 @@ class DownloadPrimaireHandler extends TransfertHandler {
 
     async transfererFichier(transfertInfo) {
         debug("DownloadPrimaireHandler.transfererFichier fichier ", transfertInfo)
-        const { fuuid } = transfertInfo
+        const { fuuid, fichier, backup } = transfertInfo
 
+        const idFichier = fuuid || fichier
         transfertInfo.enCours = true
 
         // Verifier si le fichier est deja present localement
         try {
-            const infoFichier = await this.manager.getInfoFichier(fuuid)
-            debug("Le fichier %s existe deja (SKIP) : %O", fuuid, infoFichier)
+            let infoFichier = null
+            await this.manager.getInfoFichier(idFichier, {backup})
+            debug("Le fichier %s existe deja (SKIP) : %O", idFichier, infoFichier)
             return
         } catch(err) {
             if(err.code === 'ENOENT') {
                 // Ok, fichier n'existe pas deja
                 transfertInfo.verificationLocale = true
-                debug("transfererFichier Verification absence fichier avant download fuuid %s OK", fuuid)
+                debug("transfererFichier Verification absence fichier avant download fuuid %s OK", idFichier)
             } else {
                 throw err
             }
@@ -562,72 +567,113 @@ class DownloadPrimaireHandler extends TransfertHandler {
     }
 
     async downloadFichier(transfertInfo) {
-        const { fuuid, archive } = transfertInfo
+        const { fuuid, fichier, archive, backup } = transfertInfo
         debug("DownloadPrimaireHandler.downloadFichier Debut download ", fuuid)
 
-        const urlDownload = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href),
-              httpsAgent = this.syncConsignation.syncManager.manager.getHttpsAgent()
-        urlDownload.pathname += '/' + fuuid
-        debug("DownloadPrimaireHandler.downloadFichier URL download fichier ", urlDownload.href)
+        const httpsAgent = this.manager.getHttpsAgent(),
+              mq = this.syncConsignation.syncManager.mq
 
-        const controller = new AbortController()
+        const urlDownload = new URL(this.syncConsignation.syncManager.urlConsignationTransfert.href)
+        if(backup) {
+            const pathSplit = fichier.split('/')
+            const nomfichier = pathSplit.pop(),
+                  domaine = pathSplit.pop(),
+                  uuid_backup = pathSplit.pop()
 
-        const reponse = await axios({
-            method: 'GET', 
-            url: urlDownload.href, 
-            httpsAgent,
-            responseType: 'stream',
-            signal: controller.signal,
-        })
-
-        let timeout = setTimeout(controller.abort, 45_000)  // Timeout 15 secondes pour connexion
-
-        // debug("Reponse headers : ", reponse.headers)
-        try {
-            const taille = Number.parseInt(reponse.headers['content-length'])
-            transfertInfo.taille = taille
-        } catch(err) {
-            debug("DownloadPrimaireHandler.downloadFichier Erreur lecture taille fuuid %s a partir des headers http", fuuid, err)
-            transfertInfo.taille = null
-        }
-        transfertInfo.position = 0
-
-        debug("DownloadPrimaireHandler.downloadFichier Reponse fichier %s status : %d", fuuid, reponse.status)
-        const pathFichierDownload = path.join(this.pathStaging, fuuid)
-        try {
-            const writeStream = fs.createWriteStream(pathFichierDownload)
-            const verificateurHachage = new VerificateurHachage(fuuid)
-
-            await new Promise((resolve, reject)=>{
-                reponse.data.on('data', chunk => {
-                    verificateurHachage.update(chunk)
-                    transfertInfo.position += chunk.length
-                    clearTimeout(timeout)
-                    timeout = setTimeout(controller.abort, 15_000)  // Timeout 15 secondes entre chunks
+            urlDownload.pathname += '/backup/download/' + fichier
+            debug("downloadFichier Backup ", urlDownload.href)
+            const reponse = await axios({
+                method: 'GET', 
+                url: urlDownload.href, 
+                httpsAgent,
+                responseType: 'stream',
+                // signal: controller.signal,
+                timeout: 5_000,
+            })
+            const pathFichierDownload = path.join(this.pathStaging, fichier.replaceAll('/', '_'))
+            try {
+                const writeStream = fs.createWriteStream(pathFichierDownload)
+                await new Promise((resolve, reject)=>{
+                    writeStream.on('error', reject)
+                    writeStream.on('close', resolve)
+                    reponse.data.pipe(writeStream)
                 })
-                writeStream.on('error', reject)
-                writeStream.on('close', () => {
-                    // Verifier hachage - lance une exception si la verification echoue
-                    verificateurHachage.verify().then(resolve).catch(reject)
-                })
-                reponse.data.pipe(writeStream)
+
+                // TODO Verifier catalogue recu
+                await verifierCatalogue(mq.pki, pathFichierDownload, domaine)
+
+                await this.manager.sauvegarderBackupTransactions(uuid_backup, domaine, pathFichierDownload)
+
+            } catch(err) {
+                // Supprimer le fichier temporaire
+                fsPromises.unlink(pathFichierDownload)
+                    .catch(err=>console.info("DownloadPrimaireHandler.downloadFichier Erreur cleanup fichier backup %s (download en erreur)) : ", err))
+                throw err
+            }
+
+        } else {
+            urlDownload.pathname += '/' + fuuid
+            debug("DownloadPrimaireHandler.downloadFichier URL download fichier ", urlDownload.href)
+
+            const controller = new AbortController()
+
+            const reponse = await axios({
+                method: 'GET', 
+                url: urlDownload.href, 
+                httpsAgent,
+                responseType: 'stream',
+                signal: controller.signal,
             })
 
-            clearTimeout(timeout)
-            timeout = null
+            let timeout = setTimeout(controller.abort, 45_000)  // Timeout 15 secondes pour connexion
 
-            debug("DownloadPrimaireHandler.downloadFichier Resultat transfert : ", transfertInfo)
-            await this.manager.consignerFichier(this.pathStaging, fuuid)
-            if(archive) {
-                await this.manager.archiverFichier(fuuid)
+            // debug("Reponse headers : ", reponse.headers)
+            try {
+                const taille = Number.parseInt(reponse.headers['content-length'])
+                transfertInfo.taille = taille
+            } catch(err) {
+                debug("DownloadPrimaireHandler.downloadFichier Erreur lecture taille fuuid %s a partir des headers http", fuuid, err)
+                transfertInfo.taille = null
             }
-        } catch(err) {
-            // Supprimer le fichier temporaire
-            fsPromises.unlink(pathFichierDownload)
-                .catch(err=>console.info("DownloadPrimaireHandler.downloadFichier Erreur cleanup fichier %s (download en erreur)) : ", err))
-            throw err
-        } finally {
-            clearTimeout(timeout)
+            transfertInfo.position = 0
+
+            debug("DownloadPrimaireHandler.downloadFichier Reponse fichier %s status : %d", fuuid, reponse.status)
+            const pathFichierDownload = path.join(this.pathStaging, fuuid)
+            try {
+                const writeStream = fs.createWriteStream(pathFichierDownload)
+                const verificateurHachage = new VerificateurHachage(fuuid)
+
+                await new Promise((resolve, reject)=>{
+                    reponse.data.on('data', chunk => {
+                        verificateurHachage.update(chunk)
+                        transfertInfo.position += chunk.length
+                        clearTimeout(timeout)
+                        timeout = setTimeout(controller.abort, 15_000)  // Timeout 15 secondes entre chunks
+                    })
+                    writeStream.on('error', reject)
+                    writeStream.on('close', () => {
+                        // Verifier hachage - lance une exception si la verification echoue
+                        verificateurHachage.verify().then(resolve).catch(reject)
+                    })
+                    reponse.data.pipe(writeStream)
+                })
+
+                clearTimeout(timeout)
+                timeout = null
+
+                debug("DownloadPrimaireHandler.downloadFichier Resultat transfert : ", transfertInfo)
+                await this.manager.consignerFichier(this.pathStaging, fuuid)
+                if(archive) {
+                    await this.manager.archiverFichier(fuuid)
+                }
+            } catch(err) {
+                // Supprimer le fichier temporaire
+                fsPromises.unlink(pathFichierDownload)
+                    .catch(err=>console.info("DownloadPrimaireHandler.downloadFichier Erreur cleanup fichier %s (download en erreur)) : ", err))
+                throw err
+            } finally {
+                clearTimeout(timeout)
+            }
         }
 
     }

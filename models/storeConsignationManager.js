@@ -88,6 +88,7 @@ class ManagerFacade {
     getPathDataFolder() { return getPathDataFolder() }
     async setEstConsignationPrimaire(estPrimaire) { await setEstConsignationPrimaire(estPrimaire) }
     getBackupTransactionStream(fichier) { return _storeConsignationHandler.getBackupTransactionStream(fichier) }
+    sauvegarderBackupTransactions(uuid_backup, domaine, srcPath) { return _storeConsignationHandler.sauvegarderBackupTransactions(uuid_backup, domaine, srcPath) }
 
     emettrePresence() { return emettrePresence() }
 
