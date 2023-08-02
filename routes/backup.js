@@ -163,8 +163,16 @@ async function downloaderFichier(req, res) {
         return res.status(400).send('Parametres manquants')
     }
 
-
-    return res.sendStatus(500)  // TODO
+    try {
+        const readStream = await req.consignationManager.getBackupTransactionStream(
+            `${uuid_backup}/${domaine}/${nomfichier}`)
+        res.status(200)
+        readStream.pipe(res)
+    } catch(err) {
+        if(err.code === 'ENOENT') return res.sendStatus(404)
+        console.error(new Date() + " downloaderFichier ERROR ", err)
+        return res.sendStatus(500)
+    }
 }
 
 module.exports = init
